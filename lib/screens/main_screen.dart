@@ -38,7 +38,7 @@ class _MainScreenState extends State<MainScreen> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: const Color(0xFF121212),
-        selectedItemColor: const Color(0xFFFA2D48), // Apple Music Red Accent
+        selectedItemColor: Theme.of(context).primaryColor, // Apple Music Red Accent
         unselectedItemColor: Colors.grey[600],
         currentIndex: _selectedIndex,
         type: BottomNavigationBarType.fixed,

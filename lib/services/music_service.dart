@@ -152,43 +152,74 @@ class MusicService extends ChangeNotifier {
     }
   }
 
+  // Full browser headers to avoid CDN 403s and throttling
+  static const Map<String, String> _ytHeaders = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/125.0.0.0 Safari/537.36',
+    'Accept': '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Origin': 'https://www.youtube.com',
+    'Referer': 'https://www.youtube.com/',
+  };
+
+  /// Fetches the stream URL from the backend.
+  /// [bustCache] forces the backend to re-extract the URL (used on retry).
+  Future<String?> _fetchStreamUrl(String videoId, {bool bustCache = false}) async {
+    try {
+      if (bustCache) {
+        // Tell backend to discard its cached URL for this video
+        await http.delete(Uri.parse('http://10.0.2.2:8000/cache/$videoId'))
+            .timeout(const Duration(seconds: 3));
+      }
+      final response = await http
+          .get(Uri.parse('http://10.0.2.2:8000/stream_url?v=$videoId'))
+          .timeout(const Duration(seconds: 20));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['url'] as String?;
+      }
+    } catch (e) {
+      debugPrint('_fetchStreamUrl error: $e');
+    }
+    return null;
+  }
+
   Future<void> playSong(Video song) async {
     _isLoading = true;
     _currentSong = song;
     notifyListeners();
 
     try {
-      debugPrint('Step 1: Asking Python backend for stream URL for ${song.id.value}');
-      
-      // 10.0.2.2 is the special IP Android Emulator uses to access the Mac's localhost
-      final response = await http.get(Uri.parse('http://10.0.2.2:8000/stream_url?v=${song.id.value}'));
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final streamUrl = data['url'];
-        
-        debugPrint('Step 2: Received direct stream URL from yt-dlp!');
-        
-        await _audioPlayer.setAudioSource(
-          AudioSource.uri(
-            Uri.parse(streamUrl),
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
-            },
-          ),
-        );
-        
-        debugPrint('Step 3: Playing audio via just_audio');
-        await _audioPlayer.play();
+      final proxyUrl = 'http://10.0.2.2:8000/stream/${song.id.value}.m4a';
+      debugPrint('[Play] Setting audio source to local proxy: $proxyUrl');
 
-        // Asynchronously fetch YouTube recommendations to build an infinite queue!
-        _fetchNextRecommendations(song);
-      } else {
-        debugPrint('Backend error: ${response.body}');
+      await _audioPlayer.stop();
+
+      try {
+        await _audioPlayer.setAudioSource(
+          AudioSource.uri(Uri.parse(proxyUrl)),
+          preload: true,
+        );
+      } catch (proxyError) {
+        debugPrint('[Play] Proxy error ($proxyError), falling back to direct stream…');
+        final directUrl = await _fetchStreamUrl(song.id.value);
+        if (directUrl != null) {
+          await _audioPlayer.setAudioSource(
+            AudioSource.uri(Uri.parse(directUrl), headers: _ytHeaders),
+            preload: true,
+          );
+        } else {
+          rethrow;
+        }
       }
-    } catch (e, stackTrace) {
-      debugPrint('Error playing song: $e');
-      debugPrint('Stack trace: $stackTrace');
+
+      debugPrint('[Play] Starting playback…');
+      await _audioPlayer.play();
+
+      _fetchNextRecommendations(song);
+    } catch (e, st) {
+      debugPrint('[Play] Error playing song: $e\n$st');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -240,17 +271,13 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await http.get(Uri.parse('http://10.0.2.2:8000/stream_url?v=${song.id.value}'));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final streamUrl = data['url'];
+      final streamUrl = await _fetchStreamUrl(song.id.value);
+      if (streamUrl == null) return false;
 
         // Download stream bytes
         final audioResponse = await http.get(
           Uri.parse(streamUrl),
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          },
+          headers: _ytHeaders,
         );
 
         if (audioResponse.statusCode == 200) {
@@ -277,7 +304,6 @@ class MusicService extends ChangeNotifier {
           notifyListeners();
           return true;
         }
-      }
     } catch (e) {
       debugPrint('Error downloading song: $e');
     } finally {

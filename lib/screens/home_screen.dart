@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
+import '../services/preferences_service.dart';
+import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -11,8 +13,11 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final MusicService _musicService = MusicService();
+  final PreferencesService _prefs = PreferencesService();
   List<Video> _topChartsIndia = [];
   List<Video> _trendingNow = [];
+  List<Video> _newReleases = [];
+  List<Video> _personalizedMixes = [];
   bool _isLoadingCharts = true;
 
   @override
@@ -25,10 +30,21 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final charts = await _musicService.searchSongs('Top Charts India Music');
       final trending = await _musicService.searchSongs('Trending Songs 2026');
+      final newReleases = await _musicService.searchSongs('Latest Music Hits');
+      
+      // Personalization logic based on search history
+      String mixQuery = 'My personal music mix track';
+      if (_prefs.searchHistory.isNotEmpty) {
+        mixQuery = '${_prefs.searchHistory.first} mix';
+      }
+      final mixes = await _musicService.searchSongs(mixQuery);
+      
       if (mounted) {
         setState(() {
           _topChartsIndia = charts;
           _trendingNow = trending;
+          _newReleases = newReleases;
+          _personalizedMixes = mixes;
           _isLoadingCharts = false;
         });
       }
@@ -68,10 +84,18 @@ class _HomeScreenState extends State<HomeScreen> {
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 16.0),
-                child: CircleAvatar(
-                  backgroundColor: Colors.grey[800],
-                  radius: 18,
-                  child: const Icon(Icons.person, color: Colors.white, size: 20),
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                    );
+                  },
+                  child: CircleAvatar(
+                    backgroundColor: Colors.grey[800],
+                    radius: 18,
+                    child: const Icon(Icons.person, color: Colors.white, size: 20),
+                  ),
                 ),
               ),
             ],
@@ -80,10 +104,10 @@ class _HomeScreenState extends State<HomeScreen> {
           // Main Feed Body
           SliverToBoxAdapter(
             child: _isLoadingCharts
-                ? const SizedBox(
+                ? SizedBox(
                     height: 300,
                     child: Center(
-                      child: CircularProgressIndicator(color: Color(0xFF1DB954)),
+                      child: CircularProgressIndicator(color: Theme.of(context).primaryColor),
                     ),
                   )
                 : Padding(
@@ -94,9 +118,19 @@ class _HomeScreenState extends State<HomeScreen> {
                         _buildSectionHeader('TOP CHARTS: INDIA', 'Updated Daily'),
                         _buildHorizontalChartCards(_topChartsIndia),
                         const SizedBox(height: 24),
-                        _buildSectionHeader('TRENDING NOW', 'Personalized Pick'),
+                        
+                        _buildSectionHeader('MADE FOR YOU', 'Based on your listening history'),
+                        _buildHorizontalChartCards(_personalizedMixes),
+                        const SizedBox(height: 24),
+
+                        _buildSectionHeader('NEW RELEASES', 'Fresh Music'),
+                        _buildHorizontalChartCards(_newReleases),
+                        const SizedBox(height: 24),
+
+                        _buildSectionHeader('TRENDING NOW', 'Global Pick'),
                         _buildHorizontalChartCards(_trendingNow),
                         const SizedBox(height: 24),
+                        
                         if (_musicService.likedSongs.isNotEmpty) ...[
                           _buildSectionHeader('YOUR FAVORITES', 'Liked Tracks'),
                           _buildLikedSongsGrid(),

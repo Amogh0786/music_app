@@ -1,0 +1,75 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class PreferencesService extends ChangeNotifier {
+  static final PreferencesService _instance = PreferencesService._internal();
+  factory PreferencesService() => _instance;
+
+  PreferencesService._internal();
+
+  late SharedPreferences _prefs;
+  bool _isInitialized = false;
+
+  // Settings
+  bool _crossfadeEnabled = false;
+  Color _themeColor = const Color(0xFFFA2D48); // Default Apple Red
+  double _cacheSizeMB = 500.0;
+
+  // Search History
+  List<String> _searchHistory = [];
+
+  bool get isInitialized => _isInitialized;
+  bool get crossfadeEnabled => _crossfadeEnabled;
+  Color get themeColor => _themeColor;
+  double get cacheSizeMB => _cacheSizeMB;
+  List<String> get searchHistory => _searchHistory;
+
+  Future<void> init() async {
+    if (_isInitialized) return;
+    _prefs = await SharedPreferences.getInstance();
+    
+    _crossfadeEnabled = _prefs.getBool('crossfade') ?? false;
+    int colorValue = _prefs.getInt('themeColor') ?? 0xFFFA2D48;
+    _themeColor = Color(colorValue);
+    _cacheSizeMB = _prefs.getDouble('cacheSizeMB') ?? 500.0;
+    _searchHistory = _prefs.getStringList('searchHistory') ?? [];
+    
+    _isInitialized = true;
+    notifyListeners();
+  }
+
+  Future<void> setCrossfade(bool value) async {
+    _crossfadeEnabled = value;
+    await _prefs.setBool('crossfade', value);
+    notifyListeners();
+  }
+
+  Future<void> setThemeColor(Color color) async {
+    _themeColor = color;
+    await _prefs.setInt('themeColor', color.value);
+    notifyListeners();
+  }
+
+  Future<void> setCacheSize(double sizeMB) async {
+    _cacheSizeMB = sizeMB;
+    await _prefs.setDouble('cacheSizeMB', sizeMB);
+    notifyListeners();
+  }
+
+  Future<void> addToSearchHistory(String query) async {
+    if (query.trim().isEmpty) return;
+    _searchHistory.remove(query);
+    _searchHistory.insert(0, query);
+    if (_searchHistory.length > 10) {
+      _searchHistory = _searchHistory.sublist(0, 10);
+    }
+    await _prefs.setStringList('searchHistory', _searchHistory);
+    notifyListeners();
+  }
+
+  Future<void> clearSearchHistory() async {
+    _searchHistory.clear();
+    await _prefs.setStringList('searchHistory', _searchHistory);
+    notifyListeners();
+  }
+}

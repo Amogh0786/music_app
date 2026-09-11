@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
+import '../services/preferences_service.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -11,13 +12,31 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final MusicService _musicService = MusicService();
+  final PreferencesService _prefs = PreferencesService();
   final TextEditingController _searchController = TextEditingController();
   List<Video> _searchResults = [];
   bool _isSearching = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   void _performSearch(String query) async {
     if (query.trim().isEmpty) return;
     
+    // Save to search history
+    await _prefs.addToSearchHistory(query);
+
     setState(() {
       _isSearching = true;
     });
@@ -34,6 +53,8 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final history = _prefs.searchHistory;
+
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
@@ -82,29 +103,66 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Search Results List
+            // Search Results or History List
             Expanded(
               child: _isSearching
-                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF1DB954)))
+                  ? Center(child: CircularProgressIndicator(color: Theme.of(context).primaryColor))
                   : _searchResults.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.search, size: 64, color: Colors.grey[800]),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Play what you love',
-                                style: TextStyle(color: Colors.grey[400], fontSize: 16, fontWeight: FontWeight.bold),
+                      ? (history.isEmpty 
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.search, size: 64, color: Colors.grey[800]),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'Play what you love',
+                                    style: TextStyle(color: Colors.grey[400], fontSize: 16, fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Search for songs, artists, or albums',
+                                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Search for songs, artists, or albums',
-                                style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                              ),
-                            ],
-                          ),
-                        )
+                            )
+                          : ListView.builder(
+                              itemCount: history.length + 1,
+                              itemBuilder: (context, index) {
+                                if (index == 0) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 8.0, top: 8.0),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text(
+                                          'Recent Searches',
+                                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                                        ),
+                                        TextButton(
+                                          onPressed: () {
+                                            _prefs.clearSearchHistory();
+                                            setState(() {});
+                                          },
+                                          child: Text('Clear', style: TextStyle(color: Theme.of(context).primaryColor)),
+                                        )
+                                      ],
+                                    ),
+                                  );
+                                }
+                                final item = history[index - 1];
+                                return ListTile(
+                                  leading: const Icon(Icons.history, color: Colors.grey),
+                                  title: Text(item, style: const TextStyle(color: Colors.white)),
+                                  onTap: () {
+                                    _searchController.text = item;
+                                    _performSearch(item);
+                                  },
+                                );
+                              }
+                            )
+                          )
                       : ListView.builder(
                           padding: const EdgeInsets.only(bottom: 110),
                           itemCount: _searchResults.length,
