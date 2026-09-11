@@ -5,6 +5,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'preferences_service.dart';
 
 class MusicService extends ChangeNotifier {
   static final MusicService _instance = MusicService._internal();
@@ -113,42 +114,84 @@ class MusicService extends ChangeNotifier {
 
   Future<List<Video>> searchSongs(String query) async {
     if (query.trim().isEmpty) return [];
-    
+
     try {
-      // Search YouTube
-      final searchList = await _yt.search.search(query);
-      debugPrint('Found ${searchList.length} items from YouTube search');
-      
-      final filteredList = searchList.where((video) => video.duration != null).toList();
-      debugPrint('After filtering null durations: ${filteredList.length} items');
-      
-      return filteredList;
+      final response = await http
+          .get(Uri.parse('http://10.0.2.2:8000/search?q=${Uri.encodeComponent(query)}'))
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> jsonList = json.decode(response.body);
+        final List<Video> results = [];
+
+        for (var item in jsonList) {
+          final videoId = item['id'] as String;
+          final title = item['title'] as String? ?? 'Unknown Title';
+          final author = item['author'] as String? ?? 'Unknown Artist';
+          final durationSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
+          final duration = durationSec != null ? Duration(seconds: durationSec) : null;
+
+          results.add(
+            Video(
+              VideoId(videoId),
+              title,
+              author,
+              ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+              DateTime.now(),
+              '',
+              null,
+              '',
+              duration,
+              ThumbnailSet(videoId),
+              null,
+              Engagement(0, null, null),
+              false,
+            ),
+          );
+        }
+        debugPrint('[Backend Search] Returned ${results.length} items for "$query"');
+        return results;
+      }
     } catch (e) {
-      debugPrint('Error searching YouTube: $e');
+      debugPrint('Backend search error: $e, falling back to YouTubeExplode…');
+    }
+
+    try {
+      final searchList = await _yt.search.search(query);
+      return searchList.where((video) => video.duration != null).toList();
+    } catch (e) {
+      debugPrint('Error searching YouTubeExplode fallback: $e');
       return [];
     }
   }
 
 
   Future<void> playPlaylist(List<Video> playlist, int index) async {
-    _playlist = playlist;
+    _playlist = List.from(playlist);
     _currentIndex = index;
     if (_currentIndex >= 0 && _currentIndex < _playlist.length) {
-      await playSong(_playlist[_currentIndex]);
+      await playSong(_playlist[_currentIndex], updateQueue: false);
     }
   }
 
   Future<void> nextSong() async {
     if (_playlist.isNotEmpty && _currentIndex + 1 < _playlist.length) {
       _currentIndex++;
-      await playSong(_playlist[_currentIndex]);
+      await playSong(_playlist[_currentIndex], updateQueue: false);
+    } else if (_currentSong != null) {
+      debugPrint('[Queue] End of queue reached. Fetching auto-play recommendations…');
+      await _fetchNextRecommendations(_currentSong!);
+      if (_currentIndex + 1 < _playlist.length) {
+        _currentIndex++;
+        await playSong(_playlist[_currentIndex], updateQueue: false);
+      }
     }
   }
 
   Future<void> previousSong() async {
     if (_playlist.isNotEmpty && _currentIndex - 1 >= 0) {
       _currentIndex--;
-      await playSong(_playlist[_currentIndex]);
+      await playSong(_playlist[_currentIndex], updateQueue: false);
     }
   }
 
@@ -185,10 +228,23 @@ class MusicService extends ChangeNotifier {
     return null;
   }
 
-  Future<void> playSong(Video song) async {
+  Future<void> playSong(Video song, {bool updateQueue = true}) async {
     _isLoading = true;
     _currentSong = song;
+
+    if (updateQueue) {
+      final existingIndex = _playlist.indexWhere((item) => item.id == song.id);
+      if (existingIndex != -1) {
+        _currentIndex = existingIndex;
+      } else {
+        _playlist = [song];
+        _currentIndex = 0;
+      }
+    }
     notifyListeners();
+
+    // Track play count and history for personalization algorithm
+    PreferencesService().recordSongPlay(song.author, song.title);
 
     try {
       final proxyUrl = 'http://10.0.2.2:8000/stream/${song.id.value}.m4a';
@@ -216,6 +272,8 @@ class MusicService extends ChangeNotifier {
 
       debugPrint('[Play] Starting playback…');
       await _audioPlayer.play();
+      _isLoading = false;
+      notifyListeners();
 
       _fetchNextRecommendations(song);
     } catch (e, st) {
@@ -232,12 +290,18 @@ class MusicService extends ChangeNotifier {
       final relatedList = await _yt.videos.getRelatedVideos(song);
       if (relatedList != null && relatedList.isNotEmpty) {
         final newTracks = relatedList.where((v) => v.duration != null).toList();
+        
+        // Keep queue items up to current index, and append YouTube's recommendations next
+        if (_currentIndex + 1 < _playlist.length) {
+          _playlist.removeRange(_currentIndex + 1, _playlist.length);
+        }
+
         for (var track in newTracks) {
           if (!_playlist.any((item) => item.id == track.id)) {
             _playlist.add(track);
           }
         }
-        debugPrint('Added ${newTracks.length} auto-play recommended songs to queue!');
+        debugPrint('Updated queue: ${_playlist.length} total tracks. Next up: ${_playlist[_currentIndex + 1].title}');
         notifyListeners();
       }
     } catch (e) {

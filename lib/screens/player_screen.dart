@@ -41,7 +41,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget build(BuildContext context) {
     final song = _musicService.currentSong;
     final isPlaying = _musicService.audioPlayer.playing;
-    final isLoading = _musicService.isLoading;
+    final isLoading = _musicService.isLoading && !isPlaying;
     final isLiked = song != null && _musicService.likedSongs.any((s) => s['id'] == song.id.value);
     final hdThumbnail = song != null ? MusicService.getHdThumbnail(song.id.value) : '';
 

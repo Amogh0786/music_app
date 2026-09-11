@@ -33,7 +33,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
   Widget build(BuildContext context) {
     final song = _musicService.currentSong;
     final isPlaying = _musicService.audioPlayer.playing;
-    final isLoading = _musicService.isLoading;
+    final isLoading = _musicService.isLoading && !isPlaying;
     final hdThumbnail = song != null ? MusicService.getHdThumbnail(song.id.value) : '';
 
     if (song == null && !isLoading) {

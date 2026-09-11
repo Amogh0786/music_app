@@ -6,8 +6,9 @@ import time
 
 app = FastAPI()
 
-# In-memory URL cache: { video_id: (url, expires_at_timestamp) }
+# In-memory URL & Search caches
 _url_cache: dict[str, tuple[str, float]] = {}
+_search_cache: dict[str, tuple[list[dict], float]] = {}
 CACHE_TTL_SECONDS = 4 * 60 * 60  # 4 hours
 
 
@@ -20,8 +21,6 @@ def _get_youtube_url(video_id: str) -> str:
         else:
             del _url_cache[video_id]
 
-    # Format 140 is YouTube's standard AAC/m4a audio stream (~128kbps)
-    # It is a single progressive file (never DASH/HLS) compatible with ExoPlayer
     ydl_opts = {
         "format": "140/bestaudio[ext=m4a]/bestaudio/best",
         "quiet": True,
@@ -51,6 +50,56 @@ def _get_youtube_url(video_id: str) -> str:
 
         _url_cache[video_id] = (url, now + CACHE_TTL_SECONDS)
         return url
+
+
+@app.get("/search")
+def search_videos(q: str):
+    if not q or not q.strip():
+        return []
+
+    query_key = q.strip().lower()
+    now = time.time()
+
+    if query_key in _search_cache:
+        results, expires_at = _search_cache[query_key]
+        if now < expires_at:
+            return results
+
+    ydl_opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": True,
+        "skip_download": True,
+        "http_headers": {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/125.0.0.0 Safari/537.36"
+            ),
+        },
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f"ytsearch15:{q}", download=False)
+            results = []
+            for entry in info.get("entries", []):
+                if entry and entry.get("id"):
+                    results.append(
+                        {
+                            "id": entry.get("id"),
+                            "title": entry.get("title", "Unknown Title"),
+                            "author": entry.get("uploader")
+                            or entry.get("channel")
+                            or "Unknown Artist",
+                            "duration": entry.get("duration"),
+                        }
+                    )
+
+            _search_cache[query_key] = (results, now + 1800)  # 30-min cache
+            return results
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/stream/{video_id}.m4a")
@@ -85,7 +134,6 @@ def stream_audio(request: Request, video_id: str = None, v: str = None):
     try:
         yt_resp = urllib.request.urlopen(req)
     except Exception as e:
-        # Cache might be stale -> invalidate & retry once
         if target_id in _url_cache:
             del _url_cache[target_id]
         try:
@@ -97,19 +145,29 @@ def stream_audio(request: Request, video_id: str = None, v: str = None):
                 status_code=500, detail=f"Proxy error: {retry_err}"
             )
 
-    data = yt_resp.read()
+    def iterfile():
+        try:
+            while True:
+                chunk = yt_resp.read(64 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            yt_resp.close()
 
     response_headers = {
         "Content-Type": "audio/mp4",
-        "Content-Length": str(len(data)),
         "Accept-Ranges": "bytes",
     }
     content_range = yt_resp.headers.get("Content-Range")
     if content_range:
         response_headers["Content-Range"] = content_range
+    content_length = yt_resp.headers.get("Content-Length")
+    if content_length:
+        response_headers["Content-Length"] = content_length
 
-    return Response(
-        content=data,
+    return StreamingResponse(
+        iterfile(),
         status_code=yt_resp.status,
         headers=response_headers,
         media_type="audio/mp4",

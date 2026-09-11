@@ -18,23 +18,52 @@ class PreferencesService extends ChangeNotifier {
   // Search History
   List<String> _searchHistory = [];
 
+  // Listening Preferences & Play Counts
+  final Map<String, int> _artistPlayCounts = {};
+  String _mostPlayedArtist = '';
+
   bool get isInitialized => _isInitialized;
   bool get crossfadeEnabled => _crossfadeEnabled;
   Color get themeColor => _themeColor;
   double get cacheSizeMB => _cacheSizeMB;
   List<String> get searchHistory => _searchHistory;
+  String get mostPlayedArtist => _mostPlayedArtist;
 
   Future<void> init() async {
     if (_isInitialized) return;
     _prefs = await SharedPreferences.getInstance();
-    
+
     _crossfadeEnabled = _prefs.getBool('crossfade') ?? false;
     int colorValue = _prefs.getInt('themeColor') ?? 0xFFFA2D48;
     _themeColor = Color(colorValue);
     _cacheSizeMB = _prefs.getDouble('cacheSizeMB') ?? 500.0;
     _searchHistory = _prefs.getStringList('searchHistory') ?? [];
-    
+    _mostPlayedArtist = _prefs.getString('mostPlayedArtist') ?? '';
+
     _isInitialized = true;
+    notifyListeners();
+  }
+
+  Future<void> recordSongPlay(String artist, String title) async {
+    if (artist.trim().isEmpty) return;
+
+    final count = (_artistPlayCounts[artist] ?? 0) + 1;
+    _artistPlayCounts[artist] = count;
+
+    // Recalculate top artist
+    String topArtist = _mostPlayedArtist;
+    int maxCount = 0;
+    _artistPlayCounts.forEach((key, val) {
+      if (val > maxCount) {
+        maxCount = val;
+        topArtist = key;
+      }
+    });
+
+    if (topArtist != _mostPlayedArtist) {
+      _mostPlayedArtist = topArtist;
+      await _prefs.setString('mostPlayedArtist', _mostPlayedArtist);
+    }
     notifyListeners();
   }
 
