@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 class MusicService extends ChangeNotifier {
   static final MusicService _instance = MusicService._internal();
@@ -10,6 +12,7 @@ class MusicService extends ChangeNotifier {
 
   MusicService._internal() {
     _initAudioPlayer();
+    loadDownloadedSongs();
   }
 
   final YoutubeExplode _yt = YoutubeExplode();
@@ -111,6 +114,110 @@ class MusicService extends ChangeNotifier {
     } catch (e, stackTrace) {
       debugPrint('Error playing song: $e');
       debugPrint('Stack trace: $stackTrace');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  List<Map<String, String>> _downloadedSongs = [];
+  bool _isDownloading = false;
+
+  List<Map<String, String>> get downloadedSongs => _downloadedSongs;
+  bool get isDownloading => _isDownloading;
+
+  Future<void> loadDownloadedSongs() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/downloads.json');
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        final List<dynamic> jsonList = json.decode(content);
+        _downloadedSongs = jsonList.map((e) => Map<String, String>.from(e)).toList();
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error loading downloaded songs: $e');
+    }
+  }
+
+  Future<bool> downloadSong(Video song) async {
+    _isDownloading = true;
+    notifyListeners();
+
+    try {
+      final response = await http.get(Uri.parse('http://10.0.2.2:8000/stream_url?v=${song.id.value}'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final streamUrl = data['url'];
+
+        // Download stream bytes
+        final audioResponse = await http.get(
+          Uri.parse(streamUrl),
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+        );
+
+        if (audioResponse.statusCode == 200) {
+          final dir = await getApplicationDocumentsDirectory();
+          final filePath = '${dir.path}/${song.id.value}.m4a';
+          final file = File(filePath);
+          await file.writeAsBytes(audioResponse.bodyBytes);
+
+          final songInfo = {
+            'id': song.id.value,
+            'title': song.title,
+            'author': song.author,
+            'thumbnail': song.thumbnails.highResUrl,
+            'localPath': filePath,
+          };
+
+          _downloadedSongs.removeWhere((item) => item['id'] == song.id.value);
+          _downloadedSongs.add(songInfo);
+
+          final jsonFile = File('${dir.path}/downloads.json');
+          await jsonFile.writeAsString(json.encode(_downloadedSongs));
+
+          debugPrint('Successfully downloaded song to $filePath');
+          notifyListeners();
+          return true;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error downloading song: $e');
+    } finally {
+      _isDownloading = false;
+      notifyListeners();
+    }
+    return false;
+  }
+
+  Future<void> playDownloadedSong(Map<String, String> songData) async {
+    _isLoading = true;
+    // Create a dummy Video object for UI consistency
+    _currentSong = Video(
+      VideoId(songData['id']!),
+      songData['title']!,
+      songData['author']!,
+      ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+      DateTime.now(),
+      '',
+      null,
+      '',
+      null,
+      ThumbnailSet(songData['id']!),
+      null,
+      Engagement(0, null, null),
+      false,
+    );
+    notifyListeners();
+
+    try {
+      await _audioPlayer.setFilePath(songData['localPath']!);
+      await _audioPlayer.play();
+    } catch (e) {
+      debugPrint('Error playing downloaded song: $e');
     } finally {
       _isLoading = false;
       notifyListeners();

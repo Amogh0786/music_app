@@ -79,7 +79,7 @@ class _SearchScreenState extends State<SearchScreen> {
                               title: Text(video.title, maxLines: 1, overflow: TextOverflow.ellipsis),
                               subtitle: Text(video.author, maxLines: 1),
                               onTap: () {
-                                _musicService.playSong(video);
+                                _musicService.playPlaylist(_searchResults, index);
                               },
                             );
                           },

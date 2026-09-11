@@ -86,9 +86,43 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       ),
                     ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.more_vert, color: Colors.white),
-                    onPressed: () {},
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: _musicService.isDownloading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : Icon(
+                                _musicService.downloadedSongs.any((s) => s['id'] == song.id.value)
+                                    ? Icons.download_done
+                                    : Icons.file_download_outlined,
+                                color: _musicService.downloadedSongs.any((s) => s['id'] == song.id.value)
+                                    ? const Color(0xFF1DB954)
+                                    : Colors.white,
+                              ),
+                        onPressed: _musicService.isDownloading
+                            ? null
+                            : () async {
+                                final success = await _musicService.downloadSong(song);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        success ? 'Downloaded to offline library!' : 'Download failed.',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.more_vert, color: Colors.white),
+                        onPressed: () {},
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -217,7 +251,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.skip_previous, color: Colors.white, size: 36),
-                    onPressed: () {},
+                    onPressed: () => _musicService.previousSong(),
                   ),
                   Container(
                     width: 64,
@@ -238,7 +272,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.skip_next, color: Colors.white, size: 36),
-                    onPressed: () {},
+                    onPressed: () => _musicService.nextSong(),
                   ),
                   IconButton(
                     icon: const Icon(Icons.repeat, color: Colors.grey, size: 24),
