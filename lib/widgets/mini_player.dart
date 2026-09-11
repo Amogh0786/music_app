@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/music_service.dart';
 import '../screens/player_screen.dart';
@@ -25,7 +26,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
   }
 
   void _onMusicStateChanged() {
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   @override
@@ -33,82 +34,125 @@ class _MiniPlayerState extends State<MiniPlayer> {
     final song = _musicService.currentSong;
     final isPlaying = _musicService.audioPlayer.playing;
     final isLoading = _musicService.isLoading;
+    final hdThumbnail = song != null ? MusicService.getHdThumbnail(song.id.value) : '';
 
     if (song == null && !isLoading) {
-      return const SizedBox.shrink(); // Don't show player if no song is active
+      return const SizedBox.shrink();
     }
 
     return GestureDetector(
       onTap: () {
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (context) => const PlayerScreen()),
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => const PlayerScreen(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              const begin = Offset(0.0, 1.0);
+              const end = Offset.zero;
+              const curve = Curves.easeOutCubic;
+              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              return SlideTransition(position: animation.drive(tween), child: child);
+            },
+          ),
         );
       },
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        padding: const EdgeInsets.all(8),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        height: 64,
         decoration: BoxDecoration(
-          color: const Color(0xFF282828),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.4),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            ),
+          ],
         ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Colors.grey[700],
-              borderRadius: BorderRadius.circular(4),
-              image: song != null
-                  ? DecorationImage(
-                      image: NetworkImage(song.thumbnails.lowResUrl),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
-            ),
-            child: song == null ? const Icon(Icons.music_note, color: Colors.white54) : null,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  song?.title ?? 'Loading...',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  song?.author ?? '',
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.favorite_border),
-            onPressed: () {},
-          ),
-          isLoading
-              ? const Padding(
-                  padding: EdgeInsets.all(12.0),
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1DB954)),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+            child: Container(
+              color: const Color(0xFF282828).withOpacity(0.85),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  // Album Thumbnail
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: song != null
+                          ? Image.network(
+                              hdThumbnail,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Image.network(song.thumbnails.lowResUrl, fit: BoxFit.cover),
+                            )
+                          : Container(color: Colors.grey[800]),
+                    ),
                   ),
-                )
-              : IconButton(
-                  icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
-                  onPressed: () => _musicService.togglePlayPause(),
-                ),
-        ],
+                  const SizedBox(width: 12),
+
+                  // Song Title and Artist
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          song?.title ?? 'Loading...',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            letterSpacing: -0.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          song?.author ?? '',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.6),
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Control Buttons (Play/Pause & Next)
+                  isLoading
+                      ? const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          ),
+                        )
+                      : IconButton(
+                          icon: Icon(
+                            isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                            color: Colors.white,
+                            size: 30,
+                          ),
+                          onPressed: () => _musicService.togglePlayPause(),
+                        ),
+                  IconButton(
+                    icon: const Icon(Icons.skip_next_rounded, color: Colors.white, size: 28),
+                    onPressed: () => _musicService.nextSong(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
-    ),
     );
   }
 }

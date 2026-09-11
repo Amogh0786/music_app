@@ -23,10 +23,11 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF121212),
       body: Stack(
         children: [
           _screens[_selectedIndex],
-          // Positioned mini player just above the bottom navigation bar
+          // Floating Mini Player pinned above the Bottom Navigation Bar
           const Positioned(
             bottom: 0,
             left: 0,
@@ -36,13 +37,17 @@ class _MainScreenState extends State<MainScreen> {
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
+        backgroundColor: const Color(0xFF121212),
+        selectedItemColor: const Color(0xFFFA2D48), // Apple Music Red Accent
+        unselectedItemColor: Colors.grey[600],
         currentIndex: _selectedIndex,
+        type: BottomNavigationBarType.fixed,
         onTap: (index) => setState(() => _selectedIndex = index),
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Home',
+            icon: Icon(Icons.play_circle_outline),
+            activeIcon: Icon(Icons.play_circle_fill),
+            label: 'Listen Now',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.search_outlined),

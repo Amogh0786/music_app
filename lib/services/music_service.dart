@@ -22,21 +22,93 @@ class MusicService extends ChangeNotifier {
   List<Video> _playlist = [];
   int _currentIndex = 0;
   bool _isLoading = false;
+  bool _isShuffle = false;
+  LoopMode _loopMode = LoopMode.off;
+  List<Map<String, String>> _likedSongs = [];
 
   Video? get currentSong => _currentSong;
   List<Video> get playlist => _playlist;
   int get currentIndex => _currentIndex;
   bool get isLoading => _isLoading;
+  bool get isShuffle => _isShuffle;
+  LoopMode get loopMode => _loopMode;
+  List<Map<String, String>> get likedSongs => _likedSongs;
   AudioPlayer get audioPlayer => _audioPlayer;
 
+  static String getHdThumbnail(String videoId) {
+    return 'https://i.ytimg.com/vi/$videoId/maxresdefault.jpg';
+  }
+
   void _initAudioPlayer() {
-    // Listen to player state changes to notify UI
     _audioPlayer.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed) {
-        nextSong(); // Auto play next song when current finishes
+        nextSong(); // Infinite Auto-Play next recommended track
       }
       notifyListeners();
     });
+    loadLikedSongs();
+  }
+
+  Future<void> loadLikedSongs() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/liked_songs.json');
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        final List<dynamic> jsonList = json.decode(content);
+        _likedSongs = jsonList.map((e) => Map<String, String>.from(e)).toList();
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error loading liked songs: $e');
+    }
+  }
+
+  void toggleLike(Video song) async {
+    final exists = _likedSongs.any((s) => s['id'] == song.id.value);
+    if (exists) {
+      _likedSongs.removeWhere((s) => s['id'] == song.id.value);
+    } else {
+      _likedSongs.add({
+        'id': song.id.value,
+        'title': song.title,
+        'author': song.author,
+        'thumbnail': getHdThumbnail(song.id.value),
+      });
+    }
+    notifyListeners();
+
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/liked_songs.json');
+      await file.writeAsString(json.encode(_likedSongs));
+    } catch (e) {
+      debugPrint('Error saving liked songs: $e');
+    }
+  }
+
+  void seekRelative(Duration offset) {
+    final current = _audioPlayer.position;
+    final target = current + offset;
+    _audioPlayer.seek(target);
+  }
+
+  void toggleShuffle() {
+    _isShuffle = !_isShuffle;
+    _audioPlayer.setShuffleModeEnabled(_isShuffle);
+    notifyListeners();
+  }
+
+  void toggleRepeat() {
+    if (_loopMode == LoopMode.off) {
+      _loopMode = LoopMode.all;
+    } else if (_loopMode == LoopMode.all) {
+      _loopMode = LoopMode.one;
+    } else {
+      _loopMode = LoopMode.off;
+    }
+    _audioPlayer.setLoopMode(_loopMode);
+    notifyListeners();
   }
 
   Future<List<Video>> searchSongs(String query) async {
@@ -108,6 +180,9 @@ class MusicService extends ChangeNotifier {
         
         debugPrint('Step 3: Playing audio via just_audio');
         await _audioPlayer.play();
+
+        // Asynchronously fetch YouTube recommendations to build an infinite queue!
+        _fetchNextRecommendations(song);
       } else {
         debugPrint('Backend error: ${response.body}');
       }
@@ -117,6 +192,25 @@ class MusicService extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> _fetchNextRecommendations(Video song) async {
+    try {
+      debugPrint('Fetching YouTube auto-play recommendations for ${song.title}');
+      final relatedList = await _yt.videos.getRelatedVideos(song);
+      if (relatedList != null && relatedList.isNotEmpty) {
+        final newTracks = relatedList.where((v) => v.duration != null).toList();
+        for (var track in newTracks) {
+          if (!_playlist.any((item) => item.id == track.id)) {
+            _playlist.add(track);
+          }
+        }
+        debugPrint('Added ${newTracks.length} auto-play recommended songs to queue!');
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error fetching recommendations: $e');
     }
   }
 
