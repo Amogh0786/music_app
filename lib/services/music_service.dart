@@ -1,6 +1,7 @@
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 class MusicService extends ChangeNotifier {
   static final MusicService _instance = MusicService._internal();
@@ -51,7 +52,7 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      debugPrint('Step 1: Getting manifest for ${song.id}');
+      debugPrint('Step 1: Setting up proxy stream for ${song.id}');
       var manifest = await _yt.videos.streamsClient.getManifest(song.id);
       
       debugPrint('Step 2: Checking audio streams. Count: ${manifest.audioOnly.length}');
@@ -60,13 +61,19 @@ class MusicService extends ChangeNotifier {
         return;
       }
 
-      var streamInfo = manifest.audioOnly.withHighestBitrate();
+      // ExoPlayer sometimes struggles to decode chunked .webm (Opus/Vorbis) streams.
+      // We force it to use .mp4 (M4A / AAC) which ExoPlayer handles perfectly.
+      var streamInfo = manifest.audioOnly
+          .where((stream) => stream.container.name == 'mp4')
+          .withHighestBitrate();
+          
       debugPrint('Step 3: Selected stream URL: ${streamInfo.url}');
-
-      debugPrint('Step 4: Passing URL to audio player');
-      await _audioPlayer.setUrl(streamInfo.url.toString());
       
-      debugPrint('Step 5: Playing audio');
+      // Instead of giving ExoPlayer the URL (which gets 403 Forbidden), 
+      // we download the stream via Dart and pipe it directly to ExoPlayer!
+      await _audioPlayer.setAudioSource(YoutubeAudioSource(streamInfo.url.toString()));
+      
+      debugPrint('Step 4: Playing audio via Dart proxy');
       await _audioPlayer.play();
     } catch (e, stackTrace) {
       debugPrint('Error playing song: $e');
@@ -76,7 +83,6 @@ class MusicService extends ChangeNotifier {
       notifyListeners();
     }
   }
-
   void togglePlayPause() {
     if (_audioPlayer.playing) {
       _audioPlayer.pause();
@@ -84,5 +90,40 @@ class MusicService extends ChangeNotifier {
       _audioPlayer.play();
     }
     notifyListeners();
+  }
+}
+
+/// A custom AudioSource that pipes the YouTube stream through Dart's HTTP client
+/// This completely bypasses the ExoPlayer 403 Forbidden error!
+class YoutubeAudioSource extends StreamAudioSource {
+  final String url;
+
+  YoutubeAudioSource(this.url);
+
+  @override
+  Future<StreamAudioResponse> request([int? start, int? end]) async {
+    start ??= 0;
+    
+    final req = http.Request('GET', Uri.parse(url));
+    // ExoPlayer requires Range requests for seeking and buffering.
+    // This was the missing piece that caused the SocketTimeout!
+    req.headers['Range'] = 'bytes=$start-${end != null ? end - 1 : ''}';
+    req.headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36';
+
+    final response = await http.Client().send(req);
+    
+    int? sourceLength;
+    final contentRange = response.headers['content-range'];
+    if (contentRange != null && contentRange.contains('/')) {
+      sourceLength = int.tryParse(contentRange.split('/').last);
+    }
+
+    return StreamAudioResponse(
+      sourceLength: sourceLength,
+      contentLength: response.contentLength,
+      offset: start,
+      stream: response.stream,
+      contentType: response.headers['content-type'] ?? 'audio/mp4',
+    );
   }
 }
