@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/music_service.dart';
+import '../screens/player_screen.dart';
 
 class MiniPlayer extends StatefulWidget {
   const MiniPlayer({super.key});
@@ -37,13 +38,19 @@ class _MiniPlayerState extends State<MiniPlayer> {
       return const SizedBox.shrink(); // Don't show player if no song is active
     }
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF282828),
-        borderRadius: BorderRadius.circular(8),
-      ),
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (context) => const PlayerScreen()),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF282828),
+          borderRadius: BorderRadius.circular(8),
+        ),
       child: Row(
         children: [
           Container(
@@ -101,6 +108,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                 ),
         ],
       ),
+    ),
     );
   }
 }
