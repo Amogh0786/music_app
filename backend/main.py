@@ -96,7 +96,7 @@ def version_check():
     return {
         "yt_dlp": yt_dlp.version.__version__,
         "node": shutil.which("node"),
-        "commit": "v3-check",
+        "commit": "v4-android-fix",
     }
 
 
@@ -116,13 +116,13 @@ def _get_youtube_url(video_id: str) -> str:
             del _url_cache[video_id]
 
     ydl_opts = {
-        "format": "140/bestaudio[ext=m4a]/bestaudio/18/best",
+        "format": "18/bestaudio/best",
         "quiet": True,
         "no_warnings": True,
         "skip_download": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios"],
+                "player_client": ["android"],
                 "player_skip": ["webpage", "configs"],
             }
         },
@@ -408,14 +408,14 @@ def _sync_download_audio(video_id: str) -> Path:
     node_path = shutil.which("node") or "/usr/bin/node" or "/opt/homebrew/bin/node"
 
     ydl_opts = {
-        "format": "140/bestaudio[ext=m4a]/bestaudio/18/best",
+        "format": "18/bestaudio/best",
         "outtmpl": str(temp_file),
         "quiet": True,
         "no_warnings": True,
         "overwrites": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios"],
+                "player_client": ["android"],
                 "player_skip": ["webpage", "configs"],
             }
         },

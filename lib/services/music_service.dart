@@ -22,6 +22,7 @@ class MusicService extends ChangeNotifier {
   }
 
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final YoutubeExplode _ytExplode = YoutubeExplode();
 
   Video? _currentSong;
   List<Video> _playlist = [];
@@ -538,6 +539,48 @@ class MusicService extends ChangeNotifier {
     return null;
   }
 
+  /// Resolves the direct Google CDN audio stream URL natively on the user's device.
+  /// Because this request originates from the user's mobile/residential IP,
+  /// YouTube does NOT challenge it as a datacenter bot.
+  Future<String?> _resolveDirectAudioUrl(String videoId) async {
+    try {
+      final manifest = await _ytExplode.videos.streamsClient
+          .getManifest(videoId)
+          .timeout(const Duration(seconds: 8));
+
+      // On iOS, AVPlayer prefers MP4 container (AAC codec)
+      if (Platform.isIOS) {
+        final mp4Streams = manifest.audioOnly.where(
+          (s) => s.container.name.toLowerCase() == 'mp4' || s.codec.mimeType.contains('mp4'),
+        );
+        if (mp4Streams.isNotEmpty) {
+          final chosen = mp4Streams.withHighestBitrate();
+          debugPrint('[StreamResolver] Selected iOS-friendly MP4/AAC stream (${chosen.bitrate}) for $videoId');
+          return chosen.url.toString();
+        }
+      }
+
+      // On Android and other platforms, ExoPlayer natively handles both Opus (WebM) and AAC (MP4)
+      final audioStreams = manifest.audioOnly;
+      if (audioStreams.isNotEmpty) {
+        final chosen = audioStreams.withHighestBitrate();
+        debugPrint('[StreamResolver] Selected high-bitrate audio stream (${chosen.bitrate}, ${chosen.container.name}) for $videoId');
+        return chosen.url.toString();
+      }
+
+      // Fallback: Muxed streams (audio + video, ExoPlayer plays audio track)
+      final muxedStreams = manifest.muxed;
+      if (muxedStreams.isNotEmpty) {
+        final chosen = muxedStreams.withHighestBitrate();
+        debugPrint('[StreamResolver] Fallback: Selected muxed stream for $videoId');
+        return chosen.url.toString();
+      }
+    } catch (e) {
+      debugPrint('[StreamResolver] Device direct resolution error for $videoId: $e');
+    }
+    return null;
+  }
+
   Future<void> playSong(Video song, {bool updateQueue = true}) async {
     _isLoading = true;
     _currentSong = song;
@@ -570,7 +613,7 @@ class MusicService extends ChangeNotifier {
     try {
       await _audioPlayer.stop();
 
-      // If this song is downloaded locally, play directly from disk
+      // 1. If this song is downloaded locally, play directly from disk
       final downloadedItem = _downloadedSongs.firstWhere(
         (item) => item['id'] == song.id.value,
         orElse: () => {},
@@ -591,30 +634,58 @@ class MusicService extends ChangeNotifier {
         }
       }
 
-      final proxyUri = ApiConfig.streamProxyUri(song.id.value);
-      debugPrint('[Play] Setting audio source to proxy: $proxyUri');
+      bool playbackSourceSet = false;
 
+      // 2. Primary: Direct On-Device Resolution (Ultra-fast, 0 server load, immune to datacenter blocks)
       try {
+        debugPrint('[Play] Resolving direct audio stream on mobile device for ${song.id.value}…');
+        final directUrl = await _resolveDirectAudioUrl(song.id.value);
+        if (_currentSong?.id.value != song.id.value) return;
+
+        if (directUrl != null) {
+          debugPrint('[Play] Direct audio URL resolved! Setting audio source…');
+          await _audioPlayer.setAudioSource(
+            AudioSource.uri(Uri.parse(directUrl), tag: mediaItem),
+            preload: true,
+          );
+          playbackSourceSet = true;
+        }
+      } catch (directError) {
+        if (_isInterrupted(directError)) {
+          debugPrint('[Play] Load interrupted by newer request');
+          return;
+        }
+        debugPrint('[Play] Direct resolution error ($directError), trying fallbacks…');
+      }
+
+      // 3. Fallback 1: Backend /stream_url
+      if (!playbackSourceSet) {
+        if (_currentSong?.id.value != song.id.value) return;
+        try {
+          debugPrint('[Play] Fallback 1: Requesting /stream_url from backend…');
+          final backendUrl = await _fetchStreamUrl(song.id.value);
+          if (_currentSong?.id.value != song.id.value) return;
+          if (backendUrl != null) {
+            await _audioPlayer.setAudioSource(
+              AudioSource.uri(Uri.parse(backendUrl), headers: _ytHeaders, tag: mediaItem),
+              preload: true,
+            );
+            playbackSourceSet = true;
+          }
+        } catch (backendUrlError) {
+          debugPrint('[Play] Backend /stream_url error: $backendUrlError');
+        }
+      }
+
+      // 4. Fallback 2: Backend proxy /stream/{id}.m4a
+      if (!playbackSourceSet) {
+        if (_currentSong?.id.value != song.id.value) return;
+        final proxyUri = ApiConfig.streamProxyUri(song.id.value);
+        debugPrint('[Play] Fallback 2: Setting audio source to proxy: $proxyUri');
         await _audioPlayer.setAudioSource(
           AudioSource.uri(proxyUri, tag: mediaItem),
           preload: true,
         );
-      } catch (proxyError) {
-        if (_isInterrupted(proxyError)) {
-          debugPrint('[Play] Load interrupted by newer request');
-          return;
-        }
-        debugPrint('[Play] Proxy error ($proxyError), falling back to direct stream…');
-        final directUrl = await _fetchStreamUrl(song.id.value);
-        if (_currentSong?.id.value != song.id.value) return;
-        if (directUrl != null) {
-          await _audioPlayer.setAudioSource(
-            AudioSource.uri(Uri.parse(directUrl), headers: _ytHeaders, tag: mediaItem),
-            preload: true,
-          );
-        } else {
-          rethrow;
-        }
       }
 
       if (_currentSong?.id.value != song.id.value) return;
@@ -709,20 +780,42 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // First try proxy stream, fallback to direct stream URL
-      final proxyUri = ApiConfig.streamProxyUri(song.id.value);
       final client = http.Client();
       http.StreamedResponse? response;
 
+      // 1. Primary: Direct on-device stream URL resolution (fastest, direct from Google CDN)
       try {
-        final request = http.Request('GET', proxyUri);
-        response = await client.send(request).timeout(const Duration(seconds: 15));
-      } catch (_) {
-        final streamUrl = await _fetchStreamUrl(song.id.value);
-        if (streamUrl != null) {
-          final request = http.Request('GET', Uri.parse(streamUrl));
-          request.headers.addAll(_ytHeaders);
-          response = await client.send(request).timeout(const Duration(seconds: 15));
+        final directUrl = await _resolveDirectAudioUrl(song.id.value);
+        if (directUrl != null) {
+          final request = http.Request('GET', Uri.parse(directUrl));
+          response = await client.send(request).timeout(const Duration(seconds: 25));
+        }
+      } catch (e) {
+        debugPrint('[Download] Direct URL error: $e');
+      }
+
+      // 2. Fallback 1: Backend /stream_url
+      if (response == null || response.statusCode != 200) {
+        try {
+          final streamUrl = await _fetchStreamUrl(song.id.value);
+          if (streamUrl != null) {
+            final request = http.Request('GET', Uri.parse(streamUrl));
+            request.headers.addAll(_ytHeaders);
+            response = await client.send(request).timeout(const Duration(seconds: 25));
+          }
+        } catch (e) {
+          debugPrint('[Download] Backend streamUrl error: $e');
+        }
+      }
+
+      // 3. Fallback 2: Backend proxy stream
+      if (response == null || response.statusCode != 200) {
+        try {
+          final proxyUri = ApiConfig.streamProxyUri(song.id.value);
+          final request = http.Request('GET', proxyUri);
+          response = await client.send(request).timeout(const Duration(seconds: 25));
+        } catch (e) {
+          debugPrint('[Download] Proxy error: $e');
         }
       }
 
