@@ -38,6 +38,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return '$minutes:$seconds';
   }
 
+  String _cleanLyrics(String? raw) {
+    if (raw == null) return 'No lyrics available.';
+    // Strip [01:23.45] style LRC timestamp tags
+    final cleaned = raw.replaceAll(RegExp(r'\[\d+:\d+(\.\d+)?\]'), '').trim();
+    return cleaned.isEmpty ? 'No lyrics available.' : cleaned;
+  }
+
   void _toggleLyrics(Video song) {
     setState(() {
       _showLyrics = !_showLyrics;
@@ -61,7 +68,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           child: Container(
             height: MediaQuery.of(context).size.height * 0.75,
             decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E).withOpacity(0.92),
+              color: const Color(0xFF1E1E1E).withValues(alpha: 0.92),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               border: Border.all(color: Colors.white10),
             ),
@@ -120,7 +127,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   width: 46,
                                   height: 46,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Image.network(
+                                  errorBuilder: (_, _, _) => Image.network(
                                     song.thumbnails.lowResUrl,
                                     width: 46,
                                     height: 46,
@@ -143,7 +150,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: isCurrent ? Theme.of(context).primaryColor.withOpacity(0.8) : Colors.grey[400],
+                                  color: isCurrent ? Theme.of(context).primaryColor.withValues(alpha: 0.8) : Colors.grey[400],
                                   fontSize: 12,
                                 ),
                               ),
@@ -179,7 +186,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E1E24).withOpacity(0.95),
+              color: const Color(0xFF1E1E24).withValues(alpha: 0.95),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               border: Border.all(color: Colors.white10),
             ),
@@ -303,8 +310,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    _musicService.dominantColor.withOpacity(0.85),
-                    _musicService.vibrantColor.withOpacity(0.45),
+                    _musicService.dominantColor.withValues(alpha: 0.85),
+                    _musicService.vibrantColor.withValues(alpha: 0.45),
                     const Color(0xFF121212),
                     Colors.black,
                   ],
@@ -323,7 +330,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               duration: const Duration(milliseconds: 800),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: _musicService.dominantColor.withOpacity(0.5),
+                color: _musicService.dominantColor.withValues(alpha: 0.5),
               ),
             ),
           ),
@@ -336,7 +343,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               duration: const Duration(milliseconds: 800),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: _musicService.vibrantColor.withOpacity(0.4),
+                color: _musicService.vibrantColor.withValues(alpha: 0.4),
               ),
             ),
           ),
@@ -344,7 +351,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 55, sigmaY: 55),
               child: Container(
-                color: Colors.black.withOpacity(0.35),
+                color: Colors.black.withValues(alpha: 0.35),
               ),
             ),
           ),
@@ -441,7 +448,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         decoration: BoxDecoration(
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.6),
+                              color: Colors.black.withValues(alpha: 0.6),
                               blurRadius: 25,
                               spreadRadius: 5,
                             ),
@@ -450,7 +457,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         child: Image.network(
                           hdThumbnail,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Image.network(song.thumbnails.highResUrl, fit: BoxFit.cover),
+                          errorBuilder: (_, _, _) => Image.network(song.thumbnails.highResUrl, fit: BoxFit.cover),
                         ),
                       ),
                     )
@@ -461,7 +468,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.3),
+                          color: Colors.black.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: _musicService.isFetchingLyrics
@@ -471,7 +478,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             : SingleChildScrollView(
                                 physics: const BouncingScrollPhysics(),
                                 child: Text(
-                                  _musicService.cachedLyrics ?? 'No lyrics available.',
+                                  _cleanLyrics(_musicService.cachedLyrics),
                                   textAlign: TextAlign.left,
                                   style: const TextStyle(
                                     color: Colors.white,
@@ -509,7 +516,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             Text(
                               song.author,
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                                 fontSize: 16,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -566,8 +573,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(_formatDuration(position), style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
-                                Text(_formatDuration(duration), style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
+                                Text(_formatDuration(position), style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 12)),
+                                Text(_formatDuration(duration), style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 12)),
                               ],
                             ),
                           ),

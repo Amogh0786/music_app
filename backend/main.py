@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import yt_dlp
 import urllib.request
@@ -12,6 +13,7 @@ from typing import Dict, List
 # Co-occurrence storage: maps video_id -> Counter of next video_ids
 co_occurrence: dict[str, Counter[str]] = {}
 CO_OCCURRENCE_FILE = Path(__file__).with_name('co_occurrence.json')
+_last_co_occurrence_save = 0.0
 
 def _load_co_occurrence():
     global co_occurrence
@@ -45,12 +47,16 @@ MAX_STREAM_RETRIES = 3
 STREAM_CHUNK_SIZE = 64 * 1024  # 64KB
 
 def _record_co_occurrence(current_id: str, next_id: str):
-    """Update co-occurrence counters and persist to disk."""
+    """Update co-occurrence counters and persist to disk (throttled)."""
+    global _last_co_occurrence_save
     if not current_id or not next_id:
         return
     counter = co_occurrence.setdefault(current_id, Counter())
     counter[next_id] += 1
-    _save_co_occurrence()
+    now = time.time()
+    if now - _last_co_occurrence_save > 10:
+        _save_co_occurrence()
+        _last_co_occurrence_save = now
 
 def _get_top_cooccurring(v_id: str, limit: int) -> List[str]:
     """Return up to `limit` video IDs that most frequently follow `v_id`.
@@ -63,6 +69,14 @@ def _get_top_cooccurring(v_id: str, limit: int) -> List[str]:
 
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # In-memory URL & Search caches
 _url_cache: dict[str, tuple[str, float]] = {}
@@ -358,8 +372,8 @@ def get_next_candidates(v: str, limit: int = 20):
 
 
 
-@app.get("/stream/{video_id}.m4a")
-@app.get("/stream")
+@app.api_route("/stream/{video_id}.m4a", methods=["GET", "HEAD"])
+@app.api_route("/stream", methods=["GET", "HEAD"])
 def stream_audio(request: Request, video_id: str = None, v: str = None):
     target_id = video_id or v
     if not target_id:
@@ -401,37 +415,6 @@ def stream_audio(request: Request, video_id: str = None, v: str = None):
                 status_code=500, detail=f"Proxy error: {retry_err}"
             )
 
-    def iterfile():
-        attempts = 0
-        nonlocal yt_resp
-        while attempts < MAX_STREAM_RETRIES:
-            try:
-                while True:
-                    chunk = yt_resp.read(STREAM_CHUNK_SIZE)
-                    if not chunk:
-                        return
-                    yield chunk
-                break
-            except ConnectionResetError:
-                attempts += 1
-                if attempts >= MAX_STREAM_RETRIES:
-                    raise HTTPException(status_code=502, detail="Upstream stream reset")
-                # retry: close and reopen connection
-                try:
-                    yt_resp.close()
-                except Exception:
-                    pass
-                target_url = _get_youtube_url(target_id)
-                req = urllib.request.Request(target_url, headers=headers)
-                yt_resp = urllib.request.urlopen(req)
-            finally:
-                # Ensure the response is closed when exiting loop
-                if attempts >= MAX_STREAM_RETRIES:
-                    try:
-                        yt_resp.close()
-                    except Exception:
-                        pass
-
     response_headers = {
         "Content-Type": "audio/mp4",
         "Accept-Ranges": "bytes",
@@ -442,6 +425,50 @@ def stream_audio(request: Request, video_id: str = None, v: str = None):
     content_length = yt_resp.headers.get("Content-Length")
     if content_length:
         response_headers["Content-Length"] = content_length
+
+    # If the player is doing a HEAD check (to inspect Content-Length/Ranges)
+    if request.method == "HEAD":
+        try:
+            yt_resp.close()
+        except Exception:
+            pass
+        return Response(
+            content=b"",
+            status_code=yt_resp.status,
+            headers=response_headers,
+            media_type="audio/mp4",
+        )
+
+    def iterfile():
+        attempts = 0
+        nonlocal yt_resp
+        try:
+            while attempts < MAX_STREAM_RETRIES:
+                try:
+                    while True:
+                        chunk = yt_resp.read(STREAM_CHUNK_SIZE)
+                        if not chunk:
+                            return
+                        yield chunk
+                    break
+                except (ConnectionResetError, BrokenPipeError):
+                    attempts += 1
+                    if attempts >= MAX_STREAM_RETRIES:
+                        return
+                    try:
+                        yt_resp.close()
+                    except Exception:
+                        pass
+                    target_url = _get_youtube_url(target_id)
+                    req = urllib.request.Request(target_url, headers=headers)
+                    yt_resp = urllib.request.urlopen(req)
+        except Exception:
+            return
+        finally:
+            try:
+                yt_resp.close()
+            except Exception:
+                pass
 
     return StreamingResponse(
         iterfile(),

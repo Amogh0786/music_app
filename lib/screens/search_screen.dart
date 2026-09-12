@@ -276,7 +276,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                   width: 52,
                                   height: 52,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Image.network(
+                                  errorBuilder: (_, _, _) => Image.network(
                                     video.thumbnails.lowResUrl,
                                     width: 52,
                                     height: 52,
@@ -374,7 +374,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                       borderRadius: BorderRadius.circular(14),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: colors.first.withOpacity(0.3),
+                                          color: colors.first.withValues(alpha: 0.3),
                                           blurRadius: 8,
                                           offset: const Offset(0, 4),
                                         ),

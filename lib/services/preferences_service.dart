@@ -14,6 +14,7 @@ class PreferencesService extends ChangeNotifier {
   bool _crossfadeEnabled = false;
   Color _themeColor = const Color(0xFFFA2D48); // Default Apple Red
   double _cacheSizeMB = 500.0;
+  String _customServerUrl = '';
 
   // Search History
   List<String> _searchHistory = [];
@@ -26,6 +27,7 @@ class PreferencesService extends ChangeNotifier {
   bool get crossfadeEnabled => _crossfadeEnabled;
   Color get themeColor => _themeColor;
   double get cacheSizeMB => _cacheSizeMB;
+  String get customServerUrl => _customServerUrl;
   List<String> get searchHistory => _searchHistory;
   String get mostPlayedArtist => _mostPlayedArtist;
 
@@ -37,6 +39,7 @@ class PreferencesService extends ChangeNotifier {
     int colorValue = _prefs.getInt('themeColor') ?? 0xFFFA2D48;
     _themeColor = Color(colorValue);
     _cacheSizeMB = _prefs.getDouble('cacheSizeMB') ?? 500.0;
+    _customServerUrl = _prefs.getString('customServerUrl') ?? '';
     _searchHistory = _prefs.getStringList('searchHistory') ?? [];
     _mostPlayedArtist = _prefs.getString('mostPlayedArtist') ?? '';
 
@@ -75,13 +78,19 @@ class PreferencesService extends ChangeNotifier {
 
   Future<void> setThemeColor(Color color) async {
     _themeColor = color;
-    await _prefs.setInt('themeColor', color.value);
+    await _prefs.setInt('themeColor', color.toARGB32());
     notifyListeners();
   }
 
   Future<void> setCacheSize(double sizeMB) async {
     _cacheSizeMB = sizeMB;
     await _prefs.setDouble('cacheSizeMB', sizeMB);
+    notifyListeners();
+  }
+
+  Future<void> setCustomServerUrl(String url) async {
+    _customServerUrl = url.trim();
+    await _prefs.setString('customServerUrl', _customServerUrl);
     notifyListeners();
   }
 

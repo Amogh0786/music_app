@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:palette_generator/palette_generator.dart';
+import 'api_config.dart';
 import 'preferences_service.dart';
 
 class MusicService extends ChangeNotifier {
@@ -18,7 +21,6 @@ class MusicService extends ChangeNotifier {
     loadDownloadedSongs();
   }
 
-  final YoutubeExplode _yt = YoutubeExplode();
   final AudioPlayer _audioPlayer = AudioPlayer();
 
   Video? _currentSong;
@@ -117,11 +119,17 @@ class MusicService extends ChangeNotifier {
       if (state.processingState == ProcessingState.completed) {
         if (_isTransitioning) return;
         _isTransitioning = true;
-        debugPrint('[AudioPlayer] Track completed. Advancing to next song…');
         try {
-          await nextSong();
+          if (_loopMode == LoopMode.one) {
+            debugPrint('[AudioPlayer] LoopMode.one active: repeating current track…');
+            await _audioPlayer.seek(Duration.zero);
+            await _audioPlayer.play();
+          } else {
+            debugPrint('[AudioPlayer] Track completed. Advancing to next song…');
+            await nextSong();
+          }
         } catch (e) {
-          debugPrint('[AudioPlayer] Error advancing song on completion: $e');
+          debugPrint('[AudioPlayer] Error handling song completion: $e');
         } finally {
           _isTransitioning = false;
         }
@@ -168,6 +176,43 @@ class MusicService extends ChangeNotifier {
     }
   }
 
+  Future<void> removeLikedSong(String videoId) async {
+    _likedSongs.removeWhere((s) => s['id'] == videoId);
+    notifyListeners();
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/liked_songs.json');
+      await file.writeAsString(json.encode(_likedSongs));
+    } catch (e) {
+      debugPrint('Error saving liked songs: $e');
+    }
+  }
+
+  Future<void> playLikedSong(Map<String, String> songData) async {
+    _playlist = _likedSongs.map((item) => Video(
+      VideoId(item['id'] ?? ''),
+      item['title'] ?? 'Unknown Title',
+      item['author'] ?? 'Unknown Artist',
+      ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+      DateTime.now(),
+      '',
+      null,
+      '',
+      null,
+      ThumbnailSet(item['id'] ?? ''),
+      null,
+      Engagement(0, null, null),
+      false,
+    )).toList();
+
+    _currentIndex = _likedSongs.indexWhere((item) => item['id'] == songData['id']);
+    if (_currentIndex == -1) _currentIndex = 0;
+    if (_playlist.isNotEmpty) {
+      await playSong(_playlist[_currentIndex], updateQueue: false);
+    }
+  }
+
+
   void seekRelative(Duration offset) {
     final current = _audioPlayer.position;
     final target = current + offset;
@@ -197,9 +242,8 @@ class MusicService extends ChangeNotifier {
 
     try {
       final response = await http
-          .get(Uri.parse('http://10.0.2.2:8000/search?q=${Uri.encodeComponent(query)}&page=$page&limit=20'))
-          .timeout(const Duration(seconds: 10));
-
+          .get(ApiConfig.searchUri(query, page: page, limit: 20))
+          .timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
         final List<dynamic> jsonList = json.decode(response.body);
@@ -244,7 +288,7 @@ class MusicService extends ChangeNotifier {
     if (query.trim().isEmpty) return [];
     try {
       final response = await http
-          .get(Uri.parse('http://10.0.2.2:8000/suggestions?q=${Uri.encodeComponent(query)}&limit=$limit'))
+          .get(ApiConfig.suggestionsUri(query, limit: limit))
           .timeout(const Duration(seconds: 4));
       if (response.statusCode == 200) {
         final List<dynamic> jsonList = json.decode(response.body);
@@ -260,7 +304,7 @@ class MusicService extends ChangeNotifier {
   Future<void> reportTrackFinished(String currentId, String nextId) async {
     try {
       await http.post(
-        Uri.parse('http://10.0.2.2:8000/track_finished'),
+        ApiConfig.trackFinishedUri(),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'current_id': currentId, 'next_id': nextId}),
       ).timeout(const Duration(seconds: 5));
@@ -274,7 +318,7 @@ class MusicService extends ChangeNotifier {
   Future<List<Video>> fetchNextCandidates(String videoId, {int limit = 20}) async {
     try {
       final response = await http
-          .get(Uri.parse('http://10.0.2.2:8000/next_candidates?v=$videoId&limit=$limit'))
+          .get(ApiConfig.nextCandidatesUri(videoId, limit: limit))
           .timeout(const Duration(seconds: 12));
       if (response.statusCode == 200) {
         final List<dynamic> jsonList = json.decode(response.body);
@@ -310,17 +354,15 @@ class MusicService extends ChangeNotifier {
     return [];
   }
 
-
-
-
   Future<void> _extractPalette(String videoId) async {
     try {
-      final imageUrl = getHdThumbnail(videoId);
+      // hqdefault is guaranteed to exist on YouTube CDN, preventing 404 SocketExceptions
+      final imageUrl = 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
       final palette = await PaletteGenerator.fromImageProvider(
         NetworkImage(imageUrl),
-        size: const Size(120, 120),
-        maximumColorCount: 12,
-      ).timeout(const Duration(seconds: 4));
+        size: const Size(100, 100),
+        maximumColorCount: 8,
+      ).timeout(const Duration(seconds: 3));
 
       final dominant = palette.dominantColor?.color ?? palette.vibrantColor?.color ?? const Color(0xFF1E1E2C);
       final vibrant = palette.vibrantColor?.color ?? palette.lightVibrantColor?.color ?? dominant;
@@ -398,16 +440,36 @@ class MusicService extends ChangeNotifier {
       return;
     }
 
-    if (_playlist.isNotEmpty && _currentIndex + 1 < _playlist.length) {
-      final prevSong = _currentSong;
-      _currentIndex++;
-      final nextTrack = _playlist[_currentIndex];
-      if (prevSong != null) {
-        reportTrackFinished(prevSong.id.value, nextTrack.id.value);
+    if (_playlist.isNotEmpty) {
+      if (_isShuffle && _playlist.length > 1) {
+        final random = Random();
+        int nextIdx = random.nextInt(_playlist.length);
+        if (nextIdx == _currentIndex) {
+          nextIdx = (nextIdx + 1) % _playlist.length;
+        }
+        final prevSong = _currentSong;
+        _currentIndex = nextIdx;
+        final nextTrack = _playlist[_currentIndex];
+        if (prevSong != null) {
+          reportTrackFinished(prevSong.id.value, nextTrack.id.value);
+        }
+        await playSong(nextTrack, updateQueue: false);
+        _checkAndPreloadNextQueue();
+        return;
+      } else if (_currentIndex + 1 < _playlist.length) {
+        final prevSong = _currentSong;
+        _currentIndex++;
+        final nextTrack = _playlist[_currentIndex];
+        if (prevSong != null) {
+          reportTrackFinished(prevSong.id.value, nextTrack.id.value);
+        }
+        await playSong(nextTrack, updateQueue: false);
+        _checkAndPreloadNextQueue();
+        return;
       }
-      await playSong(nextTrack, updateQueue: false);
-      _checkAndPreloadNextQueue();
-    } else if (_currentSong != null) {
+    }
+
+    if (_currentSong != null) {
       debugPrint('[Queue] End of queue reached. Fetching next recommendations…');
       _isLoading = true;
       notifyListeners();
@@ -432,6 +494,9 @@ class MusicService extends ChangeNotifier {
     if (_playlist.isNotEmpty && _currentIndex - 1 >= 0) {
       _currentIndex--;
       await playSong(_playlist[_currentIndex], updateQueue: false);
+    } else if (_playlist.isNotEmpty && _audioPlayer.position.inSeconds > 3) {
+      // Replay current track from start
+      await _audioPlayer.seek(Duration.zero);
     }
   }
 
@@ -452,11 +517,11 @@ class MusicService extends ChangeNotifier {
     try {
       if (bustCache) {
         // Tell backend to discard its cached URL for this video
-        await http.delete(Uri.parse('http://10.0.2.2:8000/cache/$videoId'))
+        await http.delete(ApiConfig.cacheInvalidateUri(videoId))
             .timeout(const Duration(seconds: 3));
       }
       final response = await http
-          .get(Uri.parse('http://10.0.2.2:8000/stream_url?v=$videoId'))
+          .get(ApiConfig.streamUrlUri(videoId))
           .timeout(const Duration(seconds: 20));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -489,15 +554,44 @@ class MusicService extends ChangeNotifier {
     // Track play count and history for personalization algorithm
     PreferencesService().recordSongPlay(song.author, song.title);
 
-    try {
-      final proxyUrl = 'http://10.0.2.2:8000/stream/${song.id.value}.m4a';
-      debugPrint('[Play] Setting audio source to local proxy: $proxyUrl');
+    final mediaItem = MediaItem(
+      id: song.id.value,
+      album: 'YouTube',
+      title: song.title,
+      artist: song.author,
+      artUri: Uri.tryParse(getHdThumbnail(song.id.value)),
+    );
 
+    try {
       await _audioPlayer.stop();
+
+      // If this song is downloaded locally, play directly from disk
+      final downloadedItem = _downloadedSongs.firstWhere(
+        (item) => item['id'] == song.id.value,
+        orElse: () => {},
+      );
+
+      if (downloadedItem.isNotEmpty && downloadedItem['localPath'] != null) {
+        final localFile = File(downloadedItem['localPath']!);
+        if (await localFile.exists()) {
+          debugPrint('[Play] Playing locally downloaded file: ${localFile.path}');
+          await _audioPlayer.setAudioSource(
+            AudioSource.uri(Uri.file(localFile.path), tag: mediaItem),
+          );
+          await _audioPlayer.play();
+          _isLoading = false;
+          notifyListeners();
+          _checkAndPreloadNextQueue();
+          return;
+        }
+      }
+
+      final proxyUri = ApiConfig.streamProxyUri(song.id.value);
+      debugPrint('[Play] Setting audio source to proxy: $proxyUri');
 
       try {
         await _audioPlayer.setAudioSource(
-          AudioSource.uri(Uri.parse(proxyUrl)),
+          AudioSource.uri(proxyUri, tag: mediaItem),
           preload: true,
         );
       } catch (proxyError) {
@@ -505,7 +599,7 @@ class MusicService extends ChangeNotifier {
         final directUrl = await _fetchStreamUrl(song.id.value);
         if (directUrl != null) {
           await _audioPlayer.setAudioSource(
-            AudioSource.uri(Uri.parse(directUrl), headers: _ytHeaders),
+            AudioSource.uri(Uri.parse(directUrl), headers: _ytHeaders, tag: mediaItem),
             preload: true,
           );
         } else {
@@ -578,39 +672,49 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final streamUrl = await _fetchStreamUrl(song.id.value);
-      if (streamUrl == null) return false;
+      // First try proxy stream, fallback to direct stream URL
+      final proxyUri = ApiConfig.streamProxyUri(song.id.value);
+      final client = http.Client();
+      http.StreamedResponse? response;
 
-        // Download stream bytes
-        final audioResponse = await http.get(
-          Uri.parse(streamUrl),
-          headers: _ytHeaders,
-        );
-
-        if (audioResponse.statusCode == 200) {
-          final dir = await getApplicationDocumentsDirectory();
-          final filePath = '${dir.path}/${song.id.value}.m4a';
-          final file = File(filePath);
-          await file.writeAsBytes(audioResponse.bodyBytes);
-
-          final songInfo = {
-            'id': song.id.value,
-            'title': song.title,
-            'author': song.author,
-            'thumbnail': song.thumbnails.highResUrl,
-            'localPath': filePath,
-          };
-
-          _downloadedSongs.removeWhere((item) => item['id'] == song.id.value);
-          _downloadedSongs.add(songInfo);
-
-          final jsonFile = File('${dir.path}/downloads.json');
-          await jsonFile.writeAsString(json.encode(_downloadedSongs));
-
-          debugPrint('Successfully downloaded song to $filePath');
-          notifyListeners();
-          return true;
+      try {
+        final request = http.Request('GET', proxyUri);
+        response = await client.send(request).timeout(const Duration(seconds: 15));
+      } catch (_) {
+        final streamUrl = await _fetchStreamUrl(song.id.value);
+        if (streamUrl != null) {
+          final request = http.Request('GET', Uri.parse(streamUrl));
+          request.headers.addAll(_ytHeaders);
+          response = await client.send(request).timeout(const Duration(seconds: 15));
         }
+      }
+
+      if (response != null && response.statusCode == 200) {
+        final dir = await getApplicationDocumentsDirectory();
+        final filePath = '${dir.path}/${song.id.value}.m4a';
+        final file = File(filePath);
+        final sink = file.openWrite();
+        await response.stream.pipe(sink);
+        await sink.close();
+
+        final songInfo = {
+          'id': song.id.value,
+          'title': song.title,
+          'author': song.author,
+          'thumbnail': song.thumbnails.highResUrl,
+          'localPath': filePath,
+        };
+
+        _downloadedSongs.removeWhere((item) => item['id'] == song.id.value);
+        _downloadedSongs.add(songInfo);
+
+        final jsonFile = File('${dir.path}/downloads.json');
+        await jsonFile.writeAsString(json.encode(_downloadedSongs));
+
+        debugPrint('Successfully downloaded song to $filePath');
+        notifyListeners();
+        return true;
+      }
     } catch (e) {
       debugPrint('Error downloading song: $e');
     } finally {
@@ -620,34 +724,49 @@ class MusicService extends ChangeNotifier {
     return false;
   }
 
+  Future<void> deleteDownloadedSong(String videoId) async {
+    try {
+      final item = _downloadedSongs.firstWhere((s) => s['id'] == videoId, orElse: () => {});
+      if (item.isNotEmpty && item['localPath'] != null) {
+        final file = File(item['localPath']!);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      }
+      _downloadedSongs.removeWhere((s) => s['id'] == videoId);
+      final dir = await getApplicationDocumentsDirectory();
+      final jsonFile = File('${dir.path}/downloads.json');
+      await jsonFile.writeAsString(json.encode(_downloadedSongs));
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error deleting downloaded song: $e');
+    }
+  }
+
   Future<void> playDownloadedSong(Map<String, String> songData) async {
     _isLoading = true;
-    // Create a dummy Video object for UI consistency
-    _currentSong = Video(
-      VideoId(songData['id']!),
-      songData['title']!,
-      songData['author']!,
+
+    // Load ALL downloaded songs into queue so Next and Prev work seamlessly!
+    _playlist = _downloadedSongs.map((item) => Video(
+      VideoId(item['id']!),
+      item['title'] ?? 'Unknown Title',
+      item['author'] ?? 'Unknown Artist',
       ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
       DateTime.now(),
       '',
       null,
       '',
       null,
-      ThumbnailSet(songData['id']!),
+      ThumbnailSet(item['id']!),
       null,
       Engagement(0, null, null),
       false,
-    );
-    notifyListeners();
+    )).toList();
 
-    try {
-      await _audioPlayer.setFilePath(songData['localPath']!);
-      await _audioPlayer.play();
-    } catch (e) {
-      debugPrint('Error playing downloaded song: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+    _currentIndex = _downloadedSongs.indexWhere((item) => item['id'] == songData['id']);
+    if (_currentIndex == -1) _currentIndex = 0;
+    if (_playlist.isNotEmpty) {
+      await playSong(_playlist[_currentIndex], updateQueue: false);
     }
   }
 

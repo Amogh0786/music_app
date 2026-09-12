@@ -32,7 +32,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E1E24).withOpacity(0.95),
+              color: const Color(0xFF1E1E24).withValues(alpha: 0.95),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               border: Border.all(color: Colors.white10),
             ),
@@ -153,7 +153,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SwitchListTile(
                 title: const Text('Crossfade Tracks', style: TextStyle(color: Colors.white)),
                 subtitle: Text('Smooth transition between songs', style: TextStyle(color: Colors.grey[400])),
-                activeColor: _prefs.themeColor,
+                activeThumbColor: _prefs.themeColor,
                 value: _prefs.crossfadeEnabled,
                 onChanged: (val) {
                   _prefs.setCrossfade(val);
@@ -206,7 +206,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: _availableColors.map((color) {
-                    final isSelected = _prefs.themeColor.value == color.value;
+                    final isSelected = _prefs.themeColor.toARGB32() == color.toARGB32();
                     return GestureDetector(
                       onTap: () => _prefs.setThemeColor(color),
                       child: Container(

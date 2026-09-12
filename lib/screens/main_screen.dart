@@ -26,7 +26,10 @@ class _MainScreenState extends State<MainScreen> {
       backgroundColor: const Color(0xFF121212),
       body: Stack(
         children: [
-          _screens[_selectedIndex],
+          IndexedStack(
+            index: _selectedIndex,
+            children: _screens,
+          ),
           // Floating Mini Player pinned above the Bottom Navigation Bar
           const Positioned(
             bottom: 0,

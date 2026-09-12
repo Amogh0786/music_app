@@ -28,14 +28,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadHomeFeeds() async {
     try {
-      final charts = await _musicService.searchSongs('Top Charts India Music');
-      final trending = await _musicService.searchSongs('Trending Songs 2026');
-      final newReleases = await _musicService.searchSongs('Latest Music Hits');
-
       // Build a rich multi-artist/multi-search "Made For You" blend
-      List<Video> blendedMix = [];
-      List<String> seeds = [];
-
+      final List<String> seeds = [];
       if (_prefs.mostPlayedArtist.isNotEmpty) {
         seeds.add('${_prefs.mostPlayedArtist} songs');
       }
@@ -44,18 +38,34 @@ class _HomeScreenState extends State<HomeScreen> {
           seeds.add('$query songs');
         }
       }
-
       if (seeds.isEmpty) {
         seeds.add('Top Hit Songs 2026');
       }
 
-      // Fetch results for all seeds and interleave them
-      List<List<Video>> seedResults = [];
-      for (var seed in seeds) {
-        final res = await _musicService.searchSongs(seed);
-        if (res.isNotEmpty) seedResults.add(res);
+      // Fetch all feeds and seeds in parallel
+      final futureCharts = _musicService.searchSongs('Top Charts India Music');
+      final futureTrending = _musicService.searchSongs('Trending Songs 2026');
+      final futureNewReleases = _musicService.searchSongs('Latest Music Hits');
+      final futureSeeds = seeds.map((s) => _musicService.searchSongs(s)).toList();
+
+      final results = await Future.wait<dynamic>([
+        futureCharts,
+        futureTrending,
+        futureNewReleases,
+        ...futureSeeds,
+      ]);
+
+      final charts = results[0] as List<Video>;
+      final trending = results[1] as List<Video>;
+      final newReleases = results[2] as List<Video>;
+
+      final List<List<Video>> seedResults = [];
+      for (int i = 3; i < results.length; i++) {
+        final seedList = results[i] as List<Video>;
+        if (seedList.isNotEmpty) seedResults.add(seedList);
       }
 
+      final List<Video> blendedMix = [];
       int maxLen = 0;
       for (var list in seedResults) {
         if (list.length > maxLen) maxLen = list.length;
@@ -237,7 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Image.network(
                         hdThumbnail,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Image.network(song.thumbnails.highResUrl, fit: BoxFit.cover),
+                        errorBuilder: (_, _, _) => Image.network(song.thumbnails.highResUrl, fit: BoxFit.cover),
                       ),
                     ),
                   ),
@@ -293,7 +303,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: 52,
                 height: 52,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Image.network(
+                errorBuilder: (_, _, _) => Image.network(
                   song.thumbnails.lowResUrl,
                   width: 52,
                   height: 52,

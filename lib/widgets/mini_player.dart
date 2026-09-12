@@ -63,12 +63,12 @@ class _MiniPlayerState extends State<MiniPlayer> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: _musicService.vibrantColor.withOpacity(0.3),
+            color: _musicService.vibrantColor.withValues(alpha: 0.3),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: _musicService.dominantColor.withOpacity(0.35),
+              color: _musicService.dominantColor.withValues(alpha: 0.35),
               blurRadius: 16,
               spreadRadius: 1,
               offset: const Offset(0, 4),
@@ -82,8 +82,8 @@ class _MiniPlayerState extends State<MiniPlayer> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 600),
               color: Color.alphaBlend(
-                _musicService.dominantColor.withOpacity(0.25),
-                const Color(0xFF202025).withOpacity(0.88),
+                _musicService.dominantColor.withValues(alpha: 0.25),
+                const Color(0xFF202025).withValues(alpha: 0.88),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
@@ -99,7 +99,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                           ? Image.network(
                               hdThumbnail,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Image.network(song.thumbnails.lowResUrl, fit: BoxFit.cover),
+                              errorBuilder: (_, _, _) => Image.network(song.thumbnails.lowResUrl, fit: BoxFit.cover),
                             )
                           : Container(color: Colors.grey[800]),
                     ),
@@ -138,7 +138,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                         Text(
                           song?.author ?? '',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.6),
+                            color: Colors.white.withValues(alpha: 0.6),
                             fontSize: 12,
                           ),
                           maxLines: 1,
