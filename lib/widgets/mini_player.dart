@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/music_service.dart';
 import '../screens/player_screen.dart';
+import 'animated_equalizer.dart';
 
 class MiniPlayer extends StatefulWidget {
   const MiniPlayer({super.key});
@@ -55,16 +56,22 @@ class _MiniPlayerState extends State<MiniPlayer> {
           ),
         );
       },
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 600),
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         height: 64,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: _musicService.vibrantColor.withOpacity(0.3),
+            width: 1,
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.4),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
+              color: _musicService.dominantColor.withOpacity(0.35),
+              blurRadius: 16,
+              spreadRadius: 1,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -72,10 +79,15 @@ class _MiniPlayerState extends State<MiniPlayer> {
           borderRadius: BorderRadius.circular(16),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-            child: Container(
-              color: const Color(0xFF282828).withOpacity(0.85),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 600),
+              color: Color.alphaBlend(
+                _musicService.dominantColor.withOpacity(0.25),
+                const Color(0xFF202025).withOpacity(0.88),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
+
                 children: [
                   // Album Thumbnail
                   ClipRRect(
@@ -100,16 +112,27 @@ class _MiniPlayerState extends State<MiniPlayer> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          song?.title ?? 'Loading...',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            letterSpacing: -0.2,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                song?.title ?? 'Loading...',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  letterSpacing: -0.2,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            AnimatedEqualizer(
+                              isPlaying: isPlaying,
+                              color: Theme.of(context).primaryColor,
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 2),
                         Text(

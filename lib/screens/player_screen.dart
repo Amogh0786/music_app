@@ -13,6 +13,7 @@ class PlayerScreen extends StatefulWidget {
 
 class _PlayerScreenState extends State<PlayerScreen> {
   final MusicService _musicService = MusicService();
+  bool _showLyrics = false;
 
   @override
   void initState() {
@@ -37,6 +38,243 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return '$minutes:$seconds';
   }
 
+  void _toggleLyrics(Video song) {
+    setState(() {
+      _showLyrics = !_showLyrics;
+    });
+    if (_showLyrics) {
+      _musicService.fetchLyrics(song);
+    }
+  }
+
+  void _showQueueSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        final playlist = _musicService.playlist;
+        final currentIndex = _musicService.currentIndex;
+
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+          child: Container(
+            height: MediaQuery.of(context).size.height * 0.75,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E1E).withOpacity(0.92),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              border: Border.all(color: Colors.white10),
+            ),
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white38,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Up Next',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      Text(
+                        '${playlist.length} Tracks',
+                        style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(color: Colors.white12, height: 1),
+                Expanded(
+                  child: playlist.isEmpty
+                      ? const Center(
+                          child: Text('Queue is empty', style: TextStyle(color: Colors.white54)),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          itemCount: playlist.length,
+                          itemBuilder: (context, index) {
+                            final song = playlist[index];
+                            final isCurrent = index == currentIndex;
+                            final hdThumbnail = MusicService.getHdThumbnail(song.id.value);
+
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+                              leading: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  hdThumbnail,
+                                  width: 46,
+                                  height: 46,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Image.network(
+                                    song.thumbnails.lowResUrl,
+                                    width: 46,
+                                    height: 46,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                              title: Text(
+                                song.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: isCurrent ? Theme.of(context).primaryColor : Colors.white,
+                                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              subtitle: Text(
+                                song.author,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: isCurrent ? Theme.of(context).primaryColor.withOpacity(0.8) : Colors.grey[400],
+                                  fontSize: 12,
+                                ),
+                              ),
+                              trailing: isCurrent
+                                  ? Icon(Icons.equalizer, color: Theme.of(context).primaryColor, size: 24)
+                                  : Text(
+                                      _formatDuration(song.duration),
+                                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                                    ),
+                              onTap: () {
+                                Navigator.pop(context);
+                                _musicService.playPlaylist(playlist, index);
+                              },
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showSleepTimerSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E24).withOpacity(0.95),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              border: Border.all(color: Colors.white10),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white38,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.bedtime, color: Color(0xFFFA2D48), size: 22),
+                        SizedBox(width: 10),
+                        Text(
+                          'Sleep Timer',
+                          style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    if (_musicService.isSleepTimerActive)
+                      Text(
+                        _musicService.sleepTimerLabel,
+                        style: const TextStyle(color: Color(0xFFFA2D48), fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (_musicService.isSleepTimerActive)
+                  ListTile(
+                    leading: const Icon(Icons.timer_off_outlined, color: Colors.redAccent),
+                    title: const Text('Turn Off Timer', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                    subtitle: Text('Active: ${_musicService.sleepTimerLabel}', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                    onTap: () {
+                      _musicService.cancelSleepTimer();
+                      Navigator.pop(context);
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.timer_outlined, color: Colors.white),
+                  title: const Text('15 Minutes', style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    _musicService.startSleepTimer(const Duration(minutes: 15));
+                    Navigator.pop(context);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.timer_outlined, color: Colors.white),
+                  title: const Text('30 Minutes', style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    _musicService.startSleepTimer(const Duration(minutes: 30));
+                    Navigator.pop(context);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.timer_outlined, color: Colors.white),
+                  title: const Text('45 Minutes', style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    _musicService.startSleepTimer(const Duration(minutes: 45));
+                    Navigator.pop(context);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.timer_outlined, color: Colors.white),
+                  title: const Text('1 Hour', style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    _musicService.startSleepTimer(const Duration(hours: 1));
+                    Navigator.pop(context);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.music_note_outlined, color: Colors.white),
+                  title: const Text('End of Current Track', style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    _musicService.setStopAtEndOfTrack(true);
+                    Navigator.pop(context);
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final song = _musicService.currentSong;
@@ -56,19 +294,57 @@ class _PlayerScreenState extends State<PlayerScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 1. Dynamic Ambient Blurred Album Art Background (Apple Music Signature)
+          // 1. Dynamic Album Palette Ambient Liquid Gradient Background
           Positioned.fill(
-            child: Image.network(
-              hdThumbnail,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Image.network(song.thumbnails.highResUrl, fit: BoxFit.cover),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 800),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    _musicService.dominantColor.withOpacity(0.85),
+                    _musicService.vibrantColor.withOpacity(0.45),
+                    const Color(0xFF121212),
+                    Colors.black,
+                  ],
+                  stops: const [0.0, 0.45, 0.8, 1.0],
+                ),
+              ),
+            ),
+          ),
+          // Ambient Glow Spheres
+          Positioned(
+            top: -60,
+            left: -60,
+            width: 320,
+            height: 320,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 800),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _musicService.dominantColor.withOpacity(0.5),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 220,
+            right: -80,
+            width: 360,
+            height: 360,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 800),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _musicService.vibrantColor.withOpacity(0.4),
+              ),
             ),
           ),
           Positioned.fill(
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+              filter: ImageFilter.blur(sigmaX: 55, sigmaY: 55),
               child: Container(
-                color: Colors.black.withOpacity(0.55),
+                color: Colors.black.withOpacity(0.35),
               ),
             ),
           ),
@@ -79,7 +355,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               child: Column(
                 children: [
-                  // Top Grabber & Header
+                  // Top Grabber & Header Actions
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -95,63 +371,119 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           borderRadius: BorderRadius.circular(3),
                         ),
                       ),
-                      IconButton(
-                        icon: _musicService.isDownloading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : Icon(
-                                _musicService.downloadedSongs.any((s) => s['id'] == song.id.value)
-                                    ? Icons.download_done
-                                    : Icons.arrow_circle_down_outlined,
-                                color: _musicService.downloadedSongs.any((s) => s['id'] == song.id.value)
-                                    ? const Color(0xFF1DB954)
-                                    : Colors.white70,
-                                size: 26,
-                              ),
-                        onPressed: _musicService.isDownloading
-                            ? null
-                            : () async {
-                                final success = await _musicService.downloadSong(song);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        success ? 'Saved to Offline Library!' : 'Download failed.',
-                                      ),
-                                    ),
-                                  );
-                                }
-                              },
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-
-                  // HD 1080p Album Artwork Card
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      width: MediaQuery.of(context).size.width * 0.82,
-                      height: MediaQuery.of(context).size.width * 0.82,
-                      decoration: BoxDecoration(
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.6),
-                            blurRadius: 25,
-                            spreadRadius: 5,
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              _showLyrics ? Icons.music_note : Icons.lyrics_outlined,
+                              color: _showLyrics ? Theme.of(context).primaryColor : Colors.white70,
+                              size: 24,
+                            ),
+                            onPressed: () => _toggleLyrics(song),
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              Icons.bedtime_outlined,
+                              color: _musicService.isSleepTimerActive ? Theme.of(context).primaryColor : Colors.white70,
+                              size: 24,
+                            ),
+                            onPressed: () => _showSleepTimerSheet(context),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.queue_music_rounded, color: Colors.white70, size: 24),
+                            onPressed: () => _showQueueSheet(context),
+                          ),
+                          IconButton(
+                            icon: _musicService.isDownloading
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : Icon(
+                                    _musicService.downloadedSongs.any((s) => s['id'] == song.id.value)
+                                        ? Icons.download_done
+                                        : Icons.arrow_circle_down_outlined,
+                                    color: _musicService.downloadedSongs.any((s) => s['id'] == song.id.value)
+                                        ? const Color(0xFF1DB954)
+                                        : Colors.white70,
+                                    size: 26,
+                                  ),
+                            onPressed: _musicService.isDownloading
+                                ? null
+                                : () async {
+                                    final success = await _musicService.downloadSong(song);
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            success ? 'Saved to Offline Library!' : 'Download failed.',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
                           ),
                         ],
                       ),
-                      child: Image.network(
-                        hdThumbnail,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Image.network(song.thumbnails.highResUrl, fit: BoxFit.cover),
+                    ],
+                  ),
+
+                  const Spacer(),
+
+                  // Center Content: Either Album Art OR Interactive Apple Lyrics View
+                  if (!_showLyrics)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: MediaQuery.of(context).size.width * 0.82,
+                        height: MediaQuery.of(context).size.width * 0.82,
+                        decoration: BoxDecoration(
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.6),
+                              blurRadius: 25,
+                              spreadRadius: 5,
+                            ),
+                          ],
+                        ),
+                        child: Image.network(
+                          hdThumbnail,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Image.network(song.thumbnails.highResUrl, fit: BoxFit.cover),
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      flex: 8,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: _musicService.isFetchingLyrics
+                            ? Center(
+                                child: CircularProgressIndicator(color: Theme.of(context).primaryColor),
+                              )
+                            : SingleChildScrollView(
+                                physics: const BouncingScrollPhysics(),
+                                child: Text(
+                                  _musicService.cachedLyrics ?? 'No lyrics available.',
+                                  textAlign: TextAlign.left,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    height: 1.8,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ),
                       ),
                     ),
-                  ),
                   const Spacer(),
 
                   // Song Title & Artist Info + Like Button
@@ -199,54 +531,47 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Interactive Progress Bar (Scrubber)
+                  // Scrubber Bar
                   StreamBuilder<Duration>(
                     stream: _musicService.audioPlayer.positionStream,
-                    builder: (context, snapshotPosition) {
-                      final position = snapshotPosition.data ?? Duration.zero;
-                      return StreamBuilder<Duration?>(
-                        stream: _musicService.audioPlayer.durationStream,
-                        builder: (context, snapshotDuration) {
-                          final duration = snapshotDuration.data ?? song.duration ?? Duration.zero;
-                          double progress = 0.0;
-                          if (duration.inMilliseconds > 0) {
-                            progress = (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
-                          }
+                    builder: (context, snapshot) {
+                      final position = snapshot.data ?? Duration.zero;
+                      final duration = _musicService.audioPlayer.duration ?? Duration.zero;
+                      double progress = 0.0;
+                      if (duration.inMilliseconds > 0) {
+                        progress = (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
+                      }
 
-                          return Column(
-                            children: [
-                              SliderTheme(
-                                data: SliderTheme.of(context).copyWith(
-                                  trackHeight: 4,
-                                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-                                  activeTrackColor: Colors.white,
-                                  inactiveTrackColor: Colors.white.withOpacity(0.2),
-                                  thumbColor: Colors.white,
-                                ),
-                                child: Slider(
-                                  value: progress,
-                                  onChanged: (value) {
-                                    final seekPos = Duration(
-                                      milliseconds: (value * duration.inMilliseconds).round(),
-                                    );
-                                    _musicService.audioPlayer.seek(seekPos);
-                                  },
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(_formatDuration(position), style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
-                                    Text(_formatDuration(duration), style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          );
-                        },
+                      return Column(
+                        children: [
+                          SliderTheme(
+                            data: SliderThemeData(
+                              trackHeight: 4,
+                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                              activeTrackColor: Colors.white,
+                              inactiveTrackColor: Colors.white24,
+                              thumbColor: Colors.white,
+                            ),
+                            child: Slider(
+                              value: progress,
+                              onChanged: (val) {
+                                final newPosition = Duration(milliseconds: (val * duration.inMilliseconds).toInt());
+                                _musicService.audioPlayer.seek(newPosition);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(_formatDuration(position), style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
+                                Text(_formatDuration(duration), style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                        ],
                       );
                     },
                   ),

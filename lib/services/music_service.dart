@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
@@ -5,6 +6,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:palette_generator/palette_generator.dart';
 import 'preferences_service.dart';
 
 class MusicService extends ChangeNotifier {
@@ -27,6 +29,20 @@ class MusicService extends ChangeNotifier {
   LoopMode _loopMode = LoopMode.off;
   List<Map<String, String>> _likedSongs = [];
 
+  String? _cachedLyrics;
+  String? _cachedLyricsSongId;
+  bool _isFetchingLyrics = false;
+
+  // Palette Extraction
+  Color _dominantColor = const Color(0xFF1E1E2C);
+  Color _vibrantColor = const Color(0xFFFA2D48);
+
+  // Sleep Timer
+  Timer? _sleepTimer;
+  Timer? _sleepCountdownTimer;
+  Duration? _sleepRemaining;
+  bool _stopAtEndOfTrack = false;
+
   Video? get currentSong => _currentSong;
   List<Video> get playlist => _playlist;
   int get currentIndex => _currentIndex;
@@ -35,17 +51,81 @@ class MusicService extends ChangeNotifier {
   LoopMode get loopMode => _loopMode;
   List<Map<String, String>> get likedSongs => _likedSongs;
   AudioPlayer get audioPlayer => _audioPlayer;
+  String? get cachedLyrics => _cachedLyrics;
+  bool get isFetchingLyrics => _isFetchingLyrics;
+
+  Color get dominantColor => _dominantColor;
+  Color get vibrantColor => _vibrantColor;
+
+  bool get isSleepTimerActive => _sleepTimer != null || _stopAtEndOfTrack;
+  Duration? get sleepRemaining => _sleepRemaining;
+  bool get stopAtEndOfTrack => _stopAtEndOfTrack;
+
+  String get sleepTimerLabel {
+    if (_stopAtEndOfTrack) return 'End of Track';
+    if (_sleepRemaining != null) {
+      final mins = _sleepRemaining!.inMinutes;
+      final secs = _sleepRemaining!.inSeconds.remainder(60).toString().padLeft(2, '0');
+      return '$mins:$secs';
+    }
+    return 'Off';
+  }
+
+  Future<void> fetchLyrics(Video song) async {
+    if (_cachedLyricsSongId == song.id.value && _cachedLyrics != null) return;
+
+    _isFetchingLyrics = true;
+    _cachedLyrics = null;
+    _cachedLyricsSongId = song.id.value;
+    notifyListeners();
+
+    try {
+      final title = song.title.replaceAll(RegExp(r'\(.*?\)|\[.*?\]'), '').trim();
+      final artist = song.author.replaceAll(' - Topic', '').trim();
+      final url = Uri.parse('https://lrclib.net/api/search?q=${Uri.encodeComponent("$title $artist")}');
+
+      final response = await http.get(url, headers: {'User-Agent': 'Mozilla/5.0'}).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> results = json.decode(response.body);
+        if (results.isNotEmpty) {
+          final first = results.first;
+          _cachedLyrics = first['plainLyrics'] ?? first['syncedLyrics'] ?? 'No lyrics available.';
+        } else {
+          _cachedLyrics = 'No lyrics found for this track.';
+        }
+      } else {
+        _cachedLyrics = 'No lyrics available.';
+      }
+    } catch (e) {
+      _cachedLyrics = 'No lyrics available for this track.';
+    } finally {
+      _isFetchingLyrics = false;
+      notifyListeners();
+    }
+  }
 
   static String getHdThumbnail(String videoId) {
     return 'https://i.ytimg.com/vi/$videoId/maxresdefault.jpg';
   }
 
+  bool _isTransitioning = false;
+  bool _isFetchingNextQueue = false;
+
   void _initAudioPlayer() {
-    _audioPlayer.playerStateStream.listen((state) {
+    _audioPlayer.playerStateStream.listen((state) async {
       if (state.processingState == ProcessingState.completed) {
-        nextSong(); // Infinite Auto-Play next recommended track
+        if (_isTransitioning) return;
+        _isTransitioning = true;
+        debugPrint('[AudioPlayer] Track completed. Advancing to next song…');
+        try {
+          await nextSong();
+        } catch (e) {
+          debugPrint('[AudioPlayer] Error advancing song on completion: $e');
+        } finally {
+          _isTransitioning = false;
+        }
       }
-      notifyListeners();
     });
     loadLikedSongs();
   }
@@ -112,13 +192,14 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<List<Video>> searchSongs(String query) async {
+  Future<List<Video>> searchSongs(String query, {int page = 1}) async {
     if (query.trim().isEmpty) return [];
 
     try {
       final response = await http
-          .get(Uri.parse('http://10.0.2.2:8000/search?q=${Uri.encodeComponent(query)}'))
+          .get(Uri.parse('http://10.0.2.2:8000/search?q=${Uri.encodeComponent(query)}&page=$page&limit=20'))
           .timeout(const Duration(seconds: 10));
+
 
       if (response.statusCode == 200) {
         final List<dynamic> jsonList = json.decode(response.body);
@@ -149,22 +230,150 @@ class MusicService extends ChangeNotifier {
             ),
           );
         }
-        debugPrint('[Backend Search] Returned ${results.length} items for "$query"');
+        debugPrint('[Backend Search] Returned ${results.length} items for "$query" (page $page)');
         return results;
       }
     } catch (e) {
-      debugPrint('Backend search error: $e, falling back to YouTubeExplode…');
+      debugPrint('Backend search error: $e');
     }
+    return [];
+  }
 
+  /// Live query suggestions while typing (up to [limit] suggestions)
+  Future<List<String>> fetchSuggestions(String query, {int limit = 8}) async {
+    if (query.trim().isEmpty) return [];
     try {
-      final searchList = await _yt.search.search(query);
-      return searchList.where((video) => video.duration != null).toList();
+      final response = await http
+          .get(Uri.parse('http://10.0.2.2:8000/suggestions?q=${Uri.encodeComponent(query)}&limit=$limit'))
+          .timeout(const Duration(seconds: 4));
+      if (response.statusCode == 200) {
+        final List<dynamic> jsonList = json.decode(response.body);
+        return jsonList.map((e) => e.toString()).toList();
+      }
     } catch (e) {
-      debugPrint('Error searching YouTubeExplode fallback: $e');
-      return [];
+      debugPrint('fetchSuggestions error: $e');
+    }
+    return [];
+  }
+
+  /// Reports track completion for collaborative filtering co-occurrence
+  Future<void> reportTrackFinished(String currentId, String nextId) async {
+    try {
+      await http.post(
+        Uri.parse('http://10.0.2.2:8000/track_finished'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'current_id': currentId, 'next_id': nextId}),
+      ).timeout(const Duration(seconds: 5));
+      debugPrint('[Collaborative] Reported track transition: $currentId -> $nextId');
+    } catch (e) {
+      debugPrint('reportTrackFinished error: $e');
     }
   }
 
+  /// Fetches the next 20 songs using collaborative patterns, genre, and radio
+  Future<List<Video>> fetchNextCandidates(String videoId, {int limit = 20}) async {
+    try {
+      final response = await http
+          .get(Uri.parse('http://10.0.2.2:8000/next_candidates?v=$videoId&limit=$limit'))
+          .timeout(const Duration(seconds: 12));
+      if (response.statusCode == 200) {
+        final List<dynamic> jsonList = json.decode(response.body);
+        final List<Video> results = [];
+        for (var item in jsonList) {
+          final vid = item['id'] as String;
+          final title = item['title'] as String? ?? 'Unknown Title';
+          final author = item['author'] as String? ?? 'Unknown Artist';
+          final durationSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
+          results.add(
+            Video(
+              VideoId(vid),
+              title,
+              author,
+              ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+              DateTime.now(),
+              '',
+              null,
+              '',
+              durationSec != null ? Duration(seconds: durationSec) : null,
+              ThumbnailSet(vid),
+              null,
+              Engagement(0, null, null),
+              false,
+            ),
+          );
+        }
+        return results;
+      }
+    } catch (e) {
+      debugPrint('fetchNextCandidates error: $e');
+    }
+    return [];
+  }
+
+
+
+
+  Future<void> _extractPalette(String videoId) async {
+    try {
+      final imageUrl = getHdThumbnail(videoId);
+      final palette = await PaletteGenerator.fromImageProvider(
+        NetworkImage(imageUrl),
+        size: const Size(120, 120),
+        maximumColorCount: 12,
+      ).timeout(const Duration(seconds: 4));
+
+      final dominant = palette.dominantColor?.color ?? palette.vibrantColor?.color ?? const Color(0xFF1E1E2C);
+      final vibrant = palette.vibrantColor?.color ?? palette.lightVibrantColor?.color ?? dominant;
+
+      _dominantColor = dominant;
+      _vibrantColor = vibrant;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[Palette] Extraction error: $e');
+    }
+  }
+
+  void startSleepTimer(Duration duration) {
+    cancelSleepTimer();
+    _sleepRemaining = duration;
+    _stopAtEndOfTrack = false;
+    notifyListeners();
+
+    _sleepCountdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_sleepRemaining != null && _sleepRemaining!.inSeconds > 0) {
+        _sleepRemaining = _sleepRemaining! - const Duration(seconds: 1);
+        notifyListeners();
+      } else {
+        timer.cancel();
+      }
+    });
+
+    _sleepTimer = Timer(duration, () {
+      _stopPlayback();
+    });
+  }
+
+  void setStopAtEndOfTrack(bool enable) {
+    cancelSleepTimer();
+    _stopAtEndOfTrack = enable;
+    notifyListeners();
+  }
+
+  void cancelSleepTimer() {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    _sleepCountdownTimer?.cancel();
+    _sleepCountdownTimer = null;
+    _sleepRemaining = null;
+    _stopAtEndOfTrack = false;
+    notifyListeners();
+  }
+
+  void _stopPlayback() {
+    _audioPlayer.pause();
+    cancelSleepTimer();
+    notifyListeners();
+  }
 
   Future<void> playPlaylist(List<Video> playlist, int index) async {
     _playlist = List.from(playlist);
@@ -174,16 +383,47 @@ class MusicService extends ChangeNotifier {
     }
   }
 
+  void _checkAndPreloadNextQueue() {
+    // When 5 or fewer songs remain after current playing song, silently load next 20 songs
+    if ((_playlist.length - (_currentIndex + 1)) <= 5 && _currentSong != null) {
+      final seedSong = _playlist.isNotEmpty ? _playlist.last : _currentSong!;
+      _fetchNextRecommendations(seedSong);
+    }
+  }
+
   Future<void> nextSong() async {
+    if (_stopAtEndOfTrack) {
+      debugPrint('[SleepTimer] Reached end of current track. Stopping playback.');
+      _stopPlayback();
+      return;
+    }
+
     if (_playlist.isNotEmpty && _currentIndex + 1 < _playlist.length) {
+      final prevSong = _currentSong;
       _currentIndex++;
-      await playSong(_playlist[_currentIndex], updateQueue: false);
+      final nextTrack = _playlist[_currentIndex];
+      if (prevSong != null) {
+        reportTrackFinished(prevSong.id.value, nextTrack.id.value);
+      }
+      await playSong(nextTrack, updateQueue: false);
+      _checkAndPreloadNextQueue();
     } else if (_currentSong != null) {
-      debugPrint('[Queue] End of queue reached. Fetching auto-play recommendations…');
+      debugPrint('[Queue] End of queue reached. Fetching next recommendations…');
+      _isLoading = true;
+      notifyListeners();
       await _fetchNextRecommendations(_currentSong!);
       if (_currentIndex + 1 < _playlist.length) {
+        final prevSong = _currentSong;
         _currentIndex++;
-        await playSong(_playlist[_currentIndex], updateQueue: false);
+        final nextTrack = _playlist[_currentIndex];
+        if (prevSong != null) {
+          reportTrackFinished(prevSong.id.value, nextTrack.id.value);
+        }
+        await playSong(nextTrack, updateQueue: false);
+        _checkAndPreloadNextQueue();
+      } else {
+        _isLoading = false;
+        notifyListeners();
       }
     }
   }
@@ -243,6 +483,9 @@ class MusicService extends ChangeNotifier {
     }
     notifyListeners();
 
+    // Trigger palette extraction asynchronously
+    _extractPalette(song.id.value);
+
     // Track play count and history for personalization algorithm
     PreferencesService().recordSongPlay(song.author, song.title);
 
@@ -275,7 +518,7 @@ class MusicService extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
 
-      _fetchNextRecommendations(song);
+      _checkAndPreloadNextQueue();
     } catch (e, st) {
       debugPrint('[Play] Error playing song: $e\n$st');
     } finally {
@@ -285,27 +528,27 @@ class MusicService extends ChangeNotifier {
   }
 
   Future<void> _fetchNextRecommendations(Video song) async {
+    if (_isFetchingNextQueue) return;
+    _isFetchingNextQueue = true;
     try {
-      debugPrint('Fetching YouTube auto-play recommendations for ${song.title}');
-      final relatedList = await _yt.videos.getRelatedVideos(song);
-      if (relatedList != null && relatedList.isNotEmpty) {
-        final newTracks = relatedList.where((v) => v.duration != null).toList();
-        
-        // Keep queue items up to current index, and append YouTube's recommendations next
-        if (_currentIndex + 1 < _playlist.length) {
-          _playlist.removeRange(_currentIndex + 1, _playlist.length);
-        }
+      debugPrint('[Recommendations] Silently fetching next 20 songs for ${song.title}…');
+      final candidates = await fetchNextCandidates(song.id.value, limit: 20);
 
-        for (var track in newTracks) {
-          if (!_playlist.any((item) => item.id == track.id)) {
+      if (candidates.isNotEmpty) {
+        int added = 0;
+        for (var track in candidates) {
+          if (!_playlist.any((item) => item.id.value == track.id.value)) {
             _playlist.add(track);
+            added++;
           }
         }
-        debugPrint('Updated queue: ${_playlist.length} total tracks. Next up: ${_playlist[_currentIndex + 1].title}');
+        debugPrint('[Queue] Appended $added recommended tracks. Total in queue: ${_playlist.length}');
         notifyListeners();
       }
     } catch (e) {
       debugPrint('Error fetching recommendations: $e');
+    } finally {
+      _isFetchingNextQueue = false;
     }
   }
 

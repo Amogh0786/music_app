@@ -1,5 +1,7 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/preferences_service.dart';
+import '../services/music_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -10,6 +12,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _prefs = PreferencesService();
+  final _musicService = MusicService();
 
   final List<Color> _availableColors = [
     const Color(0xFFFA2D48), // Apple Red
@@ -19,10 +22,122 @@ class _SettingsScreenState extends State<SettingsScreen> {
     const Color(0xFFFF9800), // Orange
   ];
 
+  void _showSleepTimerSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E24).withOpacity(0.95),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              border: Border.all(color: Colors.white10),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white38,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.bedtime, color: Color(0xFFFA2D48), size: 22),
+                        SizedBox(width: 10),
+                        Text(
+                          'Sleep Timer',
+                          style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    if (_musicService.isSleepTimerActive)
+                      Text(
+                        _musicService.sleepTimerLabel,
+                        style: const TextStyle(color: Color(0xFFFA2D48), fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (_musicService.isSleepTimerActive)
+                  ListTile(
+                    leading: const Icon(Icons.timer_off_outlined, color: Colors.redAccent),
+                    title: const Text('Turn Off Timer', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                    subtitle: Text('Active: ${_musicService.sleepTimerLabel}', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                    onTap: () {
+                      _musicService.cancelSleepTimer();
+                      Navigator.pop(context);
+                      setState(() {});
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.timer_outlined, color: Colors.white),
+                  title: const Text('15 Minutes', style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    _musicService.startSleepTimer(const Duration(minutes: 15));
+                    Navigator.pop(context);
+                    setState(() {});
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.timer_outlined, color: Colors.white),
+                  title: const Text('30 Minutes', style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    _musicService.startSleepTimer(const Duration(minutes: 30));
+                    Navigator.pop(context);
+                    setState(() {});
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.timer_outlined, color: Colors.white),
+                  title: const Text('45 Minutes', style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    _musicService.startSleepTimer(const Duration(minutes: 45));
+                    Navigator.pop(context);
+                    setState(() {});
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.timer_outlined, color: Colors.white),
+                  title: const Text('1 Hour', style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    _musicService.startSleepTimer(const Duration(hours: 1));
+                    Navigator.pop(context);
+                    setState(() {});
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.music_note_outlined, color: Colors.white),
+                  title: const Text('End of Current Track', style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    _musicService.setStopAtEndOfTrack(true);
+                    Navigator.pop(context);
+                    setState(() {});
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _prefs,
+      animation: Listenable.merge([_prefs, _musicService]),
       builder: (context, _) {
         return Scaffold(
           backgroundColor: const Color(0xFF121212),
@@ -47,7 +162,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   );
                 },
               ),
+              ListTile(
+                title: const Text('Sleep Timer', style: TextStyle(color: Colors.white)),
+                subtitle: Text(
+                  _musicService.isSleepTimerActive
+                      ? 'Active: ${_musicService.sleepTimerLabel}'
+                      : 'Automatically stop playback after set duration',
+                  style: TextStyle(color: _musicService.isSleepTimerActive ? _prefs.themeColor : Colors.grey[400]),
+                ),
+                trailing: Icon(
+                  _musicService.isSleepTimerActive ? Icons.bedtime : Icons.bedtime_outlined,
+                  color: _musicService.isSleepTimerActive ? _prefs.themeColor : Colors.white70,
+                ),
+                onTap: () => _showSleepTimerSheet(context),
+              ),
               const Divider(color: Colors.white24, height: 32),
+
               
               _buildSectionTitle('Storage & Cache'),
               ListTile(
