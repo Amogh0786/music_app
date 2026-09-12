@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: music-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    region: oregon
+    healthCheckPath: /
+    autoDeploy: true

@@ -85,6 +85,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.get("/")
+def health_check():
+    return {"status": "online", "service": "music-backend"}
+
+
 # In-memory URL & Search caches
 _url_cache: dict[str, tuple[str, float]] = {}
 _search_cache: dict[str, tuple[list[dict], float]] = {}
@@ -482,4 +488,5 @@ def invalidate_cache(video_id: str):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
