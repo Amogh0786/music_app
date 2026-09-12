@@ -91,6 +91,15 @@ def health_check():
     return {"status": "online", "service": "music-backend"}
 
 
+@app.get("/version")
+def version_check():
+    return {
+        "yt_dlp": yt_dlp.version.__version__,
+        "node": shutil.which("node"),
+        "commit": "v3-check",
+    }
+
+
 # In-memory URL & Search caches
 _url_cache: dict[str, tuple[str, float]] = {}
 _search_cache: dict[str, tuple[list[dict], float]] = {}
