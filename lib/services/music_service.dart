@@ -12,6 +12,13 @@ import 'package:palette_generator/palette_generator.dart';
 import 'api_config.dart';
 import 'preferences_service.dart';
 
+class StreamCandidate {
+  final String url;
+  final int tag;
+  final String type;
+  StreamCandidate(this.url, this.tag, this.type);
+}
+
 class MusicService extends ChangeNotifier {
   static final MusicService _instance = MusicService._internal();
   factory MusicService() => _instance;
@@ -554,13 +561,11 @@ class MusicService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// Resolves the direct Google CDN audio stream URL natively on the user's device.
-  /// Because this request originates from the user's mobile/residential IP,
-  /// YouTube does NOT challenge it as a datacenter bot.
-  Future<String?> _resolveDirectAudioUrl(String videoId) async {
+  /// Resolves ordered stream candidates natively on the user's device.
+  /// Prioritizes Format 18 (Progressive MP4 AAC) to eliminate ExoPlayer DASH fragmentation errors.
+  Future<List<StreamCandidate>> _resolveStreamCandidates(String videoId) async {
     StreamManifest? manifest;
 
-    // Try with primary instance first
     try {
       manifest = await _ytExplode.videos.streamsClient
           .getManifest(videoId)
@@ -582,38 +587,45 @@ class MusicService extends ChangeNotifier {
       }
     }
 
-    if (manifest == null) return null;
+    if (manifest == null) return [];
 
-    try {
-      // Always prefer MP4/AAC container (e.g. itag 140 @ 128kbps) for 100% universal hardware decoding on Android & iOS
-      final mp4Streams = manifest.audioOnly.where(
-        (s) => s.container.name.toLowerCase() == 'mp4' || s.codec.mimeType.contains('mp4'),
-      );
-      if (mp4Streams.isNotEmpty) {
-        final chosen = mp4Streams.withHighestBitrate();
-        debugPrint('[StreamResolver] Selected MP4/AAC stream (${chosen.bitrate}, tag: ${chosen.tag}) for $videoId');
-        return chosen.url.toString();
-      }
+    final List<StreamCandidate> candidates = [];
 
-      // Fallback: Highest bitrate audio stream (e.g. WebM Opus)
-      final audioStreams = manifest.audioOnly;
-      if (audioStreams.isNotEmpty) {
-        final chosen = audioStreams.withHighestBitrate();
-        debugPrint('[StreamResolver] Selected audio stream (${chosen.bitrate}, ${chosen.container.name}) for $videoId');
-        return chosen.url.toString();
-      }
-
-      // Fallback: Muxed streams (audio + video, audio track played by ExoPlayer)
-      final muxedStreams = manifest.muxed;
-      if (muxedStreams.isNotEmpty) {
-        final chosen = muxedStreams.withHighestBitrate();
-        debugPrint('[StreamResolver] Fallback: Selected muxed stream for $videoId');
-        return chosen.url.toString();
-      }
-    } catch (e) {
-      debugPrint('[StreamResolver] Stream selection error for $videoId: $e');
+    // Candidate 1: Progressive Format 18 (MP4 with AAC stereo audio).
+    // This is the golden standard for ExoPlayer on Android and AVPlayer on iOS
+    // because it contains a progressive moov atom, avoiding DASH single-segment parser errors.
+    final muxed18 = manifest.muxed.where((s) => s.tag == 18);
+    if (muxed18.isNotEmpty) {
+      candidates.add(StreamCandidate(muxed18.first.url.toString(), 18, 'mp4_progressive_360p_aac'));
     }
-    return null;
+
+    // Candidate 2: Progressive WebM Opus (e.g. itag 251, 160kbps high-quality Opus)
+    // ExoPlayer has native Matroska/WebM demuxing and plays this seamlessly on Android.
+    final webmOpus = manifest.audioOnly.where(
+      (s) => s.container.name.toLowerCase() == 'webm' || s.codec.mimeType.contains('webm') || s.codec.mimeType.contains('opus'),
+    );
+    if (webmOpus.isNotEmpty) {
+      final best = webmOpus.withHighestBitrate();
+      candidates.add(StreamCandidate(best.url.toString(), best.tag, 'audio_webm_opus'));
+    }
+
+    // Candidate 3: AudioOnly MP4 (itag 140, 128k AAC)
+    final mp4Audio = manifest.audioOnly.where(
+      (s) => s.container.name.toLowerCase() == 'mp4' || s.codec.mimeType.contains('mp4'),
+    );
+    if (mp4Audio.isNotEmpty) {
+      candidates.add(StreamCandidate(mp4Audio.withHighestBitrate().url.toString(), 140, 'mp4_audio_dash'));
+    }
+
+    // Candidate 4: Any other muxed stream (e.g. itag 22 720p MP4)
+    for (final m in manifest.muxed) {
+      if (m.tag != 18) {
+        candidates.add(StreamCandidate(m.url.toString(), m.tag, 'muxed_${m.container.name}'));
+        break;
+      }
+    }
+
+    return candidates;
   }
 
   Future<void> playSong(Video song, {bool updateQueue = true}) async {
@@ -671,32 +683,69 @@ class MusicService extends ChangeNotifier {
 
       bool playbackSourceSet = false;
 
-      // 2. Primary: Direct On-Device Resolution (Ultra-fast, 0 server load, immune to datacenter blocks)
+      // 2. Primary: Direct On-Device Multi-Candidate Resolution
       try {
-        debugPrint('[Play] Resolving direct audio stream on mobile device for ${song.id.value}…');
-        final directUrl = await _resolveDirectAudioUrl(song.id.value);
+        debugPrint('[Play] Resolving direct audio candidates on mobile device for ${song.id.value}…');
+        final candidates = await _resolveStreamCandidates(song.id.value);
         if (_currentSong?.id.value != song.id.value) return;
 
-        if (directUrl != null) {
-          debugPrint('[Play] Direct audio URL resolved! Setting audio source…');
-          _reportClientLog('direct_url_resolved', {
-            'videoId': song.id.value,
-            'urlPrefix': directUrl.substring(0, min(60, directUrl.length)),
-          });
+        if (candidates.isNotEmpty) {
+          final tempDir = await getTemporaryDirectory();
 
-          try {
-            await _audioPlayer.setAudioSource(
-              AudioSource.uri(Uri.parse(directUrl), headers: _ytHeaders, tag: mediaItem),
-              preload: true,
-            );
-            playbackSourceSet = true;
-          } catch (sourceWithHeadersError) {
-            debugPrint('[Play] setAudioSource with headers failed: $sourceWithHeadersError. Trying without headers…');
-            await _audioPlayer.setAudioSource(
-              AudioSource.uri(Uri.parse(directUrl), tag: mediaItem),
-              preload: true,
-            );
-            playbackSourceSet = true;
+          for (final candidate in candidates) {
+            if (_currentSong?.id.value != song.id.value) return;
+
+            debugPrint('[Play] Trying stream candidate (tag: ${candidate.tag}, type: ${candidate.type})…');
+            _reportClientLog('trying_stream_candidate', {
+              'videoId': song.id.value,
+              'tag': candidate.tag,
+              'type': candidate.type,
+            });
+
+            // 1. First attempt: Direct native AudioSource.uri (fastest, progressive hardware decoding)
+            try {
+              await _audioPlayer.setAudioSource(
+                AudioSource.uri(Uri.parse(candidate.url), tag: mediaItem),
+                preload: true,
+              );
+              playbackSourceSet = true;
+              _reportClientLog('playback_started_uri', {
+                'videoId': song.id.value,
+                'tag': candidate.tag,
+              });
+              break;
+            } catch (uriError) {
+              debugPrint('[Play] AudioSource.uri failed ($uriError), trying LockCachingAudioSource…');
+              // 2. Second attempt: LockCachingAudioSource fallback
+              try {
+                final cacheFile = File('${tempDir.path}/track_${song.id.value}_${candidate.tag}.m4a');
+                if (await cacheFile.exists() && await cacheFile.length() == 0) {
+                  await cacheFile.delete();
+                }
+                await _audioPlayer.setAudioSource(
+                  LockCachingAudioSource(
+                    Uri.parse(candidate.url),
+                    cacheFile: cacheFile,
+                    tag: mediaItem,
+                  ),
+                  preload: true,
+                );
+                playbackSourceSet = true;
+                _reportClientLog('playback_started_lockcache', {
+                  'videoId': song.id.value,
+                  'tag': candidate.tag,
+                });
+                break;
+              } catch (lockError) {
+                debugPrint('[Play] Candidate tag ${candidate.tag} failed: $lockError');
+                _reportClientLog('candidate_failed', {
+                  'videoId': song.id.value,
+                  'tag': candidate.tag,
+                  'uriError': uriError.toString(),
+                  'lockError': lockError.toString(),
+                });
+              }
+            }
           }
         }
       } catch (directError) {
@@ -744,6 +793,11 @@ class MusicService extends ChangeNotifier {
       await _audioPlayer.play();
       _isLoading = false;
       notifyListeners();
+
+      _reportClientLog('playback_active', {
+        'videoId': song.id.value,
+        'title': song.title,
+      });
 
       _preloadUpcomingTracks();
       _checkAndPreloadNextQueue();
@@ -833,12 +887,18 @@ class MusicService extends ChangeNotifier {
       final client = http.Client();
       http.StreamedResponse? response;
 
-      // 1. Primary: Direct on-device stream URL resolution (fastest, direct from Google CDN)
+      // 1. Primary: Direct on-device stream URL candidates
       try {
-        final directUrl = await _resolveDirectAudioUrl(song.id.value);
-        if (directUrl != null) {
-          final request = http.Request('GET', Uri.parse(directUrl));
-          response = await client.send(request).timeout(const Duration(seconds: 25));
+        final candidates = await _resolveStreamCandidates(song.id.value);
+        for (final candidate in candidates) {
+          try {
+            final request = http.Request('GET', Uri.parse(candidate.url));
+            final res = await client.send(request).timeout(const Duration(seconds: 25));
+            if (res.statusCode == 200) {
+              response = res;
+              break;
+            }
+          } catch (_) {}
         }
       } catch (e) {
         debugPrint('[Download] Direct URL error: $e');
