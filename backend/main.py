@@ -107,20 +107,14 @@ def _get_youtube_url(video_id: str) -> str:
             del _url_cache[video_id]
 
     ydl_opts = {
-        "format": "140/bestaudio[ext=m4a]/bestaudio/best",
+        "format": "140/bestaudio[ext=m4a]/bestaudio/18/best",
         "quiet": True,
         "no_warnings": True,
         "skip_download": True,
-        "http_headers": {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/125.0.0.0 Safari/537.36"
-            ),
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept": "*/*",
-            "Referer": "https://www.youtube.com/",
-            "Origin": "https://www.youtube.com",
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "web"],
+            }
         },
     }
 
@@ -401,14 +395,19 @@ def _sync_download_audio(video_id: str) -> Path:
         return cache_file
 
     temp_file = CACHE_DIR / f"{video_id}.download.m4a"
-    node_path = shutil.which("node") or "/opt/homebrew/bin/node"
+    node_path = shutil.which("node") or "/usr/bin/node" or "/opt/homebrew/bin/node"
 
     ydl_opts = {
-        "format": "140/bestaudio[ext=m4a]/bestaudio/best",
+        "format": "140/bestaudio[ext=m4a]/bestaudio/18/best",
         "outtmpl": str(temp_file),
         "quiet": True,
         "no_warnings": True,
         "overwrites": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "web"],
+            }
+        },
     }
     if os.path.exists(node_path):
         ydl_opts["js_runtimes"] = {"node": {"path": node_path}}
