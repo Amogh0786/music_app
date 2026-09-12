@@ -1,16 +1,10 @@
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'preferences_service.dart';
 
 class ApiConfig {
-  /// Default local ports and addresses
-  static const String _defaultHostAndroid = '10.0.2.2:8000';
-  static const String _defaultHostDesktop = '127.0.0.1:8000';
+  static const String _defaultCloudUrl = 'https://music-backend-4kel.onrender.com';
 
   /// Returns the base URL for the backend API.
-  /// If the user configured a custom URL (e.g. Google Cloud deployment), it uses that.
-  /// Otherwise, it detects the platform and picks 10.0.2.2 for Android emulator
-  /// and 127.0.0.1 for desktop/web.
+  /// Uses custom URL if configured by the user, otherwise defaults to the live Render cloud backend.
   static String get baseUrl {
     final customUrl = PreferencesService().customServerUrl;
     if (customUrl.isNotEmpty) {
@@ -18,15 +12,7 @@ class ApiConfig {
       return customUrl.endsWith('/') ? customUrl.substring(0, customUrl.length - 1) : customUrl;
     }
 
-    if (kIsWeb) {
-      return 'http://localhost:8000';
-    }
-
-    if (Platform.isAndroid) {
-      return 'http://$_defaultHostAndroid';
-    }
-
-    return 'http://$_defaultHostDesktop';
+    return _defaultCloudUrl;
   }
 
   static Uri searchUri(String query, {int page = 1, int limit = 20}) {

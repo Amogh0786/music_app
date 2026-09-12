@@ -113,7 +113,8 @@ def _get_youtube_url(video_id: str) -> str:
         "skip_download": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "web"],
+                "player_client": ["android", "ios"],
+                "player_skip": ["webpage", "configs"],
             }
         },
     }
@@ -405,7 +406,8 @@ def _sync_download_audio(video_id: str) -> Path:
         "overwrites": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "web"],
+                "player_client": ["android", "ios"],
+                "player_skip": ["webpage", "configs"],
             }
         },
     }
