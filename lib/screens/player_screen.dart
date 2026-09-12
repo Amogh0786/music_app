@@ -14,6 +14,7 @@ class PlayerScreen extends StatefulWidget {
 class _PlayerScreenState extends State<PlayerScreen> {
   final MusicService _musicService = MusicService();
   bool _showLyrics = false;
+  double? _dragValue;
 
   @override
   void initState() {
@@ -63,15 +64,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
         final playlist = _musicService.playlist;
         final currentIndex = _musicService.currentIndex;
 
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-          child: Container(
-            height: MediaQuery.of(context).size.height * 0.75,
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E).withValues(alpha: 0.92),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              border: Border.all(color: Colors.white10),
-            ),
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.75,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E24),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(color: Colors.white10),
+          ),
             child: Column(
               children: [
                 const SizedBox(height: 12),
@@ -170,10 +169,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ),
               ],
             ),
-          ),
-        );
-      },
-    );
+          );
+        },
+      );
   }
 
   void _showSleepTimerSheet(BuildContext context) {
@@ -549,22 +547,34 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         progress = (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
                       }
 
+                      final displayPosition = _dragValue != null
+                          ? Duration(milliseconds: (_dragValue! * duration.inMilliseconds).toInt())
+                          : position;
+
                       return Column(
                         children: [
                           SliderTheme(
-                            data: SliderThemeData(
+                            data: const SliderThemeData(
                               trackHeight: 4,
-                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                              thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
+                              overlayShape: RoundSliderOverlayShape(overlayRadius: 14),
                               activeTrackColor: Colors.white,
                               inactiveTrackColor: Colors.white24,
                               thumbColor: Colors.white,
                             ),
                             child: Slider(
-                              value: progress,
+                              value: _dragValue ?? progress,
                               onChanged: (val) {
+                                setState(() {
+                                  _dragValue = val;
+                                });
+                              },
+                              onChangeEnd: (val) {
                                 final newPosition = Duration(milliseconds: (val * duration.inMilliseconds).toInt());
                                 _musicService.audioPlayer.seek(newPosition);
+                                setState(() {
+                                  _dragValue = null;
+                                });
                               },
                             ),
                           ),
@@ -573,7 +583,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(_formatDuration(position), style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 12)),
+                                Text(_formatDuration(displayPosition), style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 12)),
                                 Text(_formatDuration(duration), style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 12)),
                               ],
                             ),

@@ -315,10 +315,15 @@ class MusicService extends ChangeNotifier {
   }
 
   /// Fetches the next 20 songs using collaborative patterns, genre, and radio
-  Future<List<Video>> fetchNextCandidates(String videoId, {int limit = 20}) async {
+  Future<List<Video>> fetchNextCandidates(
+    String videoId, {
+    int limit = 20,
+    String? title,
+    String? artist,
+  }) async {
     try {
       final response = await http
-          .get(ApiConfig.nextCandidatesUri(videoId, limit: limit))
+          .get(ApiConfig.nextCandidatesUri(videoId, limit: limit, title: title, artist: artist))
           .timeout(const Duration(seconds: 12));
       if (response.statusCode == 200) {
         final List<dynamic> jsonList = json.decode(response.body);
@@ -595,8 +600,13 @@ class MusicService extends ChangeNotifier {
           preload: true,
         );
       } catch (proxyError) {
+        if (_isInterrupted(proxyError)) {
+          debugPrint('[Play] Load interrupted by newer request');
+          return;
+        }
         debugPrint('[Play] Proxy error ($proxyError), falling back to direct stream…');
         final directUrl = await _fetchStreamUrl(song.id.value);
+        if (_currentSong?.id.value != song.id.value) return;
         if (directUrl != null) {
           await _audioPlayer.setAudioSource(
             AudioSource.uri(Uri.parse(directUrl), headers: _ytHeaders, tag: mediaItem),
@@ -607,17 +617,39 @@ class MusicService extends ChangeNotifier {
         }
       }
 
+      if (_currentSong?.id.value != song.id.value) return;
+
       debugPrint('[Play] Starting playback…');
       await _audioPlayer.play();
       _isLoading = false;
       notifyListeners();
 
+      _preloadUpcomingTracks();
       _checkAndPreloadNextQueue();
     } catch (e, st) {
+      if (_isInterrupted(e)) {
+        debugPrint('[Play] Playback superseded by newer song selection');
+        return;
+      }
       debugPrint('[Play] Error playing song: $e\n$st');
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_currentSong?.id.value == song.id.value) {
+        _isLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  bool _isInterrupted(dynamic e) {
+    final msg = e.toString().toLowerCase();
+    return msg.contains('loading interrupted') || msg.contains('interrupted');
+  }
+
+  void _preloadUpcomingTracks() {
+    if (_playlist.isEmpty) return;
+    final nextTracks = _playlist.skip(_currentIndex + 1).take(2);
+    for (final track in nextTracks) {
+      http.get(ApiConfig.preloadUri(track.id.value)).catchError((_) => http.Response('', 500));
     }
   }
 
@@ -626,7 +658,12 @@ class MusicService extends ChangeNotifier {
     _isFetchingNextQueue = true;
     try {
       debugPrint('[Recommendations] Silently fetching next 20 songs for ${song.title}…');
-      final candidates = await fetchNextCandidates(song.id.value, limit: 20);
+      final candidates = await fetchNextCandidates(
+        song.id.value,
+        limit: 20,
+        title: song.title,
+        artist: song.author,
+      );
 
       if (candidates.isNotEmpty) {
         int added = 0;

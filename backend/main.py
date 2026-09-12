@@ -1,11 +1,13 @@
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 import yt_dlp
 import urllib.request
 import time
 import json
 import os
+import shutil
+import asyncio
 from collections import Counter
 from pathlib import Path
 from typing import Dict, List
@@ -14,6 +16,11 @@ from typing import Dict, List
 co_occurrence: dict[str, Counter[str]] = {}
 CO_OCCURRENCE_FILE = Path(__file__).with_name('co_occurrence.json')
 _last_co_occurrence_save = 0.0
+
+# Local disk audio cache for instant playback, seeking, and stutter-free streaming
+CACHE_DIR = Path(__file__).with_name("audio_cache")
+CACHE_DIR.mkdir(exist_ok=True)
+_stream_locks: dict[str, asyncio.Lock] = {}
 
 def _load_co_occurrence():
     global co_occurrence
@@ -44,7 +51,7 @@ ALLOWED_LONG_TITLES = ['mix', 'full album']
 
 # Streaming resilience
 MAX_STREAM_RETRIES = 3
-STREAM_CHUNK_SIZE = 64 * 1024  # 64KB
+STREAM_CHUNK_SIZE = 256 * 1024  # 256KB buffer for smooth playback without starvation
 
 def _record_co_occurrence(current_id: str, next_id: str):
     """Update co-occurrence counters and persist to disk (throttled)."""
@@ -243,7 +250,7 @@ def get_suggestions(q: str, limit: int = 8):
 
 
 @app.get("/radio")
-def get_radio(v: str):
+def get_radio(v: str, title: str = None, artist: str = None):
     if not v or not v.strip():
         return []
 
@@ -261,6 +268,7 @@ def get_radio(v: str):
         "no_warnings": True,
         "extract_flat": True,
         "skip_download": True,
+        "playlistend": 20,  # Fast 1.3s response instead of 25s infinite playlist crawl
         "http_headers": {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -275,7 +283,9 @@ def get_radio(v: str):
             info = ydl.extract_info(f"https://music.youtube.com/watch?v={video_id}&list=RD{video_id}", download=False)
             entries = info.get("entries", [])
             if not entries:
-                info = ydl.extract_info(f"ytsearch30:{video_id} song", download=False)
+                clean_term = f"{title or ''} {artist or ''}".strip()
+                search_q = f"ytsearch20:{clean_term} song" if clean_term else f"ytsearch20:{video_id} song"
+                info = ydl.extract_info(search_q, download=False)
                 entries = info.get("entries", [])
 
             results = []
@@ -319,7 +329,7 @@ async def track_finished(request: Request):
 
 
 @app.get("/next_candidates")
-def get_next_candidates(v: str, limit: int = 20):
+def get_next_candidates(v: str, limit: int = 20, title: str = None, artist: str = None):
     """Return next 20 songs using:
     1. Collaborative co-occurrence (what other users played next after v)
     2. YouTube Music Radio (similar style/genre for v)
@@ -347,7 +357,7 @@ def get_next_candidates(v: str, limit: int = 20):
                 return candidates
 
     # 2. YouTube Music Radio (same genre / style)
-    radio_songs = get_radio(target_id)
+    radio_songs = get_radio(target_id, title=title, artist=artist)
     for song in radio_songs:
         sid = song.get("id")
         if sid and sid not in seen_ids:
@@ -358,7 +368,8 @@ def get_next_candidates(v: str, limit: int = 20):
 
     # 3. Fallback search if still fewer than limit
     if len(candidates) < limit:
-        fallback_search = search_videos(f"{target_id} trending songs", page=1, limit=limit)
+        clean_fallback = f"{title or ''} {artist or ''}".strip() or "trending songs"
+        fallback_search = search_videos(f"{clean_fallback} music", page=1, limit=limit)
         for song in fallback_search:
             sid = song.get("id")
             if sid and sid not in seen_ids:
@@ -372,110 +383,84 @@ def get_next_candidates(v: str, limit: int = 20):
 
 
 
+def _get_stream_lock(video_id: str) -> asyncio.Lock:
+    if video_id not in _stream_locks:
+        _stream_locks[video_id] = asyncio.Lock()
+    return _stream_locks[video_id]
+
+
+def _sync_download_audio(video_id: str) -> Path:
+    cache_file = CACHE_DIR / f"{video_id}.m4a"
+    if cache_file.exists() and cache_file.stat().st_size > 100000:
+        return cache_file
+
+    temp_file = CACHE_DIR / f"{video_id}.download.m4a"
+    node_path = shutil.which("node") or "/opt/homebrew/bin/node"
+
+    ydl_opts = {
+        "format": "140/bestaudio[ext=m4a]/bestaudio/best",
+        "outtmpl": str(temp_file),
+        "quiet": True,
+        "no_warnings": True,
+        "overwrites": True,
+    }
+    if os.path.exists(node_path):
+        ydl_opts["js_runtimes"] = {"node": {"path": node_path}}
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
+
+    if temp_file.exists() and temp_file.stat().st_size > 100000:
+        temp_file.replace(cache_file)
+        return cache_file
+    raise RuntimeError(f"Download produced invalid or missing file for {video_id}")
+
+
 @app.api_route("/stream/{video_id}.m4a", methods=["GET", "HEAD"])
 @app.api_route("/stream", methods=["GET", "HEAD"])
-def stream_audio(request: Request, video_id: str = None, v: str = None):
+async def stream_audio(request: Request, video_id: str = None, v: str = None):
     target_id = video_id or v
     if not target_id:
         raise HTTPException(status_code=400, detail="Missing video ID")
 
-    try:
-        target_url = _get_youtube_url(target_id)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/125.0.0.0 Safari/537.36"
-        ),
-        "Accept": "*/*",
-        "Referer": "https://www.youtube.com/",
-        "Origin": "https://www.youtube.com",
-    }
-
-    range_header = request.headers.get("range")
-    if range_header:
-        headers["Range"] = range_header
-
-    req = urllib.request.Request(target_url, headers=headers)
-
-    try:
-        yt_resp = urllib.request.urlopen(req)
-    except Exception as e:
-        if target_id in _url_cache:
-            del _url_cache[target_id]
-        try:
-            target_url = _get_youtube_url(target_id)
-            req = urllib.request.Request(target_url, headers=headers)
-            yt_resp = urllib.request.urlopen(req)
-        except Exception as retry_err:
-            raise HTTPException(
-                status_code=500, detail=f"Proxy error: {retry_err}"
-            )
-
-    response_headers = {
-        "Content-Type": "audio/mp4",
-        "Accept-Ranges": "bytes",
-    }
-    content_range = yt_resp.headers.get("Content-Range")
-    if content_range:
-        response_headers["Content-Range"] = content_range
-    content_length = yt_resp.headers.get("Content-Length")
-    if content_length:
-        response_headers["Content-Length"] = content_length
-
-    # If the player is doing a HEAD check (to inspect Content-Length/Ranges)
-    if request.method == "HEAD":
-        try:
-            yt_resp.close()
-        except Exception:
-            pass
-        return Response(
-            content=b"",
-            status_code=yt_resp.status,
-            headers=response_headers,
-            media_type="audio/mp4",
-        )
-
-    def iterfile():
-        attempts = 0
-        nonlocal yt_resp
-        try:
-            while attempts < MAX_STREAM_RETRIES:
+    cache_file = CACHE_DIR / f"{target_id}.m4a"
+    if not (cache_file.exists() and cache_file.stat().st_size > 100000):
+        lock = _get_stream_lock(target_id)
+        async with lock:
+            if not (cache_file.exists() and cache_file.stat().st_size > 100000):
                 try:
-                    while True:
-                        chunk = yt_resp.read(STREAM_CHUNK_SIZE)
-                        if not chunk:
-                            return
-                        yield chunk
-                    break
-                except (ConnectionResetError, BrokenPipeError):
-                    attempts += 1
-                    if attempts >= MAX_STREAM_RETRIES:
-                        return
-                    try:
-                        yt_resp.close()
-                    except Exception:
-                        pass
-                    target_url = _get_youtube_url(target_id)
-                    req = urllib.request.Request(target_url, headers=headers)
-                    yt_resp = urllib.request.urlopen(req)
-        except Exception:
-            return
-        finally:
-            try:
-                yt_resp.close()
-            except Exception:
-                pass
+                    await asyncio.to_thread(_sync_download_audio, target_id)
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"Proxy download error: {e}")
 
-    return StreamingResponse(
-        iterfile(),
-        status_code=yt_resp.status,
-        headers=response_headers,
+    return FileResponse(
+        path=str(cache_file),
         media_type="audio/mp4",
+        filename=f"{target_id}.m4a",
     )
+
+
+@app.api_route("/preload", methods=["GET", "POST"])
+async def preload_audio(v: str, background_tasks: BackgroundTasks):
+    if not v or not v.strip():
+        return {"status": "error", "message": "Missing video id"}
+    target_id = v.strip()
+    cache_file = CACHE_DIR / f"{target_id}.m4a"
+    if cache_file.exists() and cache_file.stat().st_size > 100000:
+        return {"status": "cached", "id": target_id}
+
+    async def _bg_download(vid: str):
+        lock = _get_stream_lock(vid)
+        async with lock:
+            target = CACHE_DIR / f"{vid}.m4a"
+            if not (target.exists() and target.stat().st_size > 100000):
+                try:
+                    await asyncio.to_thread(_sync_download_audio, vid)
+                except Exception:
+                    pass
+
+    background_tasks.add_task(_bg_download, target_id)
+    return {"status": "preloading", "id": target_id}
 
 
 @app.get("/stream_url")

@@ -45,8 +45,15 @@ class ApiConfig {
     return Uri.parse('$baseUrl/stream_url?v=$videoId');
   }
 
-  static Uri nextCandidatesUri(String videoId, {int limit = 20}) {
-    return Uri.parse('$baseUrl/next_candidates?v=$videoId&limit=$limit');
+  static Uri nextCandidatesUri(String videoId, {int limit = 20, String? title, String? artist}) {
+    final buffer = StringBuffer('$baseUrl/next_candidates?v=$videoId&limit=$limit');
+    if (title != null && title.isNotEmpty) {
+      buffer.write('&title=${Uri.encodeComponent(title)}');
+    }
+    if (artist != null && artist.isNotEmpty) {
+      buffer.write('&artist=${Uri.encodeComponent(artist)}');
+    }
+    return Uri.parse(buffer.toString());
   }
 
   static Uri trackFinishedUri() {
@@ -55,5 +62,9 @@ class ApiConfig {
 
   static Uri cacheInvalidateUri(String videoId) {
     return Uri.parse('$baseUrl/cache/$videoId');
+  }
+
+  static Uri preloadUri(String videoId) {
+    return Uri.parse('$baseUrl/preload?v=$videoId');
   }
 }

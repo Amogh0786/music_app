@@ -300,7 +300,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                 onPressed: () {},
                               ),
                               onTap: () {
-                                _musicService.playPlaylist(_searchResults, index);
+                                _musicService.playSong(video);
                               },
                             );
                           },

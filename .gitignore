@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Backend Cache
+backend/audio_cache/
+backend/__pycache__/
+
