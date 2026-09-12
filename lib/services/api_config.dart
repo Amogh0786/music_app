@@ -53,4 +53,8 @@ class ApiConfig {
   static Uri preloadUri(String videoId) {
     return Uri.parse('$baseUrl/preload?v=$videoId');
   }
+
+  static Uri clientLogUri() {
+    return Uri.parse('$baseUrl/client_log');
+  }
 }

@@ -539,36 +539,71 @@ class MusicService extends ChangeNotifier {
     return null;
   }
 
+  void _reportClientLog(String stage, Map<String, dynamic> data) {
+    try {
+      final payload = {
+        'stage': stage,
+        'timestamp': DateTime.now().toIso8601String(),
+        ...data,
+      };
+      http.post(
+        ApiConfig.clientLogUri(),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(payload),
+      ).timeout(const Duration(seconds: 4)).catchError((_) => http.Response('', 500));
+    } catch (_) {}
+  }
+
   /// Resolves the direct Google CDN audio stream URL natively on the user's device.
   /// Because this request originates from the user's mobile/residential IP,
   /// YouTube does NOT challenge it as a datacenter bot.
   Future<String?> _resolveDirectAudioUrl(String videoId) async {
+    StreamManifest? manifest;
+
+    // Try with primary instance first
     try {
-      final manifest = await _ytExplode.videos.streamsClient
+      manifest = await _ytExplode.videos.streamsClient
           .getManifest(videoId)
-          .timeout(const Duration(seconds: 8));
-
-      // On iOS, AVPlayer prefers MP4 container (AAC codec)
-      if (Platform.isIOS) {
-        final mp4Streams = manifest.audioOnly.where(
-          (s) => s.container.name.toLowerCase() == 'mp4' || s.codec.mimeType.contains('mp4'),
-        );
-        if (mp4Streams.isNotEmpty) {
-          final chosen = mp4Streams.withHighestBitrate();
-          debugPrint('[StreamResolver] Selected iOS-friendly MP4/AAC stream (${chosen.bitrate}) for $videoId');
-          return chosen.url.toString();
+          .timeout(const Duration(seconds: 20));
+    } catch (e) {
+      debugPrint('[StreamResolver] Primary instance error for $videoId: $e. Retrying with fresh instance…');
+      try {
+        final freshYt = YoutubeExplode();
+        try {
+          manifest = await freshYt.videos.streamsClient
+              .getManifest(videoId)
+              .timeout(const Duration(seconds: 20));
+        } finally {
+          freshYt.close();
         }
+      } catch (e2) {
+        debugPrint('[StreamResolver] Fresh instance error for $videoId: $e2');
+        _reportClientLog('resolve_error', {'videoId': videoId, 'error': e2.toString()});
       }
+    }
 
-      // On Android and other platforms, ExoPlayer natively handles both Opus (WebM) and AAC (MP4)
-      final audioStreams = manifest.audioOnly;
-      if (audioStreams.isNotEmpty) {
-        final chosen = audioStreams.withHighestBitrate();
-        debugPrint('[StreamResolver] Selected high-bitrate audio stream (${chosen.bitrate}, ${chosen.container.name}) for $videoId');
+    if (manifest == null) return null;
+
+    try {
+      // Always prefer MP4/AAC container (e.g. itag 140 @ 128kbps) for 100% universal hardware decoding on Android & iOS
+      final mp4Streams = manifest.audioOnly.where(
+        (s) => s.container.name.toLowerCase() == 'mp4' || s.codec.mimeType.contains('mp4'),
+      );
+      if (mp4Streams.isNotEmpty) {
+        final chosen = mp4Streams.withHighestBitrate();
+        debugPrint('[StreamResolver] Selected MP4/AAC stream (${chosen.bitrate}, tag: ${chosen.tag}) for $videoId');
         return chosen.url.toString();
       }
 
-      // Fallback: Muxed streams (audio + video, ExoPlayer plays audio track)
+      // Fallback: Highest bitrate audio stream (e.g. WebM Opus)
+      final audioStreams = manifest.audioOnly;
+      if (audioStreams.isNotEmpty) {
+        final chosen = audioStreams.withHighestBitrate();
+        debugPrint('[StreamResolver] Selected audio stream (${chosen.bitrate}, ${chosen.container.name}) for $videoId');
+        return chosen.url.toString();
+      }
+
+      // Fallback: Muxed streams (audio + video, audio track played by ExoPlayer)
       final muxedStreams = manifest.muxed;
       if (muxedStreams.isNotEmpty) {
         final chosen = muxedStreams.withHighestBitrate();
@@ -576,7 +611,7 @@ class MusicService extends ChangeNotifier {
         return chosen.url.toString();
       }
     } catch (e) {
-      debugPrint('[StreamResolver] Device direct resolution error for $videoId: $e');
+      debugPrint('[StreamResolver] Stream selection error for $videoId: $e');
     }
     return null;
   }
@@ -644,11 +679,25 @@ class MusicService extends ChangeNotifier {
 
         if (directUrl != null) {
           debugPrint('[Play] Direct audio URL resolved! Setting audio source…');
-          await _audioPlayer.setAudioSource(
-            AudioSource.uri(Uri.parse(directUrl), tag: mediaItem),
-            preload: true,
-          );
-          playbackSourceSet = true;
+          _reportClientLog('direct_url_resolved', {
+            'videoId': song.id.value,
+            'urlPrefix': directUrl.substring(0, min(60, directUrl.length)),
+          });
+
+          try {
+            await _audioPlayer.setAudioSource(
+              AudioSource.uri(Uri.parse(directUrl), headers: _ytHeaders, tag: mediaItem),
+              preload: true,
+            );
+            playbackSourceSet = true;
+          } catch (sourceWithHeadersError) {
+            debugPrint('[Play] setAudioSource with headers failed: $sourceWithHeadersError. Trying without headers…');
+            await _audioPlayer.setAudioSource(
+              AudioSource.uri(Uri.parse(directUrl), tag: mediaItem),
+              preload: true,
+            );
+            playbackSourceSet = true;
+          }
         }
       } catch (directError) {
         if (_isInterrupted(directError)) {
@@ -656,6 +705,7 @@ class MusicService extends ChangeNotifier {
           return;
         }
         debugPrint('[Play] Direct resolution error ($directError), trying fallbacks…');
+        _reportClientLog('direct_play_failed', {'videoId': song.id.value, 'error': directError.toString()});
       }
 
       // 3. Fallback 1: Backend /stream_url

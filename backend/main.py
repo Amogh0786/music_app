@@ -96,8 +96,18 @@ def version_check():
     return {
         "yt_dlp": yt_dlp.version.__version__,
         "node": shutil.which("node"),
-        "commit": "v4-android-fix",
+        "commit": "v5-client-logging",
     }
+
+
+@app.post("/client_log")
+async def receive_client_log(request: Request):
+    try:
+        data = await request.json()
+        print(f"📱 [CLIENT_LOG] {json.dumps(data)}")
+    except Exception as e:
+        print(f"📱 [CLIENT_LOG ERROR] {e}")
+    return {"status": "ok"}
 
 
 # In-memory URL & Search caches
