@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,9 +19,13 @@ class PreferencesService extends ChangeNotifier {
   double _cacheSizeMB = 500.0;
   String _customServerUrl = '';
   ArtworkStyle _artworkStyle = ArtworkStyle.card;
+  String _userName = 'Charan';
 
   // Search History
   List<String> _searchHistory = [];
+
+  // Listening History
+  List<Map<String, String>> _listeningHistory = [];
 
   // Listening Preferences & Play Counts
   final Map<String, int> _artistPlayCounts = {};
@@ -32,7 +37,9 @@ class PreferencesService extends ChangeNotifier {
   double get cacheSizeMB => _cacheSizeMB;
   String get customServerUrl => _customServerUrl;
   ArtworkStyle get artworkStyle => _artworkStyle;
+  String get userName => _userName;
   List<String> get searchHistory => _searchHistory;
+  List<Map<String, String>> get listeningHistory => _listeningHistory;
   String get mostPlayedArtist => _mostPlayedArtist;
 
   Future<void> init() async {
@@ -46,8 +53,19 @@ class PreferencesService extends ChangeNotifier {
     _customServerUrl = _prefs.getString('customServerUrl') ?? '';
     _searchHistory = _prefs.getStringList('searchHistory') ?? [];
     _mostPlayedArtist = _prefs.getString('mostPlayedArtist') ?? '';
+    _userName = _prefs.getString('userName') ?? 'Charan';
     final styleStr = _prefs.getString('artworkStyle') ?? 'card';
     _artworkStyle = styleStr == 'vinyl' ? ArtworkStyle.vinyl : ArtworkStyle.card;
+
+    final historyJson = _prefs.getString('listeningHistoryJson');
+    if (historyJson != null && historyJson.isNotEmpty) {
+      try {
+        final List<dynamic> decoded = json.decode(historyJson);
+        _listeningHistory = decoded.map((e) => Map<String, String>.from(e)).toList();
+      } catch (_) {
+        _listeningHistory = [];
+      }
+    }
 
     _isInitialized = true;
     notifyListeners();
@@ -111,9 +129,39 @@ class PreferencesService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> removeFromSearchHistory(String query) async {
+    _searchHistory.remove(query);
+    await _prefs.setStringList('searchHistory', _searchHistory);
+    notifyListeners();
+  }
+
   Future<void> clearSearchHistory() async {
     _searchHistory.clear();
     await _prefs.setStringList('searchHistory', _searchHistory);
+    notifyListeners();
+  }
+
+  Future<void> addToListeningHistory(Map<String, String> song) async {
+    final id = song['id'];
+    if (id == null || id.isEmpty) return;
+    _listeningHistory.removeWhere((item) => item['id'] == id);
+    _listeningHistory.insert(0, song);
+    if (_listeningHistory.length > 50) {
+      _listeningHistory = _listeningHistory.sublist(0, 50);
+    }
+    await _prefs.setString('listeningHistoryJson', json.encode(_listeningHistory));
+    notifyListeners();
+  }
+
+  Future<void> clearListeningHistory() async {
+    _listeningHistory.clear();
+    await _prefs.remove('listeningHistoryJson');
+    notifyListeners();
+  }
+
+  Future<void> setUserName(String name) async {
+    _userName = name.trim().isEmpty ? 'Charan' : name.trim();
+    await _prefs.setString('userName', _userName);
     notifyListeners();
   }
 

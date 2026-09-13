@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
 import '../services/preferences_service.dart';
@@ -71,12 +72,17 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   void initState() {
     super.initState();
+    _prefs.addListener(_onPrefsChanged);
     _searchController.addListener(_onSearchChanged);
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
         _loadMoreResults();
       }
     });
+  }
+
+  void _onPrefsChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onSearchChanged() {
@@ -106,6 +112,7 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _prefs.removeListener(_onPrefsChanged);
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _scrollController.dispose();
@@ -168,13 +175,18 @@ class _SearchScreenState extends State<SearchScreen> {
     final history = _prefs.searchHistory;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: const Color(0xFF0B0B0F),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF121212),
+        backgroundColor: const Color(0xFF0B0B0F),
         elevation: 0,
         title: const Text(
           'Search',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: -0.5),
+          style: TextStyle(
+            fontSize: 30,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+            letterSpacing: -0.8,
+          ),
         ),
       ),
       body: Padding(
@@ -182,26 +194,41 @@ class _SearchScreenState extends State<SearchScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Apple-style Search Field
+            // Modern Frosted Search Field
             Container(
-              height: 42,
+              height: 48,
               decoration: BoxDecoration(
-                color: const Color(0xFF282828),
-                borderRadius: BorderRadius.circular(12),
+                color: const Color(0xFF161622),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.25),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: TextField(
                 controller: _searchController,
-                onSubmitted: _performSearch,
+                onSubmitted: (val) {
+                  HapticFeedback.lightImpact();
+                  _performSearch(val);
+                },
                 textInputAction: TextInputAction.search,
                 style: const TextStyle(color: Colors.white, fontSize: 15),
                 decoration: InputDecoration(
                   hintText: 'Artists, Songs, Lyrics, and More',
-                  hintStyle: TextStyle(color: Colors.grey[500], fontSize: 15),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white54, size: 20),
+                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.38), fontSize: 14),
+                  prefixIcon: const Icon(Icons.search_rounded, color: Colors.white60, size: 22),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, color: Colors.white54, size: 18),
+                          icon: const Icon(Icons.clear_rounded, color: Colors.white60, size: 18),
                           onPressed: () {
+                            HapticFeedback.lightImpact();
                             _searchController.clear();
                             setState(() {
                               _searchResults.clear();
@@ -212,7 +239,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         )
                       : null,
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 ),
               ),
             ),
@@ -226,7 +253,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           _suggestions.isNotEmpty &&
                           _searchController.text.trim() != _currentQuery)
                       ? ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 110),
+                          padding: const EdgeInsets.only(bottom: 160),
                           itemCount: _suggestions.length,
                           itemBuilder: (context, index) {
                             final suggestion = _suggestions[index];
@@ -252,7 +279,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       : _searchResults.isNotEmpty
                           ? ListView.builder(
                           controller: _scrollController,
-                          padding: const EdgeInsets.only(bottom: 110),
+                          padding: const EdgeInsets.only(bottom: 160),
                           itemCount: _searchResults.length + (_isLoadingMore ? 1 : 0),
                           itemBuilder: (context, index) {
                             if (index == _searchResults.length) {
@@ -307,7 +334,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         )
 
                       : ListView(
-                          padding: const EdgeInsets.only(bottom: 110),
+                          padding: const EdgeInsets.only(bottom: 160),
                           children: [
                             if (history.isNotEmpty) ...[
                               Row(
@@ -315,35 +342,106 @@ class _SearchScreenState extends State<SearchScreen> {
                                 children: [
                                   const Text(
                                     'Recent Searches',
-                                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: -0.3,
+                                    ),
                                   ),
                                   TextButton(
                                     onPressed: () {
+                                      HapticFeedback.lightImpact();
                                       _prefs.clearSearchHistory();
                                       setState(() {});
                                     },
-                                    child: Text('Clear', style: TextStyle(color: Theme.of(context).primaryColor)),
+                                    child: Text(
+                                      'Clear All',
+                                      style: TextStyle(
+                                        color: Theme.of(context).primaryColor,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
                                   )
                                 ],
                               ),
-                              ...history.take(4).map(
-                                    (item) => ListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      leading: const Icon(Icons.history, color: Colors.grey, size: 20),
-                                      title: Text(item, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: history.map((item) {
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF181824),
+                                      borderRadius: BorderRadius.circular(24),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(alpha: 0.12),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(24),
                                       onTap: () {
+                                        HapticFeedback.lightImpact();
                                         _searchController.text = item;
                                         _performSearch(item);
                                       },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.history_rounded, size: 15, color: Colors.white60),
+                                            const SizedBox(width: 6),
+                                            ConstrainedBox(
+                                              constraints: const BoxConstraints(maxWidth: 180),
+                                              child: Text(
+                                                item,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            GestureDetector(
+                                              behavior: HitTestBehavior.opaque,
+                                              onTap: () {
+                                                HapticFeedback.selectionClick();
+                                                _prefs.removeFromSearchHistory(item);
+                                              },
+                                              child: Container(
+                                                padding: const EdgeInsets.all(2),
+                                                decoration: const BoxDecoration(
+                                                  color: Colors.white12,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(Icons.close_rounded, size: 12, color: Colors.white70),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                              const SizedBox(height: 16),
+                                  );
+                                }).toList(),
+                              ),
+                              const SizedBox(height: 24),
                             ],
                             const Text(
                               'Browse Categories',
-                              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: -0.3),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: -0.3,
+                              ),
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 14),
                             GridView.builder(
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),
@@ -360,22 +458,27 @@ class _SearchScreenState extends State<SearchScreen> {
 
                                 return GestureDetector(
                                   onTap: () {
+                                    HapticFeedback.lightImpact();
                                     _searchController.text = cat['title'];
                                     _performSearch(cat['query']);
                                   },
                                   child: Container(
-                                    padding: const EdgeInsets.all(12),
+                                    padding: const EdgeInsets.all(14),
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(
                                         colors: colors,
                                         begin: Alignment.topLeft,
                                         end: Alignment.bottomRight,
                                       ),
-                                      borderRadius: BorderRadius.circular(14),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(alpha: 0.15),
+                                        width: 1,
+                                      ),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: colors.first.withValues(alpha: 0.3),
-                                          blurRadius: 8,
+                                          color: colors.first.withValues(alpha: 0.35),
+                                          blurRadius: 10,
                                           offset: const Offset(0, 4),
                                         ),
                                       ],
@@ -386,9 +489,9 @@ class _SearchScreenState extends State<SearchScreen> {
                                         cat['title'],
                                         style: const TextStyle(
                                           color: Colors.white,
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: -0.2,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: -0.3,
                                         ),
                                       ),
                                     ),

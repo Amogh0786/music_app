@@ -648,6 +648,13 @@ class MusicService extends ChangeNotifier {
 
     // Track play count and history for personalization algorithm
     PreferencesService().recordSongPlay(song.author, song.title);
+    PreferencesService().addToListeningHistory({
+      'id': song.id.value,
+      'title': song.title,
+      'author': song.author,
+      'thumbnail': getHdThumbnail(song.id.value),
+      'playedAt': DateTime.now().toIso8601String(),
+    });
 
     final mediaItem = MediaItem(
       id: song.id.value,
@@ -1007,6 +1014,59 @@ class MusicService extends ChangeNotifier {
     if (_playlist.isNotEmpty) {
       await playSong(_playlist[_currentIndex], updateQueue: false);
     }
+  }
+
+  Future<void> playHistorySong(Map<String, String> songData) async {
+    final history = PreferencesService().listeningHistory;
+    _playlist = history.map((item) => Video(
+      VideoId(item['id'] ?? ''),
+      item['title'] ?? 'Unknown Title',
+      item['author'] ?? 'Unknown Artist',
+      ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+      DateTime.now(),
+      '',
+      null,
+      '',
+      null,
+      ThumbnailSet(item['id'] ?? ''),
+      null,
+      Engagement(0, null, null),
+      false,
+    )).toList();
+
+    _currentIndex = history.indexWhere((item) => item['id'] == songData['id']);
+    if (_currentIndex == -1) _currentIndex = 0;
+    if (_playlist.isNotEmpty) {
+      await playSong(_playlist[_currentIndex], updateQueue: false);
+    }
+  }
+
+  Future<int> getTotalDownloadedBytes() async {
+    int total = 0;
+    for (final song in _downloadedSongs) {
+      if (song['localPath'] != null) {
+        try {
+          final file = File(song['localPath']!);
+          if (await file.exists()) {
+            total += await file.length();
+          }
+        } catch (_) {}
+      }
+    }
+    return total;
+  }
+
+  Future<int> getDownloadedSongSize(String videoId) async {
+    final s = _downloadedSongs.firstWhere((item) => item['id'] == videoId, orElse: () => {});
+    if (s.isNotEmpty && s['localPath'] != null) {
+      try {
+        final f = File(s['localPath']!);
+        if (await f.exists()) {
+          return await f.length();
+        }
+      } catch (_) {}
+    }
+    return 0;
   }
 
   void togglePlayPause() {
