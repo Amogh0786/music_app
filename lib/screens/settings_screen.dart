@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:ota_update/ota_update.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../services/preferences_service.dart';
 import '../services/music_service.dart';
 import '../services/update_service.dart';
@@ -403,7 +405,21 @@ class _UpdateModalSheetState extends State<_UpdateModalSheet> {
   String _statusText = '';
   String? _errorMessage;
 
-  void _startUpdate() {
+  Future<void> _startUpdate() async {
+    if (Platform.isAndroid) {
+      final status = await Permission.requestInstallPackages.status;
+      if (!status.isGranted) {
+        final result = await Permission.requestInstallPackages.request();
+        if (!result.isGranted) {
+          setState(() {
+            _errorMessage =
+                'Permission needed to install packages. Please enable "Install unknown apps" for this app in Settings.';
+          });
+          return;
+        }
+      }
+    }
+
     setState(() {
       _isDownloading = true;
       _downloadProgress = 0;
