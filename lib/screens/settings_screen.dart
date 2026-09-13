@@ -1,7 +1,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:ota_update/ota_update.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../services/preferences_service.dart';
 import '../services/music_service.dart';
+import '../services/update_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,6 +16,28 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _prefs = PreferencesService();
   final _musicService = MusicService();
+
+  String _appVersion = '';
+  String _buildNumber = '';
+  bool _isCheckingUpdate = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPackageInfo();
+  }
+
+  Future<void> _loadPackageInfo() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() {
+          _appVersion = info.version;
+          _buildNumber = info.buildNumber;
+        });
+      }
+    } catch (_) {}
+  }
 
   final List<Color> _availableColors = [
     const Color(0xFFFA2D48), // Apple Red
@@ -238,10 +263,111 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   );
                 },
               ),
+              const Divider(color: Colors.white24, height: 32),
+
+              _buildSectionTitle('App Updates & Version'),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _prefs.themeColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.system_update_alt_rounded, color: _prefs.themeColor, size: 22),
+                ),
+                title: Text(
+                  _appVersion.isEmpty
+                      ? 'Music App'
+                      : 'Music App v$_appVersion (${_buildNumber.isEmpty ? "release" : "Build $_buildNumber"})',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  _isCheckingUpdate
+                      ? 'Checking GitHub for new releases…'
+                      : 'Tap to check for updates',
+                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                ),
+                trailing: _isCheckingUpdate
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: _prefs.themeColor,
+                        ),
+                      )
+                    : Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey[500], size: 14),
+                onTap: _isCheckingUpdate ? null : _handleCheckForUpdates,
+              ),
+              const SizedBox(height: 20),
             ],
           ),
         );
       }
+    );
+  }
+
+  Future<void> _handleCheckForUpdates() async {
+    if (_isCheckingUpdate) return;
+    setState(() => _isCheckingUpdate = true);
+
+    try {
+      final updateInfo = await UpdateService().checkForUpdate();
+      if (!mounted) return;
+
+      if (updateInfo == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not reach GitHub Releases. Please check your internet connection.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      } else if (!updateInfo.hasUpdate) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "You're on the latest version (${updateInfo.tagName})! 🎉",
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF1DB954),
+          ),
+        );
+      } else {
+        _showUpdateSheet(context, updateInfo);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Update check failed: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCheckingUpdate = false);
+      }
+    }
+  }
+
+  void _showUpdateSheet(BuildContext context, AppUpdateInfo info) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _UpdateModalSheet(
+        info: info,
+        themeColor: _prefs.themeColor,
+      ),
     );
   }
 
@@ -255,6 +381,273 @@ class _SettingsScreenState extends State<SettingsScreen> {
           fontSize: 14,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+}
+
+class _UpdateModalSheet extends StatefulWidget {
+  final AppUpdateInfo info;
+  final Color themeColor;
+
+  const _UpdateModalSheet({required this.info, required this.themeColor});
+
+  @override
+  State<_UpdateModalSheet> createState() => _UpdateModalSheetState();
+}
+
+class _UpdateModalSheetState extends State<_UpdateModalSheet> {
+  bool _isDownloading = false;
+  int _downloadProgress = 0;
+  String _statusText = '';
+  String? _errorMessage;
+
+  void _startUpdate() {
+    setState(() {
+      _isDownloading = true;
+      _downloadProgress = 0;
+      _statusText = 'Connecting to download server…';
+      _errorMessage = null;
+    });
+
+    try {
+      UpdateService().startOtaUpdate(widget.info.downloadUrl).listen(
+        (OtaEvent event) {
+          if (!mounted) return;
+          setState(() {
+            switch (event.status) {
+              case OtaStatus.DOWNLOADING:
+                final parsed = int.tryParse(event.value ?? '0');
+                if (parsed != null) _downloadProgress = parsed;
+                _statusText = 'Downloading update… $_downloadProgress%';
+                break;
+              case OtaStatus.INSTALLING:
+                _downloadProgress = 100;
+                _statusText = 'Launching installer…';
+                break;
+              case OtaStatus.ALREADY_RUNNING_ERROR:
+                _errorMessage = 'An update download is already in progress.';
+                _isDownloading = false;
+                break;
+              case OtaStatus.PERMISSION_NOT_GRANTED_ERROR:
+                _errorMessage =
+                    'Permission needed to install packages. Please allow "Install unknown apps" in Android settings.';
+                _isDownloading = false;
+                break;
+              case OtaStatus.INTERNAL_ERROR:
+                _errorMessage = 'Download failed: ${event.value ?? "Unknown error"}.';
+                _isDownloading = false;
+                break;
+              default:
+                break;
+            }
+          });
+        },
+        onError: (e) {
+          if (mounted) {
+            setState(() {
+              _errorMessage = 'Download error: $e';
+              _isDownloading = false;
+            });
+          }
+        },
+      );
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Could not start download: $e';
+        _isDownloading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E1E24).withValues(alpha: 0.96),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border.all(color: Colors.white12),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: widget.themeColor.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.rocket_launch_rounded, color: widget.themeColor, size: 24),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Update Available!',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${widget.info.tagName} • ${widget.info.formattedSize}',
+                          style: TextStyle(
+                            color: widget.themeColor,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                "What's New:",
+                style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                constraints: const BoxConstraints(maxHeight: 180),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.black38,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: SingleChildScrollView(
+                  child: Text(
+                    widget.info.changelog,
+                    style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.45),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 22),
+              if (_errorMessage != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.redAccent.withValues(alpha: 0.4)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.redAccent, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              if (_isDownloading) ...[
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _statusText,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
+                        Text(
+                          '$_downloadProgress%',
+                          style: TextStyle(color: widget.themeColor, fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: _downloadProgress > 0 ? _downloadProgress / 100.0 : null,
+                        minHeight: 8,
+                        backgroundColor: Colors.white12,
+                        valueColor: AlwaysStoppedAnimation<Color>(widget.themeColor),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Center(
+                      child: Text(
+                        'Keep music_app open until installation starts',
+                        style: TextStyle(color: Colors.white38, fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: const Text('Later', style: TextStyle(color: Colors.white60, fontSize: 15)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
+                        onPressed: _startUpdate,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: widget.themeColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.download_rounded, size: 20),
+                            SizedBox(width: 8),
+                            Text('Update Now', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
