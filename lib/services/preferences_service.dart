@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+enum ArtworkStyle { card, vinyl }
+
 class PreferencesService extends ChangeNotifier {
   static final PreferencesService _instance = PreferencesService._internal();
   factory PreferencesService() => _instance;
@@ -15,6 +17,7 @@ class PreferencesService extends ChangeNotifier {
   Color _themeColor = const Color(0xFFFA2D48); // Default Apple Red
   double _cacheSizeMB = 500.0;
   String _customServerUrl = '';
+  ArtworkStyle _artworkStyle = ArtworkStyle.card;
 
   // Search History
   List<String> _searchHistory = [];
@@ -28,6 +31,7 @@ class PreferencesService extends ChangeNotifier {
   Color get themeColor => _themeColor;
   double get cacheSizeMB => _cacheSizeMB;
   String get customServerUrl => _customServerUrl;
+  ArtworkStyle get artworkStyle => _artworkStyle;
   List<String> get searchHistory => _searchHistory;
   String get mostPlayedArtist => _mostPlayedArtist;
 
@@ -42,6 +46,8 @@ class PreferencesService extends ChangeNotifier {
     _customServerUrl = _prefs.getString('customServerUrl') ?? '';
     _searchHistory = _prefs.getStringList('searchHistory') ?? [];
     _mostPlayedArtist = _prefs.getString('mostPlayedArtist') ?? '';
+    final styleStr = _prefs.getString('artworkStyle') ?? 'card';
+    _artworkStyle = styleStr == 'vinyl' ? ArtworkStyle.vinyl : ArtworkStyle.card;
 
     _isInitialized = true;
     notifyListeners();
@@ -109,5 +115,16 @@ class PreferencesService extends ChangeNotifier {
     _searchHistory.clear();
     await _prefs.setStringList('searchHistory', _searchHistory);
     notifyListeners();
+  }
+
+  Future<void> setArtworkStyle(ArtworkStyle style) async {
+    _artworkStyle = style;
+    await _prefs.setString('artworkStyle', style.name);
+    notifyListeners();
+  }
+
+  Future<void> toggleArtworkStyle() async {
+    final next = _artworkStyle == ArtworkStyle.card ? ArtworkStyle.vinyl : ArtworkStyle.card;
+    await setArtworkStyle(next);
   }
 }

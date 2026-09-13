@@ -1,8 +1,13 @@
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
+import '../services/preferences_service.dart';
+import '../widgets/vinyl_record_player.dart';
+import '../widgets/waveform_scrubber.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key});
@@ -11,20 +16,32 @@ class PlayerScreen extends StatefulWidget {
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends State<PlayerScreen> {
+class _PlayerScreenState extends State<PlayerScreen>
+    with SingleTickerProviderStateMixin {
   final MusicService _musicService = MusicService();
+  final PreferencesService _prefs = PreferencesService();
+
+  late AnimationController _ambientController;
   bool _showLyrics = false;
-  double? _dragValue;
 
   @override
   void initState() {
     super.initState();
     _musicService.addListener(_onStateChanged);
+    _prefs.addListener(_onStateChanged);
+
+    // Continuous slow rotation for living ambient aura
+    _ambientController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 24),
+    )..repeat();
   }
 
   @override
   void dispose() {
+    _ambientController.dispose();
     _musicService.removeListener(_onStateChanged);
+    _prefs.removeListener(_onStateChanged);
     super.dispose();
   }
 
@@ -41,12 +58,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   String _cleanLyrics(String? raw) {
     if (raw == null) return 'No lyrics available.';
-    // Strip [01:23.45] style LRC timestamp tags
     final cleaned = raw.replaceAll(RegExp(r'\[\d+:\d+(\.\d+)?\]'), '').trim();
     return cleaned.isEmpty ? 'No lyrics available.' : cleaned;
   }
 
   void _toggleLyrics(Video song) {
+    HapticFeedback.lightImpact();
     setState(() {
       _showLyrics = !_showLyrics;
     });
@@ -56,6 +73,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _showQueueSheet(BuildContext context) {
+    HapticFeedback.lightImpact();
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -64,21 +82,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
         final playlist = _musicService.playlist;
         final currentIndex = _musicService.currentIndex;
 
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.75,
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E1E24),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border.all(color: Colors.white10),
-          ),
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+          child: Container(
+            height: MediaQuery.of(context).size.height * 0.75,
+            decoration: BoxDecoration(
+              color: const Color(0xFF16161E).withValues(alpha: 0.95),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              border: Border.all(color: Colors.white12),
+            ),
             child: Column(
               children: [
                 const SizedBox(height: 12),
                 Container(
-                  width: 36,
+                  width: 38,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white38,
+                    color: Colors.white30,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -96,9 +116,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           letterSpacing: -0.3,
                         ),
                       ),
-                      Text(
-                        '${playlist.length} Tracks',
-                        style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white12,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${playlist.length} Tracks',
+                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
                       ),
                     ],
                   ),
@@ -118,18 +145,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             final hdThumbnail = MusicService.getHdThumbnail(song.id.value);
 
                             return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                               leading: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(10),
                                 child: Image.network(
                                   hdThumbnail,
-                                  width: 46,
-                                  height: 46,
+                                  width: 48,
+                                  height: 48,
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, _, _) => Image.network(
                                     song.thumbnails.lowResUrl,
-                                    width: 46,
-                                    height: 46,
+                                    width: 48,
+                                    height: 48,
                                     fit: BoxFit.cover,
                                   ),
                                 ),
@@ -149,7 +176,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: isCurrent ? Theme.of(context).primaryColor.withValues(alpha: 0.8) : Colors.grey[400],
+                                  color: isCurrent
+                                      ? Theme.of(context).primaryColor.withValues(alpha: 0.8)
+                                      : Colors.white54,
                                   fontSize: 12,
                                 ),
                               ),
@@ -157,7 +186,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   ? Icon(Icons.equalizer, color: Theme.of(context).primaryColor, size: 24)
                                   : Text(
                                       _formatDuration(song.duration),
-                                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                                      style: const TextStyle(color: Colors.white38, fontSize: 12),
                                     ),
                               onTap: () {
                                 Navigator.pop(context);
@@ -169,12 +198,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ),
               ],
             ),
-          );
-        },
-      );
+          ),
+        );
+      },
+    );
   }
 
   void _showSleepTimerSheet(BuildContext context) {
+    HapticFeedback.lightImpact();
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -184,88 +215,54 @@ class _PlayerScreenState extends State<PlayerScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E1E24).withValues(alpha: 0.95),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              border: Border.all(color: Colors.white10),
+              color: const Color(0xFF16161E).withValues(alpha: 0.96),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              border: Border.all(color: Colors.white12),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 36,
+                  width: 38,
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: Colors.white38,
+                    color: Colors.white30,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.bedtime, color: Color(0xFFFA2D48), size: 22),
-                        SizedBox(width: 10),
-                        Text(
-                          'Sleep Timer',
-                          style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                        ),
-                      ],
+                    const Text(
+                      'Sleep Timer',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     if (_musicService.isSleepTimerActive)
-                      Text(
-                        _musicService.sleepTimerLabel,
-                        style: const TextStyle(color: Color(0xFFFA2D48), fontWeight: FontWeight.bold, fontSize: 14),
+                      TextButton(
+                        onPressed: () {
+                          _musicService.cancelSleepTimer();
+                          Navigator.pop(context);
+                        },
+                        child: const Text('Turn Off', style: TextStyle(color: Colors.redAccent)),
                       ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                if (_musicService.isSleepTimerActive)
-                  ListTile(
-                    leading: const Icon(Icons.timer_off_outlined, color: Colors.redAccent),
-                    title: const Text('Turn Off Timer', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                    subtitle: Text('Active: ${_musicService.sleepTimerLabel}', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
-                    onTap: () {
-                      _musicService.cancelSleepTimer();
-                      Navigator.pop(context);
-                    },
-                  ),
+                const SizedBox(height: 8),
+                _buildSleepOption(context, '15 minutes', const Duration(minutes: 15)),
+                _buildSleepOption(context, '30 minutes', const Duration(minutes: 30)),
+                _buildSleepOption(context, '45 minutes', const Duration(minutes: 45)),
+                _buildSleepOption(context, '1 hour', const Duration(hours: 1)),
                 ListTile(
-                  leading: const Icon(Icons.timer_outlined, color: Colors.white),
-                  title: const Text('15 Minutes', style: TextStyle(color: Colors.white)),
-                  onTap: () {
-                    _musicService.startSleepTimer(const Duration(minutes: 15));
-                    Navigator.pop(context);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.timer_outlined, color: Colors.white),
-                  title: const Text('30 Minutes', style: TextStyle(color: Colors.white)),
-                  onTap: () {
-                    _musicService.startSleepTimer(const Duration(minutes: 30));
-                    Navigator.pop(context);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.timer_outlined, color: Colors.white),
-                  title: const Text('45 Minutes', style: TextStyle(color: Colors.white)),
-                  onTap: () {
-                    _musicService.startSleepTimer(const Duration(minutes: 45));
-                    Navigator.pop(context);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.timer_outlined, color: Colors.white),
-                  title: const Text('1 Hour', style: TextStyle(color: Colors.white)),
-                  onTap: () {
-                    _musicService.startSleepTimer(const Duration(hours: 1));
-                    Navigator.pop(context);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.music_note_outlined, color: Colors.white),
-                  title: const Text('End of Current Track', style: TextStyle(color: Colors.white)),
+                  leading: const Icon(Icons.music_off_outlined, color: Colors.white70),
+                  title: const Text('End of current track', style: TextStyle(color: Colors.white)),
+                  trailing: _musicService.stopAtEndOfTrack
+                      ? const Icon(Icons.check, color: Color(0xFF1DB954))
+                      : null,
                   onTap: () {
                     _musicService.setStopAtEndOfTrack(true);
                     Navigator.pop(context);
@@ -280,6 +277,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  Widget _buildSleepOption(BuildContext context, String label, Duration duration) {
+    final isSelected = _musicService.sleepRemaining != null &&
+        (_musicService.sleepRemaining!.inMinutes - duration.inMinutes).abs() < 1;
+
+    return ListTile(
+      leading: const Icon(Icons.timer_outlined, color: Colors.white70),
+      title: Text(label, style: const TextStyle(color: Colors.white)),
+      trailing: isSelected ? const Icon(Icons.check, color: Color(0xFF1DB954)) : null,
+      onTap: () {
+        _musicService.startSleepTimer(duration);
+        Navigator.pop(context);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final song = _musicService.currentSong;
@@ -287,69 +299,88 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final isLoading = _musicService.isLoading && !isPlaying;
     final isLiked = song != null && _musicService.likedSongs.any((s) => s['id'] == song.id.value);
     final hdThumbnail = song != null ? MusicService.getHdThumbnail(song.id.value) : '';
+    final artworkStyle = _prefs.artworkStyle;
 
     if (song == null) {
       return const Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: Color(0xFF0B0B0F),
         body: Center(child: Text('No song active', style: TextStyle(color: Colors.white))),
       );
     }
 
+    final dominantColor = _musicService.dominantColor;
+    final vibrantColor = _musicService.vibrantColor;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color(0xFF0B0B0F),
       body: Stack(
         children: [
-          // 1. Dynamic Album Palette Ambient Liquid Gradient Background
+          // 1. Dynamic Living Ambient Gradient Mesh Aura
           Positioned.fill(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 800),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    _musicService.dominantColor.withValues(alpha: 0.85),
-                    _musicService.vibrantColor.withValues(alpha: 0.45),
-                    const Color(0xFF121212),
-                    Colors.black,
+            child: AnimatedBuilder(
+              animation: _ambientController,
+              builder: (context, child) {
+                final progress = _ambientController.value;
+                final angle = progress * 2 * math.pi;
+
+                return Stack(
+                  children: [
+                    // Deep base color
+                    Container(color: const Color(0xFF09090D)),
+
+                    // Blob 1 (Top Left, rotating)
+                    Positioned(
+                      top: -100 + (math.sin(angle) * 40),
+                      left: -100 + (math.cos(angle) * 40),
+                      width: 420,
+                      height: 420,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: dominantColor.withValues(alpha: 0.70),
+                        ),
+                      ),
+                    ),
+
+                    // Blob 2 (Mid Right, reverse rotating)
+                    Positioned(
+                      top: 180 + (math.cos(angle) * 50),
+                      right: -120 + (math.sin(angle) * 50),
+                      width: 380,
+                      height: 380,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: vibrantColor.withValues(alpha: 0.55),
+                        ),
+                      ),
+                    ),
+
+                    // Blob 3 (Bottom Center, breathing)
+                    Positioned(
+                      bottom: -80 + (math.sin(angle * 1.5) * 30),
+                      left: 40 + (math.cos(angle * 1.5) * 30),
+                      width: 340,
+                      height: 340,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: dominantColor.withValues(alpha: 0.45),
+                        ),
+                      ),
+                    ),
                   ],
-                  stops: const [0.0, 0.45, 0.8, 1.0],
-                ),
-              ),
+                );
+              },
             ),
           ),
-          // Ambient Glow Spheres
-          Positioned(
-            top: -60,
-            left: -60,
-            width: 320,
-            height: 320,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 800),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _musicService.dominantColor.withValues(alpha: 0.5),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 220,
-            right: -80,
-            width: 360,
-            height: 360,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 800),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _musicService.vibrantColor.withValues(alpha: 0.4),
-              ),
-            ),
-          ),
+
+          // Frost blur overlay
           Positioned.fill(
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 55, sigmaY: 55),
+              filter: ImageFilter.blur(sigmaX: 65, sigmaY: 65),
               child: Container(
-                color: Colors.black.withValues(alpha: 0.35),
+                color: Colors.black.withValues(alpha: 0.42),
               ),
             ),
           ),
@@ -357,7 +388,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           // 2. Main Player Content
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
               child: Column(
                 children: [
                   // Top Grabber & Header Actions
@@ -365,39 +396,62 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white70, size: 32),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 34),
                         onPressed: () => Navigator.pop(context),
                       ),
                       Container(
                         width: 40,
                         height: 5,
                         decoration: BoxDecoration(
-                          color: Colors.white30,
+                          color: Colors.white24,
                           borderRadius: BorderRadius.circular(3),
                         ),
                       ),
                       Row(
                         children: [
+                          // Artwork Style Toggle (Squircle Card <-> Vinyl Record)
+                          IconButton(
+                            tooltip: artworkStyle == ArtworkStyle.card
+                                ? 'Switch to Vinyl Player'
+                                : 'Switch to Album Card',
+                            icon: Icon(
+                              artworkStyle == ArtworkStyle.card
+                                  ? Icons.album_outlined
+                                  : Icons.crop_square_rounded,
+                              color: Colors.white70,
+                              size: 24,
+                            ),
+                            onPressed: () {
+                              HapticFeedback.lightImpact();
+                              _prefs.toggleArtworkStyle();
+                            },
+                          ),
+                          // Lyrics Toggle
                           IconButton(
                             icon: Icon(
-                              _showLyrics ? Icons.music_note : Icons.lyrics_outlined,
+                              _showLyrics ? Icons.music_note_rounded : Icons.lyrics_outlined,
                               color: _showLyrics ? Theme.of(context).primaryColor : Colors.white70,
                               size: 24,
                             ),
                             onPressed: () => _toggleLyrics(song),
                           ),
+                          // Sleep Timer
                           IconButton(
                             icon: Icon(
                               Icons.bedtime_outlined,
-                              color: _musicService.isSleepTimerActive ? Theme.of(context).primaryColor : Colors.white70,
+                              color: _musicService.isSleepTimerActive
+                                  ? Theme.of(context).primaryColor
+                                  : Colors.white70,
                               size: 24,
                             ),
                             onPressed: () => _showSleepTimerSheet(context),
                           ),
+                          // Queue Sheet
                           IconButton(
                             icon: const Icon(Icons.queue_music_rounded, color: Colors.white70, size: 24),
                             onPressed: () => _showQueueSheet(context),
                           ),
+                          // Offline Download
                           IconButton(
                             icon: _musicService.isDownloading
                                 ? const SizedBox(
@@ -407,7 +461,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   )
                                 : Icon(
                                     _musicService.downloadedSongs.any((s) => s['id'] == song.id.value)
-                                        ? Icons.download_done
+                                        ? Icons.download_done_rounded
                                         : Icons.arrow_circle_down_outlined,
                                     color: _musicService.downloadedSongs.any((s) => s['id'] == song.id.value)
                                         ? const Color(0xFF1DB954)
@@ -436,38 +490,72 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
                   const Spacer(),
 
-                  // Center Content: Either Album Art OR Interactive Apple Lyrics View
+                  // Center Content: Artwork Switcher OR Synced Lyrics
                   if (!_showLyrics)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: MediaQuery.of(context).size.width * 0.82,
-                        height: MediaQuery.of(context).size.width * 0.82,
-                        decoration: BoxDecoration(
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.6),
-                              blurRadius: 25,
-                              spreadRadius: 5,
-                            ),
-                          ],
-                        ),
-                        child: Image.network(
-                          hdThumbnail,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Image.network(song.thumbnails.highResUrl, fit: BoxFit.cover),
-                        ),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 400),
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(scale: animation, child: child),
                       ),
+                      child: artworkStyle == ArtworkStyle.vinyl
+                          ? VinylRecordPlayer(
+                              key: const ValueKey('vinyl_style'),
+                              imageUrl: hdThumbnail,
+                              isPlaying: isPlaying,
+                              dominantColor: dominantColor,
+                              vibrantColor: vibrantColor,
+                              size: MediaQuery.of(context).size.width * 0.78,
+                            )
+                          : Center(
+                              key: const ValueKey('card_style'),
+                              child: Hero(
+                                tag: 'player_artwork_${song.id.value}',
+                                child: Container(
+                                  width: MediaQuery.of(context).size.width * 0.82,
+                                  height: MediaQuery.of(context).size.width * 0.82,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(24),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: dominantColor.withValues(alpha: 0.60),
+                                        blurRadius: 36,
+                                        spreadRadius: 6,
+                                        offset: const Offset(0, 16),
+                                      ),
+                                      BoxShadow(
+                                        color: vibrantColor.withValues(alpha: 0.40),
+                                        blurRadius: 50,
+                                        spreadRadius: 10,
+                                        offset: const Offset(0, 8),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(24),
+                                    child: Image.network(
+                                      hdThumbnail,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) => Image.network(
+                                        song.thumbnails.highResUrl,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                     )
                   else
                     Expanded(
                       flex: 8,
                       child: Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(20),
+                          color: Colors.black.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: Colors.white10),
                         ),
                         child: _musicService.isFetchingLyrics
                             ? Center(
@@ -489,9 +577,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               ),
                       ),
                     ),
+
                   const Spacer(),
 
-                  // Song Title & Artist Info + Like Button
+                  // Track Info & Like Button
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -526,106 +615,89 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       ),
                       IconButton(
                         icon: Icon(
-                          isLiked ? Icons.favorite : Icons.favorite_border,
-                          color: isLiked ? const Color(0xFFE63946) : Colors.white70,
-                          size: 28,
+                          isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                          color: isLiked ? const Color(0xFFFA2D48) : Colors.white70,
+                          size: 30,
                         ),
-                        onPressed: () => _musicService.toggleLike(song),
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          _musicService.toggleLike(song);
+                        },
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
 
-                  // Scrubber Bar
+                  const SizedBox(height: 16),
+
+                  // Tactile Waveform Scrubber
                   StreamBuilder<Duration>(
                     stream: _musicService.audioPlayer.positionStream,
                     builder: (context, snapshot) {
                       final position = snapshot.data ?? Duration.zero;
-                      final duration = _musicService.audioPlayer.duration ?? Duration.zero;
-                      double progress = 0.0;
-                      if (duration.inMilliseconds > 0) {
-                        progress = (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
-                      }
+                      final duration = _musicService.audioPlayer.duration ??
+                          (song.duration ?? Duration.zero);
 
-                      final displayPosition = _dragValue != null
-                          ? Duration(milliseconds: (_dragValue! * duration.inMilliseconds).toInt())
-                          : position;
-
-                      return Column(
-                        children: [
-                          SliderTheme(
-                            data: const SliderThemeData(
-                              trackHeight: 4,
-                              thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
-                              overlayShape: RoundSliderOverlayShape(overlayRadius: 14),
-                              activeTrackColor: Colors.white,
-                              inactiveTrackColor: Colors.white24,
-                              thumbColor: Colors.white,
-                            ),
-                            child: Slider(
-                              value: _dragValue ?? progress,
-                              onChanged: (val) {
-                                setState(() {
-                                  _dragValue = val;
-                                });
-                              },
-                              onChangeEnd: (val) {
-                                final newPosition = Duration(milliseconds: (val * duration.inMilliseconds).toInt());
-                                _musicService.audioPlayer.seek(newPosition);
-                                setState(() {
-                                  _dragValue = null;
-                                });
-                              },
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(_formatDuration(displayPosition), style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 12)),
-                                Text(_formatDuration(duration), style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 12)),
-                              ],
-                            ),
-                          ),
-                        ],
+                      return WaveformScrubber(
+                        position: position,
+                        duration: duration,
+                        songId: song.id.value,
+                        accentColor: vibrantColor,
+                        onSeek: (newPos) {
+                          _musicService.audioPlayer.seek(newPos);
+                        },
                       );
                     },
                   ),
+
                   const SizedBox(height: 12),
 
-                  // Secondary Controls (-10s, +10s, Shuffle, Repeat)
+                  // Secondary Controls (Shuffle, -10s, +10s, Repeat)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       IconButton(
                         icon: Icon(
-                          Icons.shuffle,
+                          Icons.shuffle_rounded,
                           color: _musicService.isShuffle ? const Color(0xFF1DB954) : Colors.white54,
-                          size: 22,
+                          size: 24,
                         ),
-                        onPressed: () => _musicService.toggleShuffle(),
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          _musicService.toggleShuffle();
+                        },
                       ),
                       IconButton(
-                        icon: const Icon(Icons.replay_10, color: Colors.white70, size: 28),
-                        onPressed: () => _musicService.seekRelative(const Duration(seconds: -10)),
+                        icon: const Icon(Icons.replay_10_rounded, color: Colors.white70, size: 28),
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          _musicService.seekRelative(const Duration(seconds: -10));
+                        },
                       ),
                       IconButton(
-                        icon: const Icon(Icons.forward_10, color: Colors.white70, size: 28),
-                        onPressed: () => _musicService.seekRelative(const Duration(seconds: 10)),
+                        icon: const Icon(Icons.forward_10_rounded, color: Colors.white70, size: 28),
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          _musicService.seekRelative(const Duration(seconds: 10));
+                        },
                       ),
                       IconButton(
                         icon: Icon(
                           _musicService.loopMode == LoopMode.one
-                              ? Icons.repeat_one
-                              : Icons.repeat,
-                          color: _musicService.loopMode != LoopMode.off ? const Color(0xFF1DB954) : Colors.white54,
-                          size: 22,
+                              ? Icons.repeat_one_rounded
+                              : Icons.repeat_rounded,
+                          color: _musicService.loopMode != LoopMode.off
+                              ? const Color(0xFF1DB954)
+                              : Colors.white54,
+                          size: 24,
                         ),
-                        onPressed: () => _musicService.toggleRepeat(),
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          _musicService.toggleRepeat();
+                        },
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 12),
 
                   // Main Playback Controls (Prev, Play/Pause, Next)
@@ -633,33 +705,50 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.skip_previous_rounded, color: Colors.white, size: 44),
-                        onPressed: () => _musicService.previousSong(),
+                        icon: const Icon(Icons.skip_previous_rounded, color: Colors.white, size: 46),
+                        onPressed: () {
+                          HapticFeedback.mediumImpact();
+                          _musicService.previousSong();
+                        },
                       ),
+                      // Elevated Play/Pause Button with Ambient Glow
                       Container(
-                        width: 72,
-                        height: 72,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
+                        width: 76,
+                        height: 76,
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: vibrantColor.withValues(alpha: 0.5),
+                              blurRadius: 20,
+                              spreadRadius: 2,
+                            ),
+                          ],
                         ),
                         child: isLoading
                             ? const Padding(
-                                padding: EdgeInsets.all(20.0),
+                                padding: EdgeInsets.all(22.0),
                                 child: CircularProgressIndicator(color: Colors.black, strokeWidth: 3),
                               )
                             : IconButton(
                                 icon: Icon(
                                   isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                                   color: Colors.black,
-                                  size: 44,
+                                  size: 46,
                                 ),
-                                onPressed: () => _musicService.togglePlayPause(),
+                                onPressed: () {
+                                  HapticFeedback.lightImpact();
+                                  _musicService.togglePlayPause();
+                                },
                               ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.skip_next_rounded, color: Colors.white, size: 44),
-                        onPressed: () => _musicService.nextSong(),
+                        icon: const Icon(Icons.skip_next_rounded, color: Colors.white, size: 46),
+                        onPressed: () {
+                          HapticFeedback.mediumImpact();
+                          _musicService.nextSong();
+                        },
                       ),
                     ],
                   ),
