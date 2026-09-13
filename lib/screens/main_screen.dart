@@ -3,6 +3,8 @@ import 'home_screen.dart';
 import 'search_screen.dart';
 import 'library_screen.dart';
 import '../widgets/mini_player.dart';
+import '../services/music_service.dart';
+import '../services/notification_permission_service.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -19,6 +21,24 @@ class _MainScreenState extends State<MainScreen> {
     SearchScreen(),
     LibraryScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    MusicService().addListener(_onMusicServiceChanged);
+  }
+
+  @override
+  void dispose() {
+    MusicService().removeListener(_onMusicServiceChanged);
+    super.dispose();
+  }
+
+  void _onMusicServiceChanged() {
+    if (MusicService().currentSong != null && mounted) {
+      NotificationPermissionService.checkAndPrompt(context);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

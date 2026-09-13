@@ -9,7 +9,10 @@ void main() async {
     await JustAudioBackground.init(
       androidNotificationChannelId: 'com.example.music_app.channel.audio',
       androidNotificationChannelName: 'Music Playback',
-      androidNotificationOngoing: true,
+      androidNotificationChannelDescription: 'Music playback controls and lock screen notification',
+      androidNotificationIcon: 'drawable/ic_stat_music',
+      androidNotificationOngoing: false,
+      androidStopForegroundOnPause: false,
     );
   } catch (e) {
     debugPrint('JustAudioBackground init warning: $e');

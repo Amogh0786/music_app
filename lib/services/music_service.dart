@@ -651,10 +651,11 @@ class MusicService extends ChangeNotifier {
 
     final mediaItem = MediaItem(
       id: song.id.value,
-      album: 'YouTube',
+      album: 'SoundWave',
       title: song.title,
       artist: song.author,
       artUri: Uri.tryParse(getHdThumbnail(song.id.value)),
+      duration: song.duration,
     );
 
     try {
