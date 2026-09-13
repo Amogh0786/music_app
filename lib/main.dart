@@ -7,12 +7,13 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await JustAudioBackground.init(
-      androidNotificationChannelId: 'com.example.music_app.channel.audio',
-      androidNotificationChannelName: 'Music Playback',
+      androidNotificationChannelId: 'com.example.music_app.channel.audio_playback_v2',
+      androidNotificationChannelName: 'Music Playback & Controls',
       androidNotificationChannelDescription: 'Music playback controls and lock screen notification',
-      androidNotificationIcon: 'drawable/ic_stat_music',
-      androidNotificationOngoing: false,
-      androidStopForegroundOnPause: false,
+      androidNotificationIcon: 'mipmap/ic_launcher',
+      androidNotificationOngoing: true,
+      androidStopForegroundOnPause: true,
+      notificationColor: const Color(0xFFFA2D48),
     );
   } catch (e) {
     debugPrint('JustAudioBackground init warning: $e');

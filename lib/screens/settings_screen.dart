@@ -7,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../services/preferences_service.dart';
 import '../services/music_service.dart';
 import '../services/update_service.dart';
+import '../services/notification_permission_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -15,18 +16,41 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObserver {
   final _prefs = PreferencesService();
   final _musicService = MusicService();
 
   String _appVersion = '';
   String _buildNumber = '';
   bool _isCheckingUpdate = false;
+  bool _notificationGranted = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadPackageInfo();
+    _checkNotificationStatus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkNotificationStatus();
+    }
+  }
+
+  Future<void> _checkNotificationStatus() async {
+    final granted = await NotificationPermissionService.isPermissionGranted();
+    if (mounted) {
+      setState(() => _notificationGranted = granted);
+    }
   }
 
   Future<void> _loadPackageInfo() async {
@@ -205,7 +229,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const Divider(color: Colors.white24, height: 32),
 
-              
+              _buildSectionTitle('Lock Screen & Notification Controls'),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: (_notificationGranted ? Colors.green : _prefs.themeColor).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    _notificationGranted ? Icons.notifications_active_rounded : Icons.notifications_off_outlined,
+                    color: _notificationGranted ? Colors.greenAccent : _prefs.themeColor,
+                    size: 22,
+                  ),
+                ),
+                title: const Text('Lock Screen Player Controls', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                subtitle: Text(
+                  _notificationGranted
+                      ? 'Active • Playback controls appear on lock screen and notification shade'
+                      : 'Disabled • Tap to enable lock screen media controls & album artwork',
+                  style: TextStyle(color: _notificationGranted ? Colors.white60 : Colors.amberAccent, fontSize: 12),
+                ),
+                trailing: _notificationGranted
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.4)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_circle, color: Colors.greenAccent, size: 14),
+                            SizedBox(width: 4),
+                            Text('Active', style: TextStyle(color: Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      )
+                    : ElevatedButton(
+                        onPressed: () async {
+                          await NotificationPermissionService.requestNotificationPermission(context);
+                          _checkNotificationStatus();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _prefs.themeColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('Enable', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                onTap: () async {
+                  await NotificationPermissionService.requestNotificationPermission(context);
+                  _checkNotificationStatus();
+                },
+              ),
+              const Divider(color: Colors.white24, height: 32),
+
               _buildSectionTitle('Storage & Cache'),
               ListTile(
                 title: const Text('Maximum Cache Size', style: TextStyle(color: Colors.white)),

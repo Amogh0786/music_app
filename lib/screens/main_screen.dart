@@ -26,6 +26,11 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     MusicService().addListener(_onMusicServiceChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        NotificationPermissionService.promptIfNeeded(context);
+      }
+    });
   }
 
   @override
@@ -36,7 +41,7 @@ class _MainScreenState extends State<MainScreen> {
 
   void _onMusicServiceChanged() {
     if (MusicService().currentSong != null && mounted) {
-      NotificationPermissionService.checkAndPrompt(context);
+      NotificationPermissionService.promptIfNeeded(context);
     }
   }
 
