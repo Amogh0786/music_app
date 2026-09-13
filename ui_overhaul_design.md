@@ -166,14 +166,45 @@ Before we lock down the implementation plan, let's discuss:
 
 ---
 
-## 5. Decisions Log
+## 5. Decisions Log (Finalized)
 
-*(To be filled as we discuss)*
-
-| Decision Area | Chosen Direction | Specifications |
+| Decision Area | Chosen Direction | Detailed Technical Specification |
 | :--- | :--- | :--- |
-| **1. Now Playing Artwork** | *Pending discussion* | |
-| **2. Navigation Bar** | *Pending discussion* | |
-| **3. Ambient Background** | *Pending discussion* | |
-| **4. Home Screen Layout** | *Pending discussion* | |
-| **5. Phased Rollout** | *Pending discussion* | |
+| **1. Now Playing Artwork** | **Option C: User Toggle** (Modern Squircle Card vs. Spinning Vinyl Turntable) | Provide a setting in `PreferencesService`: `PlayerArtworkStyle.card` vs `PlayerArtworkStyle.vinyl`. The card style features 3D depth and ambient back-glow; the vinyl style features a realistic turntable disc that smoothly spins on playback and pauses on pause. |
+| **2. Navigation Bar & Mini-Player** | **Option A: Floating Frosted Glass Dock** | A floating pill-shaped dock with `BackdropFilter(sigma: 25)`, floating 16dp above screen bottom with a subtle 10% white border. Mini-player includes gesture recognition (swipe left/right to change tracks, swipe up to open Now Playing, tap to expand). |
+| **3. Ambient Background** | **Option A: Living Ambient Mesh Glow** | Dynamic multi-layered radial gradient mesh derived from palette extraction (`_dominantColor`, `_vibrantColor`). Slow, continuous organic rotation with custom `AnimationController` for a breathing, concert-like atmosphere. |
+| **4. Home Screen Layout** | **Option A: Hero Billboard + Mood Chips** | Top spotlight carousel for featured/recent artists + horizontal mood filter chips (`⚡ Energetic`, `☕ Chill & Relax`, `🎧 Focus / Coding`, `💪 Workout`, `🌙 Sleep`) + horizontal rows for Recently Played, Trending, and Quick Picks. |
+| **5. Rollout Strategy** | **Option A: Phased Screen-by-Screen** | Deliver in 3 manageable, testable milestones so every change is verified without regressions. |
+
+---
+
+## 6. Phased Implementation Roadmap
+
+### 🚀 Phase 1: The Core Audio Experience (Mini-Player & Now Playing Screen)
+- [ ] **Ambient Mesh Aura**: Implement animated rotating gradient mesh in `player_screen.dart` driven by `_dominantColor` and `_vibrantColor`.
+- [ ] **Hero Artwork Switcher**:
+  - Implement **Modern Squircle 3D Card** with dynamic glow.
+  - Implement **Spinning Vinyl Record Animation** with realistic center groove and rotating disc.
+  - Add artwork style preference toggle in Settings (`PreferencesService`).
+- [ ] **Waveform Scrubber**: Replace slider with tactile capsule waveform progress bar.
+- [ ] **Floating Mini-Player**: Add swipe gestures (left/right to skip, swipe up to expand) and bottom glowing progress line in `mini_player.dart`.
+
+### 🚀 Phase 2: Navigation & Discovery (Floating Dock & Home Screen)
+- [ ] **Floating Island Navigation**: Redesign `main_screen.dart` with floating frosted-glass bottom pill.
+- [ ] **Home Screen Spotlight Billboard**: Featured dynamic artist/song carousel banner.
+- [ ] **Mood & Activity Filter Chips**: Interactive category chips that filter recommendations on the fly.
+- [ ] **Horizontal Content Rows**: "Recently Played" and "Quick Picks" with smooth horizontal scrolling.
+- [ ] **Shimmer Loading Skeletons**: High-end dark shimmer placeholders replacing circular spinners.
+
+### 🚀 Phase 3: Library, Search & Polish
+- [ ] **Instant Debounced Search**: 300ms live search with genre exploration grid and dismissible search history chips.
+- [ ] **Library Storage Meter**: Circular storage usage ring (e.g. `142 MB / 2.0 GB`) and segmented tabs for Downloads, Liked Songs, and History.
+- [ ] **Haptic Feedback & Spring Physics**: Add haptic vibrations to scrubbers, likes, and track skips.
+
+---
+
+## 7. Sign-off
+
+- [x] All 5 UI decisions agreed and recorded.
+- [ ] Phase 1 implementation approved to begin.
+
