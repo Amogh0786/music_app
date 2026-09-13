@@ -659,8 +659,6 @@ class MusicService extends ChangeNotifier {
     );
 
     try {
-      await _audioPlayer.stop();
-
       // 1. If this song is downloaded locally, play directly from disk
       final downloadedItem = _downloadedSongs.firstWhere(
         (item) => item['id'] == song.id.value,
