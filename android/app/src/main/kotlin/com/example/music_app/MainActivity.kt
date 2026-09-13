@@ -12,6 +12,21 @@ class MainActivity : AudioServiceActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createNotificationChannel()
+        keepAudioServiceDrawables()
+    }
+
+    private fun keepAudioServiceDrawables() {
+        // Explicit compile-time references to prevent AAPT/R8 resource shrinking
+        val drawables = intArrayOf(
+            R.drawable.audio_service_play_arrow,
+            R.drawable.audio_service_pause,
+            R.drawable.audio_service_stop,
+            R.drawable.audio_service_skip_next,
+            R.drawable.audio_service_skip_previous,
+            R.drawable.audio_service_fast_forward,
+            R.drawable.audio_service_fast_rewind,
+            R.drawable.ic_stat_music
+        )
     }
 
     private fun createNotificationChannel() {
