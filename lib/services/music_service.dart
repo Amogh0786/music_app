@@ -6,6 +6,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:palette_generator/palette_generator.dart';
@@ -666,101 +667,123 @@ class MusicService extends ChangeNotifier {
     );
 
     try {
-      // 1. If this song is downloaded locally, play directly from disk
-      final downloadedItem = _downloadedSongs.firstWhere(
-        (item) => item['id'] == song.id.value,
-        orElse: () => {},
-      );
+      // 1. If this song is downloaded locally, play directly from disk (mobile only)
+      if (!kIsWeb) {
+        final downloadedItem = _downloadedSongs.firstWhere(
+          (item) => item['id'] == song.id.value,
+          orElse: () => {},
+        );
 
-      if (downloadedItem.isNotEmpty && downloadedItem['localPath'] != null) {
-        final localFile = File(downloadedItem['localPath']!);
-        if (await localFile.exists()) {
-          debugPrint('[Play] Playing locally downloaded file: ${localFile.path}');
-          await _audioPlayer.setAudioSource(
-            AudioSource.uri(Uri.file(localFile.path), tag: mediaItem),
-          );
-          await _audioPlayer.play();
-          _isLoading = false;
-          notifyListeners();
-          _checkAndPreloadNextQueue();
-          return;
+        if (downloadedItem.isNotEmpty && downloadedItem['localPath'] != null) {
+          final localFile = File(downloadedItem['localPath']!);
+          if (await localFile.exists()) {
+            debugPrint('[Play] Playing locally downloaded file: ${localFile.path}');
+            await _audioPlayer.setAudioSource(
+              AudioSource.uri(Uri.file(localFile.path), tag: mediaItem),
+            );
+            await _audioPlayer.play();
+            _isLoading = false;
+            notifyListeners();
+            _checkAndPreloadNextQueue();
+            return;
+          }
         }
       }
 
       bool playbackSourceSet = false;
 
-      // 2. Primary: Direct On-Device Multi-Candidate Resolution
-      try {
-        debugPrint('[Play] Resolving direct audio candidates on mobile device for ${song.id.value}…');
-        final candidates = await _resolveStreamCandidates(song.id.value);
-        if (_currentSong?.id.value != song.id.value) return;
+      // 2. Web Mode (PWA / Browser):
+      // Browsers enforce CORS and block direct socket/manifest requests to YouTube.
+      // Route immediately through backend stream proxy with zero delay and no 20s timeouts.
+      if (kIsWeb) {
+        final proxyUri = ApiConfig.streamProxyUri(song.id.value);
+        debugPrint('[Play][Web] Playing via CORS audio proxy: $proxyUri');
+        _reportClientLog('web_stream_start', {'videoId': song.id.value, 'url': proxyUri.toString()});
+        try {
+          await _audioPlayer.setAudioSource(
+            AudioSource.uri(proxyUri, tag: mediaItem),
+            preload: true,
+          );
+          playbackSourceSet = true;
+        } catch (webErr) {
+          debugPrint('[Play][Web] Proxy AudioSource error: $webErr');
+          _reportClientLog('web_stream_error', {'videoId': song.id.value, 'error': webErr.toString()});
+        }
+      } else {
+        // 3. Mobile Native Mode (Android / iOS app):
+        // Direct On-Device Multi-Candidate Resolution (Format 18 progressive AAC / itag 251)
+        try {
+          debugPrint('[Play] Resolving direct audio candidates on mobile device for ${song.id.value}…');
+          final candidates = await _resolveStreamCandidates(song.id.value);
+          if (_currentSong?.id.value != song.id.value) return;
 
-        if (candidates.isNotEmpty) {
-          final tempDir = await getTemporaryDirectory();
+          if (candidates.isNotEmpty) {
+            final tempDir = await getTemporaryDirectory();
 
-          for (final candidate in candidates) {
-            if (_currentSong?.id.value != song.id.value) return;
+            for (final candidate in candidates) {
+              if (_currentSong?.id.value != song.id.value) return;
 
-            debugPrint('[Play] Trying stream candidate (tag: ${candidate.tag}, type: ${candidate.type})…');
-            _reportClientLog('trying_stream_candidate', {
-              'videoId': song.id.value,
-              'tag': candidate.tag,
-              'type': candidate.type,
-            });
-
-            // 1. First attempt: Direct native AudioSource.uri (fastest, progressive hardware decoding)
-            try {
-              await _audioPlayer.setAudioSource(
-                AudioSource.uri(Uri.parse(candidate.url), tag: mediaItem),
-                preload: true,
-              );
-              playbackSourceSet = true;
-              _reportClientLog('playback_started_uri', {
+              debugPrint('[Play] Trying stream candidate (tag: ${candidate.tag}, type: ${candidate.type})…');
+              _reportClientLog('trying_stream_candidate', {
                 'videoId': song.id.value,
                 'tag': candidate.tag,
+                'type': candidate.type,
               });
-              break;
-            } catch (uriError) {
-              debugPrint('[Play] AudioSource.uri failed ($uriError), trying LockCachingAudioSource…');
-              // 2. Second attempt: LockCachingAudioSource fallback
+
+              // 1. First attempt: Direct native AudioSource.uri (fastest, progressive hardware decoding)
               try {
-                final cacheFile = File('${tempDir.path}/track_${song.id.value}_${candidate.tag}.m4a');
-                if (await cacheFile.exists() && await cacheFile.length() == 0) {
-                  await cacheFile.delete();
-                }
                 await _audioPlayer.setAudioSource(
-                  LockCachingAudioSource(
-                    Uri.parse(candidate.url),
-                    cacheFile: cacheFile,
-                    tag: mediaItem,
-                  ),
+                  AudioSource.uri(Uri.parse(candidate.url), tag: mediaItem),
                   preload: true,
                 );
                 playbackSourceSet = true;
-                _reportClientLog('playback_started_lockcache', {
+                _reportClientLog('playback_started_uri', {
                   'videoId': song.id.value,
                   'tag': candidate.tag,
                 });
                 break;
-              } catch (lockError) {
-                debugPrint('[Play] Candidate tag ${candidate.tag} failed: $lockError');
-                _reportClientLog('candidate_failed', {
-                  'videoId': song.id.value,
-                  'tag': candidate.tag,
-                  'uriError': uriError.toString(),
-                  'lockError': lockError.toString(),
-                });
+              } catch (uriError) {
+                debugPrint('[Play] AudioSource.uri failed ($uriError), trying LockCachingAudioSource…');
+                // 2. Second attempt: LockCachingAudioSource fallback
+                try {
+                  final cacheFile = File('${tempDir.path}/track_${song.id.value}_${candidate.tag}.m4a');
+                  if (await cacheFile.exists() && await cacheFile.length() == 0) {
+                    await cacheFile.delete();
+                  }
+                  await _audioPlayer.setAudioSource(
+                    LockCachingAudioSource(
+                      Uri.parse(candidate.url),
+                      cacheFile: cacheFile,
+                      tag: mediaItem,
+                    ),
+                    preload: true,
+                  );
+                  playbackSourceSet = true;
+                  _reportClientLog('playback_started_lockcache', {
+                    'videoId': song.id.value,
+                    'tag': candidate.tag,
+                  });
+                  break;
+                } catch (lockError) {
+                  debugPrint('[Play] Candidate tag ${candidate.tag} failed: $lockError');
+                  _reportClientLog('candidate_failed', {
+                    'videoId': song.id.value,
+                    'tag': candidate.tag,
+                    'uriError': uriError.toString(),
+                    'lockError': lockError.toString(),
+                  });
+                }
               }
             }
           }
+        } catch (directError) {
+          if (_isInterrupted(directError)) {
+            debugPrint('[Play] Load interrupted by newer request');
+            return;
+          }
+          debugPrint('[Play] Direct resolution error ($directError), trying fallbacks…');
+          _reportClientLog('direct_play_failed', {'videoId': song.id.value, 'error': directError.toString()});
         }
-      } catch (directError) {
-        if (_isInterrupted(directError)) {
-          debugPrint('[Play] Load interrupted by newer request');
-          return;
-        }
-        debugPrint('[Play] Direct resolution error ($directError), trying fallbacks…');
-        _reportClientLog('direct_play_failed', {'videoId': song.id.value, 'error': directError.toString()});
       }
 
       // 3. Fallback 1: Backend /stream_url
