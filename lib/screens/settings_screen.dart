@@ -194,195 +194,146 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
           backgroundColor: const Color(0xFF121212),
           appBar: AppBar(
             backgroundColor: const Color(0xFF121212),
-            title: const Text('Settings'),
+            title: const Text('Settings', style: TextStyle(fontWeight: FontWeight.bold)),
             elevation: 0,
+            centerTitle: true,
           ),
           body: ListView(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.symmetric(vertical: 16.0),
             children: [
-              _buildSectionTitle('Audio Preferences'),
-              SwitchListTile(
-                title: const Text('Crossfade Tracks', style: TextStyle(color: Colors.white)),
-                subtitle: Text('Smooth transition between songs', style: TextStyle(color: Colors.grey[400])),
-                activeThumbColor: _prefs.themeColor,
-                value: _prefs.crossfadeEnabled,
-                onChanged: (val) {
-                  _prefs.setCrossfade(val);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Crossfade set to ${val ? "On" : "Off"}'), backgroundColor: _prefs.themeColor),
-                  );
-                },
-              ),
-              ListTile(
-                title: const Text('Sleep Timer', style: TextStyle(color: Colors.white)),
-                subtitle: Text(
-                  _musicService.isSleepTimerActive
-                      ? 'Active: ${_musicService.sleepTimerLabel}'
-                      : 'Automatically stop playback after set duration',
-                  style: TextStyle(color: _musicService.isSleepTimerActive ? _prefs.themeColor : Colors.grey[400]),
-                ),
-                trailing: Icon(
-                  _musicService.isSleepTimerActive ? Icons.bedtime : Icons.bedtime_outlined,
-                  color: _musicService.isSleepTimerActive ? _prefs.themeColor : Colors.white70,
-                ),
-                onTap: () => _showSleepTimerSheet(context),
-              ),
-              const Divider(color: Colors.white24, height: 32),
-
-              _buildSectionTitle('Lock Screen & Notification Controls'),
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: (_notificationGranted ? Colors.green : _prefs.themeColor).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
+              _buildSectionTitle('PLAYBACK'),
+              _buildSettingsGroup([
+                SwitchListTile(
+                  title: const Text('Crossfade Tracks', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                  subtitle: Text('Smooth transition between songs', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                  activeThumbColor: Colors.white,
+                  activeTrackColor: _prefs.themeColor,
+                  value: _prefs.crossfadeEnabled,
+                  secondary: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: _prefs.themeColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                    child: Icon(Icons.graphic_eq_rounded, color: _prefs.themeColor, size: 20),
                   ),
-                  child: Icon(
-                    _notificationGranted ? Icons.notifications_active_rounded : Icons.notifications_off_outlined,
-                    color: _notificationGranted ? Colors.greenAccent : _prefs.themeColor,
-                    size: 22,
+                  onChanged: (val) {
+                    _prefs.setCrossfade(val);
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Crossfade set to ${val ? "On" : "Off"}'), backgroundColor: _prefs.themeColor));
+                  },
+                ),
+                ListTile(
+                  title: const Text('Sleep Timer', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                  subtitle: Text(_musicService.isSleepTimerActive ? 'Active: ${_musicService.sleepTimerLabel}' : 'Stop playback automatically', style: TextStyle(color: _musicService.isSleepTimerActive ? _prefs.themeColor : Colors.grey[400], fontSize: 13)),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: _prefs.themeColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                    child: Icon(Icons.bedtime_rounded, color: _prefs.themeColor, size: 20),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white30),
+                  onTap: () => _showSleepTimerSheet(context),
+                ),
+              ]),
+              const SizedBox(height: 16),
+              
+              _buildSectionTitle('APPEARANCE & THEME STUDIO'),
+              _buildThemeStudio(),
+              const SizedBox(height: 16),
+
+              _buildSectionTitle('AUDIO QUALITY'),
+              _buildSettingsGroup([
+                ListTile(
+                  title: const Text('Streaming Quality', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                  subtitle: Text('Normal (128 kbps)', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.blueAccent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                    child: const Icon(Icons.high_quality_rounded, color: Colors.blueAccent, size: 20),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white30),
+                  onTap: () {
+                    // Placeholder for future implementation
+                  },
+                ),
+              ]),
+              const SizedBox(height: 16),
+
+              _buildSectionTitle('SYSTEM & CONTROLS'),
+              _buildSettingsGroup([
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: (_notificationGranted ? Colors.green : _prefs.themeColor).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                    child: Icon(_notificationGranted ? Icons.notifications_active_rounded : Icons.notifications_off_outlined, color: _notificationGranted ? Colors.greenAccent : _prefs.themeColor, size: 20),
+                  ),
+                  title: const Text('Lock Screen Controls', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                  subtitle: Text(_notificationGranted ? 'Active' : 'Tap to enable permissions', style: TextStyle(color: _notificationGranted ? Colors.greenAccent : Colors.amberAccent, fontSize: 13)),
+                  trailing: _notificationGranted
+                      ? const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 20)
+                      : ElevatedButton(
+                          onPressed: () async {
+                            await NotificationPermissionService.requestNotificationPermission(context);
+                            _checkNotificationStatus();
+                          },
+                          style: ElevatedButton.styleFrom(backgroundColor: _prefs.themeColor, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                          child: const Text('Enable', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        ),
+                  onTap: () async {
+                    await NotificationPermissionService.requestNotificationPermission(context);
+                    _checkNotificationStatus();
+                  },
+                ),
+                ListTile(
+                  title: const Text('Clear Search History', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.redAccent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                    child: const Icon(Icons.history_rounded, color: Colors.redAccent, size: 20),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white30),
+                  onTap: () {
+                    _prefs.clearSearchHistory();
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Search history cleared'), backgroundColor: _prefs.themeColor));
+                  },
+                ),
+              ]),
+              const SizedBox(height: 16),
+
+              _buildSectionTitle('STORAGE (${_prefs.cacheSizeMB.toInt()} MB Limit)'),
+              _buildSettingsGroup([
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+                  child: Slider(
+                    activeColor: _prefs.themeColor,
+                    inactiveColor: Colors.white10,
+                    value: _prefs.cacheSizeMB,
+                    min: 100,
+                    max: 2000,
+                    divisions: 19,
+                    label: '${_prefs.cacheSizeMB.toInt()} MB',
+                    onChanged: (val) => _prefs.setCacheSize(val),
                   ),
                 ),
-                title: const Text('Lock Screen Player Controls', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                subtitle: Text(
-                  _notificationGranted
-                      ? 'Active • Playback controls appear on lock screen and notification shade'
-                      : 'Disabled • Tap to enable lock screen media controls & album artwork',
-                  style: TextStyle(color: _notificationGranted ? Colors.white60 : Colors.amberAccent, fontSize: 12),
-                ),
-                trailing: _notificationGranted
-                    ? Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.4)),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.check_circle, color: Colors.greenAccent, size: 14),
-                            SizedBox(width: 4),
-                            Text('Active', style: TextStyle(color: Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      )
-                    : ElevatedButton(
-                        onPressed: () async {
-                          await NotificationPermissionService.requestNotificationPermission(context);
-                          _checkNotificationStatus();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _prefs.themeColor,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Text('Enable', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                      ),
-                onTap: () async {
-                  await NotificationPermissionService.requestNotificationPermission(context);
-                  _checkNotificationStatus();
-                },
-              ),
-              const Divider(color: Colors.white24, height: 32),
-
-              _buildSectionTitle('Storage & Cache'),
-              ListTile(
-                title: const Text('Maximum Cache Size', style: TextStyle(color: Colors.white)),
-                subtitle: Text('${_prefs.cacheSizeMB.toInt()} MB limit for downloaded tracks', style: TextStyle(color: Colors.grey[400])),
-              ),
-              Slider(
-                activeColor: _prefs.themeColor,
-                inactiveColor: Colors.white24,
-                value: _prefs.cacheSizeMB,
-                min: 100,
-                max: 2000,
-                divisions: 19,
-                label: '${_prefs.cacheSizeMB.toInt()} MB',
-                onChanged: (val) => _prefs.setCacheSize(val),
-              ),
-              const Divider(color: Colors.white24, height: 32),
-
-              _buildSectionTitle('Appearance & Theme'),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Text('Select Accent Color', style: TextStyle(color: Colors.grey[400])),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: _availableColors.map((color) {
-                    final isSelected = _prefs.themeColor.toARGB32() == color.toARGB32();
-                    return GestureDetector(
-                      onTap: () => _prefs.setThemeColor(color),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected ? Colors.white : Colors.transparent,
-                            width: 3,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-              const Divider(color: Colors.white24, height: 32),
-
-              _buildSectionTitle('Search Data'),
-              ListTile(
-                title: const Text('Clear Search History', style: TextStyle(color: Colors.white)),
-                trailing: Icon(Icons.delete_outline, color: Theme.of(context).primaryColor),
-                onTap: () {
-                  _prefs.clearSearchHistory();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: const Text('Search history cleared'), backgroundColor: _prefs.themeColor),
-                  );
-                },
-              ),
-              const Divider(color: Colors.white24, height: 32),
-
-              _buildSectionTitle('App Updates & Version'),
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: _prefs.themeColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
+              ]),
+              const SizedBox(height: 16),
+              
+              _buildSectionTitle('ABOUT'),
+              _buildSettingsGroup([
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.orangeAccent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                    child: const Icon(Icons.system_update_alt_rounded, color: Colors.orangeAccent, size: 20),
                   ),
-                  child: Icon(Icons.system_update_alt_rounded, color: _prefs.themeColor, size: 22),
+                  title: Text(
+                    _appVersion.isEmpty
+                        ? 'Music App'
+                        : 'Version $_appVersion${_buildNumber.isNotEmpty ? " (Build $_buildNumber)" : ""}',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                  ),
+                  subtitle: Text(_isCheckingUpdate ? 'Checking for updates…' : 'Tap to check for new releases', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                  trailing: _isCheckingUpdate ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: _prefs.themeColor)) : const Icon(Icons.chevron_right_rounded, color: Colors.white30),
+                  onTap: _isCheckingUpdate ? null : _handleCheckForUpdates,
                 ),
-                title: Text(
-                  _appVersion.isEmpty
-                      ? 'Music App'
-                      : 'Music App v$_appVersion (${_buildNumber.isEmpty ? "release" : "Build $_buildNumber"})',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text(
-                  _isCheckingUpdate
-                      ? 'Checking GitHub for new releases…'
-                      : 'Tap to check for updates',
-                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                ),
-                trailing: _isCheckingUpdate
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: _prefs.themeColor,
-                        ),
-                      )
-                    : Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey[500], size: 14),
-                onTap: _isCheckingUpdate ? null : _handleCheckForUpdates,
-              ),
-              const SizedBox(height: 20),
+              ]),
+              const SizedBox(height: 40),
             ],
           ),
         );
@@ -456,15 +407,101 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
 
   Widget _buildSectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      padding: const EdgeInsets.only(left: 32.0, bottom: 8.0, top: 8.0),
       child: Text(
         title,
         style: TextStyle(
-          color: _prefs.themeColor,
-          fontSize: 14,
+          color: Colors.grey[500],
+          fontSize: 12,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.2,
         ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsGroup(List<Widget> children) {
+    final List<Widget> separatedChildren = [];
+    for (int i = 0; i < children.length; i++) {
+      separatedChildren.add(children[i]);
+      if (i < children.length - 1) {
+        separatedChildren.add(const Divider(color: Colors.white10, height: 1, indent: 56));
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E24),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        children: separatedChildren,
+      ),
+    );
+  }
+
+  Widget _buildThemeStudio() {
+    return Container(
+      height: 120,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        itemCount: _availableColors.length,
+        itemBuilder: (context, index) {
+          final color = _availableColors[index];
+          final isSelected = _prefs.themeColor.toARGB32() == color.toARGB32();
+          return GestureDetector(
+            onTap: () => _prefs.setThemeColor(color),
+            child: Container(
+              width: 100,
+              margin: const EdgeInsets.only(right: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E24),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isSelected ? color : Colors.white10,
+                  width: isSelected ? 2 : 1,
+                ),
+                boxShadow: isSelected ? [BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 8)] : null,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                    child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 18) : null,
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 60,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
