@@ -116,6 +116,13 @@ _search_cache: dict[str, tuple[list[dict], float]] = {}
 CACHE_TTL_SECONDS = 4 * 60 * 60  # 4 hours
 
 
+PIPED_INSTANCES = [
+    "https://pipedapi.kavin.rocks",
+    "https://pipedapi.tokhmi.xyz",
+    "https://pipedapi.adminforge.de",
+    "https://api.piped.projectsegfau.lt"
+]
+
 def _get_youtube_url(video_id: str) -> str:
     now = time.time()
     if video_id in _url_cache:
@@ -125,6 +132,27 @@ def _get_youtube_url(video_id: str) -> str:
         else:
             del _url_cache[video_id]
 
+    import random
+    instances = PIPED_INSTANCES.copy()
+    random.shuffle(instances)
+    
+    # 1. Try Piped API to bypass AWS IP blocks
+    for base_url in instances:
+        try:
+            req = urllib.request.Request(f"{base_url}/streams/{video_id}", headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                audio_streams = data.get("audioStreams", [])
+                if audio_streams:
+                    # Prefer m4a format
+                    m4a_streams = [s for s in audio_streams if "mp4a" in s.get("mimeType", "") or "m4a" in s.get("format", "")]
+                    best_url = m4a_streams[0]["url"] if m4a_streams else audio_streams[0]["url"]
+                    _url_cache[video_id] = (best_url, now + CACHE_TTL_SECONDS)
+                    return best_url
+        except Exception:
+            continue
+
+    # 2. Fallback to yt-dlp if Piped instances fail
     ydl_opts = {
         "format": "18/bestaudio/best",
         "quiet": True,
@@ -414,29 +442,19 @@ def _sync_download_audio(video_id: str) -> Path:
         return cache_file
 
     temp_file = CACHE_DIR / f"{video_id}.download.m4a"
-    node_path = shutil.which("node") or "/usr/bin/node" or "/opt/homebrew/bin/node"
-
-    ydl_opts = {
-        "format": "18/bestaudio/best",
-        "outtmpl": str(temp_file),
-        "quiet": True,
-        "no_warnings": True,
-        "overwrites": True,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios"],
-            }
-        },
-    }
-    if os.path.exists(node_path):
-        ydl_opts["js_runtimes"] = {"node": {"path": node_path}}
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
+    
+    # 1. Get the direct stream URL (uses Piped API first, fallback yt-dlp)
+    stream_url = _get_youtube_url(video_id)
+    
+    # 2. Download directly via urllib (much faster, avoids AWS block)
+    req = urllib.request.Request(stream_url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=15) as response, open(temp_file, 'wb') as out_file:
+        shutil.copyfileobj(response, out_file)
 
     if temp_file.exists() and temp_file.stat().st_size > 100000:
         temp_file.replace(cache_file)
         return cache_file
+        
     raise RuntimeError(f"Download produced invalid or missing file for {video_id}")
 
 
