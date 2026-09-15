@@ -15,6 +15,22 @@ class ApiConfig {
     return _defaultCloudUrl;
   }
 
+  static const String defaultCloudflareWorkerUrl = 'https://dilse-edge-stream.workers.dev';
+
+  /// Returns the configured Cloudflare Worker base URL for direct audio streaming.
+  /// Falls back to defaultCloudflareWorkerUrl if not explicitly configured.
+  static String get cloudflareWorkerUrl {
+    final customUrl = PreferencesService().cloudflareWorkerUrl;
+    if (customUrl.isNotEmpty) {
+      return customUrl.endsWith('/') ? customUrl.substring(0, customUrl.length - 1) : customUrl;
+    }
+    return defaultCloudflareWorkerUrl;
+  }
+
+  static Uri cloudflareStreamUri(String videoId) {
+    return Uri.parse('$cloudflareWorkerUrl/stream?v=$videoId');
+  }
+
   static Uri searchUri(String query, {int page = 1, int limit = 20}) {
     return Uri.parse('$baseUrl/search?q=${Uri.encodeComponent(query)}&page=$page&limit=$limit');
   }

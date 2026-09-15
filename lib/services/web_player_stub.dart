@@ -23,6 +23,7 @@ class WebPlayerBridge {
     String? artist,
     String? artworkUrl,
     double startSeconds = 0,
+    String? streamUrl,
   }) {}
 
   static void pause() {}

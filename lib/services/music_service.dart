@@ -843,15 +843,17 @@ class MusicService extends ChangeNotifier {
       }
 
       // 2. Web Mode (PWA / Browser):
-      // Method 1: Invisible YouTube Player engine - 100% immune to IP bans, zero latency on iOS Safari/PWA
+      // Dual Engine: Cloudflare Edge Direct Stream (<audio>) + YouTube IFrame Fallback
       if (kIsWeb) {
-        debugPrint('[Play][Web] Playing via Invisible YouTube Player: ${song.id.value}');
-        _reportClientLog('web_stream_start', {'videoId': song.id.value, 'engine': 'iframe'});
+        final directStreamUrl = ApiConfig.cloudflareStreamUri(song.id.value).toString();
+        debugPrint('[Play][Web] Playing via Web Dual Engine: ${song.id.value} (edge: $directStreamUrl)');
+        _reportClientLog('web_stream_start', {'videoId': song.id.value, 'engine': 'dual'});
         WebPlayerBridge.play(
           song.id.value,
           title: song.title,
           artist: song.author,
           artworkUrl: getHdThumbnail(song.id.value),
+          streamUrl: directStreamUrl,
         );
         _isLoading = false;
         notifyListeners();

@@ -19,6 +19,7 @@ class PreferencesService extends ChangeNotifier {
   Color _themeColor = const Color(0xFFFA2D48); // Default DilSe Crimson
   double _cacheSizeMB = 500.0;
   String _customServerUrl = '';
+  String _cloudflareWorkerUrl = '';
   ArtworkStyle _artworkStyle = ArtworkStyle.card;
   ScrubberStyle _scrubberStyle = ScrubberStyle.waveform;
   String _userName = '';
@@ -39,6 +40,7 @@ class PreferencesService extends ChangeNotifier {
   Color get themeColor => _themeColor;
   double get cacheSizeMB => _cacheSizeMB;
   String get customServerUrl => _customServerUrl;
+  String get cloudflareWorkerUrl => _cloudflareWorkerUrl;
   ArtworkStyle get artworkStyle => _artworkStyle;
   ScrubberStyle get scrubberStyle => _scrubberStyle;
   String get userName => _userName.isEmpty ? 'Friend' : _userName;
@@ -58,6 +60,7 @@ class PreferencesService extends ChangeNotifier {
     _themeColor = Color(colorValue);
     _cacheSizeMB = _prefs.getDouble('cacheSizeMB') ?? 500.0;
     _customServerUrl = _prefs.getString('customServerUrl') ?? '';
+    _cloudflareWorkerUrl = _prefs.getString('cloudflareWorkerUrl') ?? '';
     _searchHistory = _prefs.getStringList('searchHistory') ?? [];
     _mostPlayedArtist = _prefs.getString('mostPlayedArtist') ?? '';
     _userName = _prefs.getString('userName') ?? '';
@@ -125,6 +128,12 @@ class PreferencesService extends ChangeNotifier {
   Future<void> setCustomServerUrl(String url) async {
     _customServerUrl = url.trim();
     await _prefs.setString('customServerUrl', _customServerUrl);
+    notifyListeners();
+  }
+
+  Future<void> setCloudflareWorkerUrl(String url) async {
+    _cloudflareWorkerUrl = url.trim();
+    await _prefs.setString('cloudflareWorkerUrl', _cloudflareWorkerUrl);
     notifyListeners();
   }
 

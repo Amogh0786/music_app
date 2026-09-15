@@ -128,6 +128,7 @@ class WebPlayerBridge {
     String? artist,
     String? artworkUrl,
     double startSeconds = 0,
+    String? streamUrl,
   }) {
     init();
     _isPlaying = true;
@@ -150,6 +151,7 @@ class WebPlayerBridge {
         'dilsePlay'.toJS,
         videoId.toJS,
         startSeconds.toJS,
+        (streamUrl ?? '').toJS,
       );
     }
   }
