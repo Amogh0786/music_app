@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'api_config.dart';
 import 'preferences_service.dart';
+import 'web_player_bridge.dart';
 
 class StreamCandidate {
   final String url;
@@ -62,6 +63,13 @@ class MusicService extends ChangeNotifier {
   LoopMode get loopMode => _loopMode;
   List<Map<String, String>> get likedSongs => _likedSongs;
   AudioPlayer get audioPlayer => _audioPlayer;
+
+  bool get isPlaying => kIsWeb ? WebPlayerBridge.isPlaying : _audioPlayer.playing;
+  Duration get position => kIsWeb ? WebPlayerBridge.currentPosition : _audioPlayer.position;
+  Duration? get duration => kIsWeb ? WebPlayerBridge.currentDuration : _audioPlayer.duration;
+  Stream<Duration> get positionStream => kIsWeb ? WebPlayerBridge.positionStream : _audioPlayer.positionStream;
+  Stream<Duration?> get durationStream => kIsWeb ? WebPlayerBridge.durationStream : _audioPlayer.durationStream;
+
   String? get cachedLyrics => _cachedLyrics;
   bool get isFetchingLyrics => _isFetchingLyrics;
 
@@ -82,6 +90,40 @@ class MusicService extends ChangeNotifier {
     return 'Off';
   }
 
+  static String _cleanSongTitle(String raw) {
+    // 1. Remove text inside parentheses & brackets like (Official Video), [4K], (Telugu)
+    var s = raw.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), ' ');
+
+    // 2. Split on common delimiters and keep primary song name
+    final parts = s.split(RegExp(r'\s*[|:–—/]\s*|\s+-\s+'));
+    if (parts.isNotEmpty) {
+      s = parts.first;
+    }
+
+    // 3. Remove common YouTube noise words (case-insensitive)
+    s = s.replaceAll(RegExp(
+      r'\b(full\s+video\s+song|video\s+song|lyric\s+video|official\s+video|official\s+music\s+video|official\s+song|full\s+song|full\s+audio|audio\s+song|lyrics|lyrical|hd|4k|8k|song|track|remix|mashup)\b',
+      caseSensitive: false,
+    ), ' ');
+
+    // 4. Clean extra whitespace
+    return s.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  static String _cleanArtistName(String raw) {
+    var s = raw.replaceAll(' - Topic', '').trim();
+    final lower = s.toLowerCase();
+    const labels = [
+      't-series', 'aditya music', 'sony music', 'zee music', 'lahari music',
+      'speed audio', 'tips official', 'saregama', 'yrf', 'think music',
+      'tseries', 'vevo', 'records', 'entertainment', 'music'
+    ];
+    for (final label in labels) {
+      if (lower.contains(label)) return '';
+    }
+    return s;
+  }
+
   Future<void> fetchLyrics(Video song) async {
     if (_cachedLyricsSongId == song.id.value && _cachedLyrics != null) return;
 
@@ -91,25 +133,51 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final title = song.title.replaceAll(RegExp(r'\(.*?\)|\[.*?\]'), '').trim();
-      final artist = song.author.replaceAll(' - Topic', '').trim();
-      final url = Uri.parse('https://lrclib.net/api/search?q=${Uri.encodeComponent("$title $artist")}');
+      final cleanTitle = _cleanSongTitle(song.title);
+      final cleanArtist = _cleanArtistName(song.author);
 
-      final response = await http.get(url, headers: {'User-Agent': 'Mozilla/5.0'}).timeout(const Duration(seconds: 8));
+      List<dynamic> results = [];
+      // Tier 1: Clean Title + Clean Artist
+      if (cleanTitle.isNotEmpty && cleanArtist.isNotEmpty) {
+        try {
+          final url1 = Uri.parse('https://lrclib.net/api/search?q=${Uri.encodeComponent("$cleanTitle $cleanArtist")}');
+          final res1 = await http.get(url1, headers: {'User-Agent': 'Mozilla/5.0'}).timeout(const Duration(seconds: 4));
+          if (res1.statusCode == 200) {
+            results = json.decode(res1.body);
+          }
+        } catch (_) {}
+      }
 
-      if (response.statusCode == 200) {
-        final List<dynamic> results = json.decode(response.body);
-        if (results.isNotEmpty) {
-          final first = results.first;
-          _cachedLyrics = first['plainLyrics'] ?? first['syncedLyrics'] ?? 'No lyrics available.';
-        } else {
-          _cachedLyrics = 'No lyrics found for this track.';
-        }
+      // Tier 2: Clean Title via track_name parameter
+      if (results.isEmpty && cleanTitle.isNotEmpty) {
+        try {
+          final url2 = Uri.parse('https://lrclib.net/api/search?track_name=${Uri.encodeComponent(cleanTitle)}');
+          final res2 = await http.get(url2, headers: {'User-Agent': 'Mozilla/5.0'}).timeout(const Duration(seconds: 4));
+          if (res2.statusCode == 200) {
+            results = json.decode(res2.body);
+          }
+        } catch (_) {}
+      }
+
+      // Tier 3: General query with clean title
+      if (results.isEmpty && cleanTitle.isNotEmpty) {
+        try {
+          final url3 = Uri.parse('https://lrclib.net/api/search?q=${Uri.encodeComponent(cleanTitle)}');
+          final res3 = await http.get(url3, headers: {'User-Agent': 'Mozilla/5.0'}).timeout(const Duration(seconds: 4));
+          if (res3.statusCode == 200) {
+            results = json.decode(res3.body);
+          }
+        } catch (_) {}
+      }
+
+      if (results.isNotEmpty) {
+        final first = results.first;
+        _cachedLyrics = first['syncedLyrics'] ?? first['plainLyrics'] ?? 'No lyrics available.';
       } else {
-        _cachedLyrics = 'No lyrics available.';
+        _cachedLyrics = 'No lyrics found for "$cleanTitle".';
       }
     } catch (e) {
-      _cachedLyrics = 'No lyrics available for this track.';
+      _cachedLyrics = 'Lyrics temporarily unavailable.';
     } finally {
       _isFetchingLyrics = false;
       notifyListeners();
@@ -123,8 +191,56 @@ class MusicService extends ChangeNotifier {
   bool _isTransitioning = false;
   bool _isFetchingNextQueue = false;
 
+  List<Video> _preloadedTopChartsIndia = [];
+  List<Video> _preloadedTrending = [];
+  bool _hasPreloadedHome = false;
+
+  List<Video> get preloadedTopChartsIndia => _preloadedTopChartsIndia;
+  List<Video> get preloadedTrending => _preloadedTrending;
+  bool get hasPreloadedHome => _hasPreloadedHome;
+
+  Future<void> preloadHomeData() async {
+    if (_hasPreloadedHome) return;
+    try {
+      final results = await Future.wait([
+        searchSongs('Top Charts India Music'),
+        searchSongs('Trending Songs 2026'),
+      ]);
+      _preloadedTopChartsIndia = results[0];
+      _preloadedTrending = results[1];
+      _hasPreloadedHome = true;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[Preload] Home data preload: $e');
+    }
+  }
+
   void _initAudioPlayer() {
+    if (kIsWeb) {
+      WebPlayerBridge.init();
+      WebPlayerBridge.onTrackEnded.listen((_) async {
+        if (_isTransitioning) return;
+        _isTransitioning = true;
+        try {
+          if (_loopMode == LoopMode.one && _currentSong != null) {
+            WebPlayerBridge.seek(Duration.zero);
+            WebPlayerBridge.resume();
+          } else {
+            await nextSong();
+          }
+        } catch (e) {
+          debugPrint('[WebPlayer] Completion error: $e');
+        } finally {
+          _isTransitioning = false;
+        }
+      });
+      WebPlayerBridge.onNext.listen((_) => nextSong());
+      WebPlayerBridge.onPrevious.listen((_) => previousSong());
+      WebPlayerBridge.stateStream.listen((_) => notifyListeners());
+    }
+
     _audioPlayer.playerStateStream.listen((state) async {
+      notifyListeners();
       if (state.processingState == ProcessingState.completed) {
         if (_isTransitioning) return;
         _isTransitioning = true;
@@ -426,7 +542,11 @@ class MusicService extends ChangeNotifier {
   }
 
   void _stopPlayback() {
-    _audioPlayer.pause();
+    if (kIsWeb) {
+      WebPlayerBridge.pause();
+    } else {
+      _audioPlayer.pause();
+    }
     cancelSleepTimer();
     notifyListeners();
   }
@@ -508,9 +628,14 @@ class MusicService extends ChangeNotifier {
     if (_playlist.isNotEmpty && _currentIndex - 1 >= 0) {
       _currentIndex--;
       await playSong(_playlist[_currentIndex], updateQueue: false);
-    } else if (_playlist.isNotEmpty && _audioPlayer.position.inSeconds > 3) {
+    } else if (_playlist.isNotEmpty && position.inSeconds > 3) {
       // Replay current track from start
-      await _audioPlayer.seek(Duration.zero);
+      if (kIsWeb) {
+        WebPlayerBridge.seek(Duration.zero);
+        notifyListeners();
+      } else {
+        await _audioPlayer.seek(Duration.zero);
+      }
     }
   }
 
@@ -647,6 +772,9 @@ class MusicService extends ChangeNotifier {
     // Trigger palette extraction asynchronously
     _extractPalette(song.id.value);
 
+    // Pre-fetch lyrics concurrently so they are instant when opened
+    fetchLyrics(song);
+
     // Track play count and history for personalization algorithm
     PreferencesService().recordSongPlay(song.author, song.title);
     PreferencesService().addToListeningHistory({
@@ -659,7 +787,7 @@ class MusicService extends ChangeNotifier {
 
     final mediaItem = MediaItem(
       id: song.id.value,
-      album: 'SoundWave',
+      album: 'DilSe',
       title: song.title,
       artist: song.author,
       artUri: Uri.tryParse(getHdThumbnail(song.id.value)),
@@ -690,32 +818,32 @@ class MusicService extends ChangeNotifier {
         }
       }
 
+      // 2. Web Mode (PWA / Browser):
+      // Method 1: Invisible YouTube Player engine - 100% immune to IP bans, zero latency on iOS Safari/PWA
+      if (kIsWeb) {
+        debugPrint('[Play][Web] Playing via Invisible YouTube Player: ${song.id.value}');
+        _reportClientLog('web_stream_start', {'videoId': song.id.value, 'engine': 'iframe'});
+        WebPlayerBridge.play(
+          song.id.value,
+          title: song.title,
+          artist: song.author,
+          artworkUrl: getHdThumbnail(song.id.value),
+        );
+        _isLoading = false;
+        notifyListeners();
+        _checkAndPreloadNextQueue();
+        return;
+      }
+
       bool playbackSourceSet = false;
 
-      // 2. Web Mode (PWA / Browser):
-      // Browsers enforce CORS and block direct socket/manifest requests to YouTube.
-      // Route immediately through backend stream proxy with zero delay and no 20s timeouts.
-      if (kIsWeb) {
-        final proxyUri = ApiConfig.streamProxyUri(song.id.value);
-        debugPrint('[Play][Web] Playing via CORS audio proxy: $proxyUri');
-        _reportClientLog('web_stream_start', {'videoId': song.id.value, 'url': proxyUri.toString()});
-        try {
-          await _audioPlayer.setAudioSource(
-            AudioSource.uri(proxyUri, tag: mediaItem),
-            preload: true,
-          );
-          playbackSourceSet = true;
-        } catch (webErr) {
-          debugPrint('[Play][Web] Proxy AudioSource error: $webErr');
-          _reportClientLog('web_stream_error', {'videoId': song.id.value, 'error': webErr.toString()});
-        }
-      } else {
-        // 3. Mobile Native Mode (Android / iOS app):
-        // Direct On-Device Multi-Candidate Resolution (Format 18 progressive AAC / itag 251)
-        try {
-          debugPrint('[Play] Resolving direct audio candidates on mobile device for ${song.id.value}…');
-          final candidates = await _resolveStreamCandidates(song.id.value);
-          if (_currentSong?.id.value != song.id.value) return;
+      // 3. Mobile Native Mode (Android / iOS app):
+      // Direct On-Device Multi-Candidate Resolution (Format 18 progressive AAC / itag 251)
+      try {
+        debugPrint('[Play] Resolving direct audio candidates on mobile device for ${song.id.value}…');
+        final candidates = await _resolveStreamCandidates(song.id.value);
+        if (_currentSong?.id.value != song.id.value) return;
+
 
           if (candidates.isNotEmpty) {
             final tempDir = await getTemporaryDirectory();
@@ -751,6 +879,7 @@ class MusicService extends ChangeNotifier {
                     await cacheFile.delete();
                   }
                   await _audioPlayer.setAudioSource(
+                    // ignore: experimental_member_use
                     LockCachingAudioSource(
                       Uri.parse(candidate.url),
                       cacheFile: cacheFile,
@@ -784,7 +913,6 @@ class MusicService extends ChangeNotifier {
           debugPrint('[Play] Direct resolution error ($directError), trying fallbacks…');
           _reportClientLog('direct_play_failed', {'videoId': song.id.value, 'error': directError.toString()});
         }
-      }
 
       // 3. Fallback 1: Backend /stream_url
       if (!playbackSourceSet) {
@@ -1092,7 +1220,25 @@ class MusicService extends ChangeNotifier {
     return 0;
   }
 
+  Future<void> seek(Duration position) async {
+    if (kIsWeb) {
+      WebPlayerBridge.seek(position);
+      notifyListeners();
+      return;
+    }
+    await _audioPlayer.seek(position);
+  }
+
   void togglePlayPause() {
+    if (kIsWeb) {
+      if (WebPlayerBridge.isPlaying) {
+        WebPlayerBridge.pause();
+      } else {
+        WebPlayerBridge.resume();
+      }
+      notifyListeners();
+      return;
+    }
     if (_audioPlayer.playing) {
       _audioPlayer.pause();
     } else {

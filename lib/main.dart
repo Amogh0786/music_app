@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import 'screens/main_screen.dart';
+import 'screens/intro_splash_screen.dart';
 import 'services/preferences_service.dart';
 
 void main() async {
@@ -8,8 +8,8 @@ void main() async {
   try {
     await JustAudioBackground.init(
       androidNotificationChannelId: 'com.example.music_app.channel.audio_playback_v2',
-      androidNotificationChannelName: 'Music Playback & Controls',
-      androidNotificationChannelDescription: 'Music playback controls and lock screen notification',
+      androidNotificationChannelName: 'DilSe Music Playback',
+      androidNotificationChannelDescription: 'DilSe high-fidelity music playback controls and live media panel',
       androidNotificationIcon: 'drawable/ic_stat_music',
       androidNotificationOngoing: false,
       androidStopForegroundOnPause: false,
@@ -32,7 +32,7 @@ class MusicApp extends StatelessWidget {
       builder: (context, child) {
         final prefs = PreferencesService();
         return MaterialApp(
-          title: 'Music App',
+          title: 'DilSe',
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
             brightness: Brightness.dark,
@@ -49,7 +49,7 @@ class MusicApp extends StatelessWidget {
             ),
             useMaterial3: true,
           ),
-          home: const MainScreen(),
+          home: const IntroSplashScreen(),
         );
       },
     );

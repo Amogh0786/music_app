@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum ArtworkStyle { card, vinyl }
+enum ScrubberStyle { waveform, classic }
 
 class PreferencesService extends ChangeNotifier {
   static final PreferencesService _instance = PreferencesService._internal();
@@ -15,11 +16,13 @@ class PreferencesService extends ChangeNotifier {
 
   // Settings
   bool _crossfadeEnabled = false;
-  Color _themeColor = const Color(0xFFFA2D48); // Default Apple Red
+  Color _themeColor = const Color(0xFFFA2D48); // Default DilSe Crimson
   double _cacheSizeMB = 500.0;
   String _customServerUrl = '';
   ArtworkStyle _artworkStyle = ArtworkStyle.card;
-  String _userName = 'Charan';
+  ScrubberStyle _scrubberStyle = ScrubberStyle.waveform;
+  String _userName = '';
+  bool _hasPromptedName = false;
 
   // Search History
   List<String> _searchHistory = [];
@@ -37,10 +40,14 @@ class PreferencesService extends ChangeNotifier {
   double get cacheSizeMB => _cacheSizeMB;
   String get customServerUrl => _customServerUrl;
   ArtworkStyle get artworkStyle => _artworkStyle;
-  String get userName => _userName;
+  ScrubberStyle get scrubberStyle => _scrubberStyle;
+  String get userName => _userName.isEmpty ? 'Friend' : _userName;
+  bool get hasCustomName => _userName.isNotEmpty;
+  bool get hasPromptedName => _hasPromptedName;
   List<String> get searchHistory => _searchHistory;
   List<Map<String, String>> get listeningHistory => _listeningHistory;
   String get mostPlayedArtist => _mostPlayedArtist;
+  int get totalPlays => _artistPlayCounts.values.fold(0, (a, b) => a + b);
 
   Future<void> init() async {
     if (_isInitialized) return;
@@ -53,9 +60,12 @@ class PreferencesService extends ChangeNotifier {
     _customServerUrl = _prefs.getString('customServerUrl') ?? '';
     _searchHistory = _prefs.getStringList('searchHistory') ?? [];
     _mostPlayedArtist = _prefs.getString('mostPlayedArtist') ?? '';
-    _userName = _prefs.getString('userName') ?? 'Charan';
+    _userName = _prefs.getString('userName') ?? '';
+    _hasPromptedName = _prefs.getBool('hasPromptedName') ?? false;
     final styleStr = _prefs.getString('artworkStyle') ?? 'card';
     _artworkStyle = styleStr == 'vinyl' ? ArtworkStyle.vinyl : ArtworkStyle.card;
+    final scrubStr = _prefs.getString('scrubberStyle') ?? 'waveform';
+    _scrubberStyle = scrubStr == 'classic' ? ScrubberStyle.classic : ScrubberStyle.waveform;
 
     final historyJson = _prefs.getString('listeningHistoryJson');
     if (historyJson != null && historyJson.isNotEmpty) {
@@ -160,8 +170,10 @@ class PreferencesService extends ChangeNotifier {
   }
 
   Future<void> setUserName(String name) async {
-    _userName = name.trim().isEmpty ? 'Charan' : name.trim();
+    _userName = name.trim();
+    _hasPromptedName = true;
     await _prefs.setString('userName', _userName);
+    await _prefs.setBool('hasPromptedName', true);
     notifyListeners();
   }
 
@@ -174,5 +186,11 @@ class PreferencesService extends ChangeNotifier {
   Future<void> toggleArtworkStyle() async {
     final next = _artworkStyle == ArtworkStyle.card ? ArtworkStyle.vinyl : ArtworkStyle.card;
     await setArtworkStyle(next);
+  }
+
+  Future<void> setScrubberStyle(ScrubberStyle style) async {
+    _scrubberStyle = style;
+    await _prefs.setString('scrubberStyle', style.name);
+    notifyListeners();
   }
 }

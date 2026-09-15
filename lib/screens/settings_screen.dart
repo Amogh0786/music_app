@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:ota_update/ota_update.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -229,6 +230,127 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   ),
                   trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white30),
                   onTap: () => _showSleepTimerSheet(context),
+                ),
+              ]),
+              const SizedBox(height: 16),
+
+              _buildSectionTitle('PLAYER EXPERIENCE & VISUALS'),
+              _buildSettingsGroup([
+                // Artwork Style (Vinyl vs Album Card)
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: _prefs.themeColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      _prefs.artworkStyle == ArtworkStyle.vinyl
+                          ? Icons.album_rounded
+                          : Icons.crop_square_rounded,
+                      color: _prefs.themeColor,
+                      size: 20,
+                    ),
+                  ),
+                  title: const Text('Artwork Style', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                  subtitle: Text(
+                    _prefs.artworkStyle == ArtworkStyle.vinyl
+                        ? 'Vinyl Turntable (Spinning Retro Player)'
+                        : 'Modern Album Card (Sleek Squircle)',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                  ),
+                  trailing: SegmentedButton<ArtworkStyle>(
+                    segments: const [
+                      ButtonSegment(
+                        value: ArtworkStyle.card,
+                        icon: Icon(Icons.crop_square_rounded, size: 16),
+                        label: Text('Card', style: TextStyle(fontSize: 12)),
+                      ),
+                      ButtonSegment(
+                        value: ArtworkStyle.vinyl,
+                        icon: Icon(Icons.album_outlined, size: 16),
+                        label: Text('Vinyl', style: TextStyle(fontSize: 12)),
+                      ),
+                    ],
+                    selected: {_prefs.artworkStyle},
+                    onSelectionChanged: (newSelection) {
+                      HapticFeedback.selectionClick();
+                      _prefs.setArtworkStyle(newSelection.first);
+                    },
+                    style: ButtonStyle(
+                      backgroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return _prefs.themeColor;
+                        }
+                        return Colors.white10;
+                      }),
+                      foregroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return Colors.white;
+                        }
+                        return Colors.white70;
+                      }),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ),
+                // Audio Scrubber Style (Waveform vs Classic)
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: _prefs.themeColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      _prefs.scrubberStyle == ScrubberStyle.waveform
+                          ? Icons.graphic_eq_rounded
+                          : Icons.linear_scale_rounded,
+                      color: _prefs.themeColor,
+                      size: 20,
+                    ),
+                  ),
+                  title: const Text('Progress Line Style', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                  subtitle: Text(
+                    _prefs.scrubberStyle == ScrubberStyle.waveform
+                        ? 'Dynamic Waveform (Interactive Beats)'
+                        : 'Classic Progress Bar (Apple Slider)',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                  ),
+                  trailing: SegmentedButton<ScrubberStyle>(
+                    segments: const [
+                      ButtonSegment(
+                        value: ScrubberStyle.waveform,
+                        icon: Icon(Icons.graphic_eq_rounded, size: 16),
+                        label: Text('Wave', style: TextStyle(fontSize: 12)),
+                      ),
+                      ButtonSegment(
+                        value: ScrubberStyle.classic,
+                        icon: Icon(Icons.linear_scale_rounded, size: 16),
+                        label: Text('Classic', style: TextStyle(fontSize: 12)),
+                      ),
+                    ],
+                    selected: {_prefs.scrubberStyle},
+                    onSelectionChanged: (newSelection) {
+                      HapticFeedback.selectionClick();
+                      _prefs.setScrubberStyle(newSelection.first);
+                    },
+                    style: ButtonStyle(
+                      backgroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return _prefs.themeColor;
+                        }
+                        return Colors.white10;
+                      }),
+                      foregroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return Colors.white;
+                        }
+                        return Colors.white70;
+                      }),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
                 ),
               ]),
               const SizedBox(height: 16),

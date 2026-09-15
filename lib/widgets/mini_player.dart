@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'package:just_audio/just_audio.dart';
 import '../services/music_service.dart';
 import '../screens/player_screen.dart';
 import 'animated_equalizer.dart';
@@ -32,15 +34,28 @@ class _MiniPlayerState extends State<MiniPlayer> {
   }
 
   void _openPlayerScreen() {
+    HapticFeedback.lightImpact();
     Navigator.of(context).push(
       PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 380),
+        reverseTransitionDuration: const Duration(milliseconds: 320),
         pageBuilder: (context, animation, secondaryAnimation) => const PlayerScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          const begin = Offset(0.0, 1.0);
-          const end = Offset.zero;
-          const curve = Curves.easeOutCubic;
-          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-          return SlideTransition(position: animation.drive(tween), child: child);
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutQuart,
+            reverseCurve: Curves.easeInQuart,
+          );
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0.0, 1.0),
+              end: Offset.zero,
+            ).animate(curved),
+            child: FadeTransition(
+              opacity: Tween<double>(begin: 0.5, end: 1.0).animate(curved),
+              child: child,
+            ),
+          );
         },
       ),
     );
@@ -49,8 +64,10 @@ class _MiniPlayerState extends State<MiniPlayer> {
   @override
   Widget build(BuildContext context) {
     final song = _musicService.currentSong;
-    final isPlaying = _musicService.audioPlayer.playing;
-    final isLoading = _musicService.isLoading && !isPlaying;
+    final isPlaying = _musicService.isPlaying;
+    final processingState = _musicService.audioPlayer.processingState;
+    final isBuffering = !kIsWeb && (processingState == ProcessingState.buffering || processingState == ProcessingState.loading);
+    final isLoading = !isPlaying && (_musicService.isLoading || isBuffering);
     final hdThumbnail = song != null ? MusicService.getHdThumbnail(song.id.value) : '';
 
     if (song == null && !isLoading) {
@@ -59,28 +76,25 @@ class _MiniPlayerState extends State<MiniPlayer> {
 
     return GestureDetector(
       onTap: _openPlayerScreen,
-      onPanEnd: (details) {
-        final dragDistance = details.velocity.pixelsPerSecond;
-        // Horizontal swipe gesture
-        if (dragDistance.dx.abs() > 300 && dragDistance.dx.abs() > dragDistance.dy.abs()) {
-          if (dragDistance.dx < 0) {
-            // Swiped Left -> Next track
+      onVerticalDragEnd: (details) {
+        if (details.primaryVelocity != null && details.primaryVelocity! < -120) {
+          _openPlayerScreen();
+        }
+      },
+      onHorizontalDragEnd: (details) {
+        if (details.primaryVelocity != null) {
+          if (details.primaryVelocity! < -200) {
             HapticFeedback.mediumImpact();
             _musicService.nextSong();
-          } else {
-            // Swiped Right -> Previous track
+          } else if (details.primaryVelocity! > 200) {
             HapticFeedback.mediumImpact();
             _musicService.previousSong();
           }
-        } else if (dragDistance.dy < -300 && dragDistance.dy.abs() > dragDistance.dx.abs()) {
-          // Swiped Up -> Open full screen player
-          HapticFeedback.lightImpact();
-          _openPlayerScreen();
         }
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 600),
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        margin: const EdgeInsets.only(left: 16, right: 16, bottom: 4),
         height: 66,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
@@ -196,7 +210,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                                   size: 32,
                                 ),
                                 onPressed: () {
-                                  HapticFeedback.lightImpact();
+                                  HapticFeedback.mediumImpact();
                                   _musicService.togglePlayPause();
                                 },
                               ),
@@ -217,10 +231,10 @@ class _MiniPlayerState extends State<MiniPlayer> {
                     right: 0,
                     bottom: 0,
                     child: StreamBuilder<Duration>(
-                      stream: _musicService.audioPlayer.positionStream,
+                      stream: _musicService.positionStream,
                       builder: (context, snapshot) {
                         final position = snapshot.data ?? Duration.zero;
-                        final duration = _musicService.audioPlayer.duration ?? Duration.zero;
+                        final duration = _musicService.duration ?? Duration.zero;
                         double progress = 0.0;
                         if (duration.inMilliseconds > 0) {
                           progress = (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);

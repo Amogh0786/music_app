@@ -36,10 +36,11 @@ class FloatingNavDock extends StatelessWidget {
     ];
 
     return SafeArea(
+      top: false,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        padding: const EdgeInsets.only(left: 16, right: 16, top: 0, bottom: 8),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(36),
+          borderRadius: BorderRadius.circular(32),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
             child: Container(

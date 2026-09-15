@@ -1,11 +1,11 @@
 {
-    "name": "Music App",
-    "short_name": "Music App",
+    "name": "DilSe - Suno Dil Se",
+    "short_name": "DilSe",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#0B0B0F",
     "theme_color": "#0B0B0F",
-    "description": "Stream high-quality ad-free music with sleek obsidian UI.",
+    "description": "DilSe: Stream high-quality music with pure emotion. Suno Dil Se.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

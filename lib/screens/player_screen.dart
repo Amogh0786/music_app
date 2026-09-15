@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
@@ -295,8 +296,10 @@ class _PlayerScreenState extends State<PlayerScreen>
   @override
   Widget build(BuildContext context) {
     final song = _musicService.currentSong;
-    final isPlaying = _musicService.audioPlayer.playing;
-    final isLoading = _musicService.isLoading && !isPlaying;
+    final isPlaying = _musicService.isPlaying;
+    final processingState = _musicService.audioPlayer.processingState;
+    final isBuffering = !kIsWeb && (processingState == ProcessingState.buffering || processingState == ProcessingState.loading);
+    final isLoading = !isPlaying && (_musicService.isLoading || isBuffering);
     final isLiked = song != null && _musicService.likedSongs.any((s) => s['id'] == song.id.value);
     final hdThumbnail = song != null ? MusicService.getHdThumbnail(song.id.value) : '';
     final artworkStyle = _prefs.artworkStyle;
@@ -313,126 +316,120 @@ class _PlayerScreenState extends State<PlayerScreen>
 
     return Scaffold(
       backgroundColor: const Color(0xFF0B0B0F),
-      body: Stack(
-        children: [
-          // 1. Dynamic Living Ambient Gradient Mesh Aura
-          Positioned.fill(
-            child: AnimatedBuilder(
-              animation: _ambientController,
-              builder: (context, child) {
-                final progress = _ambientController.value;
-                final angle = progress * 2 * math.pi;
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onVerticalDragUpdate: (details) {
+          if (details.primaryDelta != null && details.primaryDelta! > 18) {
+            HapticFeedback.lightImpact();
+            Navigator.pop(context);
+          }
+        },
+        child: Stack(
+          children: [
+            // 1. Dynamic Living Ambient Gradient Mesh Aura
+            Positioned.fill(
+              child: AnimatedBuilder(
+                animation: _ambientController,
+                builder: (context, child) {
+                  final progress = _ambientController.value;
+                  final angle = progress * 2 * math.pi;
 
-                return Stack(
-                  children: [
-                    // Deep base color
-                    Container(color: const Color(0xFF09090D)),
+                  return Stack(
+                    children: [
+                      // Deep base color
+                      Container(color: const Color(0xFF09090D)),
 
-                    // Blob 1 (Top Left, rotating)
-                    Positioned(
-                      top: -100 + (math.sin(angle) * 40),
-                      left: -100 + (math.cos(angle) * 40),
-                      width: 420,
-                      height: 420,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: dominantColor.withValues(alpha: 0.70),
+                      // Blob 1 (Top Left, rotating)
+                      Positioned(
+                        top: -100 + (math.sin(angle) * 40),
+                        left: -100 + (math.cos(angle) * 40),
+                        width: 420,
+                        height: 420,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: dominantColor.withValues(alpha: 0.70),
+                          ),
                         ),
                       ),
-                    ),
 
-                    // Blob 2 (Mid Right, reverse rotating)
-                    Positioned(
-                      top: 180 + (math.cos(angle) * 50),
-                      right: -120 + (math.sin(angle) * 50),
-                      width: 380,
-                      height: 380,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: vibrantColor.withValues(alpha: 0.55),
+                      // Blob 2 (Mid Right, reverse rotating)
+                      Positioned(
+                        top: 180 + (math.cos(angle) * 50),
+                        right: -120 + (math.sin(angle) * 50),
+                        width: 380,
+                        height: 380,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: vibrantColor.withValues(alpha: 0.55),
+                          ),
                         ),
                       ),
-                    ),
 
-                    // Blob 3 (Bottom Center, breathing)
-                    Positioned(
-                      bottom: -80 + (math.sin(angle * 1.5) * 30),
-                      left: 40 + (math.cos(angle * 1.5) * 30),
-                      width: 340,
-                      height: 340,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: dominantColor.withValues(alpha: 0.45),
+                      // Blob 3 (Bottom Center, breathing)
+                      Positioned(
+                        bottom: -80 + (math.sin(angle * 1.5) * 30),
+                        left: 40 + (math.cos(angle * 1.5) * 30),
+                        width: 340,
+                        height: 340,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: dominantColor.withValues(alpha: 0.45),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-
-          // Frost blur overlay
-          Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 65, sigmaY: 65),
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.42),
+                    ],
+                  );
+                },
               ),
             ),
-          ),
 
-          // 2. Main Player Content
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-              child: Column(
-                children: [
-                  // Top Grabber & Header Actions
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 34),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      Container(
-                        width: 40,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(3),
+            // Frost blur overlay
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 65, sigmaY: 65),
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.42),
+                ),
+              ),
+            ),
+
+            // 2. Main Player Content
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                child: Column(
+                  children: [
+                    // Top Grabber & Header Actions
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 34),
+                          onPressed: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.pop(context);
+                          },
                         ),
-                      ),
-                      Row(
-                        children: [
-                          // Artwork Style Toggle (Squircle Card <-> Vinyl Record)
-                          IconButton(
-                            tooltip: artworkStyle == ArtworkStyle.card
-                                ? 'Switch to Vinyl Player'
-                                : 'Switch to Album Card',
-                            icon: Icon(
-                              artworkStyle == ArtworkStyle.card
-                                  ? Icons.album_outlined
-                                  : Icons.crop_square_rounded,
-                              color: Colors.white70,
-                              size: 24,
-                            ),
-                            onPressed: () {
-                              HapticFeedback.lightImpact();
-                              _prefs.toggleArtworkStyle();
-                            },
+                        Container(
+                          width: 40,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(3),
                           ),
-                          // Lyrics Toggle
-                          IconButton(
-                            icon: Icon(
-                              _showLyrics ? Icons.music_note_rounded : Icons.lyrics_outlined,
-                              color: _showLyrics ? Theme.of(context).primaryColor : Colors.white70,
-                              size: 24,
-                            ),
+                        ),
+                        Row(
+                          children: [
+                            // Lyrics Toggle
+                            IconButton(
+                              icon: Icon(
+                                _showLyrics ? Icons.music_note_rounded : Icons.lyrics_outlined,
+                                color: _showLyrics ? Theme.of(context).primaryColor : Colors.white70,
+                                size: 24,
+                              ),
                             onPressed: () => _toggleLyrics(song),
                           ),
                           // Sleep Timer
@@ -629,13 +626,17 @@ class _PlayerScreenState extends State<PlayerScreen>
 
                   const SizedBox(height: 16),
 
-                  // Tactile Waveform Scrubber
+                  // Tactile Waveform Scrubber or Classic Progress Bar
                   StreamBuilder<Duration>(
-                    stream: _musicService.audioPlayer.positionStream,
+                    stream: _musicService.positionStream,
                     builder: (context, snapshot) {
                       final position = snapshot.data ?? Duration.zero;
-                      final duration = _musicService.audioPlayer.duration ??
+                      final duration = _musicService.duration ??
                           (song.duration ?? Duration.zero);
+
+                      if (_prefs.scrubberStyle == ScrubberStyle.classic) {
+                        return _buildClassicScrubber(context, position, duration, vibrantColor);
+                      }
 
                       return WaveformScrubber(
                         position: position,
@@ -643,7 +644,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                         songId: song.id.value,
                         accentColor: vibrantColor,
                         onSeek: (newPos) {
-                          _musicService.audioPlayer.seek(newPos);
+                          _musicService.seek(newPos);
                         },
                       );
                     },
@@ -662,7 +663,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                           size: 24,
                         ),
                         onPressed: () {
-                          HapticFeedback.lightImpact();
+                          HapticFeedback.selectionClick();
                           _musicService.toggleShuffle();
                         },
                       ),
@@ -691,7 +692,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                           size: 24,
                         ),
                         onPressed: () {
-                          HapticFeedback.lightImpact();
+                          HapticFeedback.selectionClick();
                           _musicService.toggleRepeat();
                         },
                       ),
@@ -738,7 +739,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                                   size: 46,
                                 ),
                                 onPressed: () {
-                                  HapticFeedback.lightImpact();
+                                  HapticFeedback.mediumImpact();
                                   _musicService.togglePlayPause();
                                 },
                               ),
@@ -755,6 +756,71 @@ class _PlayerScreenState extends State<PlayerScreen>
                   const SizedBox(height: 16),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+  Widget _buildClassicScrubber(
+    BuildContext context,
+    Duration position,
+    Duration duration,
+    Color accentColor,
+  ) {
+    final maxMs = duration.inMilliseconds > 0 ? duration.inMilliseconds.toDouble() : 1.0;
+    final curMs = position.inMilliseconds.clamp(0, maxMs.toInt()).toDouble();
+    final remaining = duration > position ? duration - position : Duration.zero;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 3.5,
+              activeTrackColor: accentColor,
+              inactiveTrackColor: Colors.white24,
+              thumbColor: Colors.white,
+              overlayColor: accentColor.withValues(alpha: 0.2),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6, elevation: 3),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+            ),
+            child: Slider(
+              value: curMs,
+              min: 0,
+              max: maxMs,
+              onChanged: (val) {
+                HapticFeedback.selectionClick();
+                _musicService.seek(Duration(milliseconds: val.toInt()));
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _formatDuration(position),
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  '-${_formatDuration(remaining)}',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

@@ -42,6 +42,12 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _prefs.addListener(_onPrefsChanged);
+    // Instant zero-wait display if background preload completed during splash
+    if (_musicService.hasPreloadedHome && _musicService.preloadedTopChartsIndia.isNotEmpty) {
+      _topChartsIndia = List.from(_musicService.preloadedTopChartsIndia);
+      _trendingNow = List.from(_musicService.preloadedTrending);
+      _isLoadingCharts = false;
+    }
     _loadHomeFeeds();
   }
 
@@ -200,7 +206,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          _prefs.userName.isNotEmpty ? _prefs.userName : 'Charan',
+                          _prefs.userName,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 26,
