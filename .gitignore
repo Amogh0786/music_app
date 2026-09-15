@@ -47,4 +47,6 @@ app.*.map.json
 # Backend Cache
 backend/audio_cache/
 backend/__pycache__/
-
+# Node / Cloudflare
+node_modules/
+**/node_modules/

@@ -1,12 +1,13 @@
 /**
- * DilSe Web Audio Player Engine (Dual-Engine: Direct Edge Stream + YouTube Fallback)
+ * DilSe Web Audio Player Engine (Dual-Engine: JioSaavn 320k Direct Audio + YouTube Fallback)
  * 
- * Primary Engine: Native HTML5 <audio> streaming directly from Cloudflare Edge Worker
+ * Primary Engine: Native HTML5 <audio> streaming 320kbps AAC from JioSaavn public CDN
  *   - Enables 100% continuous background audio playback on iOS Safari / PWA when iPhone screen is locked.
  *   - Native iOS Lock Screen notifications, Dynamic Island, and Control Center scrubbers.
+ *   - 320kbps pristine studio sound quality with zero IP bans.
  * 
- * Secondary Engine: Invisible YouTube IFrame Player (Method 1)
- *   - Zero-delay automatic fallback if the direct audio stream fails or times out.
+ * Secondary Engine: Invisible YouTube IFrame Player (Method 1 Fallback)
+ *   - Automatic fallback if a track is not available on JioSaavn or network drops.
  *   - Guarantees 0% playback failure under any circumstance.
  */
 
@@ -18,11 +19,14 @@
   let activeEngine = ENGINE_NONE;
   let currentVideoId = null;
   let currentStartSec = 0;
-  let currentStreamUrl = null;
+  let currentTitle = '';
+  let currentArtist = '';
+  let currentArtwork = '';
   let lastReportedPos = 0;
   let lastReportedDur = 0;
   let fallbackTimer = null;
   let switchingEngines = false;
+  let currentPlaySessionId = 0;
 
   // HTML5 Native Audio Element
   let audioEl = null;
@@ -79,7 +83,7 @@
 
       audioEl.addEventListener('playing', () => {
         if (activeEngine === ENGINE_AUDIO) {
-          console.log('[DilSe Web Player] Direct Edge audio playing');
+          console.log('[DilSe Web Player] JioSaavn 320k audio playing');
           clearFallbackTimer();
           broadcastState('playing');
           if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
@@ -88,7 +92,7 @@
 
       audioEl.addEventListener('pause', () => {
         if (activeEngine === ENGINE_AUDIO && !switchingEngines) {
-          console.log('[DilSe Web Player] Direct Edge audio paused');
+          console.log('[DilSe Web Player] JioSaavn audio paused');
           broadcastState('paused');
           if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
         }
@@ -113,7 +117,7 @@
 
       audioEl.addEventListener('ended', () => {
         if (activeEngine === ENGINE_AUDIO) {
-          console.log('[DilSe Web Player] Direct Edge audio track ended');
+          console.log('[DilSe Web Player] JioSaavn audio track ended');
           broadcastState('ended');
           window.dispatchEvent(new CustomEvent('dilse_ended'));
         }
@@ -138,13 +142,13 @@
 
   function armFallbackTimer(videoId, startSeconds) {
     clearFallbackTimer();
-    // If direct audio doesn't start within 5.5 seconds, auto-fallback to Method 1
+    // If direct audio doesn't start within 5.0 seconds, auto-fallback to YouTube
     fallbackTimer = setTimeout(() => {
       if (activeEngine === ENGINE_AUDIO && (!audioEl || audioEl.readyState < 2)) {
-        console.warn('[DilSe Web Player] Direct stream timeout (5.5s), switching to YouTube fallback');
+        console.warn('[DilSe Web Player] Direct stream timeout (5.0s), switching to YouTube fallback');
         triggerFallback();
       }
-    }, 5500);
+    }, 5000);
   }
 
   function triggerFallback() {
@@ -270,7 +274,6 @@
   function onYtStateChange(event) {
     if (activeEngine !== ENGINE_IFRAME) return;
 
-    // YT.PlayerState: ENDED = 0, PLAYING = 1, PAUSED = 2, BUFFERING = 3, CUED = 5
     let stateName = 'unknown';
     switch (event.data) {
       case 1:
@@ -363,49 +366,115 @@
 
   // --- Exposed Global APIs for Dart Bridge ---
 
-  window.dilsePlay = function (videoId, startSeconds, streamUrl) {
+  window.dilsePlay = async function (
+    videoId,
+    startSeconds,
+    title,
+    artist,
+    artworkUrl
+  ) {
+    const sessionId = ++currentPlaySessionId;
     currentVideoId = videoId;
     currentStartSec = startSeconds || 0;
-    currentStreamUrl = streamUrl;
+    currentTitle = title || currentTitle || '';
+    currentArtist = artist || currentArtist || '';
+    currentArtwork = artworkUrl || currentArtwork || '';
     lastReportedPos = startSeconds || 0;
 
     startBgAudio();
     ensureAudioElement();
+    broadcastState('buffering');
 
-    // Check if direct stream URL was provided and is valid
-    if (streamUrl && typeof streamUrl === 'string' && streamUrl.trim().length > 10) {
-      console.log('[DilSe Web Player] Starting Primary Engine (Cloudflare Edge Audio):', streamUrl);
-      activeEngine = ENGINE_AUDIO;
+    // Update MediaSession with initial metadata
+    window.dilseSetMetadata(currentTitle, currentArtist, currentArtwork);
 
-      // Stop YouTube IFrame if running
-      if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
-        try { ytPlayer.stopVideo(); } catch (_) {}
+    // If a clean song title is available, resolve on JioSaavn for 320k direct audio stream
+    if (title && title.trim().length > 1) {
+      const workerBase =
+        window.dilseWorkerBaseUrl ||
+        'https://dilse-edge-stream.charanteja-kondakalla030206.workers.dev';
+
+      const cleanTitle = title
+        .replace(/[\(\[\{].*?[\)\]\}]/g, '')
+        .replace(/official video|music video|full song|lyric video|audio song|video song/gi, '')
+        .replace(/\|.*$/g, '')
+        .trim();
+
+      const query = cleanTitle + (artist ? ' ' + artist : '');
+      console.log('[DilSe Web Player] Resolving on JioSaavn Engine:', query);
+
+      try {
+        const fetchPromise = fetch(
+          `${workerBase}/jio?q=${encodeURIComponent(query)}`
+        );
+        // 3.5s timeout for ultra-fast response
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('JioSaavn resolution timeout')), 3500)
+        );
+
+        const res = await Promise.race([fetchPromise, timeoutPromise]);
+        if (sessionId !== currentPlaySessionId) return; // Superceded by another play call
+
+        if (res && res.ok) {
+          const data = await res.json();
+          if (data.status === 'ok' && data.data?.streamUrl) {
+            const jioSong = data.data;
+            console.log(
+              `[DilSe Web Player] JioSaavn Match Found: "${jioSong.title}" (${jioSong.bitrate}) -> ${jioSong.streamUrl}`
+            );
+
+            activeEngine = ENGINE_AUDIO;
+
+            // Stop YouTube IFrame if running
+            if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
+              try {
+                ytPlayer.stopVideo();
+              } catch (_) {}
+            }
+            stopTicker();
+
+            audioEl.src = jioSong.streamUrl;
+            if (startSeconds > 0) {
+              audioEl.currentTime = startSeconds;
+            }
+            armFallbackTimer(videoId, startSeconds);
+
+            // Update MediaSession with high-res album artwork from JioSaavn
+            window.dilseSetMetadata(
+              jioSong.title || title,
+              jioSong.artist || artist,
+              jioSong.artwork || artworkUrl
+            );
+
+            audioEl.play().catch((err) => {
+              console.warn('[DilSe Web Player] audioEl.play() rejected:', err);
+              triggerFallback();
+            });
+            return;
+          }
+        }
+      } catch (err) {
+        console.log('[DilSe Web Player] JioSaavn resolution skipped/failed:', err.message);
       }
-      stopTicker();
-
-      broadcastState('buffering');
-      audioEl.src = streamUrl.trim();
-      if (startSeconds > 0) {
-        audioEl.currentTime = startSeconds;
-      }
-      armFallbackTimer(videoId, startSeconds);
-
-      audioEl.play().catch((err) => {
-        console.warn('[DilSe Web Player] Primary audio.play() rejected:', err);
-        triggerFallback();
-      });
-    } else {
-      console.log('[DilSe Web Player] No stream URL provided, using Method 1 (YouTube IFrame)');
-      playViaIframe(videoId, startSeconds);
     }
+
+    if (sessionId !== currentPlaySessionId) return;
+
+    // Fallback: If not matched on JioSaavn or resolution failed, play via YouTube IFrame (Method 1)
+    console.log('[DilSe Web Player] Playing via Method 1 (YouTube IFrame fallback):', videoId);
+    playViaIframe(videoId, startSeconds);
   };
 
   window.dilsePause = function () {
     stopBgAudio();
     if (activeEngine === ENGINE_AUDIO && audioEl) {
-      try { audioEl.pause(); } catch (_) {}
+      try {
+        audioEl.pause();
+      } catch (_) {}
     } else if (activeEngine === ENGINE_IFRAME && ytPlayer && typeof ytPlayer.pauseVideo === 'function') {
-      try { ytPlayer.pauseVideo(); } catch (_) {}
+      try {
+        ytPlayer.pauseVideo();
+      } catch (_) {}
     }
     broadcastState('paused');
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
@@ -414,9 +483,13 @@
   window.dilseResume = function () {
     startBgAudio();
     if (activeEngine === ENGINE_AUDIO && audioEl) {
-      try { audioEl.play(); } catch (_) {}
+      try {
+        audioEl.play();
+      } catch (_) {}
     } else if (activeEngine === ENGINE_IFRAME && ytPlayer && typeof ytPlayer.playVideo === 'function') {
-      try { ytPlayer.playVideo(); } catch (_) {}
+      try {
+        ytPlayer.playVideo();
+      } catch (_) {}
     }
     broadcastState('playing');
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
@@ -495,5 +568,5 @@
     }
   };
 
-  console.log('[DilSe Web Player] Dual-Engine player script initialized');
+  console.log('[DilSe Web Player] Dual-Engine player initialized (JioSaavn 320k + YouTube Fallback)');
 })();

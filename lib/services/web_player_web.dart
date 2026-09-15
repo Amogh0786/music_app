@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 import 'package:web/web.dart' as web;
+import 'api_config.dart';
 
 /// Modern Web implementation for Flutter Web using dart:js_interop & package:web.
 /// Controls the invisible YouTube IFrame player and Web MediaSession API.
@@ -136,6 +137,10 @@ class WebPlayerBridge {
 
     final globalWindow = web.window as JSObject;
 
+    // Set configured worker base URL if present
+    final workerBase = ApiConfig.cloudflareWorkerUrl;
+    globalWindow.setProperty('dilseWorkerBaseUrl'.toJS, workerBase.toJS);
+
     // Update MediaSession
     if (globalWindow.hasProperty('dilseSetMetadata'.toJS).toDart) {
       globalWindow.callMethod(
@@ -151,7 +156,8 @@ class WebPlayerBridge {
         'dilsePlay'.toJS,
         videoId.toJS,
         startSeconds.toJS,
-        (streamUrl ?? '').toJS,
+        (title ?? '').toJS,
+        (artist ?? '').toJS,
       );
     }
   }
