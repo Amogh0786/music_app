@@ -9,6 +9,7 @@ import '../services/preferences_service.dart';
 import '../services/music_service.dart';
 import '../services/update_service.dart';
 import '../services/notification_permission_service.dart';
+import '../services/api_config.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -484,7 +485,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   subtitle: Text(
                     _prefs.cloudflareWorkerUrl.isNotEmpty
                         ? _prefs.cloudflareWorkerUrl
-                        : 'Default (dilse-edge-stream.workers.dev)',
+                        : 'Default (${ApiConfig.defaultCloudflareWorkerUrl})',
                     style: TextStyle(color: Colors.grey[400], fontSize: 13),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

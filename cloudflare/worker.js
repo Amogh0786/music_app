@@ -2,7 +2,7 @@
  * DilSe Cloudflare Edge Audio Stream Worker
  * 
  * Runs on Cloudflare's global edge network across 300+ cities.
- * Fetches progressive audio streams using YouTube Mobile InnerTube API
+ * Fetches progressive audio streams using YouTube iOS Mobile InnerTube API
  * and proxies chunks with full HTTP 206 Byte Ranges and CORS headers.
  * 
  * Free tier: 100,000 requests/day.
@@ -14,6 +14,9 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Range, Content-Type, Accept',
   'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
 };
+
+const IOS_USER_AGENT =
+  'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)';
 
 export default {
   async fetch(request, env, ctx) {
@@ -59,7 +62,7 @@ export default {
  * Resolves direct audio stream URL and proxies bytes with HTTP 206 Partial Content.
  */
 async function handleAudioStream(request, videoId) {
-  // 1. Resolve direct audio stream using YouTube Mobile InnerTube API
+  // 1. Resolve direct audio stream using YouTube iOS InnerTube API
   const directUrl = await resolveStreamUrl(videoId);
   if (!directUrl) {
     throw new Error('Unable to extract audio stream for this video.');
@@ -67,21 +70,17 @@ async function handleAudioStream(request, videoId) {
 
   // 2. Prepare headers for upstream Google Video CDN
   const fetchHeaders = new Headers();
-  fetchHeaders.set(
-    'User-Agent',
-    'com.google.android.apps.youtube.music/6.42.52 (Linux; U; Android 14; en_US) gzip'
-  );
+  fetchHeaders.set('User-Agent', IOS_USER_AGENT);
   fetchHeaders.set('Accept', '*/*');
 
-  // Forward Range header from client (Crucial for iOS Safari Byte-Range support!)
-  const clientRange = request.headers.get('Range');
-  if (clientRange) {
-    fetchHeaders.set('Range', clientRange);
-  }
+  // Forward or default Range header (Google Video CDN requires Range for adaptive formats!)
+  const clientRange = request.headers.get('Range') || 'bytes=0-';
+  fetchHeaders.set('Range', clientRange);
 
   // 3. Request audio chunk from Google Video CDN
+  const method = request.method === 'HEAD' ? 'HEAD' : 'GET';
   const upstreamResponse = await fetch(directUrl, {
-    method: request.method,
+    method: method,
     headers: fetchHeaders,
   });
 
@@ -105,31 +104,40 @@ async function handleAudioStream(request, videoId) {
 }
 
 /**
- * Uses YouTube's Android Music InnerTube client to retrieve unthrottled audio streams.
+ * Uses YouTube's iOS Mobile InnerTube client to retrieve unthrottled, direct audio streams.
  */
 async function resolveStreamUrl(videoId) {
-  const innertubePayload = {
+  const iosPayload = {
     context: {
       client: {
-        clientName: 'ANDROID_MUSIC',
-        clientVersion: '6.42.52',
-        androidSdkVersion: 34,
+        clientName: 'IOS',
+        clientVersion: '20.10.4',
+        deviceMake: 'Apple',
+        deviceModel: 'iPhone16,2',
+        userAgent: IOS_USER_AGENT,
         hl: 'en',
+        platform: 'MOBILE',
+        osName: 'IOS',
+        osVersion: '18.1.0.22B83',
+        timeZone: 'UTC',
         gl: 'US',
+        utcOffsetMinutes: 0,
       },
     },
     videoId: videoId,
   };
 
-  const response = await fetch('https://music.youtube.com/youtubei/v1/player', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'User-Agent':
-        'com.google.android.apps.youtube.music/6.42.52 (Linux; U; Android 14; en_US) gzip',
-    },
-    body: JSON.stringify(innertubePayload),
-  });
+  const response = await fetch(
+    'https://www.youtube.com/youtubei/v1/player?key=AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc&prettyPrint=false',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': IOS_USER_AGENT,
+      },
+      body: JSON.stringify(iosPayload),
+    }
+  );
 
   if (!response.ok) {
     throw new Error(`InnerTube API failed with status ${response.status}`);
@@ -142,27 +150,23 @@ async function resolveStreamUrl(videoId) {
     throw new Error('No formats found in YouTube player response.');
   }
 
-  // Find best audio stream (Priority: itag 140 128kbps AAC, or any audio/mp4, or highest audio bitrate)
-  const audioFormats = formats.filter(
-    (f) =>
-      (f.mimeType && f.mimeType.startsWith('audio/')) ||
-      f.itag === 140 ||
-      f.itag === 18
-  );
-
-  if (!audioFormats.length) {
-    throw new Error('No audio formats available.');
-  }
-
-  // Check for itag 140 (standard progressive AAC audio)
-  const itag140 = audioFormats.find((f) => f.itag === 140 && f.url);
+  // Priority 1: itag 140 (128kbps AAC audio/mp4)
+  const itag140 = formats.find((f) => f.itag === 140 && f.url);
   if (itag140?.url) return itag140.url;
 
-  // Otherwise pick highest bitrate audio with direct url
-  audioFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
-  for (const f of audioFormats) {
+  // Priority 2: Any audio stream with direct url
+  const audioFormats = formats.filter(
+    (f) => (f.mimeType && f.mimeType.startsWith('audio/')) && f.url
+  );
+  if (audioFormats.length) {
+    audioFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+    return audioFormats[0].url;
+  }
+
+  // Priority 3: Any stream with direct url
+  for (const f of formats) {
     if (f.url) return f.url;
   }
 
-  throw new Error('Direct stream URL requires signature decryption.');
+  throw new Error('No direct stream URL available in formats.');
 }

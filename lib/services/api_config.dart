@@ -15,7 +15,8 @@ class ApiConfig {
     return _defaultCloudUrl;
   }
 
-  static const String defaultCloudflareWorkerUrl = 'https://dilse-edge-stream.workers.dev';
+  static const String defaultCloudflareWorkerUrl =
+      'https://dilse-edge-stream.charanteja-kondakalla030206.workers.dev';
 
   /// Returns the configured Cloudflare Worker base URL for direct audio streaming.
   /// Falls back to defaultCloudflareWorkerUrl if not explicitly configured.
