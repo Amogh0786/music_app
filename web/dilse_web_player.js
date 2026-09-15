@@ -401,11 +401,11 @@
         .trim();
 
       const query = cleanTitle + (artist ? ' ' + artist : '');
-      console.log('[DilSe Web Player] Resolving on JioSaavn Engine:', query);
+      console.log('[DilSe Web Player] Resolving on JioSaavn Smart Engine:', title, '| Artist:', artist);
 
       try {
         const fetchPromise = fetch(
-          `${workerBase}/jio?q=${encodeURIComponent(query)}`
+          `${workerBase}/jio?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist || '')}`
         );
         // 3.5s timeout for ultra-fast response
         const timeoutPromise = new Promise((_, reject) =>
@@ -417,10 +417,10 @@
 
         if (res && res.ok) {
           const data = await res.json();
-          if (data.status === 'ok' && data.data?.streamUrl) {
+          if (data.status === 'ok' && data.match && data.data?.streamUrl) {
             const jioSong = data.data;
             console.log(
-              `[DilSe Web Player] JioSaavn Match Found: "${jioSong.title}" (${jioSong.bitrate}) -> ${jioSong.streamUrl}`
+              `[DilSe Web Player] JioSaavn Confident Match Found: "${jioSong.title}" (Score: ${jioSong.confidenceScore || 'OK'}) -> ${jioSong.streamUrl}`
             );
 
             activeEngine = ENGINE_AUDIO;

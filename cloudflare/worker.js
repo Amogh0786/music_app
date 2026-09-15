@@ -34,12 +34,6 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// (disabled):crypto
-var require_crypto = __commonJS({
-  "(disabled):crypto"() {
-  }
-});
-
 // cloudflare/node_modules/crypto-js/core.js
 var require_core = __commonJS({
   "cloudflare/node_modules/crypto-js/core.js"(exports, module) {
@@ -71,7 +65,7 @@ var require_core = __commonJS({
         }
         if (!crypto && typeof __require === "function") {
           try {
-            crypto = require_crypto();
+            crypto = __require("crypto");
           } catch (err) {
           }
         }
@@ -6592,7 +6586,7 @@ var require_crypto_js = __commonJS({
 });
 
 // cloudflare/worker_source.js
-var import_crypto_js = __toESM(require_crypto_js());
+var import_crypto_js = __toESM(require_crypto_js(), 1);
 var CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
@@ -6611,21 +6605,22 @@ var worker_source_default = {
         JSON.stringify({
           status: "online",
           service: "dilse-cloudflare-edge",
-          engine: "jiosaavn-320k-enabled"
+          engine: "jiosaavn-320k-smart-matcher"
         }),
         { headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
       );
     }
     if (url.pathname === "/jio") {
-      const query = url.searchParams.get("q");
-      if (!query || query.trim().length < 2) {
+      const rawTitle = url.searchParams.get("title") || url.searchParams.get("q") || "";
+      const rawArtist = url.searchParams.get("artist") || "";
+      if (!rawTitle || rawTitle.trim().length < 2) {
         return new Response(
-          JSON.stringify({ status: "error", message: "Missing search query (?q=...)" }),
+          JSON.stringify({ status: "error", message: "Missing title/query (?title=...)" }),
           { status: 400, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
         );
       }
       try {
-        const result = await resolveJioSaavn(query.trim());
+        const result = await resolveJioSaavn(rawTitle.trim(), rawArtist.trim());
         if (result) {
           return new Response(
             JSON.stringify({ status: "ok", match: true, data: result }),
@@ -6639,7 +6634,11 @@ var worker_source_default = {
           );
         } else {
           return new Response(
-            JSON.stringify({ status: "not_found", match: false }),
+            JSON.stringify({
+              status: "not_found",
+              match: false,
+              message: "No confident match found on JioSaavn; falling back to YouTube"
+            }),
             { headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
           );
         }
@@ -6663,9 +6662,78 @@ var worker_source_default = {
     return new Response("Not Found", { status: 404, headers: CORS_HEADERS });
   }
 };
-async function resolveJioSaavn(query) {
-  const cleanQ = query.replace(/[\(\[\{].*?[\)\]\}]/g, "").replace(/official video|music video|full song|lyric video|audio song|video song/gi, "").replace(/\|.*$/g, "").trim();
-  const searchUrl = "https://www.jiosaavn.com/api.php?__call=autocomplete.get&query=" + encodeURIComponent(cleanQ) + "&_format=json&_marker=0&ctx=web6dot0";
+function normalize(str) {
+  return (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/&quot;/g, "").replace(/&#039;/g, "").replace(/&amp;/g, "&").replace(/\([^)]*\)|\[[^\]]*\]/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+function parseYoutubeMetadata(rawTitle, rawAuthor) {
+  let author = (rawAuthor || "").replace(/ - Topic$/i, "").trim();
+  const labelNoise = [
+    "t-series",
+    "tseries",
+    "aditya music",
+    "sony music",
+    "zee music",
+    "lahari music",
+    "speed audio",
+    "tips official",
+    "saregama",
+    "yrf",
+    "think music",
+    "vevo",
+    "records",
+    "entertainment",
+    "music",
+    "creations",
+    "production",
+    "audio",
+    "studios",
+    "channel",
+    "media",
+    "official"
+  ];
+  for (const label of labelNoise) {
+    if (author.toLowerCase().includes(label)) {
+      author = "";
+      break;
+    }
+  }
+  let clean = (rawTitle || "").replace(/\([^)]*\)|\[[^\]]*\]|\{[^}]*\}/g, " ").replace(/\b(official\s+(music\s+)?video|full\s+(video\s+)?song|lyric(al)?\s+video|video\s+song|audio\s+song|full\s+audio|lyrics|hd|4k|8k)\b/gi, " ");
+  const pipeParts = clean.split("|").map((p) => p.trim()).filter(Boolean);
+  let firstSegment = pipeParts[0] || clean;
+  let secondSegment = pipeParts.length > 1 ? pipeParts[1] : "";
+  let targetTitle = firstSegment;
+  let contextInfo = secondSegment;
+  if (firstSegment.includes(" - ") || firstSegment.includes(" \u2013 ") || firstSegment.includes(" \u2014 ")) {
+    const dashParts = firstSegment.split(/\s+[-–—]\s+/);
+    if (dashParts.length >= 2) {
+      const part0 = dashParts[0].trim();
+      const part1 = dashParts[1].trim();
+      if (author && part0.toLowerCase() === author.toLowerCase()) {
+        targetTitle = part1;
+      } else if (author && part1.toLowerCase() === author.toLowerCase()) {
+        targetTitle = part0;
+      } else {
+        targetTitle = part0;
+        if (!contextInfo) contextInfo = part1;
+      }
+    }
+  }
+  targetTitle = targetTitle.replace(/[-–—/:]+$/, "").replace(/\b(video|song|audio|full|track)\b/gi, "").replace(/\s+/g, " ").trim();
+  if (contextInfo) {
+    contextInfo = contextInfo.replace(/[-–—/:]+$/, "").replace(/\b(video|song|audio|full|track|starring|ft|feat)\b/gi, "").replace(/\s+/g, " ").trim();
+  }
+  return { targetTitle, targetArtist: author, contextInfo };
+}
+async function resolveJioSaavn(rawTitle, rawArtist) {
+  const { targetTitle, targetArtist, contextInfo } = parseYoutubeMetadata(rawTitle, rawArtist);
+  const normTitle = normalize(targetTitle);
+  const normArtist = normalize(targetArtist);
+  const normContext = normalize(contextInfo);
+  if (!normTitle || normTitle.length < 2) return null;
+  let searchQuery = normTitle;
+  if (normContext) searchQuery += " " + normContext;
+  if (normArtist) searchQuery += " " + normArtist;
+  const searchUrl = "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&n=10&p=1&q=" + encodeURIComponent(searchQuery.trim());
   const searchRes = await fetch(searchUrl, {
     headers: {
       "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
@@ -6673,24 +6741,56 @@ async function resolveJioSaavn(query) {
   });
   if (!searchRes.ok) return null;
   const searchData = await searchRes.json();
-  const songs = searchData.songs?.data || [];
-  if (!songs.length) return null;
-  const topSong = songs[0];
-  const pid = topSong.id;
-  if (!pid) return null;
-  const detailsUrl = "https://www.jiosaavn.com/api.php?__call=song.getDetails&pids=" + pid + "&_format=json&_marker=0&ctx=web6dot0";
-  const detailsRes = await fetch(detailsUrl, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+  const results = searchData.results || [];
+  if (!results.length) return null;
+  let bestCandidate = null;
+  let highestScore = -1;
+  for (const r of results) {
+    if (!r.encrypted_media_url) continue;
+    const candTitle = normalize(r.song);
+    const candArtist = normalize(r.primary_artists || r.singers || r.music);
+    const candAlbum = normalize(r.album);
+    let score = 0;
+    if (candTitle === normTitle) {
+      score = 100;
+    } else if (candTitle.startsWith(normTitle) || normTitle.startsWith(candTitle)) {
+      score = 80;
+    } else {
+      const targetWords = normTitle.split(" ").filter(Boolean);
+      const candWords = candTitle.split(" ").filter(Boolean);
+      let matched = 0;
+      for (const tw of targetWords) {
+        if (candWords.includes(tw)) matched++;
+      }
+      const ratio = targetWords.length > 0 ? matched / targetWords.length : 0;
+      if (ratio >= 0.7) {
+        score = 60 * ratio;
+      }
     }
-  });
-  if (!detailsRes.ok) return null;
-  const detailsData = await detailsRes.json();
-  const details = detailsData.songs ? detailsData.songs[0] : detailsData[pid];
-  if (!details || !details.encrypted_media_url) return null;
+    if (score > 0 && normArtist) {
+      if (candArtist.includes(normArtist) || normArtist.includes(candArtist)) {
+        score += 40;
+      }
+    }
+    if (score > 0 && normContext) {
+      if (candAlbum.includes(normContext) || candArtist.includes(normContext)) {
+        score += 30;
+      }
+    }
+    if (!normTitle.includes("instrumental") && candTitle.includes("instrumental")) score -= 30;
+    if (!normTitle.includes("karaoke") && candTitle.includes("karaoke")) score -= 30;
+    if (!normTitle.includes("tribute") && candTitle.includes("tribute")) score -= 30;
+    if (score > highestScore) {
+      highestScore = score;
+      bestCandidate = r;
+    }
+  }
+  if (!bestCandidate || highestScore < 50) {
+    return null;
+  }
   const key = import_crypto_js.default.enc.Utf8.parse(JIO_CIPHER_KEY);
   const decrypted = import_crypto_js.default.DES.decrypt(
-    { ciphertext: import_crypto_js.default.enc.Base64.parse(details.encrypted_media_url) },
+    { ciphertext: import_crypto_js.default.enc.Base64.parse(bestCandidate.encrypted_media_url) },
     key,
     { mode: import_crypto_js.default.mode.ECB, padding: import_crypto_js.default.pad.Pkcs7 }
   );
@@ -6698,12 +6798,13 @@ async function resolveJioSaavn(query) {
   if (!directUrl || !directUrl.startsWith("http")) return null;
   const url320 = directUrl.replace("_96.mp4", "_320.mp4").replace("_160.mp4", "_320.mp4");
   return {
-    title: details.song || topSong.title,
-    artist: details.primary_artists || topSong.music || "",
-    album: details.album || "",
-    artwork: (details.image || topSong.image || "").replace("150x150", "500x500"),
+    title: (bestCandidate.song || "").replace(/&quot;/g, '"').replace(/&#039;/g, "'"),
+    artist: bestCandidate.primary_artists || bestCandidate.singers || "",
+    album: (bestCandidate.album || "").replace(/&quot;/g, '"').replace(/&#039;/g, "'"),
+    artwork: (bestCandidate.image || "").replace("150x150", "500x500"),
     streamUrl: url320,
-    bitrate: "320kbps"
+    bitrate: "320kbps",
+    confidenceScore: highestScore
   };
 }
 export {
