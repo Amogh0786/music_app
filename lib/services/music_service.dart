@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'api_config.dart';
 import 'preferences_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'web_player_bridge.dart';
 
 class StreamCandidate {
@@ -265,6 +266,16 @@ class MusicService extends ChangeNotifier {
 
   Future<void> loadLikedSongs() async {
     try {
+      if (kIsWeb) {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString('liked_songs_web');
+        if (raw != null && raw.isNotEmpty) {
+          final List<dynamic> jsonList = json.decode(raw);
+          _likedSongs = jsonList.map((e) => Map<String, String>.from(e)).toList();
+          notifyListeners();
+        }
+        return;
+      }
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/liked_songs.json');
       if (await file.exists()) {
@@ -293,6 +304,11 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      if (kIsWeb) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('liked_songs_web', json.encode(_likedSongs));
+        return;
+      }
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/liked_songs.json');
       await file.writeAsString(json.encode(_likedSongs));
@@ -305,6 +321,11 @@ class MusicService extends ChangeNotifier {
     _likedSongs.removeWhere((s) => s['id'] == videoId);
     notifyListeners();
     try {
+      if (kIsWeb) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('liked_songs_web', json.encode(_likedSongs));
+        return;
+      }
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/liked_songs.json');
       await file.writeAsString(json.encode(_likedSongs));
@@ -337,16 +358,17 @@ class MusicService extends ChangeNotifier {
     }
   }
 
-
   void seekRelative(Duration offset) {
-    final current = _audioPlayer.position;
+    final current = position;
     final target = current + offset;
-    _audioPlayer.seek(target);
+    seek(target);
   }
 
   void toggleShuffle() {
     _isShuffle = !_isShuffle;
-    _audioPlayer.setShuffleModeEnabled(_isShuffle);
+    if (!kIsWeb) {
+      _audioPlayer.setShuffleModeEnabled(_isShuffle);
+    }
     notifyListeners();
   }
 
@@ -358,7 +380,9 @@ class MusicService extends ChangeNotifier {
     } else {
       _loopMode = LoopMode.off;
     }
-    _audioPlayer.setLoopMode(_loopMode);
+    if (!kIsWeb) {
+      _audioPlayer.setLoopMode(_loopMode);
+    }
     notifyListeners();
   }
 

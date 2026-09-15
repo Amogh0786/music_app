@@ -1,7 +1,7 @@
 /**
  * DilSe Web Audio Player Engine (Invisible YouTube IFrame Player)
  * Provides 100% reliable, zero-latency streaming on iOS Safari, PWA, and desktop browsers.
- * Integrates directly with Web MediaSession API for iPhone lockscreen metadata & controls.
+ * Integrates directly with Web MediaSession API and iOS Background Audio keeper.
  */
 
 (function () {
@@ -11,6 +11,37 @@
   let pendingStartSec = 0;
   let ticker = null;
   let currentVideoId = null;
+
+  // Native HTML5 silent audio keeper to unlock iOS Safari background audio session
+  let bgAudio = null;
+  function ensureBgAudio() {
+    if (!bgAudio) {
+      bgAudio = document.createElement('audio');
+      bgAudio.setAttribute('playsinline', 'true');
+      bgAudio.setAttribute('webkit-playsinline', 'true');
+      bgAudio.loop = true;
+      // 1-second silent stereo WAV base64
+      bgAudio.src =
+        'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+      document.body.appendChild(bgAudio);
+    }
+    return bgAudio;
+  }
+
+  function startBgAudio() {
+    try {
+      const audio = ensureBgAudio();
+      audio.play().catch(() => {});
+    } catch (_) {}
+  }
+
+  function stopBgAudio() {
+    if (bgAudio) {
+      try {
+        bgAudio.pause();
+      } catch (_) {}
+    }
+  }
 
   // Create an invisible off-screen container for YouTube IFrame
   function ensureContainer() {
@@ -29,6 +60,7 @@
   window.onYouTubeIframeAPIReady = function () {
     console.log('[DilSe Web Player] YouTube IFrame API Ready');
     ensureContainer();
+    ensureBgAudio();
     try {
       player = new YT.Player('dilse-yt-host', {
         height: '1',
@@ -77,7 +109,11 @@
             detail: { position: pos, duration: dur },
           })
         );
-        if ('mediaSession' in navigator && dur > 0 && typeof navigator.mediaSession.setPositionState === 'function') {
+        if (
+          'mediaSession' in navigator &&
+          dur > 0 &&
+          typeof navigator.mediaSession.setPositionState === 'function'
+        ) {
           try {
             navigator.mediaSession.setPositionState({
               duration: dur,
@@ -104,11 +140,13 @@
       case 1:
         stateName = 'playing';
         startTicker();
+        startBgAudio();
         if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
         break;
       case 2:
         stateName = 'paused';
         stopTicker();
+        stopBgAudio();
         if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
         break;
       case 3:
@@ -117,6 +155,7 @@
       case 0:
         stateName = 'ended';
         stopTicker();
+        stopBgAudio();
         window.dispatchEvent(new CustomEvent('dilse_ended'));
         break;
       default:
@@ -140,10 +179,30 @@
     );
   }
 
+  // Prevent iOS Safari from suspending playback when user locks screen or switches tab
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') {
+      if (player && typeof player.getPlayerState === 'function') {
+        const state = player.getPlayerState();
+        // If state was PLAYING (1) or BUFFERING (3)
+        if (state === 1 || state === 3) {
+          startBgAudio();
+          setTimeout(() => {
+            if (player && typeof player.playVideo === 'function') {
+              player.playVideo();
+            }
+          }, 120);
+        }
+      }
+    }
+  });
+
   // --- Exposed Global APIs for Dart ---
 
   window.dilsePlay = function (videoId, startSeconds) {
     currentVideoId = videoId;
+    startBgAudio();
+
     if (!isReady || !player || typeof player.loadVideoById !== 'function') {
       console.log('[DilSe Web Player] Player not ready yet. Queuing:', videoId);
       pendingVideoId = videoId;
@@ -163,6 +222,7 @@
   };
 
   window.dilsePause = function () {
+    stopBgAudio();
     if (player && typeof player.pauseVideo === 'function') {
       try {
         player.pauseVideo();
@@ -171,6 +231,7 @@
   };
 
   window.dilseResume = function () {
+    startBgAudio();
     if (player && typeof player.playVideo === 'function') {
       try {
         player.playVideo();
