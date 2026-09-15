@@ -141,6 +141,9 @@ class WebPlayerBridge {
     final workerBase = ApiConfig.cloudflareWorkerUrl;
     globalWindow.setProperty('dilseWorkerBaseUrl'.toJS, workerBase.toJS);
 
+    // Set direct stream URL if provided
+    globalWindow.setProperty('dilseCurrentStreamUrl'.toJS, (streamUrl ?? '').toJS);
+
     // Update MediaSession
     if (globalWindow.hasProperty('dilseSetMetadata'.toJS).toDart) {
       globalWindow.callMethod(

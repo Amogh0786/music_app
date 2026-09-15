@@ -364,14 +364,25 @@
     }
   });
 
-  // --- Exposed Global APIs for Dart Bridge ---
+  window.dilsePlayWithOptions = function (opts) {
+    opts = opts || {};
+    return window.dilsePlay(
+      opts.videoId,
+      opts.startSeconds || 0,
+      opts.title || '',
+      opts.artist || '',
+      opts.artworkUrl || '',
+      opts.streamUrl || ''
+    );
+  };
 
   window.dilsePlay = async function (
     videoId,
     startSeconds,
     title,
     artist,
-    artworkUrl
+    artworkUrl,
+    directStreamUrl
   ) {
     const sessionId = ++currentPlaySessionId;
     currentVideoId = videoId;
@@ -387,6 +398,34 @@
 
     // Update MediaSession with initial metadata
     window.dilseSetMetadata(currentTitle, currentArtist, currentArtwork);
+
+    // If direct stream URL is already provided (e.g. from native JioSaavn search), play instantly!
+    const streamToPlay = directStreamUrl || window.dilseCurrentStreamUrl || '';
+    window.dilseCurrentStreamUrl = '';
+
+    if (streamToPlay && typeof streamToPlay === 'string' && streamToPlay.startsWith('http')) {
+      console.log('[DilSe Web Player] Direct 320k stream provided, playing immediately:', streamToPlay);
+      activeEngine = ENGINE_AUDIO;
+
+      if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
+        try {
+          ytPlayer.stopVideo();
+        } catch (_) {}
+      }
+      stopTicker();
+
+      audioEl.src = streamToPlay;
+      if (startSeconds > 0) {
+        audioEl.currentTime = startSeconds;
+      }
+      armFallbackTimer(videoId, startSeconds);
+
+      audioEl.play().catch((err) => {
+        console.warn('[DilSe Web Player] audioEl.play() rejected:', err);
+        triggerFallback();
+      });
+      return;
+    }
 
     // If a clean song title is available, resolve on JioSaavn for 320k direct audio stream
     if (title && title.trim().length > 1) {

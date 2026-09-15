@@ -32,6 +32,14 @@ class ApiConfig {
     return Uri.parse('$cloudflareWorkerUrl/stream?v=$videoId');
   }
 
+  static Uri jioSearchUri(String query, {int limit = 20}) {
+    return Uri.parse('$cloudflareWorkerUrl/jio/search?q=${Uri.encodeComponent(query)}&limit=$limit');
+  }
+
+  static Uri jioSuggestionsUri(String query, {int limit = 8}) {
+    return Uri.parse('$cloudflareWorkerUrl/jio/suggestions?q=${Uri.encodeComponent(query)}&limit=$limit');
+  }
+
   static Uri searchUri(String query, {int page = 1, int limit = 20}) {
     return Uri.parse('$baseUrl/search?q=${Uri.encodeComponent(query)}&page=$page&limit=$limit');
   }

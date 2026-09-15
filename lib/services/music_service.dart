@@ -185,7 +185,13 @@ class MusicService extends ChangeNotifier {
     }
   }
 
+  static final Map<String, String> _artworkMap = {};
+  static final Map<String, String> _webStreamUrls = {};
+
   static String getHdThumbnail(String videoId) {
+    if (_artworkMap.containsKey(videoId)) {
+      return _artworkMap[videoId]!;
+    }
     return 'https://i.ytimg.com/vi/$videoId/maxresdefault.jpg';
   }
 
@@ -389,6 +395,67 @@ class MusicService extends ChangeNotifier {
   Future<List<Video>> searchSongs(String query, {int page = 1}) async {
     if (query.trim().isEmpty) return [];
 
+    // Web / PWA: Query official JioSaavn catalog for instant 320kbps streams & pristine covers
+    if (kIsWeb) {
+      try {
+        final response = await http
+            .get(ApiConfig.jioSearchUri(query, limit: 25))
+            .timeout(const Duration(seconds: 8));
+
+        if (response.statusCode == 200) {
+          final List<dynamic> jsonList = json.decode(response.body);
+          if (jsonList.isNotEmpty) {
+            final List<Video> results = [];
+            for (var item in jsonList) {
+              final songId = item['id'] as String? ?? '';
+              if (songId.isEmpty) continue;
+              final title = item['title'] as String? ?? 'Unknown Title';
+              final author = item['author'] as String? ?? 'DilSe Music';
+              final durationSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
+              final duration = durationSec != null ? Duration(seconds: durationSec) : null;
+              final artwork = item['thumbnail'] as String? ?? '';
+              final streamUrl = item['streamUrl'] as String? ?? '';
+
+              // Format valid 11-char ID for Video model
+              final vidString = songId.length >= 11 ? songId.substring(0, 11) : songId.padRight(11, '0');
+
+              if (artwork.isNotEmpty) {
+                _artworkMap[songId] = artwork;
+                _artworkMap[vidString] = artwork;
+              }
+              if (streamUrl.isNotEmpty) {
+                _webStreamUrls[songId] = streamUrl;
+                _webStreamUrls[vidString] = streamUrl;
+              }
+
+              results.add(
+                Video(
+                  VideoId(vidString),
+                  title,
+                  author,
+                  ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+                  DateTime.now(),
+                  '',
+                  null,
+                  '',
+                  duration,
+                  ThumbnailSet(vidString),
+                  null,
+                  Engagement(0, null, null),
+                  false,
+                ),
+              );
+            }
+            debugPrint('[JioSaavn Search][Web] Returned ${results.length} items for "$query"');
+            return results;
+          }
+        }
+      } catch (e) {
+        debugPrint('[JioSaavn Search][Web] Error: $e, falling back to YouTube search');
+      }
+    }
+
+    // Android Mobile & Web Fallback: Python Backend / YouTube search
     try {
       final response = await http
           .get(ApiConfig.searchUri(query, page: page, limit: 20))
@@ -435,6 +502,21 @@ class MusicService extends ChangeNotifier {
   /// Live query suggestions while typing (up to [limit] suggestions)
   Future<List<String>> fetchSuggestions(String query, {int limit = 8}) async {
     if (query.trim().isEmpty) return [];
+
+    if (kIsWeb) {
+      try {
+        final response = await http
+            .get(ApiConfig.jioSuggestionsUri(query, limit: limit))
+            .timeout(const Duration(seconds: 4));
+        if (response.statusCode == 200) {
+          final List<dynamic> jsonList = json.decode(response.body);
+          return jsonList.map((e) => e.toString()).toList();
+        }
+      } catch (e) {
+        debugPrint('jioSuggestions error: $e');
+      }
+    }
+
     try {
       final response = await http
           .get(ApiConfig.suggestionsUri(query, limit: limit))
@@ -845,7 +927,7 @@ class MusicService extends ChangeNotifier {
       // 2. Web Mode (PWA / Browser):
       // Dual Engine: Cloudflare Edge Direct Stream (<audio>) + YouTube IFrame Fallback
       if (kIsWeb) {
-        final directStreamUrl = ApiConfig.cloudflareStreamUri(song.id.value).toString();
+        final directStreamUrl = _webStreamUrls[song.id.value] ?? ApiConfig.cloudflareStreamUri(song.id.value).toString();
         debugPrint('[Play][Web] Playing via Web Dual Engine: ${song.id.value} (edge: $directStreamUrl)');
         _reportClientLog('web_stream_start', {'videoId': song.id.value, 'engine': 'dual'});
         WebPlayerBridge.play(
