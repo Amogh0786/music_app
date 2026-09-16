@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request, Response, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse
 import yt_dlp
 import urllib.request
 import time
@@ -10,7 +10,9 @@ import shutil
 import asyncio
 from collections import Counter
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
+from pydantic import BaseModel
+import spotlib
 
 # Co-occurrence storage: maps video_id -> Counter of next video_ids
 co_occurrence: dict[str, Counter[str]] = {}
@@ -519,6 +521,61 @@ def invalidate_cache(video_id: str):
     if video_id in _url_cache:
         del _url_cache[video_id]
     return {"status": "ok"}
+
+
+# --- Spotify Import Endpoints ---
+
+class SpotifyCodeRequest(BaseModel):
+    code: str
+
+class SpotifyImportRequest(BaseModel):
+    access_token: Optional[str] = None
+    playlist_id: str
+    is_public: bool = False
+
+@app.get("/spotify/login")
+def spotify_login():
+    """Returns the Spotify OAuth login URL."""
+    return {"url": spotlib.get_auth_url()}
+
+@app.get("/spotify/callback")
+def spotify_callback(code: str = None, error: str = None):
+    """Exchanges an authorization code for an access token and redirects to app."""
+    if error:
+        return RedirectResponse(url=f"dilsemusic://spotify-auth?error={error}")
+    if not code:
+        return RedirectResponse(url="dilsemusic://spotify-auth?error=missing_code")
+        
+    try:
+        token_info = spotlib.get_token_from_code(code)
+        token = token_info.get("access_token")
+        return RedirectResponse(url=f"dilsemusic://spotify-auth?token={token}")
+    except Exception as e:
+        return RedirectResponse(url=f"dilsemusic://spotify-auth?error={e}")
+
+@app.get("/spotify/playlists")
+def get_spotify_playlists(access_token: str):
+    """Fetches user playlists."""
+    try:
+        playlists = spotlib.get_user_playlists(access_token)
+        return {"playlists": playlists}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/spotify/import")
+def import_spotify_playlist(request: SpotifyImportRequest):
+    """Returns a list of search queries (Track + Artist) for the Flutter app to resolve."""
+    try:
+        if request.is_public:
+            tracks = spotlib.get_public_playlist_tracks(request.playlist_id)
+        else:
+            if not request.access_token:
+                raise HTTPException(status_code=400, detail="Missing access token for private playlist.")
+            tracks = spotlib.get_private_playlist_tracks(request.access_token, request.playlist_id)
+        
+        return {"tracks": tracks}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 if __name__ == "__main__":

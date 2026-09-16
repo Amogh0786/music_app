@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/music_service.dart';
 import '../services/preferences_service.dart';
+import 'spotify_import_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -101,6 +102,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
               letterSpacing: -0.8,
             ),
           ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.queue_music_rounded, color: Color(0xFF1DB954)),
+              tooltip: 'Import from Spotify',
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SpotifyImportScreen()),
+                );
+              },
+            ),
+            const SizedBox(width: 8),
+          ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(138),
             child: Column(
