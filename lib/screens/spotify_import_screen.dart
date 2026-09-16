@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:app_links/app_links.dart';
 import 'package:http/http.dart' as http;
@@ -119,17 +118,19 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
         
         setState(() => _statusMessage = 'Resolving ${tracks.length} tracks on YouTube...');
         
+        final playlistId = MusicService().createPlaylist(playlistName);
+        
         int successCount = 0;
         for (final query in tracks) {
           final results = await MusicService().searchSongs(query, page: 1);
           if (results.isNotEmpty) {
-            MusicService().toggleLike(results.first);
+            MusicService().addSongToPlaylist(playlistId, results.first);
             successCount++;
           }
         }
         
         setState(() {
-          _statusMessage = 'Successfully imported $successCount out of ${tracks.length} tracks to Liked Songs!';
+          _statusMessage = 'Successfully imported $successCount out of ${tracks.length} tracks to $playlistName!';
         });
       } else {
         setState(() => _statusMessage = 'Failed to import playlist.');
@@ -264,11 +265,11 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                                       child: const Icon(Icons.music_note, color: Colors.white54),
                                     ),
                             ),
-                            title: Text(pl['name'] ?? 'Unknown', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            title: Text((pl['name'] as String?) ?? 'Unknown', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                             subtitle: Text('${pl['total_tracks']} tracks • ${pl['owner']}', style: const TextStyle(color: Colors.white54)),
                             trailing: IconButton(
                               icon: const Icon(Icons.download_rounded, color: Color(0xFF1DB954)),
-                              onPressed: _isLoading ? null : () => _importPlaylist(pl['id'], pl['name'], false),
+                              onPressed: _isLoading ? null : () => _importPlaylist((pl['id'] as String?) ?? '', (pl['name'] as String?) ?? 'Playlist', false),
                             ),
                           );
                         },
