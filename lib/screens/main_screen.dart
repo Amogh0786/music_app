@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'home_screen.dart';
@@ -6,9 +7,11 @@ import 'search_screen.dart';
 import 'library_screen.dart';
 import '../widgets/mini_player.dart';
 import '../widgets/floating_nav_dock.dart';
+import '../widgets/interactive_update_dialog.dart';
 import '../services/music_service.dart';
 import '../services/preferences_service.dart';
 import '../services/notification_permission_service.dart';
+import '../services/update_service.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -36,8 +39,33 @@ class _MainScreenState extends State<MainScreen> {
       if (mounted) {
         _checkFirstTimeNamePrompt();
         NotificationPermissionService.promptIfNeeded(context);
+        _checkAutoAppUpdate();
       }
     });
+  }
+
+  Future<void> _checkAutoAppUpdate() async {
+    // Only check for updates on mobile devices after intro animation
+    if (kIsWeb) return;
+    final prefs = PreferencesService();
+    if (!prefs.hasPromptedName) return; // Wait until name prompt is completed
+    await Future.delayed(const Duration(milliseconds: 1000));
+    if (!mounted) return;
+
+    try {
+      final updateInfo = await UpdateService().checkForUpdate();
+      if (!mounted) return;
+      if (updateInfo != null && updateInfo.hasUpdate) {
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          barrierColor: Colors.black.withValues(alpha: 0.75),
+          builder: (ctx) => InteractiveUpdateDialog(info: updateInfo),
+        );
+      }
+    } catch (e) {
+      debugPrint('[MainScreen] Auto update check deferred: $e');
+    }
   }
 
   void _checkFirstTimeNamePrompt() {
@@ -91,7 +119,8 @@ class _MainScreenState extends State<MainScreen> {
                           ),
                         ],
                       ),
-                      child: ClipOval(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(34),
                         child: Image.asset('assets/images/dilse_logo.png', fit: BoxFit.cover),
                       ),
                     ),
@@ -141,6 +170,7 @@ class _MainScreenState extends State<MainScreen> {
                         prefs.setUserName(name.isEmpty ? 'Friend' : name);
                         HapticFeedback.mediumImpact();
                         Navigator.pop(ctx);
+                        _checkAutoAppUpdate();
                       },
                     ),
                     const SizedBox(height: 20),
@@ -159,6 +189,7 @@ class _MainScreenState extends State<MainScreen> {
                           prefs.setUserName(name.isEmpty ? 'Friend' : name);
                           HapticFeedback.mediumImpact();
                           Navigator.pop(ctx);
+                          _checkAutoAppUpdate();
                         },
                         child: const Text(
                           "Let's Start Listening",
