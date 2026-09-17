@@ -622,219 +622,71 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool _isConfidentJioSaavnCatalog(List<dynamic> items, String query) {
-    if (items.isEmpty) return false;
-
-    final cleanQ = query.toLowerCase().trim();
-
-    // 1. Check if user explicitly specified an artist (e.g. "perfect by ed sheeran" or "ed sheeran - perfect")
-    String? specifiedArtist;
-    final byMatch = RegExp(r'\bby\s+(.+)$', caseSensitive: false).firstMatch(cleanQ);
-    if (byMatch != null) {
-      specifiedArtist = byMatch.group(1)?.trim();
-    } else if (cleanQ.contains(' - ')) {
-      final parts = cleanQ.split(' - ');
-      if (parts.length == 2) {
-        specifiedArtist = parts[1].trim();
-      }
-    }
-
-    final topThree = items.take(3).toList();
-
-    // If an artist was specified, verify at least one of the top 3 results includes that artist
-    if (specifiedArtist != null && specifiedArtist.length >= 2) {
-      final artistKeywords = specifiedArtist
-          .split(RegExp(r'\s+'))
-          .map((w) => w.replaceAll(RegExp(r'[^a-zA-Z0-9]'), ''))
-          .where((w) => w.length >= 2 && !const ['the', 'and', 'official', 'music', 'band', 'song'].contains(w))
-          .toList();
-
-      bool foundArtist = false;
-      for (final item in topThree) {
-        final author = (item['author'] as String? ?? '').toLowerCase();
-        if (author.contains(specifiedArtist) ||
-            artistKeywords.any((k) => k.length >= 3 && author.contains(k))) {
-          foundArtist = true;
-          break;
-        }
-      }
-
-      if (!foundArtist) {
-        debugPrint('[Search][Web] Query explicitly specified artist "$specifiedArtist" but JioSaavn top results do not match. Falling back to backend.');
-        return false;
-      }
-    }
-
-    // 2. Count instrumental, karaoke, or third-party cover markers
-    int coverOrInstrumentalCount = 0;
-    for (final item in topThree) {
-      final title = (item['title'] as String? ?? '').toLowerCase();
-      final author = (item['author'] as String? ?? '').toLowerCase();
-      final album = (item['album'] as String? ?? '').toLowerCase();
-      final thumb = (item['thumbnail'] as String? ?? '').toLowerCase();
-
-      if (thumb.contains('-instrumental-') ||
-          title.contains('karaoke') ||
-          title.contains('instrumental') ||
-          title.contains('piano version') ||
-          title.contains('easy piano') ||
-          title.contains('tribute') ||
-          title.contains('originally perfo') ||
-          title.contains('cover') ||
-          title.contains('remake') ||
-          author.contains('karaoke') ||
-          author.contains('tribute') ||
-          author.contains('strings') ||
-          author.contains('sweet strings') ||
-          author.contains('zzang') ||
-          author.contains('luxebeats') ||
-          author.contains('tower') ||
-          author.contains('workout music') ||
-          album.contains('karaoke') ||
-          album.contains('popular covers') ||
-          album.contains('instrumental') ||
-          album.contains('covers collection')) {
-        coverOrInstrumentalCount++;
-      }
-    }
-
-    if (coverOrInstrumentalCount >= 2) {
-      debugPrint('[Search][Web] JioSaavn returned $coverOrInstrumentalCount/3 instrumental/cover items. Falling back to backend for authentic tracks.');
-      return false;
-    }
-
-    return true;
-  }
-
   Future<List<Video>> searchSongs(String query, {int page = 1}) async {
     if (query.trim().isEmpty) return [];
 
-    List<Video> jioFallback = [];
-
-    // Web / PWA: Query both JioSaavn and Backend in parallel for instant, zero-delay responses
-    if (kIsWeb) {
-      try {
-        final jioFuture = http
-            .get(ApiConfig.jioSearchUri(query, limit: 25))
-            .timeout(const Duration(seconds: 4));
-
-        final backendFuture = http
-            .get(ApiConfig.searchUri(query, page: page, limit: 20))
-            .timeout(const Duration(seconds: 15));
-
-        final jioResponse = await jioFuture.catchError((_) => http.Response('[]', 500));
-
-        if (jioResponse.statusCode == 200) {
-          final List<dynamic> jsonList = json.decode(jioResponse.body);
-          if (jsonList.isNotEmpty) {
-            final isConfident = _isConfidentJioSaavnCatalog(jsonList, query);
-
-            final List<Video> jioResults = [];
-            for (var item in jsonList) {
-              final songId = item['id'] as String? ?? '';
-              if (songId.isEmpty) continue;
-              final title = item['title'] as String? ?? 'Unknown Title';
-              final author = item['author'] as String? ?? 'DilSe Music';
-              final durationSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
-              final duration = durationSec != null ? Duration(seconds: durationSec) : null;
-              final artwork = item['thumbnail'] as String? ?? '';
-              final streamUrl = item['streamUrl'] as String? ?? '';
-
-              // Format valid 11-char ID for Video model
-              final vidString = songId.length >= 11 ? songId.substring(0, 11) : songId.padRight(11, '0');
-
-              if (artwork.isNotEmpty) {
-                _artworkMap[songId] = artwork;
-                _artworkMap[vidString] = artwork;
-              }
-              if (streamUrl.isNotEmpty) {
-                _webStreamUrls[songId] = streamUrl;
-                _webStreamUrls[vidString] = streamUrl;
-              }
-
-              jioResults.add(
-                Video(
-                  VideoId(vidString),
-                  title,
-                  author,
-                  ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
-                  DateTime.now(),
-                  '',
-                  null,
-                  '',
-                  duration,
-                  ThumbnailSet(vidString),
-                  null,
-                  Engagement(0, null, null),
-                  false,
-                ),
-              );
-            }
-
-            if (isConfident && jioResults.length >= 2) {
-              debugPrint('[Search][Web] Confident JioSaavn catalog match (${jioResults.length} items)');
-              return jioResults;
-            } else {
-              jioFallback = jioResults;
-              debugPrint('[Search][Web] JioSaavn lacked confident match, awaiting backend fallback...');
-            }
-          }
-        }
-
-        // Await backend response (already running in parallel!)
-        final backendResponse = await backendFuture.catchError((_) => http.Response('[]', 500));
-        if (backendResponse.statusCode == 200) {
-          final List<dynamic> jsonList = json.decode(backendResponse.body);
-          if (jsonList.isNotEmpty) {
-            final List<Video> backendResults = [];
-            for (var item in jsonList) {
-              final videoId = item['id'] as String;
-              final title = item['title'] as String? ?? 'Unknown Title';
-              final author = item['author'] as String? ?? 'Unknown Artist';
-              final durationSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
-              final duration = durationSec != null ? Duration(seconds: durationSec) : null;
-
-              backendResults.add(
-                Video(
-                  VideoId(videoId),
-                  title,
-                  author,
-                  ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
-                  DateTime.now(),
-                  '',
-                  null,
-                  '',
-                  duration,
-                  ThumbnailSet(videoId),
-                  null,
-                  Engagement(0, null, null),
-                  false,
-                ),
-              );
-            }
-            debugPrint('[Search][Web] Backend fallback returned ${backendResults.length} items');
-            return backendResults;
-          }
-        }
-      } catch (e) {
-        debugPrint('[Search][Web] Search error: $e');
-      }
-
-      if (jioFallback.isNotEmpty) {
-        return jioFallback;
-      }
-    }
-
-    // Android Mobile: Python Backend / YouTube search
     try {
-      final response = await http
+      // Run JioSaavn search and YouTube backend search concurrently
+      final jioFuture = http
+          .get(ApiConfig.jioSearchUri(query, limit: 25))
+          .timeout(const Duration(seconds: 4));
+
+      final backendFuture = http
           .get(ApiConfig.searchUri(query, page: page, limit: 20))
           .timeout(const Duration(seconds: 15));
 
-      if (response.statusCode == 200) {
-        final List<dynamic> jsonList = json.decode(response.body);
-        final List<Video> results = [];
+      final jioResponse = await jioFuture.catchError((_) => http.Response('[]', 500));
 
+      final List<Video> jioResults = [];
+      if (jioResponse.statusCode == 200) {
+        final List<dynamic> jsonList = json.decode(jioResponse.body);
+        for (var item in jsonList) {
+          final songId = item['id'] as String? ?? '';
+          if (songId.isEmpty) continue;
+          final title = item['title'] as String? ?? 'Unknown Title';
+          final author = item['author'] as String? ?? 'DilSe Music';
+          final durationSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
+          final duration = durationSec != null ? Duration(seconds: durationSec) : null;
+          final artwork = item['thumbnail'] as String? ?? '';
+          final streamUrl = item['streamUrl'] as String? ?? '';
+
+          // Format valid 11-char ID for Video model
+          final vidString = songId.length >= 11 ? songId.substring(0, 11) : songId.padRight(11, '0');
+
+          if (artwork.isNotEmpty) {
+            _artworkMap[songId] = artwork;
+            _artworkMap[vidString] = artwork;
+          }
+          if (streamUrl.isNotEmpty) {
+            _webStreamUrls[songId] = streamUrl;
+            _webStreamUrls[vidString] = streamUrl;
+          }
+
+          jioResults.add(
+            Video(
+              VideoId(vidString),
+              title,
+              author,
+              ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+              DateTime.now(),
+              '',
+              null,
+              '',
+              duration,
+              ThumbnailSet(vidString),
+              null,
+              Engagement(0, null, null),
+              false,
+            ),
+          );
+        }
+      }
+
+      // Await backend response (already running in parallel)
+      final backendResponse = await backendFuture.catchError((_) => http.Response('[]', 500));
+      final List<Video> backendResults = [];
+      if (backendResponse.statusCode == 200) {
+        final List<dynamic> jsonList = json.decode(backendResponse.body);
         for (var item in jsonList) {
           final videoId = item['id'] as String;
           final title = item['title'] as String? ?? 'Unknown Title';
@@ -842,7 +694,7 @@ class MusicService extends ChangeNotifier {
           final durationSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
           final duration = durationSec != null ? Duration(seconds: durationSec) : null;
 
-          results.add(
+          backendResults.add(
             Video(
               VideoId(videoId),
               title,
@@ -860,13 +712,44 @@ class MusicService extends ChangeNotifier {
             ),
           );
         }
-        debugPrint('[Backend Search] Returned ${results.length} items for "$query" (page $page)');
-        return results;
+      }
+
+      if (jioResults.isNotEmpty) {
+        // Deduplicate YouTube results against JioSaavn studio tracks
+        final combined = <Video>[...jioResults];
+        final seenTitles = jioResults
+            .map((e) => e.title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), ''))
+            .where((s) => s.isNotEmpty)
+            .toSet();
+
+        for (final ytSong in backendResults) {
+          final cleanYt = ytSong.title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+          bool isDuplicate = false;
+          for (final seen in seenTitles) {
+            if (cleanYt == seen ||
+                (cleanYt.length >= 6 && seen.contains(cleanYt)) ||
+                (seen.length >= 6 && cleanYt.contains(seen))) {
+              isDuplicate = true;
+              break;
+            }
+          }
+          if (!isDuplicate) {
+            combined.add(ytSong);
+          }
+        }
+        debugPrint('[Hybrid Search] Returned ${combined.length} songs (${jioResults.length} JioSaavn + ${combined.length - jioResults.length} YouTube)');
+        return combined;
+      }
+
+      if (backendResults.isNotEmpty) {
+        debugPrint('[Hybrid Search] Returned ${backendResults.length} YouTube songs (JioSaavn empty)');
+        return backendResults;
       }
     } catch (e) {
-      debugPrint('Backend search error: $e');
+      debugPrint('[Hybrid Search] Search error: $e');
     }
-    return jioFallback;
+
+    return [];
   }
 
   /// Live query suggestions while typing (up to [limit] suggestions)
@@ -1327,6 +1210,25 @@ class MusicService extends ChangeNotifier {
       bool playbackSourceSet = false;
 
       // 3. Mobile Native Mode (Android / iOS app):
+      // Check for direct JioSaavn 320kbps CDN stream first!
+      final directStreamUrl = _webStreamUrls[song.id.value] ?? '';
+      if (directStreamUrl.isNotEmpty) {
+        debugPrint('[Play] Playing via Direct JioSaavn 320k Stream on Mobile: ${song.id.value}');
+        _reportClientLog('direct_stream_start', {'videoId': song.id.value, 'engine': 'jiosaavn_320k'});
+        try {
+          await _audioPlayer.setAudioSource(
+            AudioSource.uri(Uri.parse(directStreamUrl), tag: mediaItem),
+          );
+          await _audioPlayer.play();
+          _isLoading = false;
+          notifyListeners();
+          _checkAndPreloadNextQueue();
+          return;
+        } catch (e) {
+          debugPrint('[Play] Direct stream error on mobile ($e), falling back to YouTube resolver…');
+        }
+      }
+
       // Direct On-Device Multi-Candidate Resolution (Format 18 progressive AAC / itag 251)
       try {
         debugPrint('[Play] Resolving direct audio candidates on mobile device for ${song.id.value}…');
@@ -1550,21 +1452,37 @@ class MusicService extends ChangeNotifier {
       final client = http.Client();
       http.StreamedResponse? response;
 
-      // 1. Primary: Direct on-device stream URL candidates
-      try {
-        final candidates = await _resolveStreamCandidates(song.id.value);
-        for (final candidate in candidates) {
-          try {
-            final request = http.Request('GET', Uri.parse(candidate.url));
-            final res = await client.send(request).timeout(const Duration(seconds: 25));
-            if (res.statusCode == 200) {
-              response = res;
-              break;
-            }
-          } catch (_) {}
+      // 0. Super-fast direct CDN download if JioSaavn 320k stream URL exists
+      final directCdnUrl = _webStreamUrls[song.id.value];
+      if (directCdnUrl != null && directCdnUrl.isNotEmpty) {
+        try {
+          final request = http.Request('GET', Uri.parse(directCdnUrl));
+          final res = await client.send(request).timeout(const Duration(seconds: 30));
+          if (res.statusCode == 200) {
+            response = res;
+          }
+        } catch (e) {
+          debugPrint('[Download] Direct JioSaavn CDN error: $e');
         }
-      } catch (e) {
-        debugPrint('[Download] Direct URL error: $e');
+      }
+
+      // 1. Primary: Direct on-device stream URL candidates
+      if (response == null || response.statusCode != 200) {
+        try {
+          final candidates = await _resolveStreamCandidates(song.id.value);
+          for (final candidate in candidates) {
+            try {
+              final request = http.Request('GET', Uri.parse(candidate.url));
+              final res = await client.send(request).timeout(const Duration(seconds: 25));
+              if (res.statusCode == 200) {
+                response = res;
+                break;
+              }
+            } catch (_) {}
+          }
+        } catch (e) {
+          debugPrint('[Download] Direct URL error: $e');
+        }
       }
 
       // 2. Fallback 1: Backend /stream_url

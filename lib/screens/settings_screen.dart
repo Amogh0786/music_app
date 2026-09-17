@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/preferences_service.dart';
 import '../services/music_service.dart';
 import '../services/update_service.dart';
@@ -543,12 +544,96 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   trailing: _isCheckingUpdate ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: _prefs.themeColor)) : const Icon(Icons.chevron_right_rounded, color: Colors.white30),
                   onTap: _isCheckingUpdate ? null : _handleCheckForUpdates,
                 ),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFA2D48).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.code_rounded, color: Color(0xFFFA2D48), size: 20),
+                  ),
+                  title: const Text(
+                    'Crafted with ❤️ by Charan Teja',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                  ),
+                  subtitle: Text(
+                    'github.com/charanteja-k',
+                    style: TextStyle(color: _prefs.themeColor, fontSize: 13),
+                  ),
+                  trailing: const Icon(Icons.open_in_new_rounded, color: Colors.white30, size: 18),
+                  onTap: () async {
+                    final uri = Uri.parse('https://github.com/charanteja-k');
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.blueAccent.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.gavel_rounded, color: Colors.blueAccent, size: 20),
+                  ),
+                  title: const Text(
+                    'Open Source & Disclaimer',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                  ),
+                  subtitle: Text(
+                    'Non-profit educational music streaming',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white30),
+                  onTap: () => _showDisclaimerDialog(context),
+                ),
               ]),
               const SizedBox(height: 40),
             ],
           ),
         );
       }
+    );
+  }
+
+  void _showDisclaimerDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.verified_user_rounded, color: Colors.blueAccent, size: 22),
+            SizedBox(width: 10),
+            Text('Educational Disclaimer', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'DilSe is a free, open-source application built strictly for educational, personal, and research purposes.\n\n'
+                '• No Audio Hosting: DilSe does not host, store, or cache any copyrighted audio or video media on any central or private servers. All streams are resolved directly on-device from publicly accessible endpoints.\n\n'
+                '• Non-Commercial: DilSe contains no advertisements, no tracking, and no monetization. It was created to provide students and music lovers with clean, ad-free access.\n\n'
+                '• Copyright: All trademarks, song titles, artist names, album art, and audio recordings belong to their respective copyright holders.\n\n'
+                'Inquiries or requests can be sent to: charanteja.kondakalla030206@gmail.com',
+                style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.45),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close', style: TextStyle(color: Colors.white70)),
+          ),
+        ],
+      ),
     );
   }
 

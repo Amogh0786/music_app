@@ -197,9 +197,20 @@ We ❤️ open-source contributions! Whether you want to fix a bug, suggest a fe
 
 ---
 
+## ⚖️ Disclaimer & DMCA Notice
+
+**DilSe** is an independent, open-source application developed strictly for educational, personal, and research purposes.
+
+- **No Media Hosting**: DilSe does **not** host, store, archive, or cache copyrighted audio or video media on any central or private servers. All audio playback is streamed directly on-device from publicly accessible third-party content distribution networks.
+- **Non-Commercial & 100% Free**: DilSe is entirely free and open source. It contains no advertisements, no tracking, no paid subscriptions, and no monetization of any kind.
+- **Intellectual Property**: All trademarks, song titles, artist names, album art, and audio recordings belong to their respective copyright holders, artists, and record labels.
+- **DMCA / Takedown Compliance**: If you are a copyright owner or licensing representative and have concerns or requests regarding repository content or endpoints, please contact [charanteja.kondakalla030206@gmail.com](mailto:charanteja.kondakalla030206@gmail.com) or open a GitHub Issue. Any valid notices will be addressed and processed promptly.
+
+---
+
 ## 📜 License
 
-This project is open source and available under the [MIT License](LICENSE).
+This project is open source and licensed under the [MIT License](LICENSE).
 
 ---
 
@@ -213,5 +224,5 @@ This project is open source and available under the [MIT License](LICENSE).
 ---
 
 <div align="center">
-  Made with ❤️ by <a href="https://github.com/charanteja-k">Charan Teja Kondakalla</a> and open-source contributors.
+  Crafted with ❤️ by <a href="https://github.com/charanteja-k">Charan Teja Kondakalla</a> and open-source contributors.
 </div>
