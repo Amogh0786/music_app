@@ -2,7 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// Floating Frosted Glass Bottom Navigation Dock
+/// Apple-Style Glassmorphic Floating Bottom Navigation Dock with Sliding Indicator
 class FloatingNavDock extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onTabSelected;
@@ -42,90 +42,122 @@ class FloatingNavDock extends StatelessWidget {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(32),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
             child: Container(
               height: 64,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xEB161622),
-                borderRadius: BorderRadius.circular(36),
+                color: const Color(0xC4141420),
+                borderRadius: BorderRadius.circular(34),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  width: 1.0,
+                  color: Colors.white.withValues(alpha: 0.14),
+                  width: 0.75,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.45),
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
+                    color: Colors.black.withValues(alpha: 0.5),
+                    blurRadius: 28,
+                    offset: const Offset(0, 10),
                   ),
                   BoxShadow(
-                    color: primaryColor.withValues(alpha: 0.08),
-                    blurRadius: 20,
+                    color: primaryColor.withValues(alpha: 0.09),
+                    blurRadius: 18,
                     offset: const Offset(0, 2),
                   ),
                 ],
               ),
-              child: Row(
-                children: List.generate(tabs.length, (index) {
-                  final tab = tabs[index];
-                  final isSelected = selectedIndex == index;
-
-                  return Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        if (!isSelected) {
-                          HapticFeedback.lightImpact();
-                          onTabSelected(index);
-                        }
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 260),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final tabWidth = constraints.maxWidth / tabs.length;
+                  return Stack(
+                    children: [
+                      // Smooth Apple-style sliding indicator pill
+                      AnimatedPositioned(
+                        duration: const Duration(milliseconds: 300),
                         curve: Curves.easeOutCubic,
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? primaryColor.withValues(alpha: 0.18)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(
-                            color: isSelected
-                                ? primaryColor.withValues(alpha: 0.35)
-                                : Colors.transparent,
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              isSelected ? tab.activeIcon : tab.icon,
-                              color: isSelected ? primaryColor : Colors.white60,
-                              size: 22,
+                        left: selectedIndex * tabWidth,
+                        top: 0,
+                        bottom: 0,
+                        width: tabWidth,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: primaryColor.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: primaryColor.withValues(alpha: 0.45),
+                              width: 1,
                             ),
-                            if (isSelected) ...[
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: Text(
-                                  tab.label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: -0.2,
-                                  ),
-                                ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: primaryColor.withValues(alpha: 0.22),
+                                blurRadius: 12,
+                                offset: const Offset(0, 2),
                               ),
                             ],
-                          ],
+                          ),
                         ),
                       ),
-                    ),
+                      // Interactive tabs
+                      Row(
+                        children: List.generate(tabs.length, (index) {
+                          final tab = tabs[index];
+                          final isSelected = selectedIndex == index;
+
+                          return Expanded(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {
+                                if (!isSelected) {
+                                  HapticFeedback.lightImpact();
+                                  onTabSelected(index);
+                                }
+                              },
+                              child: Container(
+                                alignment: Alignment.center,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    AnimatedScale(
+                                      scale: isSelected ? 1.08 : 1.0,
+                                      duration: const Duration(milliseconds: 200),
+                                      child: Icon(
+                                        isSelected ? tab.activeIcon : tab.icon,
+                                        color: isSelected ? primaryColor : Colors.white60,
+                                        size: 22,
+                                      ),
+                                    ),
+                                    AnimatedCrossFade(
+                                      duration: const Duration(milliseconds: 220),
+                                      crossFadeState: isSelected
+                                          ? CrossFadeState.showFirst
+                                          : CrossFadeState.showSecond,
+                                      firstChild: Padding(
+                                        padding: const EdgeInsets.only(left: 8),
+                                        child: Text(
+                                          tab.label,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: -0.2,
+                                          ),
+                                        ),
+                                      ),
+                                      secondChild: const SizedBox.shrink(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ],
                   );
-                }),
+                },
               ),
             ),
           ),

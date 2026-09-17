@@ -19,6 +19,7 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
+  late final PageController _pageController;
 
   final List<Widget> _screens = const [
     HomeScreen(),
@@ -29,6 +30,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: _selectedIndex);
     MusicService().addListener(_onMusicServiceChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -177,6 +179,7 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   void dispose() {
+    _pageController.dispose();
     MusicService().removeListener(_onMusicServiceChanged);
     super.dispose();
   }
@@ -193,8 +196,12 @@ class _MainScreenState extends State<MainScreen> {
       backgroundColor: const Color(0xFF0B0B0F),
       body: Stack(
         children: [
-          IndexedStack(
-            index: _selectedIndex,
+          PageView(
+            controller: _pageController,
+            physics: const ClampingScrollPhysics(),
+            onPageChanged: (index) {
+              setState(() => _selectedIndex = index);
+            },
             children: _screens,
           ),
           // Floating Mini Player & Floating Glass Dock stacked at the bottom
@@ -208,7 +215,14 @@ class _MainScreenState extends State<MainScreen> {
                 const MiniPlayer(),
                 FloatingNavDock(
                   selectedIndex: _selectedIndex,
-                  onTabSelected: (index) => setState(() => _selectedIndex = index),
+                  onTabSelected: (index) {
+                    setState(() => _selectedIndex = index);
+                    _pageController.animateToPage(
+                      index,
+                      duration: const Duration(milliseconds: 320),
+                      curve: Curves.easeOutCubic,
+                    );
+                  },
                 ),
               ],
             ),

@@ -415,6 +415,75 @@ class MusicService extends ChangeNotifier {
     }
   }
 
+  bool isLiked(String videoId) {
+    return _likedSongs.any((s) => s['id'] == videoId);
+  }
+
+  bool isDownloaded(String videoId) {
+    return _downloadedSongs.any((s) => s['id'] == videoId);
+  }
+
+  void playNext(Video song) {
+    if (_playlist.isEmpty) {
+      playSong(song);
+      return;
+    }
+    final insertIndex = (_currentIndex + 1).clamp(0, _playlist.length);
+    _playlist.insert(insertIndex, song);
+    notifyListeners();
+  }
+
+  void addToQueue(Video song) {
+    if (_playlist.isEmpty) {
+      playSong(song);
+      return;
+    }
+    _playlist.add(song);
+    notifyListeners();
+  }
+
+  void reorderQueue(int oldIndex, int newIndex) {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    if (oldIndex < 0 || oldIndex >= _playlist.length || newIndex < 0 || newIndex >= _playlist.length) return;
+    final currentSong = _currentSong;
+    final song = _playlist.removeAt(oldIndex);
+    _playlist.insert(newIndex, song);
+
+    if (currentSong != null) {
+      final newCurrent = _playlist.indexWhere((s) => s.id == currentSong.id);
+      if (newCurrent != -1) _currentIndex = newCurrent;
+    }
+    notifyListeners();
+  }
+
+  void removeFromQueue(int index) {
+    if (index < 0 || index >= _playlist.length) return;
+    final currentSong = _currentSong;
+    _playlist.removeAt(index);
+    if (currentSong != null) {
+      final newCurrent = _playlist.indexWhere((s) => s.id == currentSong.id);
+      if (newCurrent != -1) {
+        _currentIndex = newCurrent;
+      } else if (_currentIndex >= _playlist.length) {
+        _currentIndex = _playlist.isNotEmpty ? _playlist.length - 1 : 0;
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> renamePlaylist(String playlistId, String newName) async {
+    final cleanName = newName.trim();
+    if (cleanName.isEmpty) return;
+    final playlistIndex = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
+    if (playlistIndex != -1) {
+      _customPlaylists[playlistIndex]['name'] = cleanName;
+      await saveCustomPlaylists();
+      notifyListeners();
+    }
+  }
+
   Future<void> deletePlaylist(String playlistId) async {
     _customPlaylists.removeWhere((p) => p['id'] == playlistId);
     await saveCustomPlaylists();
@@ -427,6 +496,7 @@ class MusicService extends ChangeNotifier {
 
     final songs = List<Map<String, dynamic>>.from(playlist['songs'] ?? []);
     if (songs.isEmpty) return;
+
 
     _playlist = songs.map((item) => Video(
       VideoId((item['id'] as String?) ?? ''),

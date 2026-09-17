@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
 import '../services/preferences_service.dart';
+import '../widgets/song_options_bottom_sheet.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -12,9 +13,13 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> {
+class _SearchScreenState extends State<SearchScreen>
+    with AutomaticKeepAliveClientMixin {
   final MusicService _musicService = MusicService();
   final PreferencesService _prefs = PreferencesService();
+
+  @override
+  bool get wantKeepAlive => true;
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   List<Video> _searchResults = [];
@@ -172,6 +177,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final history = _prefs.searchHistory;
 
     return Scaffold(
@@ -324,8 +330,9 @@ class _SearchScreenState extends State<SearchScreen> {
                               ),
                               trailing: IconButton(
                                 icon: const Icon(Icons.more_horiz, color: Colors.white54),
-                                onPressed: () {},
+                                onPressed: () => showSongOptionsBottomSheet(context, video),
                               ),
+
                               onTap: () {
                                 _musicService.playSong(video);
                               },

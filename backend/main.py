@@ -564,16 +564,24 @@ def get_spotify_playlists(access_token: str):
 
 @app.post("/spotify/import")
 def import_spotify_playlist(request: SpotifyImportRequest):
-    """Returns a list of search queries (Track + Artist) for the Flutter app to resolve."""
+    """Returns a list of search queries (Track + Artist) and playlist name for the Flutter app to resolve."""
     try:
         if request.is_public:
-            tracks = spotlib.get_public_playlist_tracks(request.playlist_id)
+            info = spotlib.get_public_playlist_info(request.playlist_id)
+            return {
+                "name": info.get("name", "Spotify Playlist"),
+                "tracks": info.get("tracks", []),
+                "total": info.get("total", len(info.get("tracks", [])))
+            }
         else:
             if not request.access_token:
                 raise HTTPException(status_code=400, detail="Missing access token for private playlist.")
             tracks = spotlib.get_private_playlist_tracks(request.access_token, request.playlist_id)
-        
-        return {"tracks": tracks}
+            return {
+                "name": "Spotify Playlist",
+                "tracks": tracks,
+                "total": len(tracks)
+            }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
