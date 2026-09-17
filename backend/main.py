@@ -12,6 +12,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Dict, List, Optional
 from pydantic import BaseModel
+import re
 import spotlib
 
 # Co-occurrence storage: maps video_id -> Counter of next video_ids
@@ -186,22 +187,66 @@ EXCLUDE_KEYWORDS = {
     "unboxing", "breaking", "press conference"
 }
 
+def _is_same_song(cand_title: str, curr_title: str) -> bool:
+    """Check if two song titles represent the exact same track."""
+    if not cand_title or not curr_title:
+        return False
+    t1 = re.sub(r"[^a-zA-Z0-9\s]", "", cand_title.lower())
+    t2 = re.sub(r"[^a-zA-Z0-9\s]", "", curr_title.lower())
+    stopwords = {"official", "video", "audio", "lyric", "lyrics", "song", "full", "hd", "4k", "from", "the", "movie", "album"}
+    tokens1 = {w for w in t1.split() if w not in stopwords}
+    tokens2 = {w for w in t2.split() if w not in stopwords}
+    if not tokens1 or not tokens2:
+        return False
+    # If the smaller set of tokens is a subset of the larger, or high Jaccard overlap
+    intersection = tokens1.intersection(tokens2)
+    smaller_len = min(len(tokens1), len(tokens2))
+    return len(intersection) >= max(1, int(smaller_len * 0.75))
 
-def _get_entry_score(entry: dict) -> int:
+
+def _calculate_search_relevance(entry: dict, clean_query: str, native_rank: int) -> float:
+    """Calculates true search relevance preserving YouTube's native ranking algorithm.
+    - Exact and prefix title matches get top priority.
+    - Official channels and Music labels get tie-breaker bonuses.
+    - Demotes random fan edits (8D, slowed, reverb, karaoke, ringtone) below the official hit song.
+    """
     title = (entry.get("title") or "").lower()
     author = (entry.get("uploader") or entry.get("channel") or "").lower()
+    query_lower = clean_query.lower()
+    query_tokens = [t for t in re.findall(r"\w+", query_lower) if t not in {"song", "audio", "video", "full", "music"}]
 
     for kw in EXCLUDE_KEYWORDS:
         if kw in title or kw in author:
-            return 0
+            return -1.0
 
-    if author.endswith("- topic") or "official audio" in title or "audio" in title:
-        return 3
+    # Base score decays smoothly with YouTube's native ranking (preserving Google's relevance engine)
+    score = max(0.0, 100.0 - (native_rank * 2.5))
 
-    if "official music video" in title or "official video" in title or "lyric video" in title or "full song" in title or "music" in author or "vevo" in author:
-        return 2
+    # Exact query phrase bonus
+    if query_lower in title:
+        score += 80.0
+    elif query_tokens:
+        matched_tokens = sum(1 for t in query_tokens if t in title)
+        ratio = matched_tokens / len(query_tokens)
+        score += ratio * 60.0
 
-    return 1
+    # Official artists / YouTube Music / VEVO channel bonuses
+    if author.endswith("- topic"):
+        score += 18.0
+    elif "vevo" in author or "records" in author or "music" in author or "official" in author:
+        score += 15.0
+
+    # Clean official release bonus
+    if "official video" in title or "official music video" in title or "official audio" in title:
+        score += 12.0
+
+    # Penalize low-effort fan edits, karaoke, ringtones and covers so the authentic song always leads
+    if any(m in title for m in ["8d audio", "slowed", "reverb", "bass boosted", "nightcore", "remake"]):
+        score -= 30.0
+    if any(m in title for m in ["cover", "karaoke", "ringtone", "instrumental status", "status video"]):
+        score -= 40.0
+
+    return score
 
 
 @app.get("/search")
@@ -235,23 +280,21 @@ def search_videos(q: str, page: int = 1, limit: int = 20):
     try:
         raw_entries = []
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Query YouTube search with song/audio focus
-            info = ydl.extract_info(f"ytsearch50:{clean_query} song", download=False)
+            # First pass: search clean query directly to match official hits
+            info = ydl.extract_info(f"ytsearch50:{clean_query}", download=False)
             raw_entries = info.get("entries", [])
             if not raw_entries:
-                info = ydl.extract_info(f"ytsearch50:{clean_query} audio", download=False)
+                info = ydl.extract_info(f"ytsearch50:{clean_query} song", download=False)
                 raw_entries = info.get("entries", [])
 
-
         scored_results = []
-        for entry in raw_entries:
+        for native_rank, entry in enumerate(raw_entries):
             if entry and entry.get("id"):
-                # Duration filter: skip overly long tracks unless title contains allowed keywords
                 duration = entry.get("duration") or 0
                 title_lower = (entry.get("title") or "").lower()
                 if duration > MAX_DURATION_SECONDS and not any(kw in title_lower for kw in ALLOWED_LONG_TITLES):
                     continue
-                score = _get_entry_score(entry)
+                score = _calculate_search_relevance(entry, clean_query, native_rank)
                 if score > 0:
                     scored_results.append((
                         score,
@@ -263,11 +306,10 @@ def search_videos(q: str, page: int = 1, limit: int = 20):
                         }
                     ))
 
-        # Sort by score descending (Tier 1 official audio first)
+        # Sort by intelligent composite score descending
         scored_results.sort(key=lambda x: x[0], reverse=True)
         all_results = [item[1] for item in scored_results]
 
-        # Apply pagination slice
         start_idx = (page - 1) * limit
         end_idx = start_idx + limit
         paginated_results = all_results[start_idx:end_idx]
@@ -317,7 +359,7 @@ def get_radio(v: str, title: str = None, artist: str = None):
         "no_warnings": True,
         "extract_flat": True,
         "skip_download": True,
-        "playlistend": 20,  # Fast 1.3s response instead of 25s infinite playlist crawl
+        "playlistend": 25,
         "http_headers": {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -328,26 +370,37 @@ def get_radio(v: str, title: str = None, artist: str = None):
     }
 
     try:
+        clean_artist = (artist or "").split(",")[0].strip()
+        search_query = f"ytsearch30:{clean_artist} top hit songs" if clean_artist else f"ytsearch30:{title or 'popular'} hit songs"
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"https://music.youtube.com/watch?v={video_id}&list=RD{video_id}", download=False)
+            info = ydl.extract_info(search_query, download=False)
             entries = info.get("entries", [])
-            if not entries:
-                clean_term = f"{title or ''} {artist or ''}".strip()
-                search_q = f"ytsearch20:{clean_term} song" if clean_term else f"ytsearch20:{video_id} song"
-                info = ydl.extract_info(search_q, download=False)
-                entries = info.get("entries", [])
 
             results = []
             for entry in entries:
-                if entry and entry.get("id") and entry.get("id") != video_id:
-                    score = _get_entry_score(entry)
-                    if score > 0:
-                        results.append({
-                            "id": entry.get("id"),
-                            "title": entry.get("title", "Unknown Title"),
-                            "author": entry.get("uploader") or entry.get("channel") or "Unknown Artist",
-                            "duration": entry.get("duration"),
-                        })
+                if not entry or not entry.get("id"):
+                    continue
+                cand_id = entry.get("id")
+                cand_title = entry.get("title", "")
+                if cand_id == video_id:
+                    continue
+                # Skip duplicate uploads/versions of the same current track
+                if title and _is_same_song(cand_title, title):
+                    continue
+
+                duration = entry.get("duration") or 0
+                if duration > MAX_DURATION_SECONDS:
+                    continue
+
+                results.append({
+                    "id": cand_id,
+                    "title": cand_title,
+                    "author": entry.get("uploader") or entry.get("channel") or "Unknown Artist",
+                    "duration": duration,
+                })
+                if len(results) >= 20:
+                    break
 
             _search_cache[cache_key] = (results, now + 3600)
             return results
@@ -381,7 +434,7 @@ async def track_finished(request: Request):
 def get_next_candidates(v: str, limit: int = 20, title: str = None, artist: str = None):
     """Return next 20 songs using:
     1. Collaborative co-occurrence (what other users played next after v)
-    2. YouTube Music Radio (similar style/genre for v)
+    2. Artist and style recommendations (excluding duplicate titles of currently playing song)
     3. Fallback search
     """
     if not v or not v.strip():
@@ -405,7 +458,7 @@ def get_next_candidates(v: str, limit: int = 20, title: str = None, artist: str 
             if len(candidates) >= limit:
                 return candidates
 
-    # 2. YouTube Music Radio (same genre / style)
+    # 2. Artist top tracks & radio songs (excluding current title copies)
     radio_songs = get_radio(target_id, title=title, artist=artist)
     for song in radio_songs:
         sid = song.get("id")
@@ -417,11 +470,13 @@ def get_next_candidates(v: str, limit: int = 20, title: str = None, artist: str 
 
     # 3. Fallback search if still fewer than limit
     if len(candidates) < limit:
-        clean_fallback = f"{title or ''} {artist or ''}".strip() or "trending songs"
-        fallback_search = search_videos(f"{clean_fallback} music", page=1, limit=limit)
+        clean_fallback = (artist or title or "trending songs").strip()
+        fallback_search = search_videos(f"{clean_fallback} music hits", page=1, limit=limit)
         for song in fallback_search:
             sid = song.get("id")
             if sid and sid not in seen_ids:
+                if title and _is_same_song(song.get("title", ""), title):
+                    continue
                 seen_ids.add(sid)
                 candidates.append(song)
                 if len(candidates) >= limit:

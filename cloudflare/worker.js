@@ -6735,7 +6735,7 @@ function decryptMediaUrl(encryptedUrl) {
   }
 }
 async function searchJioSaavn(query, limit = 20) {
-  const url = "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&n=" + limit + "&p=1&q=" + encodeURIComponent(query);
+  const url = "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&n=" + limit + "&p=1&q=" + encodeURIComponent(query);
   const res = await fetch(url, {
     headers: {
       "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"

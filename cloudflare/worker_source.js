@@ -195,7 +195,7 @@ function decryptMediaUrl(encryptedUrl) {
  */
 async function searchJioSaavn(query, limit = 20) {
   const url =
-    'https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&n=' +
+    'https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&n=' +
     limit +
     '&p=1&q=' +
     encodeURIComponent(query);

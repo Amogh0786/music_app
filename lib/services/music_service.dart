@@ -13,6 +13,7 @@ import 'package:palette_generator/palette_generator.dart';
 import 'api_config.dart';
 import 'preferences_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:audio_session/audio_session.dart';
 import 'web_player_bridge.dart';
 
 class StreamCandidate {
@@ -28,6 +29,9 @@ class MusicService extends ChangeNotifier {
 
   MusicService._internal() {
     _initAudioPlayer();
+    if (!kIsWeb) {
+      _initAudioSession();
+    }
     loadDownloadedSongs();
   }
 
@@ -51,11 +55,11 @@ class MusicService extends ChangeNotifier {
   Color _dominantColor = const Color(0xFF1E1E2C);
   Color _vibrantColor = const Color(0xFFFA2D48);
 
-  // Sleep Timer
-  Timer? _sleepTimer;
+  // Sleep Timer (DateTime-based: immune to lock-screen throttling)
+  DateTime? _sleepEndTime;
   Timer? _sleepCountdownTimer;
-  Duration? _sleepRemaining;
   bool _stopAtEndOfTrack = false;
+  bool _wasInterruptedBySystem = false;
 
   Video? get currentSong => _currentSong;
   List<Video> get playlist => _playlist;
@@ -79,15 +83,23 @@ class MusicService extends ChangeNotifier {
   Color get dominantColor => _dominantColor;
   Color get vibrantColor => _vibrantColor;
 
-  bool get isSleepTimerActive => _sleepTimer != null || _stopAtEndOfTrack;
-  Duration? get sleepRemaining => _sleepRemaining;
+  bool get isSleepTimerActive =>
+      (_sleepEndTime != null && _sleepEndTime!.isAfter(DateTime.now())) || _stopAtEndOfTrack;
+
+  Duration? get sleepRemaining {
+    if (_sleepEndTime == null) return null;
+    final diff = _sleepEndTime!.difference(DateTime.now());
+    return diff.isNegative ? Duration.zero : diff;
+  }
+
   bool get stopAtEndOfTrack => _stopAtEndOfTrack;
 
   String get sleepTimerLabel {
     if (_stopAtEndOfTrack) return 'End of Track';
-    if (_sleepRemaining != null) {
-      final mins = _sleepRemaining!.inMinutes;
-      final secs = _sleepRemaining!.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final rem = sleepRemaining;
+    if (rem != null) {
+      final mins = rem.inMinutes;
+      final secs = rem.inSeconds.remainder(60).toString().padLeft(2, '0');
       return '$mins:$secs';
     }
     return 'Off';
@@ -221,6 +233,43 @@ class MusicService extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('[Preload] Home data preload: $e');
+    }
+  }
+
+  Future<void> _initAudioSession() async {
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration.music());
+      session.interruptionEventStream.listen((event) {
+        if (event.begin) {
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+              _audioPlayer.setVolume(0.3);
+              break;
+            case AudioInterruptionType.pause:
+            case AudioInterruptionType.unknown:
+              _wasInterruptedBySystem = true;
+              _audioPlayer.pause();
+              break;
+          }
+        } else {
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+              _audioPlayer.setVolume(1.0);
+              break;
+            case AudioInterruptionType.pause:
+              if (_wasInterruptedBySystem) {
+                _wasInterruptedBySystem = false;
+                _audioPlayer.play();
+              }
+              break;
+            case AudioInterruptionType.unknown:
+              break;
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint('[AudioSession] Error setting up session: $e');
     }
   }
 
@@ -628,7 +677,9 @@ class MusicService extends ChangeNotifier {
               );
             }
             debugPrint('[JioSaavn Search][Web] Returned ${results.length} items for "$query"');
-            return results;
+            if (results.length >= 2) {
+              return results;
+            }
           }
         }
       } catch (e) {
@@ -794,21 +845,27 @@ class MusicService extends ChangeNotifier {
 
   void startSleepTimer(Duration duration) {
     cancelSleepTimer();
-    _sleepRemaining = duration;
+    _sleepEndTime = DateTime.now().add(duration);
     _stopAtEndOfTrack = false;
     notifyListeners();
 
     _sleepCountdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_sleepRemaining != null && _sleepRemaining!.inSeconds > 0) {
-        _sleepRemaining = _sleepRemaining! - const Duration(seconds: 1);
-        notifyListeners();
-      } else {
+      final rem = sleepRemaining;
+      if (rem == null || rem == Duration.zero) {
         timer.cancel();
+        _stopPlayback();
+      } else {
+        // Smooth 5-second fade-out before stopping
+        if (rem.inSeconds <= 5 && rem.inSeconds > 0) {
+          final vol = (rem.inSeconds / 5.0).clamp(0.0, 1.0);
+          if (!kIsWeb) {
+            _audioPlayer.setVolume(vol);
+          } else {
+            WebPlayerBridge.setVolume((vol * 100.0));
+          }
+        }
+        notifyListeners();
       }
-    });
-
-    _sleepTimer = Timer(duration, () {
-      _stopPlayback();
     });
   }
 
@@ -819,20 +876,25 @@ class MusicService extends ChangeNotifier {
   }
 
   void cancelSleepTimer() {
-    _sleepTimer?.cancel();
-    _sleepTimer = null;
+    _sleepEndTime = null;
     _sleepCountdownTimer?.cancel();
     _sleepCountdownTimer = null;
-    _sleepRemaining = null;
     _stopAtEndOfTrack = false;
+    if (!kIsWeb) {
+      _audioPlayer.setVolume(1.0);
+    } else {
+      WebPlayerBridge.setVolume(100.0);
+    }
     notifyListeners();
   }
 
   void _stopPlayback() {
     if (kIsWeb) {
       WebPlayerBridge.pause();
+      WebPlayerBridge.setVolume(100.0);
     } else {
       _audioPlayer.pause();
+      _audioPlayer.setVolume(1.0);
     }
     cancelSleepTimer();
     notifyListeners();
@@ -1278,17 +1340,34 @@ class MusicService extends ChangeNotifier {
     if (_isFetchingNextQueue) return;
     _isFetchingNextQueue = true;
     try {
-      debugPrint('[Recommendations] Silently fetching next 20 songs for ${song.title}…');
-      final candidates = await fetchNextCandidates(
-        song.id.value,
-        limit: 20,
-        title: song.title,
-        artist: song.author,
-      );
+      debugPrint('[Recommendations] Silently fetching next songs for ${song.title}…');
+      List<Video> candidates = [];
+
+      if (kIsWeb) {
+        // Web/PWA: Fetch artist tracks from JioSaavn for 320k direct playback
+        final primaryArtist = song.author.split(',')[0].trim();
+        final query = (primaryArtist.isNotEmpty && primaryArtist != 'DilSe Music' && primaryArtist != 'Unknown Artist')
+            ? '$primaryArtist songs'
+            : 'Top Hits 2026';
+        candidates = await searchSongs(query);
+        if (candidates.length < 5) {
+          final top = await searchSongs('Top Charts India Music');
+          candidates.addAll(top);
+        }
+      } else {
+        // Mobile / Android: Fetch radio & collaborative recommendations from backend
+        candidates = await fetchNextCandidates(
+          song.id.value,
+          limit: 20,
+          title: song.title,
+          artist: song.author,
+        );
+      }
 
       if (candidates.isNotEmpty) {
         int added = 0;
         for (var track in candidates) {
+          if (track.id.value == song.id.value) continue;
           if (!_playlist.any((item) => item.id.value == track.id.value)) {
             _playlist.add(track);
             added++;
