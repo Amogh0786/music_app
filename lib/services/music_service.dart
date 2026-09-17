@@ -13,6 +13,7 @@ import 'package:palette_generator/palette_generator.dart';
 import 'api_config.dart';
 import 'preferences_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:audio_session/audio_session.dart';
 import 'web_player_bridge.dart';
 
 class StreamCandidate {
@@ -28,6 +29,9 @@ class MusicService extends ChangeNotifier {
 
   MusicService._internal() {
     _initAudioPlayer();
+    if (!kIsWeb) {
+      _initAudioSession();
+    }
     loadDownloadedSongs();
   }
 
@@ -51,11 +55,11 @@ class MusicService extends ChangeNotifier {
   Color _dominantColor = const Color(0xFF1E1E2C);
   Color _vibrantColor = const Color(0xFFFA2D48);
 
-  // Sleep Timer
-  Timer? _sleepTimer;
+  // Sleep Timer (DateTime-based: immune to lock-screen throttling)
+  DateTime? _sleepEndTime;
   Timer? _sleepCountdownTimer;
-  Duration? _sleepRemaining;
   bool _stopAtEndOfTrack = false;
+  bool _wasInterruptedBySystem = false;
 
   Video? get currentSong => _currentSong;
   List<Video> get playlist => _playlist;
@@ -79,15 +83,23 @@ class MusicService extends ChangeNotifier {
   Color get dominantColor => _dominantColor;
   Color get vibrantColor => _vibrantColor;
 
-  bool get isSleepTimerActive => _sleepTimer != null || _stopAtEndOfTrack;
-  Duration? get sleepRemaining => _sleepRemaining;
+  bool get isSleepTimerActive =>
+      (_sleepEndTime != null && _sleepEndTime!.isAfter(DateTime.now())) || _stopAtEndOfTrack;
+
+  Duration? get sleepRemaining {
+    if (_sleepEndTime == null) return null;
+    final diff = _sleepEndTime!.difference(DateTime.now());
+    return diff.isNegative ? Duration.zero : diff;
+  }
+
   bool get stopAtEndOfTrack => _stopAtEndOfTrack;
 
   String get sleepTimerLabel {
     if (_stopAtEndOfTrack) return 'End of Track';
-    if (_sleepRemaining != null) {
-      final mins = _sleepRemaining!.inMinutes;
-      final secs = _sleepRemaining!.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final rem = sleepRemaining;
+    if (rem != null) {
+      final mins = rem.inMinutes;
+      final secs = rem.inSeconds.remainder(60).toString().padLeft(2, '0');
       return '$mins:$secs';
     }
     return 'Off';
@@ -221,6 +233,43 @@ class MusicService extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('[Preload] Home data preload: $e');
+    }
+  }
+
+  Future<void> _initAudioSession() async {
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration.music());
+      session.interruptionEventStream.listen((event) {
+        if (event.begin) {
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+              _audioPlayer.setVolume(0.3);
+              break;
+            case AudioInterruptionType.pause:
+            case AudioInterruptionType.unknown:
+              _wasInterruptedBySystem = true;
+              _audioPlayer.pause();
+              break;
+          }
+        } else {
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+              _audioPlayer.setVolume(1.0);
+              break;
+            case AudioInterruptionType.pause:
+              if (_wasInterruptedBySystem) {
+                _wasInterruptedBySystem = false;
+                _audioPlayer.play();
+              }
+              break;
+            case AudioInterruptionType.unknown:
+              break;
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint('[AudioSession] Error setting up session: $e');
     }
   }
 
@@ -415,6 +464,75 @@ class MusicService extends ChangeNotifier {
     }
   }
 
+  bool isLiked(String videoId) {
+    return _likedSongs.any((s) => s['id'] == videoId);
+  }
+
+  bool isDownloaded(String videoId) {
+    return _downloadedSongs.any((s) => s['id'] == videoId);
+  }
+
+  void playNext(Video song) {
+    if (_playlist.isEmpty) {
+      playSong(song);
+      return;
+    }
+    final insertIndex = (_currentIndex + 1).clamp(0, _playlist.length);
+    _playlist.insert(insertIndex, song);
+    notifyListeners();
+  }
+
+  void addToQueue(Video song) {
+    if (_playlist.isEmpty) {
+      playSong(song);
+      return;
+    }
+    _playlist.add(song);
+    notifyListeners();
+  }
+
+  void reorderQueue(int oldIndex, int newIndex) {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    if (oldIndex < 0 || oldIndex >= _playlist.length || newIndex < 0 || newIndex >= _playlist.length) return;
+    final currentSong = _currentSong;
+    final song = _playlist.removeAt(oldIndex);
+    _playlist.insert(newIndex, song);
+
+    if (currentSong != null) {
+      final newCurrent = _playlist.indexWhere((s) => s.id == currentSong.id);
+      if (newCurrent != -1) _currentIndex = newCurrent;
+    }
+    notifyListeners();
+  }
+
+  void removeFromQueue(int index) {
+    if (index < 0 || index >= _playlist.length) return;
+    final currentSong = _currentSong;
+    _playlist.removeAt(index);
+    if (currentSong != null) {
+      final newCurrent = _playlist.indexWhere((s) => s.id == currentSong.id);
+      if (newCurrent != -1) {
+        _currentIndex = newCurrent;
+      } else if (_currentIndex >= _playlist.length) {
+        _currentIndex = _playlist.isNotEmpty ? _playlist.length - 1 : 0;
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> renamePlaylist(String playlistId, String newName) async {
+    final cleanName = newName.trim();
+    if (cleanName.isEmpty) return;
+    final playlistIndex = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
+    if (playlistIndex != -1) {
+      _customPlaylists[playlistIndex]['name'] = cleanName;
+      await saveCustomPlaylists();
+      notifyListeners();
+    }
+  }
+
   Future<void> deletePlaylist(String playlistId) async {
     _customPlaylists.removeWhere((p) => p['id'] == playlistId);
     await saveCustomPlaylists();
@@ -427,6 +545,7 @@ class MusicService extends ChangeNotifier {
 
     final songs = List<Map<String, dynamic>>.from(playlist['songs'] ?? []);
     if (songs.isEmpty) return;
+
 
     _playlist = songs.map((item) => Video(
       VideoId((item['id'] as String?) ?? ''),
@@ -503,20 +622,114 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool _isConfidentJioSaavnCatalog(List<dynamic> items, String query) {
+    if (items.isEmpty) return false;
+
+    final cleanQ = query.toLowerCase().trim();
+
+    // 1. Check if user explicitly specified an artist (e.g. "perfect by ed sheeran" or "ed sheeran - perfect")
+    String? specifiedArtist;
+    final byMatch = RegExp(r'\bby\s+(.+)$', caseSensitive: false).firstMatch(cleanQ);
+    if (byMatch != null) {
+      specifiedArtist = byMatch.group(1)?.trim();
+    } else if (cleanQ.contains(' - ')) {
+      final parts = cleanQ.split(' - ');
+      if (parts.length == 2) {
+        specifiedArtist = parts[1].trim();
+      }
+    }
+
+    final topThree = items.take(3).toList();
+
+    // If an artist was specified, verify at least one of the top 3 results includes that artist
+    if (specifiedArtist != null && specifiedArtist.length >= 2) {
+      final artistKeywords = specifiedArtist
+          .split(RegExp(r'\s+'))
+          .map((w) => w.replaceAll(RegExp(r'[^a-zA-Z0-9]'), ''))
+          .where((w) => w.length >= 2 && !const ['the', 'and', 'official', 'music', 'band', 'song'].contains(w))
+          .toList();
+
+      bool foundArtist = false;
+      for (final item in topThree) {
+        final author = (item['author'] as String? ?? '').toLowerCase();
+        if (author.contains(specifiedArtist) ||
+            artistKeywords.any((k) => k.length >= 3 && author.contains(k))) {
+          foundArtist = true;
+          break;
+        }
+      }
+
+      if (!foundArtist) {
+        debugPrint('[Search][Web] Query explicitly specified artist "$specifiedArtist" but JioSaavn top results do not match. Falling back to backend.');
+        return false;
+      }
+    }
+
+    // 2. Count instrumental, karaoke, or third-party cover markers
+    int coverOrInstrumentalCount = 0;
+    for (final item in topThree) {
+      final title = (item['title'] as String? ?? '').toLowerCase();
+      final author = (item['author'] as String? ?? '').toLowerCase();
+      final album = (item['album'] as String? ?? '').toLowerCase();
+      final thumb = (item['thumbnail'] as String? ?? '').toLowerCase();
+
+      if (thumb.contains('-instrumental-') ||
+          title.contains('karaoke') ||
+          title.contains('instrumental') ||
+          title.contains('piano version') ||
+          title.contains('easy piano') ||
+          title.contains('tribute') ||
+          title.contains('originally perfo') ||
+          title.contains('cover') ||
+          title.contains('remake') ||
+          author.contains('karaoke') ||
+          author.contains('tribute') ||
+          author.contains('strings') ||
+          author.contains('sweet strings') ||
+          author.contains('zzang') ||
+          author.contains('luxebeats') ||
+          author.contains('tower') ||
+          author.contains('workout music') ||
+          album.contains('karaoke') ||
+          album.contains('popular covers') ||
+          album.contains('instrumental') ||
+          album.contains('covers collection')) {
+        coverOrInstrumentalCount++;
+      }
+    }
+
+    if (coverOrInstrumentalCount >= 2) {
+      debugPrint('[Search][Web] JioSaavn returned $coverOrInstrumentalCount/3 instrumental/cover items. Falling back to backend for authentic tracks.');
+      return false;
+    }
+
+    return true;
+  }
+
   Future<List<Video>> searchSongs(String query, {int page = 1}) async {
     if (query.trim().isEmpty) return [];
 
-    // Web / PWA: Query official JioSaavn catalog for instant 320kbps streams & pristine covers
+    List<Video> jioFallback = [];
+
+    // Web / PWA: Query both JioSaavn and Backend in parallel for instant, zero-delay responses
     if (kIsWeb) {
       try {
-        final response = await http
+        final jioFuture = http
             .get(ApiConfig.jioSearchUri(query, limit: 25))
-            .timeout(const Duration(seconds: 8));
+            .timeout(const Duration(seconds: 4));
 
-        if (response.statusCode == 200) {
-          final List<dynamic> jsonList = json.decode(response.body);
+        final backendFuture = http
+            .get(ApiConfig.searchUri(query, page: page, limit: 20))
+            .timeout(const Duration(seconds: 15));
+
+        final jioResponse = await jioFuture.catchError((_) => http.Response('[]', 500));
+
+        if (jioResponse.statusCode == 200) {
+          final List<dynamic> jsonList = json.decode(jioResponse.body);
           if (jsonList.isNotEmpty) {
-            final List<Video> results = [];
+            final isConfident = _isConfidentJioSaavnCatalog(jsonList, query);
+
+            final List<Video> jioResults = [];
             for (var item in jsonList) {
               final songId = item['id'] as String? ?? '';
               if (songId.isEmpty) continue;
@@ -539,7 +752,7 @@ class MusicService extends ChangeNotifier {
                 _webStreamUrls[vidString] = streamUrl;
               }
 
-              results.add(
+              jioResults.add(
                 Video(
                   VideoId(vidString),
                   title,
@@ -557,20 +770,66 @@ class MusicService extends ChangeNotifier {
                 ),
               );
             }
-            debugPrint('[JioSaavn Search][Web] Returned ${results.length} items for "$query"');
-            return results;
+
+            if (isConfident && jioResults.length >= 2) {
+              debugPrint('[Search][Web] Confident JioSaavn catalog match (${jioResults.length} items)');
+              return jioResults;
+            } else {
+              jioFallback = jioResults;
+              debugPrint('[Search][Web] JioSaavn lacked confident match, awaiting backend fallback...');
+            }
+          }
+        }
+
+        // Await backend response (already running in parallel!)
+        final backendResponse = await backendFuture.catchError((_) => http.Response('[]', 500));
+        if (backendResponse.statusCode == 200) {
+          final List<dynamic> jsonList = json.decode(backendResponse.body);
+          if (jsonList.isNotEmpty) {
+            final List<Video> backendResults = [];
+            for (var item in jsonList) {
+              final videoId = item['id'] as String;
+              final title = item['title'] as String? ?? 'Unknown Title';
+              final author = item['author'] as String? ?? 'Unknown Artist';
+              final durationSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
+              final duration = durationSec != null ? Duration(seconds: durationSec) : null;
+
+              backendResults.add(
+                Video(
+                  VideoId(videoId),
+                  title,
+                  author,
+                  ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+                  DateTime.now(),
+                  '',
+                  null,
+                  '',
+                  duration,
+                  ThumbnailSet(videoId),
+                  null,
+                  Engagement(0, null, null),
+                  false,
+                ),
+              );
+            }
+            debugPrint('[Search][Web] Backend fallback returned ${backendResults.length} items');
+            return backendResults;
           }
         }
       } catch (e) {
-        debugPrint('[JioSaavn Search][Web] Error: $e, falling back to YouTube search');
+        debugPrint('[Search][Web] Search error: $e');
+      }
+
+      if (jioFallback.isNotEmpty) {
+        return jioFallback;
       }
     }
 
-    // Android Mobile & Web Fallback: Python Backend / YouTube search
+    // Android Mobile: Python Backend / YouTube search
     try {
       final response = await http
           .get(ApiConfig.searchUri(query, page: page, limit: 20))
-          .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final List<dynamic> jsonList = json.decode(response.body);
@@ -607,7 +866,7 @@ class MusicService extends ChangeNotifier {
     } catch (e) {
       debugPrint('Backend search error: $e');
     }
-    return [];
+    return jioFallback;
   }
 
   /// Live query suggestions while typing (up to [limit] suggestions)
@@ -724,21 +983,27 @@ class MusicService extends ChangeNotifier {
 
   void startSleepTimer(Duration duration) {
     cancelSleepTimer();
-    _sleepRemaining = duration;
+    _sleepEndTime = DateTime.now().add(duration);
     _stopAtEndOfTrack = false;
     notifyListeners();
 
     _sleepCountdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_sleepRemaining != null && _sleepRemaining!.inSeconds > 0) {
-        _sleepRemaining = _sleepRemaining! - const Duration(seconds: 1);
-        notifyListeners();
-      } else {
+      final rem = sleepRemaining;
+      if (rem == null || rem == Duration.zero) {
         timer.cancel();
+        _stopPlayback();
+      } else {
+        // Smooth 5-second fade-out before stopping
+        if (rem.inSeconds <= 5 && rem.inSeconds > 0) {
+          final vol = (rem.inSeconds / 5.0).clamp(0.0, 1.0);
+          if (!kIsWeb) {
+            _audioPlayer.setVolume(vol);
+          } else {
+            WebPlayerBridge.setVolume((vol * 100.0));
+          }
+        }
+        notifyListeners();
       }
-    });
-
-    _sleepTimer = Timer(duration, () {
-      _stopPlayback();
     });
   }
 
@@ -749,20 +1014,25 @@ class MusicService extends ChangeNotifier {
   }
 
   void cancelSleepTimer() {
-    _sleepTimer?.cancel();
-    _sleepTimer = null;
+    _sleepEndTime = null;
     _sleepCountdownTimer?.cancel();
     _sleepCountdownTimer = null;
-    _sleepRemaining = null;
     _stopAtEndOfTrack = false;
+    if (!kIsWeb) {
+      _audioPlayer.setVolume(1.0);
+    } else {
+      WebPlayerBridge.setVolume(100.0);
+    }
     notifyListeners();
   }
 
   void _stopPlayback() {
     if (kIsWeb) {
       WebPlayerBridge.pause();
+      WebPlayerBridge.setVolume(100.0);
     } else {
       _audioPlayer.pause();
+      _audioPlayer.setVolume(1.0);
     }
     cancelSleepTimer();
     notifyListeners();
@@ -1038,8 +1308,8 @@ class MusicService extends ChangeNotifier {
       // 2. Web Mode (PWA / Browser):
       // Dual Engine: Cloudflare Edge Direct Stream (<audio>) + YouTube IFrame Fallback
       if (kIsWeb) {
-        final directStreamUrl = _webStreamUrls[song.id.value] ?? ApiConfig.cloudflareStreamUri(song.id.value).toString();
-        debugPrint('[Play][Web] Playing via Web Dual Engine: ${song.id.value} (edge: $directStreamUrl)');
+        final directStreamUrl = _webStreamUrls[song.id.value] ?? '';
+        debugPrint('[Play][Web] Playing via Web Dual Engine: ${song.id.value} (directStream: $directStreamUrl)');
         _reportClientLog('web_stream_start', {'videoId': song.id.value, 'engine': 'dual'});
         WebPlayerBridge.play(
           song.id.value,
@@ -1208,17 +1478,34 @@ class MusicService extends ChangeNotifier {
     if (_isFetchingNextQueue) return;
     _isFetchingNextQueue = true;
     try {
-      debugPrint('[Recommendations] Silently fetching next 20 songs for ${song.title}…');
-      final candidates = await fetchNextCandidates(
-        song.id.value,
-        limit: 20,
-        title: song.title,
-        artist: song.author,
-      );
+      debugPrint('[Recommendations] Silently fetching next songs for ${song.title}…');
+      List<Video> candidates = [];
+
+      if (kIsWeb) {
+        // Web/PWA: Fetch artist tracks from JioSaavn for 320k direct playback
+        final primaryArtist = song.author.split(',')[0].trim();
+        final query = (primaryArtist.isNotEmpty && primaryArtist != 'DilSe Music' && primaryArtist != 'Unknown Artist')
+            ? '$primaryArtist songs'
+            : 'Top Hits 2026';
+        candidates = await searchSongs(query);
+        if (candidates.length < 5) {
+          final top = await searchSongs('Top Charts India Music');
+          candidates.addAll(top);
+        }
+      } else {
+        // Mobile / Android: Fetch radio & collaborative recommendations from backend
+        candidates = await fetchNextCandidates(
+          song.id.value,
+          limit: 20,
+          title: song.title,
+          artist: song.author,
+        );
+      }
 
       if (candidates.isNotEmpty) {
         int added = 0;
         for (var track in candidates) {
+          if (track.id.value == song.id.value) continue;
           if (!_playlist.any((item) => item.id.value == track.id.value)) {
             _playlist.add(track);
             added++;

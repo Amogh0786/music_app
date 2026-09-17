@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class NotificationPermissionService {
   /// Checks whether notification permission is granted on Android.
   static Future<bool> isPermissionGranted() async {
+    if (kIsWeb) return true;
     if (!Platform.isAndroid) return true;
     return await Permission.notification.isGranted;
   }
@@ -12,6 +14,7 @@ class NotificationPermissionService {
   /// Explicitly requests notification permission and provides immediate user feedback.
   /// If permanently denied, presents a dialog directing the user to App Settings.
   static Future<bool> requestNotificationPermission(BuildContext context) async {
+    if (kIsWeb) return true;
     if (!Platform.isAndroid) return true;
 
     final status = await Permission.notification.status;
@@ -42,6 +45,7 @@ class NotificationPermissionService {
   /// Automatically prompts for notification permission when the user starts playing music
   /// or when the app launches, if permission has not yet been granted.
   static Future<void> promptIfNeeded(BuildContext context) async {
+    if (kIsWeb) return;
     if (!Platform.isAndroid) return;
 
     try {

@@ -28,6 +28,11 @@
   let switchingEngines = false;
   let currentPlaySessionId = 0;
 
+  // Interruption and lifecycle tracking (reels, calls, tab switches)
+  let isUserPaused = false;
+  let isInterrupted = false;
+  let wasPlayingBeforeInterruption = false;
+
   // HTML5 Native Audio Element
   let audioEl = null;
 
@@ -85,6 +90,8 @@
         if (activeEngine === ENGINE_AUDIO) {
           console.log('[DilSe Web Player] JioSaavn 320k audio playing');
           clearFallbackTimer();
+          isInterrupted = false;
+          wasPlayingBeforeInterruption = true;
           broadcastState('playing');
           if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
         }
@@ -93,6 +100,10 @@
       audioEl.addEventListener('pause', () => {
         if (activeEngine === ENGINE_AUDIO && !switchingEngines) {
           console.log('[DilSe Web Player] JioSaavn audio paused');
+          if (!isUserPaused && wasPlayingBeforeInterruption && !audioEl.ended && (audioEl.currentTime > 0)) {
+            console.log('[DilSe Web Player] System interruption detected (reel, phone call, or external audio)');
+            isInterrupted = true;
+          }
           broadcastState('paused');
           if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
         }
@@ -347,9 +358,33 @@
     }
   }
 
-  // iOS Safari background playback watchdog
+  function attemptAutoResumeAfterInterruption() {
+    if (isInterrupted && !isUserPaused) {
+      console.log('[DilSe Web Player] Attempting auto-resume after interruption...');
+      if (activeEngine === ENGINE_AUDIO && audioEl && audioEl.paused) {
+        audioEl.play().then(() => {
+          console.log('[DilSe Web Player] Successfully auto-resumed playback after interruption');
+          isInterrupted = false;
+          wasPlayingBeforeInterruption = true;
+        }).catch((err) => {
+          // Secondary audio (e.g. reel) may still be playing; will retry
+          console.log('[DilSe Web Player] Auto-resume deferred:', err.message);
+        });
+      } else if (activeEngine === ENGINE_IFRAME && ytPlayer && typeof ytPlayer.playVideo === 'function') {
+        try {
+          ytPlayer.playVideo();
+          isInterrupted = false;
+          wasPlayingBeforeInterruption = true;
+        } catch (_) {}
+      }
+    }
+  }
+
+  // iOS Safari / PWA background playback & interruption watchdog
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'hidden') {
+    if (document.visibilityState === 'visible') {
+      attemptAutoResumeAfterInterruption();
+    } else if (document.visibilityState === 'hidden') {
       if (activeEngine === ENGINE_IFRAME && ytPlayer && typeof ytPlayer.getPlayerState === 'function') {
         const state = ytPlayer.getPlayerState();
         if (state === 1 || state === 3) {
@@ -363,6 +398,16 @@
       }
     }
   });
+
+  window.addEventListener('focus', attemptAutoResumeAfterInterruption);
+  window.addEventListener('pageshow', attemptAutoResumeAfterInterruption);
+
+  // Periodic poll to resume immediately once the reel or call finishes
+  setInterval(() => {
+    if (isInterrupted && !isUserPaused) {
+      attemptAutoResumeAfterInterruption();
+    }
+  }, 2000);
 
   window.dilsePlayWithOptions = function (opts) {
     opts = opts || {};
@@ -399,11 +444,18 @@
     // Update MediaSession with initial metadata
     window.dilseSetMetadata(currentTitle, currentArtist, currentArtwork);
 
+    isUserPaused = false;
+    isInterrupted = false;
+    wasPlayingBeforeInterruption = true;
+
     // If direct stream URL is already provided (e.g. from native JioSaavn search), play instantly!
     const streamToPlay = directStreamUrl || window.dilseCurrentStreamUrl || '';
     window.dilseCurrentStreamUrl = '';
 
-    if (streamToPlay && typeof streamToPlay === 'string' && streamToPlay.startsWith('http')) {
+    const isDirectAudio = streamToPlay && typeof streamToPlay === 'string' && streamToPlay.startsWith('http') &&
+      (streamToPlay.includes('.mp4') || streamToPlay.includes('.m4a') || streamToPlay.includes('saavncdn') || streamToPlay.includes('media-cdn'));
+
+    if (isDirectAudio) {
       console.log('[DilSe Web Player] Direct 320k stream provided, playing immediately:', streamToPlay);
       activeEngine = ENGINE_AUDIO;
 
@@ -458,38 +510,83 @@
           const data = await res.json();
           if (data.status === 'ok' && data.match && data.data?.streamUrl) {
             const jioSong = data.data;
-            console.log(
-              `[DilSe Web Player] JioSaavn Confident Match Found: "${jioSong.title}" (Score: ${jioSong.confidenceScore || 'OK'}) -> ${jioSong.streamUrl}`
-            );
 
-            activeEngine = ENGINE_AUDIO;
+            // Validate that the resolved track genuinely matches the requested song/artist
+            const reqTitle = (cleanTitle || title || '').toLowerCase();
+            const reqArtist = (artist || '').toLowerCase().trim();
+            const resTitle = (jioSong.title || '').toLowerCase();
+            const resArtist = (jioSong.artist || '').toLowerCase();
+            const resArtwork = (jioSong.artwork || '').toLowerCase();
 
-            // Stop YouTube IFrame if running
-            if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
-              try {
-                ytPlayer.stopVideo();
-              } catch (_) {}
+            const isCoverOrInstrumental =
+              resArtwork.includes('-instrumental-') ||
+              resTitle.includes('instrumental') ||
+              resTitle.includes('karaoke') ||
+              resTitle.includes('tribute') ||
+              resTitle.includes('piano version') ||
+              resTitle.includes('easy piano') ||
+              resTitle.includes('originally perfo') ||
+              resArtist.includes('karaoke') ||
+              resArtist.includes('tribute') ||
+              resArtist.includes('strings') ||
+              resArtist.includes('zzang') ||
+              resArtist.includes('luxebeats');
+
+            // Title validation: ensure core keywords appear
+            const titleWords = reqTitle
+              .split(/\s+/)
+              .map(w => w.replace(/[^a-z0-9]/g, ''))
+              .filter(w => w.length >= 3 && !['song', 'audio', 'video', 'from', 'lyrics', 'feat', 'with'].includes(w));
+            const titleMatches = titleWords.length === 0 || titleWords.some(w => resTitle.includes(w));
+
+            // Artist validation: if artist was specified, check it exists in the resolved track
+            let artistMatches = true;
+            if (reqArtist.length >= 3) {
+              const artistWords = reqArtist
+                .split(/\s+/)
+                .map(w => w.replace(/[^a-z0-9]/g, ''))
+                .filter(w => w.length >= 3);
+              artistMatches = artistWords.some(w => resArtist.includes(w));
             }
-            stopTicker();
 
-            audioEl.src = jioSong.streamUrl;
-            if (startSeconds > 0) {
-              audioEl.currentTime = startSeconds;
+            if (!isCoverOrInstrumental && titleMatches && artistMatches) {
+              console.log(
+                `[DilSe Web Player] JioSaavn Confident Match Confirmed: "${jioSong.title}" by "${jioSong.artist}" -> ${jioSong.streamUrl}`
+              );
+
+              activeEngine = ENGINE_AUDIO;
+
+              // Stop YouTube IFrame if running
+              if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
+                try {
+                  ytPlayer.stopVideo();
+                } catch (_) {}
+              }
+              stopTicker();
+
+              audioEl.src = jioSong.streamUrl;
+              if (startSeconds > 0) {
+                audioEl.currentTime = startSeconds;
+              }
+              armFallbackTimer(videoId, startSeconds);
+
+              // Update MediaSession with high-res album artwork from JioSaavn
+              window.dilseSetMetadata(
+                jioSong.title || title,
+                jioSong.artist || artist,
+                jioSong.artwork || artworkUrl
+              );
+
+              audioEl.play().catch((err) => {
+                console.warn('[DilSe Web Player] audioEl.play() rejected:', err);
+                triggerFallback();
+              });
+              return;
+            } else {
+              console.log(
+                `[DilSe Web Player] JioSaavn resolution rejected (Cover: ${isCoverOrInstrumental}, TitleMatch: ${titleMatches}, ArtistMatch: ${artistMatches}). Falling back to YouTube IFrame for authentic audio.`
+              );
             }
-            armFallbackTimer(videoId, startSeconds);
-
-            // Update MediaSession with high-res album artwork from JioSaavn
-            window.dilseSetMetadata(
-              jioSong.title || title,
-              jioSong.artist || artist,
-              jioSong.artwork || artworkUrl
-            );
-
-            audioEl.play().catch((err) => {
-              console.warn('[DilSe Web Player] audioEl.play() rejected:', err);
-              triggerFallback();
-            });
-            return;
           }
         }
       } catch (err) {
@@ -505,6 +602,9 @@
   };
 
   window.dilsePause = function () {
+    isUserPaused = true;
+    isInterrupted = false;
+    wasPlayingBeforeInterruption = false;
     stopBgAudio();
     if (activeEngine === ENGINE_AUDIO && audioEl) {
       try {
@@ -520,6 +620,9 @@
   };
 
   window.dilseResume = function () {
+    isUserPaused = false;
+    isInterrupted = false;
+    wasPlayingBeforeInterruption = true;
     startBgAudio();
     if (activeEngine === ENGINE_AUDIO && audioEl) {
       try {

@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:app_links/app_links.dart';
 import 'package:http/http.dart' as http;
@@ -15,15 +17,30 @@ class SpotifyImportScreen extends StatefulWidget {
 
 class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
   final _appLinks = AppLinks();
+  final _urlController = TextEditingController();
+  
   String? _accessToken;
   bool _isLoading = false;
-  List<dynamic> _playlists = [];
+  double _progress = 0.0;
   String _statusMessage = '';
+  String? _importedPlaylistId;
+  String? _importedPlaylistName;
+  int _importedSuccessCount = 0;
+  int _importedTotalCount = 0;
+
+  List<dynamic> _userPlaylists = [];
+  bool _showAdvancedOAuth = false;
 
   @override
   void initState() {
     super.initState();
     _initDeepLinkListener();
+  }
+
+  @override
+  void dispose() {
+    _urlController.dispose();
+    super.dispose();
   }
 
   void _initDeepLinkListener() {
@@ -37,7 +54,7 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
             _accessToken = token;
             _statusMessage = 'Authenticated! Fetching playlists...';
           });
-          _fetchPlaylists();
+          _fetchUserPlaylists();
         } else if (error != null) {
           setState(() {
             _statusMessage = 'Authentication failed: $error';
@@ -46,6 +63,206 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
       }
     });
   }
+
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data?.text != null && data!.text!.trim().isNotEmpty) {
+      setState(() {
+        _urlController.text = data.text!.trim();
+      });
+      HapticFeedback.selectionClick();
+    }
+  }
+
+  String _extractPlaylistId(String input) {
+    final clean = input.trim();
+    final regex = RegExp(r'(?:playlist[/:])?([a-zA-Z0-9]{22})');
+    final match = regex.firstMatch(clean);
+    if (match != null && match.groupCount >= 1) {
+      return match.group(1)!;
+    }
+    return clean;
+  }
+
+  Future<void> _importFromInputUrl() async {
+    final rawText = _urlController.text.trim();
+    if (rawText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please paste a Spotify playlist link first.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    final playlistId = _extractPlaylistId(rawText);
+    await _startImport(playlistId: playlistId, playlistName: 'Spotify Playlist', isPublic: true);
+  }
+
+  Future<Map<String, dynamic>?> _tryDirectPublicImport(String playlistId) async {
+    if (kIsWeb) return null;
+
+    try {
+      final embedUrl = Uri.parse('https://open.spotify.com/embed/playlist/$playlistId');
+      final res = await http.get(
+        embedUrl,
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200) {
+        final html = res.body;
+        final match = RegExp(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>').firstMatch(html);
+        if (match != null && match.groupCount >= 1) {
+          final data = json.decode(match.group(1)!);
+          final entity = data['props']?['pageProps']?['state']?['data']?['entity'];
+          if (entity != null) {
+            final name = entity['name'] as String? ?? 'Spotify Playlist';
+            final rawList = List<dynamic>.from(entity['trackList'] ?? []);
+            final List<String> tracks = [];
+            for (final item in rawList) {
+              if (item is Map) {
+                final title = (item['title'] as String? ?? '').trim();
+                final subtitle = (item['subtitle'] as String? ?? '').replaceAll('\u00a0', ' ').trim();
+                if (title.isNotEmpty) {
+                  tracks.add('$title $subtitle'.trim());
+                }
+              }
+            }
+            if (tracks.isNotEmpty) {
+              return {
+                'name': name,
+                'tracks': tracks,
+                'total': tracks.length,
+              };
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[SpotifyImport] Direct embed scrape fallback error: $e');
+    }
+    return null;
+  }
+
+  Future<void> _startImport({
+    required String playlistId,
+    required String playlistName,
+    required bool isPublic,
+  }) async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isLoading = true;
+      _progress = 0.05;
+      _statusMessage = 'Extracting tracks from Spotify playlist...';
+      _importedPlaylistId = null;
+    });
+
+    try {
+      Map<String, dynamic>? data;
+
+      // 1. Direct on-device scrape for mobile/desktop (instant, zero-server)
+      if (isPublic && !kIsWeb) {
+        data = await _tryDirectPublicImport(playlistId);
+      }
+
+      // 2. Fetch from backend API
+      if (data == null) {
+        final res = await http.post(
+          Uri.parse('${ApiConfig.baseUrl}/spotify/import'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            'access_token': _accessToken,
+            'playlist_id': playlistId,
+            'is_public': isPublic,
+          }),
+        ).timeout(const Duration(seconds: 30));
+
+        if (res.statusCode == 200) {
+          data = json.decode(res.body);
+        } else {
+          final err = json.decode(res.body);
+          final detail = err['detail'] as String? ?? 'Could not fetch playlist';
+          setState(() {
+            _statusMessage = 'Import error: $detail';
+          });
+          return;
+        }
+      }
+
+      if (data == null) {
+        setState(() {
+          _statusMessage = 'Could not fetch playlist data. Please try again.';
+        });
+        return;
+      }
+
+      final tracks = List<String>.from(data['tracks'] ?? []);
+      final fetchedName = (data['name'] as String?) ?? playlistName;
+
+        if (tracks.isEmpty) {
+          setState(() {
+            _statusMessage = 'No tracks found. Please make sure the playlist is Public.';
+          });
+          return;
+        }
+
+        setState(() {
+          _statusMessage = 'Found ${tracks.length} tracks in "$fetchedName". Matching audio...';
+          _progress = 0.1;
+        });
+
+        // Create local custom playlist
+        final newPlaylistId = MusicService().createPlaylist(fetchedName);
+
+        int successCount = 0;
+        final totalTracks = tracks.length;
+
+        for (int i = 0; i < totalTracks; i++) {
+          final query = tracks[i];
+          final currentNum = i + 1;
+
+          setState(() {
+            _progress = 0.1 + (0.9 * (currentNum / totalTracks));
+            _statusMessage = 'Matching $currentNum of $totalTracks:\n"$query"';
+          });
+
+          try {
+            final results = await MusicService().searchSongs(query, page: 1);
+            if (results.isNotEmpty) {
+              MusicService().addSongToPlaylist(newPlaylistId, results.first);
+              successCount++;
+            }
+          } catch (_) {
+            // Keep going if an individual search fails
+          }
+        }
+
+        HapticFeedback.mediumImpact();
+        setState(() {
+          _importedPlaylistId = newPlaylistId;
+          _importedPlaylistName = fetchedName;
+          _importedSuccessCount = successCount;
+          _importedTotalCount = totalTracks;
+          _statusMessage = 'Successfully imported $successCount of $totalTracks tracks!';
+          _progress = 1.0;
+        });
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Error connecting to server: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // --- Optional / Advanced OAuth Flows ---
 
   Future<void> _loginWithSpotify() async {
     setState(() {
@@ -64,7 +281,7 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
           setState(() => _statusMessage = 'Could not launch browser.');
         }
       } else {
-        setState(() => _statusMessage = 'Failed to get login URL.');
+        setState(() => _statusMessage = 'Server requires Spotify developer keys for login.');
       }
     } catch (e) {
       setState(() => _statusMessage = 'Error: $e');
@@ -73,7 +290,7 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
     }
   }
 
-  Future<void> _fetchPlaylists() async {
+  Future<void> _fetchUserPlaylists() async {
     if (_accessToken == null) return;
     setState(() => _isLoading = true);
 
@@ -82,8 +299,8 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         setState(() {
-          _playlists = data['playlists'] ?? [];
-          _statusMessage = 'Found ${_playlists.length} playlists.';
+          _userPlaylists = data['playlists'] ?? [];
+          _statusMessage = 'Found ${_userPlaylists.length} playlists in your account.';
         });
       } else {
         setState(() => _statusMessage = 'Failed to fetch playlists.');
@@ -95,193 +312,351 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
     }
   }
 
-  Future<void> _importPlaylist(String playlistId, String playlistName, bool isPublic) async {
-    setState(() {
-      _isLoading = true;
-      _statusMessage = 'Importing tracks from $playlistName...';
-    });
-
-    try {
-      final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/spotify/import'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'access_token': _accessToken,
-          'playlist_id': playlistId,
-          'is_public': isPublic,
-        }),
-      );
-
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        final tracks = List<String>.from(data['tracks'] ?? []);
-        
-        setState(() => _statusMessage = 'Resolving ${tracks.length} tracks on YouTube...');
-        
-        final playlistId = MusicService().createPlaylist(playlistName);
-        
-        int successCount = 0;
-        for (final query in tracks) {
-          final results = await MusicService().searchSongs(query, page: 1);
-          if (results.isNotEmpty) {
-            MusicService().addSongToPlaylist(playlistId, results.first);
-            successCount++;
-          }
-        }
-        
-        setState(() {
-          _statusMessage = 'Successfully imported $successCount out of ${tracks.length} tracks to $playlistName!';
-        });
-      } else {
-        setState(() => _statusMessage = 'Failed to import playlist.');
-      }
-    } catch (e) {
-      setState(() => _statusMessage = 'Error: $e');
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _importPublicPlaylistFromUrl() async {
-    final controller = TextEditingController();
-    final url = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E28),
-        title: const Text('Import Public Playlist', style: TextStyle(color: Colors.white)),
-        content: TextField(
-          controller: controller,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
-            hintText: 'Paste Spotify Playlist URL',
-            hintStyle: TextStyle(color: Colors.white54),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
-            child: const Text('Import', style: TextStyle(color: Color(0xFF1DB954))),
-          ),
-        ],
-      ),
-    );
-
-    if (url != null && url.isNotEmpty) {
-      // Extract playlist ID from URL
-      final regex = RegExp(r'playlist/([a-zA-Z0-9]+)');
-      final match = regex.firstMatch(url);
-      if (match != null && match.groupCount >= 1) {
-        final playlistId = match.group(1)!;
-        await _importPlaylist(playlistId, 'Public Playlist', true);
-      } else {
-        setState(() => _statusMessage = 'Invalid Spotify playlist URL.');
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    const spotifyGreen = Color(0xFF1DB954);
+
     return Scaffold(
       backgroundColor: const Color(0xFF0B0B0F),
       appBar: AppBar(
         backgroundColor: const Color(0xFF0B0B0F),
-        title: const Text('Import from Spotify', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        elevation: 0,
+        title: const Text(
+          'Import from Spotify',
+          style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white, fontSize: 18),
+        ),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (_statusMessage.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16.0),
-                child: Text(
-                  _statusMessage,
-                  style: const TextStyle(color: Colors.white70, fontSize: 14),
-                  textAlign: TextAlign.center,
+            // Header Card
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    spotifyGreen.withValues(alpha: 0.15),
+                    const Color(0xFF14141E),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: spotifyGreen.withValues(alpha: 0.25)),
               ),
-            
-            if (_accessToken == null) ...[
-              const Icon(Icons.music_note_rounded, size: 80, color: Color(0xFF1DB954)),
-              const SizedBox(height: 20),
-              const Text(
-                'Seamlessly import your Spotify playlists to DilSe.',
-                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
+              child: Column(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: spotifyGreen.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.playlist_add_check_rounded, color: spotifyGreen, size: 34),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Instant Spotify Importer',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Paste any public Spotify playlist link to save and stream it on DilSe instantly.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.65),
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 40),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.login),
-                label: const Text('Login with Spotify (Private & Public)'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1DB954),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: _isLoading ? null : _loginWithSpotify,
+            ),
+
+            const SizedBox(height: 24),
+
+            // URL Input Field & Paste Button
+            const Text(
+              'Spotify Playlist Link',
+              style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF181824),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.link),
-                label: const Text('Import Public Playlist via URL'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white30),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: _isLoading ? null : _importPublicPlaylistFromUrl,
-              ),
-            ] else ...[
-              const Text(
-                'Your Playlists',
-                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: _playlists.isEmpty
-                    ? const Center(child: CircularProgressIndicator(color: Color(0xFF1DB954)))
-                    : ListView.builder(
-                        itemCount: _playlists.length,
-                        itemBuilder: (context, index) {
-                          final pl = _playlists[index];
-                          return ListTile(
-                            contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                            leading: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: pl['image'] != ''
-                                  ? Image.network(pl['image'], width: 50, height: 50, fit: BoxFit.cover)
-                                  : Container(
-                                      width: 50,
-                                      height: 50,
-                                      color: Colors.white12,
-                                      child: const Icon(Icons.music_note, color: Colors.white54),
-                                    ),
-                            ),
-                            title: Text((pl['name'] as String?) ?? 'Unknown', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            subtitle: Text('${pl['total_tracks']} tracks • ${pl['owner']}', style: const TextStyle(color: Colors.white54)),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.download_rounded, color: Color(0xFF1DB954)),
-                              onPressed: _isLoading ? null : () => _importPlaylist((pl['id'] as String?) ?? '', (pl['name'] as String?) ?? 'Playlist', false),
-                            ),
-                          );
-                        },
+              child: TextField(
+                controller: _urlController,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                enabled: !_isLoading,
+                decoration: InputDecoration(
+                  hintText: 'https://open.spotify.com/playlist/...',
+                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 13),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  border: InputBorder.none,
+                  prefixIcon: const Icon(Icons.link_rounded, color: spotifyGreen, size: 22),
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_urlController.text.isNotEmpty)
+                        IconButton(
+                          icon: const Icon(Icons.clear, color: Colors.white54, size: 18),
+                          onPressed: () => setState(() => _urlController.clear()),
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.content_paste_rounded, color: spotifyGreen, size: 20),
+                        tooltip: 'Paste from clipboard',
+                        onPressed: _isLoading ? null : _pasteFromClipboard,
                       ),
+                      const SizedBox(width: 4),
+                    ],
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
               ),
-            ],
-            
-            if (_isLoading)
-              const Padding(
-                padding: EdgeInsets.only(top: 16.0),
-                child: Center(child: CircularProgressIndicator(color: Color(0xFF1DB954))),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Import Button
+            SizedBox(
+              height: 52,
+              child: ElevatedButton.icon(
+                icon: _isLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.black),
+                      )
+                    : const Icon(Icons.download_rounded, size: 22),
+                label: Text(
+                  _isLoading ? 'Importing Playlist...' : 'Import Playlist',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: spotifyGreen,
+                  foregroundColor: Colors.black,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: _isLoading ? null : _importFromInputUrl,
               ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Progress & Status Card
+            if (_isLoading || _statusMessage.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF14141E),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: _importedPlaylistId != null
+                        ? spotifyGreen.withValues(alpha: 0.4)
+                        : Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    if (_isLoading) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: LinearProgressIndicator(
+                          value: _progress > 0 ? _progress : null,
+                          backgroundColor: Colors.white10,
+                          color: spotifyGreen,
+                          minHeight: 6,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    Text(
+                      _statusMessage,
+                      style: TextStyle(
+                        color: _importedPlaylistId != null ? Colors.white : Colors.white70,
+                        fontSize: 13,
+                        fontWeight: _importedPlaylistId != null ? FontWeight.w600 : FontWeight.normal,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+
+                    // Success Action Buttons
+                    if (_importedPlaylistId != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: spotifyGreen.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Saved "$_importedPlaylistName" ($_importedSuccessCount / $_importedTotalCount resolved)',
+                          style: const TextStyle(color: spotifyGreen, fontWeight: FontWeight.w600, fontSize: 13),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Go to Library'),
+                            ),
+                          ),
+
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.play_arrow_rounded, size: 20),
+                              label: const Text('Play Now'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: spotifyGreen,
+                                foregroundColor: Colors.black,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              onPressed: () {
+                                MusicService().playCustomPlaylist(_importedPlaylistId!, 0);
+                                Navigator.pop(context);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+            const SizedBox(height: 24),
+
+            // How to Make Playlist Public Tip
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF12121A),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline_rounded, color: Colors.white54, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'How to get your Spotify playlist link:',
+                          style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '1. In Spotify, open your playlist and tap "..." (Options).\n'
+                          '2. Tap "Share" → "Copy Link".\n'
+                          '3. Ensure the playlist is Public (or "Add to profile").',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.6),
+                            fontSize: 12,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Optional Advanced OAuth Accordion
+            Theme(
+              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                initiallyExpanded: _showAdvancedOAuth,
+                onExpansionChanged: (val) => setState(() => _showAdvancedOAuth = val),
+                title: Text(
+                  'Developer Options (Spotify Account Login)',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: Text(
+                      'Requires Spotify Developer Client credentials configured on your backend server.',
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 12),
+                    ),
+                  ),
+                  if (_accessToken == null)
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.login_rounded, size: 18),
+                      label: const Text('Log In With Spotify Account'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: spotifyGreen,
+                        side: BorderSide(color: spotifyGreen.withValues(alpha: 0.4)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: _isLoading ? null : _loginWithSpotify,
+                    )
+                  else ...[
+                    Text(
+                      'Your Spotify Playlists (${_userPlaylists.length})',
+                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _userPlaylists.length,
+                      itemBuilder: (context, index) {
+                        final pl = _userPlaylists[index];
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(pl['name'] ?? 'Unknown', style: const TextStyle(color: Colors.white, fontSize: 14)),
+                          subtitle: Text('${pl['total_tracks']} tracks', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.download_rounded, color: spotifyGreen),
+                            onPressed: _isLoading
+                                ? null
+                                : () => _startImport(
+                                      playlistId: pl['id'] ?? '',
+                                      playlistName: pl['name'] ?? 'Playlist',
+                                      isPublic: false,
+                                    ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ),
