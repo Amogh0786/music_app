@@ -31,6 +31,7 @@
 - **🎨 Dynamic Palette Extraction**: The player UI automatically extracts vibrant and dominant accent colors from album artwork using `palette_generator`.
 - **🌙 Bedtime Sleep Timer**: Set 15m, 30m, 45m, 60m timers or auto-stop playback at the end of the current song.
 - **🔍 Fast Search & Recommendations**: Powered by a lightweight FastAPI backend deployed with automated health-checks and smart caching.
+- **🎵 Spotify Playlist Import**: Seamlessly authenticate with Spotify to import your public or private playlists into native custom playlists.
 
 ---
 
@@ -90,6 +91,7 @@ The backend server handles **only search and recommendations metadata** (mere ki
 | **Search History** | Locally stored search queries with quick re-search and clearing options. |
 | **Queue & Auto-Play** | Smart playlist queueing with silent background recommendation preloading. |
 | **Sleep Timer** | Built-in countdown timer with auto-pause at track completion. |
+| **Spotify Import** | Log in with Spotify and 1-click import any playlist directly into your local library. |
 
 ---
 
@@ -147,8 +149,20 @@ cd backend
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+```
+
+You will need to set up a [Spotify Developer App](https://developer.spotify.com/dashboard) and export the following environment variables to enable the Spotify Import feature:
+```bash
+export SPOTIPY_CLIENT_ID="your_client_id"
+export SPOTIPY_CLIENT_SECRET="your_client_secret"
+export SPOTIPY_REDIRECT_URI="http://localhost:8000/spotify/callback"
+```
+
+Start the backend server:
+```bash
 uvicorn main:app --reload --port 8000
 ```
+
 
 Then update `lib/services/api_config.dart` with your local IP (`http://10.0.2.2:8000` for Android emulator or your local LAN IP for physical devices).
 
@@ -177,7 +191,7 @@ We ❤️ open-source contributions! Whether you want to fix a bug, suggest a fe
 ### 🗺️ Planned Roadmap & Good First Issues:
 - [ ] **Lock Screen Media Controls**: Full notification shade playback controls for Android 13+ with `MediaSession`.
 - [ ] **Synchronized Lyrics**: Real-time karaoke-style lyrics display for currently playing tracks.
-- [ ] **Custom Playlists**: Create, edit, and export personal playlists.
+- [x] **Custom Playlists**: Create, edit, and export personal playlists.
 - [ ] **Equalizer**: Multi-band audio equalizer with preset sound profiles.
 - [ ] **iOS TestFlight / IPA Provisioning**: Expand native iOS background playback & CarPlay support.
 

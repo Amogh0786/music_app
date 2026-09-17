@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/music_service.dart';
 import '../services/preferences_service.dart';
+import 'spotify_import_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -86,7 +87,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final storageFraction = (usedMB / allocatedMB).clamp(0.0, 1.0);
 
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         backgroundColor: const Color(0xFF0B0B0F),
         appBar: AppBar(
@@ -101,6 +102,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
               letterSpacing: -0.8,
             ),
           ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.queue_music_rounded, color: Color(0xFF1DB954)),
+              tooltip: 'Import from Spotify',
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SpotifyImportScreen()),
+                );
+              },
+            ),
+            const SizedBox(width: 8),
+          ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(138),
             child: Column(
@@ -236,6 +251,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   tabs: [
                     Tab(text: 'Downloaded (${downloaded.length})'),
                     Tab(text: 'Liked (${liked.length})'),
+                    Tab(text: 'Playlists (${_musicService.customPlaylists.length})'),
                     Tab(text: 'History (${history.length})'),
                   ],
                 ),
@@ -454,7 +470,88 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     },
                   ),
 
-            // TAB 3: LISTENING HISTORY
+            // TAB 3: PLAYLISTS
+            _musicService.customPlaylists.isEmpty
+                ? _buildEmptyState(
+                    icon: Icons.featured_play_list_outlined,
+                    title: 'No custom playlists yet',
+                    subtitle: 'Import a playlist from Spotify or create your own.',
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.only(bottom: 160, top: 12),
+                    itemCount: _musicService.customPlaylists.length,
+                    itemBuilder: (context, index) {
+                      final playlist = _musicService.customPlaylists[index];
+                      final name = (playlist['name'] as String?) ?? 'Unknown Playlist';
+                      final songs = List<Map<String, dynamic>>.from(playlist['songs'] ?? []);
+                      final id = (playlist['id'] as String?) ?? '';
+                      
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        leading: Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E1E28),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.featured_play_list_rounded,
+                            color: Theme.of(context).primaryColor,
+                            size: 28,
+                          ),
+                        ),
+                        title: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            fontSize: 15,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        subtitle: Text(
+                          '${songs.length} tracks',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.6),
+                            fontSize: 13,
+                          ),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.white54, size: 22),
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                _musicService.deletePlaylist(id);
+                              },
+                            ),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              icon: const Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 36),
+                              onPressed: songs.isEmpty
+                                  ? null
+                                  : () {
+                                      HapticFeedback.lightImpact();
+                                      _musicService.playCustomPlaylist(id, 0);
+                                    },
+                            ),
+                          ],
+                        ),
+                        onTap: songs.isEmpty
+                            ? null
+                            : () {
+                                HapticFeedback.lightImpact();
+                                _musicService.playCustomPlaylist(id, 0);
+                              },
+                      );
+                    },
+                  ),
+
+            // TAB 4: LISTENING HISTORY
             history.isEmpty
                 ? _buildEmptyState(
                     icon: Icons.history_toggle_off_rounded,

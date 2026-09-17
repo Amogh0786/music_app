@@ -41,6 +41,7 @@ class MusicService extends ChangeNotifier {
   bool _isShuffle = false;
   LoopMode _loopMode = LoopMode.off;
   List<Map<String, String>> _likedSongs = [];
+  List<Map<String, dynamic>> _customPlaylists = [];
 
   String? _cachedLyrics;
   String? _cachedLyricsSongId;
@@ -63,6 +64,7 @@ class MusicService extends ChangeNotifier {
   bool get isShuffle => _isShuffle;
   LoopMode get loopMode => _loopMode;
   List<Map<String, String>> get likedSongs => _likedSongs;
+  List<Map<String, dynamic>> get customPlaylists => _customPlaylists;
   AudioPlayer get audioPlayer => _audioPlayer;
 
   bool get isPlaying => kIsWeb ? WebPlayerBridge.isPlaying : _audioPlayer.playing;
@@ -268,6 +270,7 @@ class MusicService extends ChangeNotifier {
       }
     });
     loadLikedSongs();
+    loadCustomPlaylists();
   }
 
   Future<void> loadLikedSongs() async {
@@ -339,6 +342,114 @@ class MusicService extends ChangeNotifier {
       debugPrint('Error saving liked songs: $e');
     }
   }
+
+  Future<void> loadCustomPlaylists() async {
+    try {
+      if (kIsWeb) {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString('custom_playlists_web');
+        if (raw != null && raw.isNotEmpty) {
+          final List<dynamic> jsonList = json.decode(raw);
+          _customPlaylists = List<Map<String, dynamic>>.from(jsonList);
+          notifyListeners();
+        }
+        return;
+      }
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/custom_playlists.json');
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        final List<dynamic> jsonList = json.decode(content);
+        _customPlaylists = List<Map<String, dynamic>>.from(jsonList);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error loading custom playlists: $e');
+    }
+  }
+
+  Future<void> saveCustomPlaylists() async {
+    try {
+      if (kIsWeb) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('custom_playlists_web', json.encode(_customPlaylists));
+        return;
+      }
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/custom_playlists.json');
+      await file.writeAsString(json.encode(_customPlaylists));
+    } catch (e) {
+      debugPrint('Error saving custom playlists: $e');
+    }
+  }
+
+  String createPlaylist(String name) {
+    final playlistId = DateTime.now().millisecondsSinceEpoch.toString();
+    _customPlaylists.add({
+      'id': playlistId,
+      'name': name,
+      'songs': [],
+    });
+    saveCustomPlaylists();
+    notifyListeners();
+    return playlistId;
+  }
+
+  void addSongToPlaylist(String playlistId, Video song) {
+    final playlistIndex = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
+    if (playlistIndex != -1) {
+      final songs = List<Map<String, dynamic>>.from(_customPlaylists[playlistIndex]['songs'] ?? []);
+      
+      // Prevent duplicates
+      if (!songs.any((s) => s['id'] == song.id.value)) {
+        songs.add({
+          'id': song.id.value,
+          'title': song.title,
+          'author': song.author,
+          'thumbnail': getHdThumbnail(song.id.value),
+        });
+        _customPlaylists[playlistIndex]['songs'] = songs;
+        saveCustomPlaylists();
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> deletePlaylist(String playlistId) async {
+    _customPlaylists.removeWhere((p) => p['id'] == playlistId);
+    await saveCustomPlaylists();
+    notifyListeners();
+  }
+
+  Future<void> playCustomPlaylist(String playlistId, int startIndex) async {
+    final playlist = _customPlaylists.firstWhere((p) => p['id'] == playlistId, orElse: () => <String, dynamic>{});
+    if (playlist.isEmpty) return;
+
+    final songs = List<Map<String, dynamic>>.from(playlist['songs'] ?? []);
+    if (songs.isEmpty) return;
+
+    _playlist = songs.map((item) => Video(
+      VideoId((item['id'] as String?) ?? ''),
+      (item['title'] as String?) ?? 'Unknown Title',
+      (item['author'] as String?) ?? 'Unknown Artist',
+      ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+      DateTime.now(),
+      '',
+      null,
+      '',
+      null,
+      ThumbnailSet((item['id'] as String?) ?? ''),
+      null,
+      Engagement(0, null, null),
+      false,
+    )).toList();
+
+    _currentIndex = startIndex;
+    if (_currentIndex < 0 || _currentIndex >= _playlist.length) _currentIndex = 0;
+    
+    await playSong(_playlist[_currentIndex], updateQueue: false);
+  }
+
 
   Future<void> playLikedSong(Map<String, String> songData) async {
     _playlist = _likedSongs.map((item) => Video(
