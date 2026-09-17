@@ -251,12 +251,6 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
           _statusMessage = 'Successfully imported $successCount of $totalTracks tracks!';
           _progress = 1.0;
         });
-      } else {
-        final err = json.decode(res.body);
-        setState(() {
-          _statusMessage = 'Import error: ${err['detail'] ?? 'Could not fetch playlist'}';
-        });
-      }
     } catch (e) {
       setState(() {
         _statusMessage = 'Error connecting to server: $e';
