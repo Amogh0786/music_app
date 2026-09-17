@@ -94,6 +94,28 @@ def health_check():
     return {"status": "online", "service": "music-backend"}
 
 
+@app.get("/jio_test")
+def jio_test():
+    url = "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&n=5&p=1&q=perfect%20ed%20sheeran"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
+        'Cookie': 'geo=106.51.1.1%2CIN%2CTelangana%2CHyderabad%2C500001; DL=english; L=english; country=IN',
+        'X-Forwarded-For': '106.51.1.1',
+        'Client-IP': '106.51.1.1'
+    }
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            results = data.get('results', [])
+            return {
+                "count": len(results),
+                "items": [{"song": r.get('song'), "artist": r.get('primary_artists'), "encrypted_url": bool(r.get('encrypted_media_url'))} for r in results[:3]]
+            }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.get("/version")
 def version_check():
     return {
