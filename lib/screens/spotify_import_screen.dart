@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:app_links/app_links.dart';
 import 'package:http/http.dart' as http;
@@ -99,6 +100,55 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
     await _startImport(playlistId: playlistId, playlistName: 'Spotify Playlist', isPublic: true);
   }
 
+  Future<Map<String, dynamic>?> _tryDirectPublicImport(String playlistId) async {
+    if (kIsWeb) return null;
+
+    try {
+      final embedUrl = Uri.parse('https://open.spotify.com/embed/playlist/$playlistId');
+      final res = await http.get(
+        embedUrl,
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200) {
+        final html = res.body;
+        final match = RegExp(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>').firstMatch(html);
+        if (match != null && match.groupCount >= 1) {
+          final data = json.decode(match.group(1)!);
+          final entity = data['props']?['pageProps']?['state']?['data']?['entity'];
+          if (entity != null) {
+            final name = entity['name'] as String? ?? 'Spotify Playlist';
+            final rawList = List<dynamic>.from(entity['trackList'] ?? []);
+            final List<String> tracks = [];
+            for (final item in rawList) {
+              if (item is Map) {
+                final title = (item['title'] as String? ?? '').trim();
+                final subtitle = (item['subtitle'] as String? ?? '').replaceAll('\u00a0', ' ').trim();
+                if (title.isNotEmpty) {
+                  tracks.add('$title $subtitle'.trim());
+                }
+              }
+            }
+            if (tracks.isNotEmpty) {
+              return {
+                'name': name,
+                'tracks': tracks,
+                'total': tracks.length,
+              };
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[SpotifyImport] Direct embed scrape fallback error: $e');
+    }
+    return null;
+  }
+
   Future<void> _startImport({
     required String playlistId,
     required String playlistName,
@@ -108,25 +158,51 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
     setState(() {
       _isLoading = true;
       _progress = 0.05;
-      _statusMessage = 'Contacting server to extract tracks...';
+      _statusMessage = 'Extracting tracks from Spotify playlist...';
       _importedPlaylistId = null;
     });
 
     try {
-      final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/spotify/import'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'access_token': _accessToken,
-          'playlist_id': playlistId,
-          'is_public': isPublic,
-        }),
-      ).timeout(const Duration(seconds: 25));
+      Map<String, dynamic>? data;
 
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        final tracks = List<String>.from(data['tracks'] ?? []);
-        final fetchedName = (data['name'] as String?) ?? playlistName;
+      // 1. Direct on-device scrape for mobile/desktop (instant, zero-server)
+      if (isPublic && !kIsWeb) {
+        data = await _tryDirectPublicImport(playlistId);
+      }
+
+      // 2. Fetch from backend API
+      if (data == null) {
+        final res = await http.post(
+          Uri.parse('${ApiConfig.baseUrl}/spotify/import'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            'access_token': _accessToken,
+            'playlist_id': playlistId,
+            'is_public': isPublic,
+          }),
+        ).timeout(const Duration(seconds: 30));
+
+        if (res.statusCode == 200) {
+          data = json.decode(res.body);
+        } else {
+          final err = json.decode(res.body);
+          final detail = err['detail'] as String? ?? 'Could not fetch playlist';
+          setState(() {
+            _statusMessage = 'Import error: $detail';
+          });
+          return;
+        }
+      }
+
+      if (data == null) {
+        setState(() {
+          _statusMessage = 'Could not fetch playlist data. Please try again.';
+        });
+        return;
+      }
+
+      final tracks = List<String>.from(data['tracks'] ?? []);
+      final fetchedName = (data['name'] as String?) ?? playlistName;
 
         if (tracks.isEmpty) {
           setState(() {
