@@ -482,8 +482,9 @@
     // If a clean song title is available, resolve on JioSaavn for 320k direct audio stream
     if (title && title.trim().length > 1) {
       const workerBase =
+        window.dilseApiBaseUrl ||
         window.dilseWorkerBaseUrl ||
-        'https://dilse-edge-stream.charanteja-kondakalla030206.workers.dev';
+        'https://music-backend-4kel.onrender.com';
 
       const cleanTitle = title
         .replace(/[\(\[\{].*?[\)\]\}]/g, '')
