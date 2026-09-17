@@ -94,26 +94,147 @@ def health_check():
     return {"status": "online", "service": "music-backend"}
 
 
-@app.get("/jio_test")
-def jio_test():
-    url = "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&n=5&p=1&q=perfect%20ed%20sheeran"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
-        'Cookie': 'geo=106.51.1.1%2CIN%2CTelangana%2CHyderabad%2C500001; DL=english; L=english; country=IN',
-        'X-Forwarded-For': '106.51.1.1',
-        'Client-IP': '106.51.1.1'
-    }
-    req = urllib.request.Request(url, headers=headers)
+# --- JioSaavn 320k Unlocked Geo-Bypass Engine ---
+
+import base64
+
+JIO_GEO_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+    "Cookie": "geo=106.51.1.1%2CIN%2CTelangana%2CHyderabad%2C500001; DL=english; L=english; country=IN; CH=G03%2CA07%2CO00%2CL03",
+    "X-Forwarded-For": "106.51.1.1",
+    "Client-IP": "106.51.1.1",
+    "Accept": "application/json",
+}
+
+def _decrypt_jio_url(encrypted_url: str) -> str:
+    if not encrypted_url:
+        return ""
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-            results = data.get('results', [])
-            return {
-                "count": len(results),
-                "items": [{"song": r.get('song'), "artist": r.get('primary_artists'), "encrypted_url": bool(r.get('encrypted_media_url'))} for r in results[:3]]
-            }
+        from Crypto.Cipher import DES
+        key = b"38346591"
+        cipher = DES.new(key, DES.MODE_ECB)
+        raw_decrypted = cipher.decrypt(base64.b64decode(encrypted_url))
+        pad = raw_decrypted[-1]
+        if isinstance(pad, int) and 0 < pad <= 8:
+            raw_decrypted = raw_decrypted[:-pad]
+        dec_str = raw_decrypted.decode("utf-8", errors="ignore")
+        if not dec_str.startswith("http"):
+            return ""
+        return dec_str.replace("_96.mp4", "_320.mp4").replace("_160.mp4", "_320.mp4")
     except Exception as e:
-        return {"error": str(e)}
+        print(f"Jio decryption error: {e}")
+        return ""
+
+def _clean_jio_text(text: Optional[str]) -> str:
+    if not text:
+        return ""
+    return (
+        text.replace("&quot;", '"')
+        .replace("&#039;", "'")
+        .replace("&amp;", "&")
+        .strip()
+    )
+
+def _search_jiosaavn_api(query: str, limit: int = 20) -> List[dict]:
+    url = f"https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&n={limit}&p=1&q={urllib.parse.quote(query)}"
+    req = urllib.request.Request(url, headers=JIO_GEO_HEADERS)
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+        results = data.get("results", [])
+        formatted = []
+        for r in results:
+            song_id = r.get("id") or ""
+            if not song_id:
+                continue
+            enc_media = r.get("encrypted_media_url") or ""
+            stream_url = _decrypt_jio_url(enc_media)
+            artwork = (r.get("image") or "").replace("150x150", "500x500")
+            title = _clean_jio_text(r.get("song"))
+            artist = _clean_jio_text(r.get("primary_artists") or r.get("singers") or r.get("music"))
+            album = _clean_jio_text(r.get("album"))
+            try:
+                duration = int(r.get("duration") or 0)
+            except (ValueError, TypeError):
+                duration = 0
+
+            formatted.append({
+                "id": song_id,
+                "title": title or "Unknown Title",
+                "author": artist or "DilSe Music",
+                "album": album,
+                "duration": duration,
+                "thumbnail": artwork,
+                "streamUrl": stream_url,
+                "source": "jiosaavn",
+                "bitrate": "320kbps",
+            })
+        return formatted
+
+@app.get("/jio/search")
+def jio_search(q: str = "", limit: int = 20):
+    if not q or not q.strip():
+        return []
+    clean_limit = min(50, max(1, limit))
+    try:
+        return _search_jiosaavn_api(q.strip(), clean_limit)
+    except Exception as e:
+        print(f"Jio search error: {e}")
+        return []
+
+@app.get("/jio/suggestions")
+def jio_suggestions(q: str = "", limit: int = 8):
+    if not q or not q.strip():
+        return []
+    url = f"https://www.jiosaavn.com/api.php?__call=autocomplete.get&query={urllib.parse.quote(q.strip())}&_format=json&_marker=0&ctx=web6dot0"
+    req = urllib.request.Request(url, headers=JIO_GEO_HEADERS)
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            suggestions = []
+            if data.get("topquery", {}).get("data"):
+                for item in data["topquery"]["data"]:
+                    t = item.get("title")
+                    if t and t not in suggestions:
+                        suggestions.append(_clean_jio_text(t))
+            if data.get("songs", {}).get("data"):
+                for item in data["songs"]["data"]:
+                    t = item.get("title")
+                    if t and t not in suggestions:
+                        suggestions.append(_clean_jio_text(t))
+            return suggestions[:limit]
+    except Exception as e:
+        print(f"Jio suggestions error: {e}")
+        return []
+
+@app.get("/jio")
+def jio_single_track(title: str = "", artist: str = "", q: str = ""):
+    query = (title or q).strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="Missing query (?title=... or ?q=...)")
+    full_q = f"{query} {artist}".strip() if artist else query
+    try:
+        results = _search_jiosaavn_api(full_q, limit=5)
+        if results and results[0].get("streamUrl"):
+            match_song = results[0]
+            return {
+                "status": "ok",
+                "match": True,
+                "data": {
+                    "title": match_song["title"],
+                    "artist": match_song["author"],
+                    "album": match_song["album"],
+                    "artwork": match_song["thumbnail"],
+                    "streamUrl": match_song["streamUrl"],
+                    "bitrate": "320kbps",
+                }
+            }
+        return {
+            "status": "not_found",
+            "match": False,
+            "message": "No confident match found on JioSaavn",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/version")

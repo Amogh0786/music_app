@@ -137,7 +137,10 @@ class WebPlayerBridge {
 
     final globalWindow = web.window as JSObject;
 
-    // Set configured worker base URL if present
+    // Set configured backend base URL and worker base URL
+    final apiBase = ApiConfig.baseUrl;
+    globalWindow.setProperty('dilseApiBaseUrl'.toJS, apiBase.toJS);
+
     final workerBase = ApiConfig.cloudflareWorkerUrl;
     globalWindow.setProperty('dilseWorkerBaseUrl'.toJS, workerBase.toJS);
 
