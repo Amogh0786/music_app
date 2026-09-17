@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/music_service.dart';
@@ -46,6 +47,7 @@ class _LibraryScreenState extends State<LibraryScreen>
   }
 
   Future<void> _calculateStorageUsage() async {
+    if (kIsWeb) return;
     int total = 0;
     final downloaded = _musicService.downloadedSongs;
     for (final s in downloaded) {

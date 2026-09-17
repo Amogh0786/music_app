@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/music_service.dart';
@@ -16,6 +17,7 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
   late AnimationController _controller;
   bool _beat1HapticPlayed = false;
   bool _beat2HapticPlayed = false;
+  bool _navigated = false;
 
   final List<_SparkleParticle> _particles = List.generate(
     28,
@@ -29,24 +31,24 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
     // 1. Kick off concurrent background preloading of Home data immediately!
     MusicService().preloadHomeData();
 
-    // 2. Setup 5-second cinematic animation controller
+    // 2. Setup animation controller (shorter on web for rapid desktop responsiveness)
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 5000),
+      duration: Duration(milliseconds: kIsWeb ? 1500 : 5000),
     );
 
     _controller.addListener(() {
       final t = _controller.value;
-      // Trigger haptics during the two heartbeats
-      // Beat 1: ~1300ms (t ~ 0.26)
-      if (t >= 0.26 && !_beat1HapticPlayed) {
-        _beat1HapticPlayed = true;
-        HapticFeedback.mediumImpact();
-      }
-      // Beat 2: ~1800ms (t ~ 0.36)
-      if (t >= 0.36 && !_beat2HapticPlayed) {
-        _beat2HapticPlayed = true;
-        HapticFeedback.heavyImpact();
+      if (!kIsWeb) {
+        // Trigger haptics during the two heartbeats on mobile
+        if (t >= 0.26 && !_beat1HapticPlayed) {
+          _beat1HapticPlayed = true;
+          HapticFeedback.mediumImpact();
+        }
+        if (t >= 0.36 && !_beat2HapticPlayed) {
+          _beat2HapticPlayed = true;
+          HapticFeedback.heavyImpact();
+        }
       }
     });
 
@@ -56,11 +58,17 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
       }
     });
 
+    // Safety fallback timer so user can NEVER be stuck on the splash screen
+    Future.delayed(Duration(milliseconds: kIsWeb ? 1800 : 5500), () {
+      if (mounted) _navigateToMain();
+    });
+
     _controller.forward();
   }
 
   void _navigateToMain() {
-    if (!mounted) return;
+    if (!mounted || _navigated) return;
+    _navigated = true;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 700),

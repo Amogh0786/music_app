@@ -149,7 +149,7 @@ class UpdateService {
 
   /// Starts downloading the APK and triggers Android's package installer.
   Stream<OtaEvent> startOtaUpdate(String downloadUrl) {
-    if (!Platform.isAndroid) {
+    if (kIsWeb || !Platform.isAndroid) {
       throw UnsupportedError('OTA updates via APK are only supported on Android.');
     }
     return OtaUpdate().execute(

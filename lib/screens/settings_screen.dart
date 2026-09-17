@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ota_update/ota_update.dart';
@@ -737,7 +738,7 @@ class _UpdateModalSheetState extends State<_UpdateModalSheet> {
   String? _errorMessage;
 
   Future<void> _startUpdate() async {
-    if (Platform.isAndroid) {
+    if (!kIsWeb && Platform.isAndroid) {
       final status = await Permission.requestInstallPackages.status;
       if (!status.isGranted) {
         final result = await Permission.requestInstallPackages.request();
