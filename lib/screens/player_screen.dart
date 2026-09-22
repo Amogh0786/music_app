@@ -576,63 +576,74 @@ class _PlayerScreenState extends State<PlayerScreen>
                     ],
                   ),
 
-                  const Spacer(),
-
-                  // Center Content: Artwork Switcher OR Synced Lyrics
+                  const Spacer(),                  // Center Content: Artwork Switcher OR Synced Lyrics
                   if (!_showLyrics)
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 400),
-                      transitionBuilder: (child, animation) => FadeTransition(
-                        opacity: animation,
-                        child: ScaleTransition(scale: animation, child: child),
-                      ),
-                      child: artworkStyle == ArtworkStyle.vinyl
-                          ? VinylRecordPlayer(
-                              key: const ValueKey('vinyl_style'),
-                              imageUrl: hdThumbnail,
-                              isPlaying: isPlaying,
-                              dominantColor: dominantColor,
-                              vibrantColor: vibrantColor,
-                              size: MediaQuery.of(context).size.width * 0.78,
-                            )
-                          : Center(
-                              key: const ValueKey('card_style'),
-                              child: Hero(
-                                tag: 'player_artwork_${song.id.value}',
-                                child: Container(
-                                  width: MediaQuery.of(context).size.width * 0.82,
-                                  height: MediaQuery.of(context).size.width * 0.82,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(24),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: dominantColor.withValues(alpha: 0.60),
-                                        blurRadius: 36,
-                                        spreadRadius: 6,
-                                        offset: const Offset(0, 16),
-                                      ),
-                                      BoxShadow(
-                                        color: vibrantColor.withValues(alpha: 0.40),
-                                        blurRadius: 50,
-                                        spreadRadius: 10,
-                                        offset: const Offset(0, 8),
-                                      ),
-                                    ],
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(24),
-                                    child: Image.network(
-                                      hdThumbnail,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, _, _) => Image.network(
-                                        song.thumbnails.highResUrl,
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onHorizontalDragEnd: (details) {
+                        if (details.primaryVelocity == null) return;
+                        if (details.primaryVelocity! < -300) {
+                          HapticFeedback.lightImpact();
+                          _musicService.nextSong();
+                        } else if (details.primaryVelocity! > 300) {
+                          HapticFeedback.lightImpact();
+                          _musicService.previousSong();
+                        }
+                      },
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 400),
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(scale: animation, child: child),
+                        ),
+                        child: artworkStyle == ArtworkStyle.vinyl
+                            ? VinylRecordPlayer(
+                                key: const ValueKey('vinyl_style'),
+                                imageUrl: hdThumbnail,
+                                isPlaying: isPlaying,
+                                dominantColor: dominantColor,
+                                vibrantColor: vibrantColor,
+                                size: MediaQuery.of(context).size.width * 0.78,
+                              )
+                            : Center(
+                                key: const ValueKey('card_style'),
+                                child: Hero(
+                                  tag: 'player_artwork_${song.id.value}',
+                                  child: Container(
+                                    width: MediaQuery.of(context).size.width * 0.82,
+                                    height: MediaQuery.of(context).size.width * 0.82,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(24),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: dominantColor.withValues(alpha: 0.60),
+                                          blurRadius: 36,
+                                          spreadRadius: 6,
+                                          offset: const Offset(0, 16),
+                                        ),
+                                        BoxShadow(
+                                          color: vibrantColor.withValues(alpha: 0.40),
+                                          blurRadius: 50,
+                                          spreadRadius: 10,
+                                          offset: const Offset(0, 8),
+                                        ),
+                                      ],
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(24),
+                                      child: Image.network(
+                                        hdThumbnail,
                                         fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) => Image.network(
+                                          song.thumbnails.highResUrl,
+                                          fit: BoxFit.cover,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
+                      ),
                     )
                   else
                     Expanded(

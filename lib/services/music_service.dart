@@ -15,6 +15,22 @@ import 'preferences_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audio_session/audio_session.dart';
 import 'web_player_bridge.dart';
+import 'canonical_song_dedup.dart';
+import 'youtube_music_client.dart';
+
+enum SearchSuggestionType { artist, song, album, history, query }
+
+class SearchSuggestion {
+  final String text;
+  final String subtitle;
+  final SearchSuggestionType type;
+
+  const SearchSuggestion({
+    required this.text,
+    required this.subtitle,
+    required this.type,
+  });
+}
 
 class StreamCandidate {
   final String url;
@@ -46,6 +62,11 @@ class MusicService extends ChangeNotifier {
   LoopMode _loopMode = LoopMode.off;
   List<Map<String, String>> _likedSongs = [];
   List<Map<String, dynamic>> _customPlaylists = [];
+
+  // Bidirectional Shuffle History Stack
+  final List<int> _shuffleHistory = [];
+  int _shuffleHistoryPointer = -1;
+  bool _isGeneratingQueue = false;
 
   String? _cachedLyrics;
   String? _cachedLyricsSongId;
@@ -602,6 +623,12 @@ class MusicService extends ChangeNotifier {
 
   void toggleShuffle() {
     _isShuffle = !_isShuffle;
+    _shuffleHistory.clear();
+    _shuffleHistoryPointer = -1;
+    if (_isShuffle && _currentIndex >= 0 && _currentIndex < _playlist.length) {
+      _shuffleHistory.add(_currentIndex);
+      _shuffleHistoryPointer = 0;
+    }
     if (!kIsWeb) {
       _audioPlayer.setShuffleModeEnabled(_isShuffle);
     }
@@ -622,22 +649,31 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 3-Tier Source Cascade Search:
+  /// Tier 1: JioSaavn (320kbps studio master audio)
+  /// Tier 2: YouTube Music (Clean official releases, no video sketches)
+  /// Tier 3: YouTube Standard (Safety net fallback)
+  /// Guaranteed Zero Cross-Source Duplicates via CanonicalSongDedup.
   Future<List<Video>> searchSongs(String query, {int page = 1}) async {
     if (query.trim().isEmpty) return [];
 
     try {
-      // Run JioSaavn search and YouTube backend search concurrently
+      // 1. Tier 1: JioSaavn search (highest priority for 320k studio quality)
       final jioFuture = http
           .get(ApiConfig.jioSearchUri(query, limit: 25))
           .timeout(const Duration(seconds: 4));
 
+      // 2. Tier 2: YouTube Music Search (official releases)
+      final ytmFuture = YouTubeMusicClient().searchSongs(query, limit: 15);
+
+      // 3. Tier 3: YouTube Standard backend
       final backendFuture = http
-          .get(ApiConfig.searchUri(query, page: page, limit: 20))
-          .timeout(const Duration(seconds: 15));
+          .get(ApiConfig.searchUri(query, page: page, limit: 15))
+          .timeout(const Duration(seconds: 12));
 
       final jioResponse = await jioFuture.catchError((_) => http.Response('[]', 500));
-
       final List<Video> jioResults = [];
+
       if (jioResponse.statusCode == 200) {
         final List<dynamic> jsonList = json.decode(jioResponse.body);
         for (var item in jsonList) {
@@ -650,7 +686,6 @@ class MusicService extends ChangeNotifier {
           final artwork = item['thumbnail'] as String? ?? '';
           final streamUrl = item['streamUrl'] as String? ?? '';
 
-          // Format valid 11-char ID for Video model
           final vidString = songId.length >= 11 ? songId.substring(0, 11) : songId.padRight(11, '0');
 
           if (artwork.isNotEmpty) {
@@ -682,9 +717,11 @@ class MusicService extends ChangeNotifier {
         }
       }
 
-      // Await backend response (already running in parallel)
+      // Await Tier 2 & Tier 3 in parallel
+      final ytmResults = await ytmFuture.catchError((_) => <Video>[]);
       final backendResponse = await backendFuture.catchError((_) => http.Response('[]', 500));
       final List<Video> backendResults = [];
+
       if (backendResponse.statusCode == 200) {
         final List<dynamic> jsonList = json.decode(backendResponse.body);
         for (var item in jsonList) {
@@ -714,42 +751,98 @@ class MusicService extends ChangeNotifier {
         }
       }
 
-      if (jioResults.isNotEmpty) {
-        // Deduplicate YouTube results against JioSaavn studio tracks
-        final combined = <Video>[...jioResults];
-        final seenTitles = jioResults
-            .map((e) => e.title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), ''))
-            .where((s) => s.isNotEmpty)
-            .toSet();
+      // Deduplicate Tier 2 against Tier 1
+      final dedupedYtm = CanonicalSongDedup.deduplicateList(jioResults, ytmResults);
 
-        for (final ytSong in backendResults) {
-          final cleanYt = ytSong.title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-          bool isDuplicate = false;
-          for (final seen in seenTitles) {
-            if (cleanYt == seen ||
-                (cleanYt.length >= 6 && seen.contains(cleanYt)) ||
-                (seen.length >= 6 && cleanYt.contains(seen))) {
-              isDuplicate = true;
-              break;
-            }
-          }
-          if (!isDuplicate) {
-            combined.add(ytSong);
-          }
-        }
-        debugPrint('[Hybrid Search] Returned ${combined.length} songs (${jioResults.length} JioSaavn + ${combined.length - jioResults.length} YouTube)');
-        return combined;
-      }
+      // Deduplicate Tier 3 against JioSaavn + YTM
+      final known = <Video>[...jioResults, ...dedupedYtm];
+      final dedupedYt = CanonicalSongDedup.deduplicateList(known, backendResults);
 
-      if (backendResults.isNotEmpty) {
-        debugPrint('[Hybrid Search] Returned ${backendResults.length} YouTube songs (JioSaavn empty)');
-        return backendResults;
-      }
+      final combined = <Video>[...jioResults, ...dedupedYtm, ...dedupedYt];
+      debugPrint('[3-Tier Search] Returned ${combined.length} songs (${jioResults.length} Jio + ${dedupedYtm.length} YTM + ${dedupedYt.length} YT)');
+      return combined;
     } catch (e) {
-      debugPrint('[Hybrid Search] Search error: $e');
+      debugPrint('[3-Tier Search] Error: $e');
     }
 
     return [];
+  }
+
+  /// Structured Spotify-grade suggestions (Artist 👤, Song 🎵, History 🕒, Query 🔍)
+  Future<List<SearchSuggestion>> fetchEntitySuggestions(String query, {int limit = 8}) async {
+    if (query.trim().isEmpty) return [];
+
+    final suggestions = <SearchSuggestion>[];
+    final qLower = query.toLowerCase().trim();
+
+    // 1. Instant Local Search History (🕒)
+    final history = PreferencesService().searchHistory;
+    for (final item in history) {
+      if (item.toLowerCase().contains(qLower)) {
+        suggestions.add(SearchSuggestion(
+          text: item,
+          subtitle: 'Recent Search',
+          type: SearchSuggestionType.history,
+        ));
+        if (suggestions.length >= 2) break;
+      }
+    }
+
+    // 2. Instant Local Top Artists (👤)
+    final topArtists = PreferencesService().getTopArtists(limit: 10);
+    for (final artist in topArtists) {
+      if (artist.toLowerCase().contains(qLower)) {
+        suggestions.add(SearchSuggestion(
+          text: artist,
+          subtitle: 'Artist',
+          type: SearchSuggestionType.artist,
+        ));
+        if (suggestions.length >= 4) break;
+      }
+    }
+
+    // 3. JioSaavn Autocomplete API (clean entity categorization)
+    try {
+      final response = await http
+          .get(ApiConfig.jioSuggestionsUri(query, limit: limit))
+          .timeout(const Duration(seconds: 3));
+      if (response.statusCode == 200) {
+        final List<dynamic> jsonList = json.decode(response.body);
+        for (var item in jsonList) {
+          final text = item.toString().trim();
+          if (text.isEmpty || suggestions.any((s) => s.text.toLowerCase() == text.toLowerCase())) {
+            continue;
+          }
+
+          final isArtist = topArtists.any((a) => a.toLowerCase() == text.toLowerCase());
+          suggestions.add(SearchSuggestion(
+            text: text,
+            subtitle: isArtist ? 'Artist' : 'Song',
+            type: isArtist ? SearchSuggestionType.artist : SearchSuggestionType.song,
+          ));
+          if (suggestions.length >= limit) break;
+        }
+      }
+    } catch (_) {}
+
+    // 4. Fill with YouTube suggestions if still sparse
+    if (suggestions.length < limit) {
+      try {
+        final rawStrings = await fetchSuggestions(query, limit: limit - suggestions.length);
+        for (final str in rawStrings) {
+          if (!suggestions.any((s) => s.text.toLowerCase() == str.toLowerCase())) {
+            suggestions.add(SearchSuggestion(
+              text: str,
+              subtitle: 'Search',
+              type: SearchSuggestionType.query,
+            ));
+            if (suggestions.length >= limit) break;
+          }
+        }
+      } catch (_) {}
+    }
+
+    return suggestions;
   }
 
   /// Live query suggestions while typing (up to [limit] suggestions)
@@ -853,6 +946,9 @@ class MusicService extends ChangeNotifier {
         maximumColorCount: 8,
       ).timeout(const Duration(seconds: 3));
 
+      // Guard against race condition: discard if song changed while extracting
+      if (_currentSong?.id.value != videoId) return;
+
       final dominant = palette.dominantColor?.color ?? palette.vibrantColor?.color ?? const Color(0xFF1E1E2C);
       final vibrant = palette.vibrantColor?.color ?? palette.lightVibrantColor?.color ?? dominant;
 
@@ -944,15 +1040,43 @@ class MusicService extends ChangeNotifier {
       return;
     }
 
+    if (_currentSong != null && _audioPlayer.position.inSeconds < 30) {
+      PreferencesService().recordSongSkip(_currentSong!.author);
+    }
+
     if (_playlist.isNotEmpty) {
       if (_isShuffle && _playlist.length > 1) {
-        final random = Random();
-        int nextIdx = random.nextInt(_playlist.length);
-        if (nextIdx == _currentIndex) {
-          nextIdx = (nextIdx + 1) % _playlist.length;
+        // If navigating forward within existing shuffle history
+        if (_shuffleHistoryPointer + 1 < _shuffleHistory.length) {
+          _shuffleHistoryPointer++;
+          _currentIndex = _shuffleHistory[_shuffleHistoryPointer];
+        } else {
+          // Select next song avoiding consecutive artist repetition
+          final random = Random();
+          final currentArtist = _currentSong != null ? CanonicalSongDedup.cleanArtist(_currentSong!.author) : '';
+
+          final candidateIndices = <int>[];
+          for (int i = 0; i < _playlist.length; i++) {
+            if (i == _currentIndex) continue;
+            final artist = CanonicalSongDedup.cleanArtist(_playlist[i].author);
+            if (currentArtist.isEmpty || artist != currentArtist) {
+              candidateIndices.add(i);
+            }
+          }
+
+          int nextIdx;
+          if (candidateIndices.isNotEmpty) {
+            nextIdx = candidateIndices[random.nextInt(candidateIndices.length)];
+          } else {
+            nextIdx = (random.nextInt(_playlist.length - 1) + _currentIndex + 1) % _playlist.length;
+          }
+
+          _currentIndex = nextIdx;
+          _shuffleHistory.add(_currentIndex);
+          _shuffleHistoryPointer = _shuffleHistory.length - 1;
         }
+
         final prevSong = _currentSong;
-        _currentIndex = nextIdx;
         final nextTrack = _playlist[_currentIndex];
         if (prevSong != null) {
           reportTrackFinished(prevSong.id.value, nextTrack.id.value);
@@ -995,6 +1119,15 @@ class MusicService extends ChangeNotifier {
   }
 
   Future<void> previousSong() async {
+    // 1. If in shuffle mode and history exists, traverse back through true shuffle history
+    if (_isShuffle && _shuffleHistoryPointer > 0) {
+      _shuffleHistoryPointer--;
+      _currentIndex = _shuffleHistory[_shuffleHistoryPointer];
+      await playSong(_playlist[_currentIndex], updateQueue: false);
+      return;
+    }
+
+    // 2. Normal sequential playback previous
     if (_playlist.isNotEmpty && _currentIndex - 1 >= 0) {
       _currentIndex--;
       await playSong(_playlist[_currentIndex], updateQueue: false);
@@ -1135,11 +1268,12 @@ class MusicService extends ChangeNotifier {
       } else {
         _playlist = [song];
         _currentIndex = 0;
+        _generate50SongProgressiveQueue(song);
       }
     }
     notifyListeners();
 
-    // Trigger palette extraction asynchronously
+    // Trigger palette extraction asynchronously with race-condition guard
     _extractPalette(song.id.value);
 
     // Pre-fetch lyrics concurrently so they are instant when opened
@@ -1154,6 +1288,40 @@ class MusicService extends ChangeNotifier {
       'thumbnail': getHdThumbnail(song.id.value),
       'playedAt': DateTime.now().toIso8601String(),
     });
+
+    // Proactively check JioSaavn to upgrade any track to 320kbps studio master!
+    if (_webStreamUrls[song.id.value] == null || _webStreamUrls[song.id.value]!.isEmpty) {
+      try {
+        final cleanT = CanonicalSongDedup.cleanTitle(song.title);
+        if (cleanT.isNotEmpty) {
+          final jioUri = ApiConfig.jioSearchUri(cleanT, limit: 3);
+          final jioResp = await http.get(jioUri).timeout(const Duration(seconds: 2));
+          if (jioResp.statusCode == 200) {
+            final List<dynamic> list = json.decode(jioResp.body);
+            for (final item in list) {
+              final itemTitle = item['title'] as String? ?? '';
+              final itemArtist = item['author'] as String? ?? '';
+              final itemStream = item['streamUrl'] as String? ?? '';
+              final itemThumb = item['thumbnail'] as String? ?? '';
+              if (itemStream.isNotEmpty &&
+                  CanonicalSongDedup.areDuplicateSongs(
+                    titleA: song.title,
+                    artistA: song.author,
+                    titleB: itemTitle,
+                    artistB: itemArtist,
+                  )) {
+                debugPrint('[Play] Upgraded "${song.title}" to JioSaavn 320k studio stream!');
+                _webStreamUrls[song.id.value] = itemStream;
+                if (itemThumb.isNotEmpty) {
+                  _artworkMap[song.id.value] = itemThumb;
+                }
+                break;
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
 
     final mediaItem = MediaItem(
       id: song.id.value,
@@ -1376,44 +1544,93 @@ class MusicService extends ChangeNotifier {
     }
   }
 
+  Future<void> _generate50SongProgressiveQueue(Video seed) async {
+    if (_isGeneratingQueue) return;
+    _isGeneratingQueue = true;
+
+    try {
+      debugPrint('[Queue50] Generating 50-song progressive chained queue for: "${seed.title}"…');
+      final progressiveQueue = <Video>[seed];
+      final seenKeys = <String>{CanonicalSongDedup.cleanTitle(seed.title)};
+
+      Future<List<Video>> getRecommendations(Video s) async {
+        // 1. First try YouTube Music Radio automix (Google's recommendation graph)
+        List<Video> raw = await YouTubeMusicClient().fetchRadioTracks(s.id.value, limit: 15);
+        if (raw.isEmpty) {
+          // 2. Fallback to search query based on primary artist
+          final cleanArtist = CanonicalSongDedup.cleanArtist(s.author);
+          final query = cleanArtist.isNotEmpty ? '$cleanArtist songs' : s.title;
+          raw = await searchSongs(query);
+        }
+        return raw;
+      }
+
+      var currentSeed = seed;
+
+      // 5 Chained Stages of 10 tracks each
+      for (int stage = 1; stage <= 5; stage++) {
+        if (_currentSong?.id.value != seed.id.value) {
+          debugPrint('[Queue50] Queue generation superseded by newer track.');
+          return;
+        }
+
+        final candidates = await getRecommendations(currentSeed);
+        final deduped = CanonicalSongDedup.deduplicateList(progressiveQueue, candidates);
+
+        for (final track in deduped) {
+          final key = CanonicalSongDedup.cleanTitle(track.title);
+          if (!seenKeys.contains(key)) {
+            seenKeys.add(key);
+            progressiveQueue.add(track);
+            if (progressiveQueue.length >= (stage * 10) + 1) break;
+          }
+        }
+
+        // The seed for next stage is the last track added in the previous stage
+        if (progressiveQueue.isNotEmpty) {
+          currentSeed = progressiveQueue.last;
+        }
+
+        if (progressiveQueue.length >= 51) break;
+      }
+
+      if (_currentSong?.id.value != seed.id.value) return;
+
+      // Balance artist distribution for upcoming tracks
+      if (progressiveQueue.length > 2) {
+        final upcoming = progressiveQueue.sublist(1);
+        final balancedUpcoming = CanonicalSongDedup.balanceArtistDistribution(upcoming);
+        _playlist = [seed, ...balancedUpcoming];
+      } else {
+        _playlist = progressiveQueue;
+      }
+
+      debugPrint('[Queue50] Successfully generated progressive queue: ${_playlist.length} songs');
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[Queue50] Queue generation error: $e');
+    } finally {
+      _isGeneratingQueue = false;
+    }
+  }
+
   Future<void> _fetchNextRecommendations(Video song) async {
     if (_isFetchingNextQueue) return;
     _isFetchingNextQueue = true;
     try {
-      debugPrint('[Recommendations] Silently fetching next songs for ${song.title}…');
-      List<Video> candidates = [];
-
-      if (kIsWeb) {
-        // Web/PWA: Fetch artist tracks from JioSaavn for 320k direct playback
-        final primaryArtist = song.author.split(',')[0].trim();
-        final query = (primaryArtist.isNotEmpty && primaryArtist != 'DilSe Music' && primaryArtist != 'Unknown Artist')
-            ? '$primaryArtist songs'
-            : 'Top Hits 2026';
+      debugPrint('[Queue] Silently fetching next 10 chained recommendations for ${song.title}…');
+      List<Video> candidates = await YouTubeMusicClient().fetchRadioTracks(song.id.value, limit: 15);
+      if (candidates.isEmpty) {
+        final cleanArtist = CanonicalSongDedup.cleanArtist(song.author);
+        final query = cleanArtist.isNotEmpty ? '$cleanArtist hits' : 'Top Hits 2026';
         candidates = await searchSongs(query);
-        if (candidates.length < 5) {
-          final top = await searchSongs('Top Charts India Music');
-          candidates.addAll(top);
-        }
-      } else {
-        // Mobile / Android: Fetch radio & collaborative recommendations from backend
-        candidates = await fetchNextCandidates(
-          song.id.value,
-          limit: 20,
-          title: song.title,
-          artist: song.author,
-        );
       }
 
-      if (candidates.isNotEmpty) {
-        int added = 0;
-        for (var track in candidates) {
-          if (track.id.value == song.id.value) continue;
-          if (!_playlist.any((item) => item.id.value == track.id.value)) {
-            _playlist.add(track);
-            added++;
-          }
-        }
-        debugPrint('[Queue] Appended $added recommended tracks. Total in queue: ${_playlist.length}');
+      final fresh = CanonicalSongDedup.deduplicateList(_playlist, candidates);
+      if (fresh.isNotEmpty) {
+        final balanced = CanonicalSongDedup.balanceArtistDistribution(fresh);
+        _playlist.addAll(balanced.take(10));
+        debugPrint('[Queue] Appended ${balanced.length} chained tracks. Total in queue: ${_playlist.length}');
         notifyListeners();
       }
     } catch (e) {

@@ -5,6 +5,50 @@ import 'package:shared_preferences/shared_preferences.dart';
 enum ArtworkStyle { card, vinyl }
 enum ScrubberStyle { waveform, classic }
 
+class TasteMatrix {
+  final List<String> topArtists;
+  final List<String> preferredLanguages;
+  final Map<String, double> artistAffinities;
+  final int totalPlays;
+  final int totalSkips;
+
+  const TasteMatrix({
+    required this.topArtists,
+    required this.preferredLanguages,
+    required this.artistAffinities,
+    required this.totalPlays,
+    required this.totalSkips,
+  });
+}
+
+class CircadianContext {
+  final String title;
+  final String subtitle;
+  final String query;
+  final String tag;
+  final String emoji;
+
+  const CircadianContext({
+    required this.title,
+    required this.subtitle,
+    required this.query,
+    required this.tag,
+    required this.emoji,
+  });
+}
+
+class DailyMixConfig {
+  final String title;
+  final String subtitle;
+  final String query;
+
+  const DailyMixConfig({
+    required this.title,
+    required this.subtitle,
+    required this.query,
+  });
+}
+
 class PreferencesService extends ChangeNotifier {
   static final PreferencesService _instance = PreferencesService._internal();
   factory PreferencesService() => _instance;
@@ -31,8 +75,10 @@ class PreferencesService extends ChangeNotifier {
   // Listening History
   List<Map<String, String>> _listeningHistory = [];
 
-  // Listening Preferences & Play Counts
+  // Listening Preferences & Play Counts (Local Private Taste Matrix)
   final Map<String, int> _artistPlayCounts = {};
+  final Map<String, int> _artistSkipCounts = {};
+  List<String> _preferredLanguages = ['Hindi', 'Telugu', 'Tamil', 'Punjabi', 'English'];
   String _mostPlayedArtist = '';
 
   bool get isInitialized => _isInitialized;
@@ -48,8 +94,10 @@ class PreferencesService extends ChangeNotifier {
   bool get hasPromptedName => _hasPromptedName;
   List<String> get searchHistory => _searchHistory;
   List<Map<String, String>> get listeningHistory => _listeningHistory;
+  List<String> get preferredLanguages => _preferredLanguages;
   String get mostPlayedArtist => _mostPlayedArtist;
   int get totalPlays => _artistPlayCounts.values.fold(0, (a, b) => a + b);
+  int get totalSkips => _artistSkipCounts.values.fold(0, (a, b) => a + b);
 
   Future<void> init() async {
     if (_isInitialized) return;
@@ -80,15 +128,38 @@ class PreferencesService extends ChangeNotifier {
       }
     }
 
+    final playsJson = _prefs.getString('artistPlayCountsJson');
+    if (playsJson != null && playsJson.isNotEmpty) {
+      try {
+        final Map<String, dynamic> decoded = json.decode(playsJson);
+        decoded.forEach((k, v) => _artistPlayCounts[k] = (v as num).toInt());
+      } catch (_) {}
+    }
+
+    final skipsJson = _prefs.getString('artistSkipCountsJson');
+    if (skipsJson != null && skipsJson.isNotEmpty) {
+      try {
+        final Map<String, dynamic> decoded = json.decode(skipsJson);
+        decoded.forEach((k, v) => _artistSkipCounts[k] = (v as num).toInt());
+      } catch (_) {}
+    }
+
+    final langs = _prefs.getStringList('preferredLanguages');
+    if (langs != null && langs.isNotEmpty) {
+      _preferredLanguages = langs;
+    }
+
     _isInitialized = true;
     notifyListeners();
   }
 
   Future<void> recordSongPlay(String artist, String title) async {
+    if (!_isInitialized) return;
     if (artist.trim().isEmpty) return;
 
     final count = (_artistPlayCounts[artist] ?? 0) + 1;
     _artistPlayCounts[artist] = count;
+    await _prefs.setString('artistPlayCountsJson', json.encode(_artistPlayCounts));
 
     // Recalculate top artist
     String topArtist = _mostPlayedArtist;
@@ -107,37 +178,194 @@ class PreferencesService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> recordSongSkip(String artist) async {
+    if (!_isInitialized) return;
+    if (artist.trim().isEmpty) return;
+
+    final count = (_artistSkipCounts[artist] ?? 0) + 1;
+    _artistSkipCounts[artist] = count;
+    await _prefs.setString('artistSkipCountsJson', json.encode(_artistSkipCounts));
+    notifyListeners();
+  }
+
+  Future<void> setPreferredLanguages(List<String> langs) async {
+    if (!_isInitialized) return;
+    _preferredLanguages = List.from(langs);
+    await _prefs.setStringList('preferredLanguages', _preferredLanguages);
+    notifyListeners();
+  }
+
+  /// Builds the 100% private local "Taste Matrix" inspired by ListenBrainz/Troi
+  TasteMatrix getTasteMatrix() {
+    final affinities = <String, double>{};
+    final allArtists = {..._artistPlayCounts.keys, ..._artistSkipCounts.keys};
+
+    for (final artist in allArtists) {
+      final plays = _artistPlayCounts[artist] ?? 0;
+      final skips = _artistSkipCounts[artist] ?? 0;
+      // Affinity: 2 points per play minus 1 point per skip
+      affinities[artist] = (plays * 2.0) - (skips * 1.0);
+    }
+
+    final sorted = affinities.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    List<String> top = sorted.take(5).map((e) => e.key).toList();
+    if (top.isEmpty) {
+      top = ['Arijit Singh', 'Anirudh Ravichander', 'Pritam', 'Sid Sriram', 'Shreya Ghoshal'];
+    }
+
+    return TasteMatrix(
+      topArtists: top,
+      preferredLanguages: List.unmodifiable(_preferredLanguages),
+      artistAffinities: affinities,
+      totalPlays: _artistPlayCounts.values.fold(0, (a, b) => a + b),
+      totalSkips: _artistSkipCounts.values.fold(0, (a, b) => a + b),
+    );
+  }
+
+  /// Returns user's top played artists based on on-device playback history
+  List<String> getTopArtists({int limit = 5}) {
+    final matrix = getTasteMatrix();
+    return matrix.topArtists.take(limit).toList();
+  }
+
+  /// Circadian Time-of-Day Contextualizer:
+  /// Morning (acoustic/ambient), Afternoon (upbeat/tempo), Evening (trending/hits), Late Night (lo-fi/slowed)
+  CircadianContext getCircadianContext() {
+    final hour = DateTime.now().hour;
+    if (hour >= 5 && hour < 12) {
+      return const CircadianContext(
+        title: 'Morning Melodies',
+        subtitle: 'Soft acoustic & ambient vibes to start your day',
+        query: 'Acoustic Ambient Melodies',
+        tag: 'MORNING',
+        emoji: '🌅',
+      );
+    }
+    if (hour >= 12 && hour < 17) {
+      return const CircadianContext(
+        title: 'Afternoon Energy',
+        subtitle: 'High-tempo beats and chartbusters to keep you grooving',
+        query: 'Upbeat High Tempo Indian Hits',
+        tag: 'AFTERNOON',
+        emoji: '⚡',
+      );
+    }
+    if (hour >= 17 && hour < 22) {
+      return const CircadianContext(
+        title: 'Evening Chill',
+        subtitle: 'Trending relaxing tracks and chill evening vibes',
+        query: 'Trending Chill Indian Hits',
+        tag: 'EVENING',
+        emoji: '🌆',
+      );
+    }
+    return const CircadianContext(
+      title: 'Late Night Vibes',
+      subtitle: 'Dreamy lo-fi and slowed melodies for quiet hours',
+      query: 'Lo-Fi Slowed Reverb Indian Melodies',
+      tag: 'LATE NIGHT',
+      emoji: '🌙',
+    );
+  }
+
+  String getTimeOfDayGreeting() {
+    return getCircadianContext().title;
+  }
+
+  /// Multi-Seed Daily Mix Synthesizer (Inspired by Spotube)
+  List<DailyMixConfig> getDailyMixConfigs() {
+    final top = getTopArtists(limit: 5);
+    final artist1 = top.isNotEmpty ? top[0] : 'Arijit Singh';
+    final artist2 = top.length > 1 ? top[1] : 'Anirudh Ravichander';
+
+    return [
+      DailyMixConfig(
+        title: 'Daily Mix 1',
+        subtitle: '$artist1 & Friends',
+        query: '$artist1 hits radio songs',
+      ),
+      DailyMixConfig(
+        title: 'Daily Mix 2',
+        subtitle: '$artist2 Melodies',
+        query: '$artist2 songs mix',
+      ),
+      DailyMixConfig(
+        title: 'Made For You',
+        subtitle: 'Personalized Blend',
+        query: '${top.take(3).join(" ")} hits',
+      ),
+    ];
+  }
+
+  /// Generates dynamic personalized search seeds for the Home Screen
+  List<String> getPersonalizedMixSeeds() {
+    final mixes = getDailyMixConfigs();
+    final vibe = getCircadianContext();
+    return [
+      mixes[0].query,
+      mixes[1].query,
+      vibe.query,
+    ];
+  }
+
+  /// Caches home feed data with timestamp TTL (6 hours)
+  Future<void> cacheHomeFeed(String key, String jsonData) async {
+    if (!_isInitialized) return;
+    await _prefs.setString('home_cache_$key', jsonData);
+    await _prefs.setInt('home_cache_time_$key', DateTime.now().millisecondsSinceEpoch);
+  }
+
+  /// Retrieves cached home feed data if less than 6 hours old
+  String? getCachedHomeFeed(String key) {
+    if (!_isInitialized) return null;
+    final timestamp = _prefs.getInt('home_cache_time_$key');
+    if (timestamp == null) return null;
+
+    final age = DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(timestamp));
+    if (age.inHours >= 6) return null; // Stale
+
+    return _prefs.getString('home_cache_$key');
+  }
+
   Future<void> setCrossfade(bool value) async {
+    if (!_isInitialized) return;
     _crossfadeEnabled = value;
     await _prefs.setBool('crossfade', value);
     notifyListeners();
   }
 
   Future<void> setThemeColor(Color color) async {
+    if (!_isInitialized) return;
     _themeColor = color;
     await _prefs.setInt('themeColor', color.toARGB32());
     notifyListeners();
   }
 
   Future<void> setCacheSize(double sizeMB) async {
+    if (!_isInitialized) return;
     _cacheSizeMB = sizeMB;
     await _prefs.setDouble('cacheSizeMB', sizeMB);
     notifyListeners();
   }
 
   Future<void> setCustomServerUrl(String url) async {
+    if (!_isInitialized) return;
     _customServerUrl = url.trim();
     await _prefs.setString('customServerUrl', _customServerUrl);
     notifyListeners();
   }
 
   Future<void> setCloudflareWorkerUrl(String url) async {
+    if (!_isInitialized) return;
     _cloudflareWorkerUrl = url.trim();
     await _prefs.setString('cloudflareWorkerUrl', _cloudflareWorkerUrl);
     notifyListeners();
   }
 
   Future<void> addToSearchHistory(String query) async {
+    if (!_isInitialized) return;
     if (query.trim().isEmpty) return;
     _searchHistory.remove(query);
     _searchHistory.insert(0, query);
@@ -149,18 +377,21 @@ class PreferencesService extends ChangeNotifier {
   }
 
   Future<void> removeFromSearchHistory(String query) async {
+    if (!_isInitialized) return;
     _searchHistory.remove(query);
     await _prefs.setStringList('searchHistory', _searchHistory);
     notifyListeners();
   }
 
   Future<void> clearSearchHistory() async {
+    if (!_isInitialized) return;
     _searchHistory.clear();
     await _prefs.setStringList('searchHistory', _searchHistory);
     notifyListeners();
   }
 
   Future<void> addToListeningHistory(Map<String, String> song) async {
+    if (!_isInitialized) return;
     final id = song['id'];
     if (id == null || id.isEmpty) return;
     _listeningHistory.removeWhere((item) => item['id'] == id);
@@ -173,12 +404,14 @@ class PreferencesService extends ChangeNotifier {
   }
 
   Future<void> clearListeningHistory() async {
+    if (!_isInitialized) return;
     _listeningHistory.clear();
     await _prefs.remove('listeningHistoryJson');
     notifyListeners();
   }
 
   Future<void> setUserName(String name) async {
+    if (!_isInitialized) return;
     _userName = name.trim();
     _hasPromptedName = true;
     await _prefs.setString('userName', _userName);
@@ -187,6 +420,7 @@ class PreferencesService extends ChangeNotifier {
   }
 
   Future<void> setArtworkStyle(ArtworkStyle style) async {
+    if (!_isInitialized) return;
     _artworkStyle = style;
     await _prefs.setString('artworkStyle', style.name);
     notifyListeners();
@@ -198,6 +432,7 @@ class PreferencesService extends ChangeNotifier {
   }
 
   Future<void> setScrubberStyle(ScrubberStyle style) async {
+    if (!_isInitialized) return;
     _scrubberStyle = style;
     await _prefs.setString('scrubberStyle', style.name);
     notifyListeners();

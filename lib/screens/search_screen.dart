@@ -24,7 +24,7 @@ class _SearchScreenState extends State<SearchScreen>
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   List<Video> _searchResults = [];
-  List<String> _suggestions = [];
+  List<SearchSuggestion> _suggestions = [];
   Timer? _debounceTimer;
   bool _isSearching = false;
   bool _isLoadingMore = false;
@@ -143,9 +143,9 @@ class _SearchScreenState extends State<SearchScreen>
     }
 
     if (query != _currentQuery) {
-      _debounceTimer = Timer(const Duration(milliseconds: 300), () async {
+      _debounceTimer = Timer(const Duration(milliseconds: 250), () async {
         if (!mounted) return;
-        final results = await _musicService.fetchSuggestions(query, limit: 8);
+        final results = await _musicService.fetchEntitySuggestions(query, limit: 10);
         if (mounted && _searchController.text.trim() == query) {
           setState(() {
             _suggestions = results;
@@ -205,11 +205,11 @@ class _SearchScreenState extends State<SearchScreen>
 
     if (mounted) {
       setState(() {
-        _currentPage = nextPage;
         _isLoadingMore = false;
         if (newResults.isEmpty) {
           _hasMore = false;
         } else {
+          _currentPage = nextPage;
           _searchResults.addAll(newResults);
         }
       });
@@ -305,20 +305,30 @@ class _SearchScreenState extends State<SearchScreen>
                           itemBuilder: (context, index) {
                             final suggestion = _suggestions[index];
                             return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                              leading: const Icon(Icons.search, color: Colors.white54, size: 20),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                              leading: _buildSuggestionLeading(suggestion.type),
                               title: Text(
-                                suggestion,
+                                suggestion.text,
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 15,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              trailing: const Icon(Icons.north_west, color: Colors.white38, size: 18),
+                              subtitle: suggestion.subtitle.isNotEmpty
+                                  ? Text(
+                                      suggestion.subtitle,
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(alpha: 0.45),
+                                        fontSize: 12,
+                                      ),
+                                    )
+                                  : null,
+                              trailing: const Icon(Icons.north_west_rounded, color: Colors.white38, size: 18),
                               onTap: () {
-                                _searchController.text = suggestion;
-                                _performSearch(suggestion);
+                                HapticFeedback.lightImpact();
+                                _searchController.text = suggestion.text;
+                                _performSearch(suggestion.text);
                               },
                             );
                           },
@@ -600,5 +610,52 @@ class _SearchScreenState extends State<SearchScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildSuggestionLeading(SearchSuggestionType type) {
+    switch (type) {
+      case SearchSuggestionType.artist:
+        return Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1DB954).withValues(alpha: 0.15),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.person_rounded, color: Color(0xFF1DB954), size: 18),
+        );
+      case SearchSuggestionType.song:
+        return Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: const Color(0xFF00c6ff).withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(Icons.music_note_rounded, color: Color(0xFF00c6ff), size: 18),
+        );
+      case SearchSuggestionType.album:
+        return Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF8008).withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(Icons.album_rounded, color: Color(0xFFFF8008), size: 18),
+        );
+      case SearchSuggestionType.history:
+        return const SizedBox(
+          width: 32,
+          height: 32,
+          child: Icon(Icons.history_rounded, color: Colors.white54, size: 20),
+        );
+      case SearchSuggestionType.query:
+        return const SizedBox(
+          width: 32,
+          height: 32,
+          child: Icon(Icons.search_rounded, color: Colors.white54, size: 20),
+        );
+    }
   }
 }

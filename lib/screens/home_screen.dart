@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
 import '../services/preferences_service.dart';
+import '../services/canonical_song_dedup.dart';
 import '../widgets/shimmer_loading.dart';
 import '../widgets/spotlight_billboard.dart';
 import '../widgets/song_options_bottom_sheet.dart';
@@ -27,6 +29,11 @@ class _HomeScreenState extends State<HomeScreen>
   List<Video> _trendingNow = [];
   List<Video> _newReleases = [];
   List<Video> _personalizedMixes = [];
+  List<Video> _circadianMix = [];
+  List<Video> _dailyMix1 = [];
+  List<Video> _dailyMix2 = [];
+  CircadianContext? _circadianContext;
+  List<DailyMixConfig> _dailyMixConfigs = [];
   bool _isLoadingCharts = true;
   String? _loadingPlaylistId;
 
@@ -97,81 +104,127 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour >= 5 && hour < 12) return 'Good morning';
-    if (hour >= 12 && hour < 17) return 'Good afternoon';
-    if (hour >= 17 && hour < 22) return 'Good evening';
-    return 'Late night';
+    return _prefs.getTimeOfDayGreeting();
   }
 
   Future<void> _loadHomeFeeds() async {
-    try {
-      final List<String> seeds = [];
-      if (_prefs.mostPlayedArtist.isNotEmpty) {
-        seeds.add('${_prefs.mostPlayedArtist} songs');
-      }
-      for (var query in _prefs.searchHistory) {
-        if (!seeds.contains('$query songs') && seeds.length < 3) {
-          seeds.add('$query songs');
-        }
-      }
-      if (seeds.isEmpty) {
-        seeds.add('Top Hit Songs 2026');
-      }
+    _circadianContext = _prefs.getCircadianContext();
+    _dailyMixConfigs = _prefs.getDailyMixConfigs();
 
+    // 1. Silent Instant Cache Hydration (< 6 hours)
+    final cachedCircadian = _deserializeCachedVideos(_prefs.getCachedHomeFeed('circadian'));
+    final cachedMix1 = _deserializeCachedVideos(_prefs.getCachedHomeFeed('daily_mix_1'));
+    final cachedMix2 = _deserializeCachedVideos(_prefs.getCachedHomeFeed('daily_mix_2'));
+    final cachedCharts = _deserializeCachedVideos(_prefs.getCachedHomeFeed('charts'));
+    final cachedTrending = _deserializeCachedVideos(_prefs.getCachedHomeFeed('trending'));
+    final cachedNewReleases = _deserializeCachedVideos(_prefs.getCachedHomeFeed('new_releases'));
+    final cachedPersonalized = _deserializeCachedVideos(_prefs.getCachedHomeFeed('personalized'));
+
+    bool hadCache = false;
+    if (cachedCircadian.isNotEmpty || cachedMix1.isNotEmpty || cachedCharts.isNotEmpty) {
+      hadCache = true;
+      if (mounted) {
+        setState(() {
+          if (cachedCircadian.isNotEmpty) _circadianMix = cachedCircadian;
+          if (cachedMix1.isNotEmpty) _dailyMix1 = cachedMix1;
+          if (cachedMix2.isNotEmpty) _dailyMix2 = cachedMix2;
+          if (cachedCharts.isNotEmpty) _topChartsIndia = cachedCharts;
+          if (cachedTrending.isNotEmpty) _trendingNow = cachedTrending;
+          if (cachedNewReleases.isNotEmpty) _newReleases = cachedNewReleases;
+          if (cachedPersonalized.isNotEmpty) _personalizedMixes = cachedPersonalized;
+          _isLoadingCharts = false;
+        });
+      }
+    }
+
+    // 2. Background Refresh / Initial Load
+    try {
+      final futureCircadian = _musicService.searchSongs(_circadianContext!.query);
+      final futureMix1 = _musicService.searchSongs(_dailyMixConfigs[0].query);
+      final futureMix2 = _musicService.searchSongs(_dailyMixConfigs[1].query);
       final futureCharts = _musicService.searchSongs('Top Charts India Music');
       final futureTrending = _musicService.searchSongs('Trending Songs 2026');
       final futureNewReleases = _musicService.searchSongs('Latest Music Hits');
-      final futureSeeds = seeds.map((s) => _musicService.searchSongs(s)).toList();
+      final futurePersonalized = _musicService.searchSongs(_dailyMixConfigs[2].query);
 
       final results = await Future.wait<dynamic>([
+        futureCircadian,
+        futureMix1,
+        futureMix2,
         futureCharts,
         futureTrending,
         futureNewReleases,
-        ...futureSeeds,
+        futurePersonalized,
       ]);
 
-      final charts = results[0] as List<Video>;
-      final trending = results[1] as List<Video>;
-      final newReleases = results[2] as List<Video>;
+      final circadian = CanonicalSongDedup.deduplicateList(results[0] as List<Video>);
+      final mix1 = CanonicalSongDedup.deduplicateList(results[1] as List<Video>);
+      final mix2 = CanonicalSongDedup.deduplicateList(results[2] as List<Video>);
+      final charts = CanonicalSongDedup.deduplicateList(results[3] as List<Video>);
+      final trending = CanonicalSongDedup.deduplicateList(results[4] as List<Video>);
+      final newReleases = CanonicalSongDedup.deduplicateList(results[5] as List<Video>);
+      final personalized = CanonicalSongDedup.deduplicateList(results[6] as List<Video>);
 
-      final List<List<Video>> seedResults = [];
-      for (int i = 3; i < results.length; i++) {
-        final seedList = results[i] as List<Video>;
-        if (seedList.isNotEmpty) seedResults.add(seedList);
-      }
-
-      final List<Video> blendedMix = [];
-      int maxLen = 0;
-      for (var list in seedResults) {
-        if (list.length > maxLen) maxLen = list.length;
-      }
-
-      for (int i = 0; i < maxLen && blendedMix.length < 15; i++) {
-        for (var list in seedResults) {
-          if (i < list.length) {
-            if (!blendedMix.any((v) => v.id == list[i].id)) {
-              blendedMix.add(list[i]);
-            }
-          }
-        }
-      }
+      _prefs.cacheHomeFeed('circadian', _serializeVideos(circadian));
+      _prefs.cacheHomeFeed('daily_mix_1', _serializeVideos(mix1));
+      _prefs.cacheHomeFeed('daily_mix_2', _serializeVideos(mix2));
+      _prefs.cacheHomeFeed('charts', _serializeVideos(charts));
+      _prefs.cacheHomeFeed('trending', _serializeVideos(trending));
+      _prefs.cacheHomeFeed('new_releases', _serializeVideos(newReleases));
+      _prefs.cacheHomeFeed('personalized', _serializeVideos(personalized));
 
       if (mounted) {
         setState(() {
+          _circadianMix = circadian;
+          _dailyMix1 = mix1;
+          _dailyMix2 = mix2;
           _topChartsIndia = charts;
           _trendingNow = trending;
           _newReleases = newReleases;
-          _personalizedMixes = blendedMix;
+          _personalizedMixes = personalized;
           _isLoadingCharts = false;
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && !hadCache) {
         setState(() {
           _isLoadingCharts = false;
         });
       }
+    }
+  }
+
+  String _serializeVideos(List<Video> videos) {
+    final list = videos.map((v) => {
+      'id': v.id.value,
+      'title': v.title,
+      'author': v.author,
+      'durationMs': v.duration?.inMilliseconds ?? 0,
+    }).toList();
+    return json.encode(list);
+  }
+
+  List<Video> _deserializeCachedVideos(String? jsonStr) {
+    if (jsonStr == null || jsonStr.isEmpty) return [];
+    try {
+      final List<dynamic> list = json.decode(jsonStr);
+      return list.map((m) => Video(
+        VideoId(m['id'] as String),
+        m['title'] as String,
+        m['author'] as String,
+        ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+        DateTime.now(),
+        '',
+        null,
+        '',
+        Duration(milliseconds: (m['durationMs'] as num?)?.toInt() ?? 0),
+        ThumbnailSet(m['id'] as String),
+        null,
+        Engagement(0, null, null),
+        false,
+      )).toList();
+    } catch (_) {
+      return [];
     }
   }
 
@@ -393,6 +446,36 @@ class _HomeScreenState extends State<HomeScreen>
                           },
                         ),
                         const SizedBox(height: 24),
+
+                        // Circadian Time-of-Day Contextual Shelf
+                        if (_circadianMix.isNotEmpty && _circadianContext != null) ...[
+                          _buildSectionHeader(
+                            '${_circadianContext!.emoji} ${_circadianContext!.title.toUpperCase()}',
+                            _circadianContext!.subtitle,
+                          ),
+                          _buildHorizontalChartCards(_circadianMix),
+                          const SizedBox(height: 24),
+                        ],
+
+                        // Multi-Seed Daily Mix 1 (Top Artist & Friends)
+                        if (_dailyMix1.isNotEmpty && _dailyMixConfigs.isNotEmpty) ...[
+                          _buildSectionHeader(
+                            _dailyMixConfigs[0].title.toUpperCase(),
+                            _dailyMixConfigs[0].subtitle,
+                          ),
+                          _buildHorizontalChartCards(_dailyMix1),
+                          const SizedBox(height: 24),
+                        ],
+
+                        // Multi-Seed Daily Mix 2 (Top Artist Melodies)
+                        if (_dailyMix2.isNotEmpty && _dailyMixConfigs.length > 1) ...[
+                          _buildSectionHeader(
+                            _dailyMixConfigs[1].title.toUpperCase(),
+                            _dailyMixConfigs[1].subtitle,
+                          ),
+                          _buildHorizontalChartCards(_dailyMix2),
+                          const SizedBox(height: 24),
+                        ],
 
                         // FEATURED PLAYLISTS & TRENDS (Spotify-Style Curated Mixes)
                         _buildSectionHeader('FEATURED PLAYLISTS', 'Trending & Curated Mixes'),
@@ -855,14 +938,20 @@ class _HomeScreenState extends State<HomeScreen>
               leading: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
                 child: Image.network(
-                  song['thumbnail']!,
+                  song['thumbnail'] ?? MusicService.getHdThumbnail(song['id'] ?? ''),
                   width: 50,
                   height: 50,
                   fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: 50,
+                    height: 50,
+                    color: Colors.white10,
+                    child: const Icon(Icons.music_note_rounded, color: Colors.white38),
+                  ),
                 ),
               ),
               title: Text(
-                song['title']!,
+                song['title'] ?? 'Unknown Track',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -873,7 +962,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               subtitle: Text(
-                song['author']!,
+                song['author'] ?? 'Unknown Artist',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -884,17 +973,19 @@ class _HomeScreenState extends State<HomeScreen>
               trailing: const Icon(Icons.favorite_rounded, color: Color(0xFFFA2D48), size: 22),
               onTap: () {
                 HapticFeedback.lightImpact();
+                final songId = song['id'] ?? '';
+                if (songId.isEmpty) return;
                 final video = Video(
-                  VideoId(song['id']!),
-                  song['title']!,
-                  song['author']!,
+                  VideoId(songId),
+                  song['title'] ?? 'Unknown Track',
+                  song['author'] ?? 'Unknown Artist',
                   ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
                   DateTime.now(),
                   '',
                   null,
                   '',
                   null,
-                  ThumbnailSet(song['id']!),
+                  ThumbnailSet(songId),
                   null,
                   Engagement(0, null, null),
                   false,
