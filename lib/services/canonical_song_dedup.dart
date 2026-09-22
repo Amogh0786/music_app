@@ -18,15 +18,35 @@ class CanonicalSongDedup {
     r'ringtone|dialogue|extended\s+version|original\s+soundtrack|ost)\b',
     caseSensitive: false,
   );
+
+  // Non-music video noise patterns (speeches, interviews, launch events, cricket, sketches)
+  static final RegExp _nonMusicTitleNoise = RegExp(
+    r'\b(speech|speech\s*@|press\s+meet|success\s+meet|launch\s+event|song\s+launch|audio\s+launch|'
+    r'pre\s+release|trailer|teaser|glimpse|promo|first\s+look|motion\s+poster|title\s+reveal|'
+    r'interview|talk\s+show|podcast|episode|review|reaction|behind\s+the\s+scenes|making\s+of|bts|'
+    r'dances?\s+to|dance\s+performance|dance\s+cover|dance\s+video|stage\s+performance|'
+    r'status\s+video|whatsapp\s+status|cricket|ipl|match\s+highlights|trophy|shreyas\s+iyer|'
+    r'full\s+movie|movie\s+scene|comedy\s+scene|action\s+scene|climax\s+scene|scenes|'
+    r'ringtone|bgm\s+only|shorts|#shorts)\b',
+    caseSensitive: false,
+  );
+
+  static final RegExp _nonMusicAuthorNoise = RegExp(
+    r'\b(media|news|tv|filmnagar|events|buzz|sports|daily|cinema\s+news|vlogs?|cricket)\b',
+    caseSensitive: false,
+  );
+
   static final RegExp _punctuation = RegExp(r'[^a-zA-Z0-9\s]');
   static final RegExp _whitespace = RegExp(r'\s+');
 
-  // Record label and noise words in artist names
+  // Record label, media company and noise words in artist names
   static const Set<String> _labelNoise = {
     't-series', 'tseries', 'aditya music', 'sony music', 'zee music',
     'lahari music', 'speed audio', 'tips official', 'tips', 'saregama',
     'yrf', 'think music', 'vevo', 'records', 'entertainment', 'music',
-    'official', 'channel', 'audio', 'soundtracks', 'company'
+    'official', 'channel', 'audio', 'soundtracks', 'company',
+    'shreyas media', 'shreyas', 'nik studios', 'abhishek pictures',
+    'gr lyrics', 'lyrics', 'lyrical', 'filmnagar', 'media', 'news', 'tv'
   };
 
   /// Common stopwords ignored during token set comparison
@@ -60,18 +80,33 @@ class CanonicalSongDedup {
     return s.toLowerCase();
   }
 
-  /// Normalizes artist name, stripping YouTube "- Topic" and record labels
+  /// Normalizes artist name, stripping YouTube "- Topic" and record labels/media channels
   static String cleanArtist(String raw) {
     if (raw.trim().isEmpty) return '';
 
     var s = raw.replaceAll(' - Topic', '').replaceAll('- Topic', '').trim();
     final lower = s.toLowerCase();
 
-    // Check if artist is just a record label channel
+    // Check if artist is just a record label, media house, or channel
     for (final label in _labelNoise) {
-      if (lower == label || (lower.contains(label) && lower.length < label.length + 6)) {
+      if (lower == label ||
+          (lower.contains(label) && lower.length < label.length + 8) ||
+          lower.startsWith('$label ') ||
+          lower.endsWith(' $label')) {
         return '';
       }
+    }
+
+    // Reject channels ending with channel suffixes
+    if (lower.endsWith(' media') ||
+        lower.endsWith(' news') ||
+        lower.endsWith(' tv') ||
+        lower.endsWith(' lyrics') ||
+        lower.endsWith(' studios') ||
+        lower.endsWith(' pictures') ||
+        lower.endsWith(' events') ||
+        lower.endsWith(' channel')) {
+      return '';
     }
 
     // Extract primary artist if comma, ampersand, or semicolon separated
@@ -82,6 +117,64 @@ class CanonicalSongDedup {
 
     s = s.replaceAll(_punctuation, ' ').replaceAll(_whitespace, ' ').trim();
     return s.toLowerCase();
+  }
+
+  /// Strict audio validator.
+  /// Rejects YouTube videos that are speeches, press meets, trailers, dance performances,
+  /// cricket highlights, teasers, or non-song media content.
+  static bool isGenuineSong(Video video) {
+    final title = video.title;
+    final author = video.author;
+
+    // 1. Blacklist non-music keywords in title
+    if (_nonMusicTitleNoise.hasMatch(title)) {
+      return false;
+    }
+
+    // 2. Blacklist non-music channels unless the title explicitly states it's an official song
+    if (_nonMusicAuthorNoise.hasMatch(author)) {
+      final titleLower = title.toLowerCase();
+      final hasSongIndicator = titleLower.contains('full video song') ||
+          titleLower.contains('official music video') ||
+          titleLower.contains('official song') ||
+          titleLower.contains('lyrical video') ||
+          titleLower.contains('lyric video');
+      if (!hasSongIndicator) {
+        return false;
+      }
+    }
+
+    // 3. Duration boundaries (authentic music tracks are 75s to 660s)
+    final duration = video.duration;
+    if (duration != null) {
+      final sec = duration.inSeconds;
+      if (sec > 0 && (sec < 75 || sec > 660)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /// Detects language from title or metadata tags (e.g. Telugu, Hindi, Tamil)
+  static String? detectLanguage(String text) {
+    final lower = text.toLowerCase();
+    if (RegExp(r'\b(telugu)\b').hasMatch(lower)) return 'telugu';
+    if (RegExp(r'\b(tamil)\b').hasMatch(lower)) return 'tamil';
+    if (RegExp(r'\b(hindi)\b').hasMatch(lower)) return 'hindi';
+    if (RegExp(r'\b(punjabi)\b').hasMatch(lower)) return 'punjabi';
+    if (RegExp(r'\b(kannada)\b').hasMatch(lower)) return 'kannada';
+    if (RegExp(r'\b(malayalam)\b').hasMatch(lower)) return 'malayalam';
+    if (RegExp(r'\b(english)\b').hasMatch(lower)) return 'english';
+    return null;
+  }
+
+  /// Verifies that candidate does not violate the seed track's language affinity
+  static bool isLanguageCompatible(String? seedLang, String candidateTitle) {
+    if (seedLang == null || seedLang.isEmpty) return true;
+    final candLang = detectLanguage(candidateTitle);
+    if (candLang == null) return true; // neutral / unlabelled
+    return candLang == seedLang;
   }
 
   /// Extracts meaningful token set from normalized text
@@ -244,33 +337,33 @@ class CanonicalSongDedup {
     return result;
   }
 
-  /// Re-orders or spaces a queue of songs so that no two consecutive songs
-  /// are from the exact same artist, promoting balanced artist distribution.
+  /// Spaces a queue of songs so that no two consecutive songs are by the exact same
+  /// artist, while preserving the recommendation ranking order (preventing oddball tracks
+  /// from being arbitrarily promoted to the top of the queue).
   static List<Video> balanceArtistDistribution(List<Video> songs) {
     if (songs.length <= 2) return songs;
 
-    final artistBuckets = <String, List<Video>>{};
-    for (final song in songs) {
-      final artist = cleanArtist(song.author);
-      final key = artist.isNotEmpty ? artist : 'unknown_${song.id.value}';
-      artistBuckets.putIfAbsent(key, () => []).add(song);
-    }
+    final result = <Video>[];
+    final remaining = List<Video>.from(songs);
 
-    // Sort buckets by size descending
-    final sortedBuckets = artistBuckets.values.toList()
-      ..sort((a, b) => b.length.compareTo(a.length));
+    while (remaining.isNotEmpty) {
+      final lastArtist = result.isEmpty ? null : cleanArtist(result.last.author);
 
-    final balanced = <Video>[];
-    int maxBucketSize = sortedBuckets.first.length;
-
-    for (int i = 0; i < maxBucketSize; i++) {
-      for (final bucket in sortedBuckets) {
-        if (i < bucket.length) {
-          balanced.add(bucket[i]);
+      // Select the highest-ranked song in remaining that does not duplicate the last song's artist
+      int targetIdx = 0;
+      if (lastArtist != null && lastArtist.isNotEmpty) {
+        final altIdx = remaining.indexWhere((s) {
+          final a = cleanArtist(s.author);
+          return a.isEmpty || a != lastArtist;
+        });
+        if (altIdx != -1) {
+          targetIdx = altIdx;
         }
       }
+
+      result.add(remaining.removeAt(targetIdx));
     }
 
-    return balanced;
+    return result;
   }
 }

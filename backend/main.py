@@ -162,6 +162,7 @@ def _search_jiosaavn_api(query: str, limit: int = 20) -> List[dict]:
                 "title": title or "Unknown Title",
                 "author": artist or "DilSe Music",
                 "album": album,
+                "language": r.get("language") or "",
                 "duration": duration,
                 "thumbnail": artwork,
                 "streamUrl": stream_url,
@@ -169,6 +170,26 @@ def _search_jiosaavn_api(query: str, limit: int = 20) -> List[dict]:
                 "bitrate": "320kbps",
             })
         return formatted
+
+@app.get("/jio/recommendations")
+def jio_recommendations(q: str = "", language: str = "telugu", limit: int = 20):
+    clean_limit = min(50, max(1, limit))
+    results = []
+    seen_ids = set()
+    
+    if q and q.strip():
+        for s in _search_jiosaavn_api(f"{q.strip()} songs", limit=clean_limit):
+            if s["id"] not in seen_ids:
+                seen_ids.add(s["id"])
+                results.append(s)
+    
+    if len(results) < clean_limit and language and language.strip():
+        for s in _search_jiosaavn_api(f"{language.strip()} trending songs", limit=clean_limit - len(results)):
+            if s["id"] not in seen_ids:
+                seen_ids.add(s["id"])
+                results.append(s)
+                
+    return results
 
 @app.get("/jio/search")
 def jio_search(q: str = "", limit: int = 20):
@@ -327,7 +348,11 @@ def _get_youtube_url(video_id: str) -> str:
 EXCLUDE_KEYWORDS = {
     "news", "tv", "live news", "headline", "podcast", "trailer", 
     "review", "reaction", "episode", "interview", "gameplay", "vlog", 
-    "unboxing", "breaking", "press conference"
+    "unboxing", "breaking", "press conference", "speech", "launch event",
+    "song launch", "audio launch", "press meet", "success meet", "teaser",
+    "glimpse", "promo", "dances to", "dance to", "dance performance",
+    "cricket", "match highlights", "ipl", "trophy", "shreyas iyer",
+    "full movie", "comedy scene", "movie scene", "making of", "behind the scenes"
 }
 
 def _is_same_song(cand_title: str, curr_title: str) -> bool:
@@ -483,6 +508,69 @@ def get_suggestions(q: str, limit: int = 8):
     return []
 
 
+def _fetch_ytm_radio(video_id: str, limit: int = 50) -> List[dict]:
+    try:
+        url = "https://music.youtube.com/youtubei/v1/next"
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/125.0.0.0 Safari/537.36"
+            ),
+            "Origin": "https://music.youtube.com",
+            "Referer": "https://music.youtube.com/",
+        }
+        payload = {
+            "context": {
+                "client": {
+                    "clientName": "WEB_REMIX",
+                    "clientVersion": "1.20240101.01.00",
+                    "hl": "en",
+                    "gl": "IN",
+                }
+            },
+            "videoId": video_id,
+            "playlistId": f"RDAMVM{video_id}",
+        }
+        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers)
+        with urllib.request.urlopen(req, timeout=7) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            tabs = data.get("contents", {}).get("singleColumnMusicWatchNextResultsRenderer", {}).get("tabbedRenderer", {}).get("watchNextTabbedResultsRenderer", {}).get("tabs", [])
+            if not tabs:
+                return []
+            items = tabs[0].get("tabRenderer", {}).get("content", {}).get("musicQueueRenderer", {}).get("content", {}).get("playlistPanelRenderer", {}).get("contents", [])
+            results = []
+            for it in items:
+                r = it.get("playlistPanelVideoRenderer")
+                if not r:
+                    continue
+                vid = r.get("videoId")
+                if not vid or vid == video_id:
+                    continue
+                t = r.get("title", {}).get("runs", [{}])[0].get("text", "Unknown Title")
+                a = r.get("longBylineText", {}).get("runs", [{}])[0].get("text", "Unknown Artist")
+
+                # Exclude non-music keywords
+                t_lower = t.lower()
+                a_lower = a.lower()
+                if any(kw in t_lower or kw in a_lower for kw in EXCLUDE_KEYWORDS):
+                    continue
+
+                results.append({
+                    "id": vid,
+                    "title": t,
+                    "author": a,
+                    "duration": 210,
+                })
+                if len(results) >= limit:
+                    break
+            return results
+    except Exception as e:
+        print(f"YTM server radio error: {e}")
+        return []
+
+
 @app.get("/radio")
 def get_radio(v: str, title: str = None, artist: str = None):
     if not v or not v.strip():
@@ -496,6 +584,12 @@ def get_radio(v: str, title: str = None, artist: str = None):
         results, expires_at = _search_cache[cache_key]
         if now < expires_at:
             return results
+
+    # 1. Prioritize Google's official YouTube Music Radio automix graph
+    ytm_radio = _fetch_ytm_radio(video_id, limit=30)
+    if ytm_radio:
+        _search_cache[cache_key] = (ytm_radio, now + 3600)
+        return ytm_radio
 
     ydl_opts = {
         "quiet": True,

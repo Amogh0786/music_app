@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'api_config.dart';
+import 'canonical_song_dedup.dart';
 
 /// Lightweight, keyless client for YouTube Music's InnerTube API (`WEB_REMIX`).
 /// Provides studio release songs, clean album art, and Google's 50-track radio mixes.
@@ -86,6 +88,50 @@ class YouTubeMusicClient {
   Future<List<Video>> fetchRadioTracks(String videoId, {int limit = 50}) async {
     if (videoId.trim().isEmpty) return [];
 
+    // 1. First try Backend / Cloud Proxy (guarantees CORS bypass on Flutter Web)
+    try {
+      final proxyUri = ApiConfig.radioUri(videoId, limit: limit);
+      final resp = await http.get(proxyUri).timeout(const Duration(seconds: 5));
+      if (resp.statusCode == 200) {
+        final List<dynamic> list = json.decode(resp.body);
+        if (list.isNotEmpty) {
+          final List<Video> serverTracks = [];
+          for (final item in list) {
+            final vid = item['id'] as String?;
+            if (vid == null || vid.isEmpty || vid == videoId) continue;
+            final t = item['title'] as String? ?? 'Unknown Title';
+            final a = item['author'] as String? ?? 'Unknown Artist';
+            final durSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
+            final track = Video(
+              VideoId(vid),
+              t,
+              a,
+              ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+              DateTime.now(),
+              '',
+              null,
+              '',
+              durSec != null ? Duration(seconds: durSec) : null,
+              ThumbnailSet(vid),
+              null,
+              Engagement(0, null, null),
+              false,
+            );
+            if (CanonicalSongDedup.isGenuineSong(track)) {
+              serverTracks.add(track);
+            }
+          }
+          if (serverTracks.isNotEmpty) {
+            debugPrint('[YTM] Retrieved ${serverTracks.length} clean radio tracks via backend proxy');
+            return serverTracks;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[YTM] Backend radio proxy failed, trying direct YTM: $e');
+    }
+
+    // 2. Direct client-side InnerTube fallback (Mobile / Desktop)
     try {
       final uri = Uri.parse('$_baseUrl/next');
       final payload = {
@@ -134,23 +180,25 @@ class YouTubeMusicClient {
         final lengthText = renderer['lengthText']?['runs']?[0]?['text'] as String? ?? '';
         final duration = _parseDuration(lengthText);
 
-        radioTracks.add(
-          Video(
-            VideoId(vid),
-            title,
-            author,
-            ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
-            DateTime.now(),
-            '',
-            null,
-            '',
-            duration,
-            ThumbnailSet(vid),
-            null,
-            Engagement(0, null, null),
-            false,
-          ),
+        final track = Video(
+          VideoId(vid),
+          title,
+          author,
+          ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+          DateTime.now(),
+          '',
+          null,
+          '',
+          duration,
+          ThumbnailSet(vid),
+          null,
+          Engagement(0, null, null),
+          false,
         );
+
+        if (CanonicalSongDedup.isGenuineSong(track)) {
+          radioTracks.add(track);
+        }
 
         if (radioTracks.length >= limit) break;
       }

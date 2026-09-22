@@ -36,8 +36,19 @@ class ApiConfig {
     return Uri.parse('$baseUrl/jio/search?q=${Uri.encodeComponent(query)}&limit=$limit');
   }
 
+  static Uri jioRecommendationsUri(String query, {String language = 'telugu', int limit = 20}) {
+    return Uri.parse('$baseUrl/jio/recommendations?q=${Uri.encodeComponent(query)}&language=${Uri.encodeComponent(language)}&limit=$limit');
+  }
+
   static Uri jioSuggestionsUri(String query, {int limit = 8}) {
     return Uri.parse('$baseUrl/jio/suggestions?q=${Uri.encodeComponent(query)}&limit=$limit');
+  }
+
+  static Uri radioUri(String videoId, {int limit = 30, String? title, String? artist}) {
+    final buffer = StringBuffer('$baseUrl/radio?v=$videoId&limit=$limit');
+    if (title != null && title.isNotEmpty) buffer.write('&title=${Uri.encodeComponent(title)}');
+    if (artist != null && artist.isNotEmpty) buffer.write('&artist=${Uri.encodeComponent(artist)}');
+    return Uri.parse(buffer.toString());
   }
 
   static Uri searchUri(String query, {int page = 1, int limit = 20}) {

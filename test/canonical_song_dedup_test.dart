@@ -126,5 +126,115 @@ void main() {
       expect(balanced[0].author, equals('Arijit Singh'));
       expect(balanced[1].author, isNot(equals('Arijit Singh')));
     });
+
+    test('Rejects non-music videos (speeches, dance clips, cricket themes, teasers)', () {
+      Video makeVideo(String id, String title, String author, {Duration? duration}) => Video(
+            VideoId(id.padRight(11, '0')),
+            title,
+            author,
+            ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+            DateTime.now(),
+            '',
+            null,
+            '',
+            duration ?? const Duration(minutes: 3, seconds: 30),
+            ThumbnailSet(id.padRight(11, '0')),
+            null,
+            Engagement(0, null, null),
+            false,
+          );
+
+      // Real cases from the screenshot
+      final speechVideo = makeVideo(
+        'speech1',
+        'Lyricist Sri Harsha Emani Speech @ Suttamla Soosi Song Launch Event',
+        'Shreyas Media',
+      );
+      expect(CanonicalSongDedup.isGenuineSong(speechVideo), isFalse);
+
+      final danceVideo = makeVideo(
+        'dance1',
+        'Anand Deverakonda & Vaishnavi Chaitanya Dances to Sanchaame Song',
+        'GR Lyrics',
+      );
+      expect(CanonicalSongDedup.isGenuineSong(danceVideo), isFalse);
+
+      final cricketVideo = makeVideo(
+        'cricket1',
+        'Shreyas Iyer Cricket Theme',
+        'Kamaal',
+      );
+      expect(CanonicalSongDedup.isGenuineSong(cricketVideo), isFalse);
+
+      final teaserVideo = makeVideo(
+        'teaser1',
+        'Nagabandham Official Teaser 4K',
+        'NIK Studios',
+        duration: const Duration(seconds: 45), // Too short!
+      );
+      expect(CanonicalSongDedup.isGenuineSong(teaserVideo), isFalse);
+
+      final interviewVideo = makeVideo(
+        'interview1',
+        'Director Exclusive Interview with Telugu FilmNagar',
+        'Telugu FilmNagar',
+      );
+      expect(CanonicalSongDedup.isGenuineSong(interviewVideo), isFalse);
+
+      // Authentic music tracks MUST pass
+      final realSong1 = makeVideo(
+        'song1',
+        'Namo Re (From "Nagabandham") (Telugu)',
+        'Sindhuja Srinivasan, Aishwarya Daruri',
+      );
+      expect(CanonicalSongDedup.isGenuineSong(realSong1), isTrue);
+
+      final realSong2 = makeVideo(
+        'song2',
+        'Veera Naga (From "Nagabandham")',
+        'Deepak Blue',
+      );
+      expect(CanonicalSongDedup.isGenuineSong(realSong2), isTrue);
+
+      final realSong3 = makeVideo(
+        'song3',
+        'Adhento Gaani Vunnapaatuga',
+        'Anirudh Ravichander',
+      );
+      expect(CanonicalSongDedup.isGenuineSong(realSong3), isTrue);
+    });
+
+    test('cleanArtist strips media houses, lyrics channels, and studios', () {
+      expect(CanonicalSongDedup.cleanArtist('Shreyas Media'), equals(''));
+      expect(CanonicalSongDedup.cleanArtist('Tips Telugu'), equals(''));
+      expect(CanonicalSongDedup.cleanArtist('GR Lyrics'), equals(''));
+      expect(CanonicalSongDedup.cleanArtist('NIK Studios'), equals(''));
+      expect(CanonicalSongDedup.cleanArtist('Abhishek Pictures'), equals(''));
+      expect(CanonicalSongDedup.cleanArtist('Telugu FilmNagar'), equals(''));
+      expect(CanonicalSongDedup.cleanArtist('Sindhuja Srinivasan'), equals('sindhuja srinivasan'));
+      expect(CanonicalSongDedup.cleanArtist('Anirudh Ravichander'), equals('anirudh ravichander'));
+    });
+
+    test('Validates language compatibility across tracks', () {
+      expect(CanonicalSongDedup.detectLanguage('Namo Re (From "Nagabandham") (Telugu)'), equals('telugu'));
+      expect(CanonicalSongDedup.detectLanguage('Kamaal Kari Jaane O (Punjabi)'), equals('punjabi'));
+      expect(CanonicalSongDedup.detectLanguage('Kesariya (Hindi)'), equals('hindi'));
+
+      // Telugu seed rejects Punjabi track
+      expect(
+        CanonicalSongDedup.isLanguageCompatible('telugu', 'Kamaal Kari Jaane O (Punjabi)'),
+        isFalse,
+      );
+      // Telugu seed accepts Telugu track
+      expect(
+        CanonicalSongDedup.isLanguageCompatible('telugu', 'Veera Naga (Telugu)'),
+        isTrue,
+      );
+      // Telugu seed accepts unlabelled tracks
+      expect(
+        CanonicalSongDedup.isLanguageCompatible('telugu', 'Adhento Gaani Vunnapaatuga'),
+        isTrue,
+      );
+    });
   });
 }

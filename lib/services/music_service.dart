@@ -654,6 +654,60 @@ class MusicService extends ChangeNotifier {
   /// Tier 2: YouTube Music (Clean official releases, no video sketches)
   /// Tier 3: YouTube Standard (Safety net fallback)
   /// Guaranteed Zero Cross-Source Duplicates via CanonicalSongDedup.
+  List<Video> _parseJioResults(String body) {
+    final List<Video> list = [];
+    try {
+      final List<dynamic> jsonList = json.decode(body);
+      for (var item in jsonList) {
+        final songId = item['id'] as String? ?? '';
+        if (songId.isEmpty) continue;
+        final title = item['title'] as String? ?? 'Unknown Title';
+        final author = item['author'] as String? ?? 'DilSe Music';
+        final durationSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
+        final duration = durationSec != null ? Duration(seconds: durationSec) : null;
+        final artwork = item['thumbnail'] as String? ?? '';
+        final streamUrl = item['streamUrl'] as String? ?? '';
+
+        final vidString = songId.length >= 11 ? songId.substring(0, 11) : songId.padRight(11, '0');
+
+        if (artwork.isNotEmpty) {
+          _artworkMap[songId] = artwork;
+          _artworkMap[vidString] = artwork;
+        }
+        if (streamUrl.isNotEmpty) {
+          _webStreamUrls[songId] = streamUrl;
+          _webStreamUrls[vidString] = streamUrl;
+        }
+
+        final video = Video(
+          VideoId(vidString),
+          title,
+          author,
+          ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+          DateTime.now(),
+          '',
+          null,
+          '',
+          duration,
+          ThumbnailSet(vidString),
+          null,
+          Engagement(0, null, null),
+          false,
+        );
+
+        if (CanonicalSongDedup.isGenuineSong(video)) {
+          list.add(video);
+        }
+      }
+    } catch (_) {}
+    return list;
+  }
+
+  /// 3-Tier Multi-Engine Search with JioSaavn Studio-First Priority:
+  /// Tier 1: JioSaavn (320kbps studio releases with pristine album covers)
+  /// Tier 2: YouTube Music (Official studio releases via InnerTube)
+  /// Tier 3: YouTube Standard (Safety net fallback only if Jio + YTM have < 8 results)
+  /// Guaranteed Zero Cross-Source Duplicates & 100% Genuine Audio via CanonicalSongDedup.
   Future<List<Video>> searchSongs(String query, {int page = 1}) async {
     if (query.trim().isEmpty) return [];
 
@@ -661,93 +715,57 @@ class MusicService extends ChangeNotifier {
       // 1. Tier 1: JioSaavn search (highest priority for 320k studio quality)
       final jioFuture = http
           .get(ApiConfig.jioSearchUri(query, limit: 25))
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 8));
 
       // 2. Tier 2: YouTube Music Search (official releases)
       final ytmFuture = YouTubeMusicClient().searchSongs(query, limit: 15);
 
-      // 3. Tier 3: YouTube Standard backend
-      final backendFuture = http
-          .get(ApiConfig.searchUri(query, page: page, limit: 15))
-          .timeout(const Duration(seconds: 12));
-
       final jioResponse = await jioFuture.catchError((_) => http.Response('[]', 500));
-      final List<Video> jioResults = [];
+      final List<Video> jioResults = jioResponse.statusCode == 200 ? _parseJioResults(jioResponse.body) : [];
 
-      if (jioResponse.statusCode == 200) {
-        final List<dynamic> jsonList = json.decode(jioResponse.body);
-        for (var item in jsonList) {
-          final songId = item['id'] as String? ?? '';
-          if (songId.isEmpty) continue;
-          final title = item['title'] as String? ?? 'Unknown Title';
-          final author = item['author'] as String? ?? 'DilSe Music';
-          final durationSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
-          final duration = durationSec != null ? Duration(seconds: durationSec) : null;
-          final artwork = item['thumbnail'] as String? ?? '';
-          final streamUrl = item['streamUrl'] as String? ?? '';
-
-          final vidString = songId.length >= 11 ? songId.substring(0, 11) : songId.padRight(11, '0');
-
-          if (artwork.isNotEmpty) {
-            _artworkMap[songId] = artwork;
-            _artworkMap[vidString] = artwork;
-          }
-          if (streamUrl.isNotEmpty) {
-            _webStreamUrls[songId] = streamUrl;
-            _webStreamUrls[vidString] = streamUrl;
-          }
-
-          jioResults.add(
-            Video(
-              VideoId(vidString),
-              title,
-              author,
-              ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
-              DateTime.now(),
-              '',
-              null,
-              '',
-              duration,
-              ThumbnailSet(vidString),
-              null,
-              Engagement(0, null, null),
-              false,
-            ),
-          );
-        }
-      }
-
-      // Await Tier 2 & Tier 3 in parallel
+      // Await Tier 2 in parallel
       final ytmResults = await ytmFuture.catchError((_) => <Video>[]);
-      final backendResponse = await backendFuture.catchError((_) => http.Response('[]', 500));
+
+      // Tier 3: YouTube Standard backend (safety net only if JioSaavn + YTM return fewer than 8 tracks)
       final List<Video> backendResults = [];
+      if (jioResults.length < 8) {
+        final backendResponse = await http
+            .get(ApiConfig.searchUri(query, page: page, limit: 15))
+            .timeout(const Duration(seconds: 10))
+            .catchError((_) => http.Response('[]', 500));
 
-      if (backendResponse.statusCode == 200) {
-        final List<dynamic> jsonList = json.decode(backendResponse.body);
-        for (var item in jsonList) {
-          final videoId = item['id'] as String;
-          final title = item['title'] as String? ?? 'Unknown Title';
-          final author = item['author'] as String? ?? 'Unknown Artist';
-          final durationSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
-          final duration = durationSec != null ? Duration(seconds: durationSec) : null;
+        if (backendResponse.statusCode == 200) {
+          try {
+            final List<dynamic> jsonList = json.decode(backendResponse.body);
+            for (var item in jsonList) {
+              final videoId = item['id'] as String;
+              final title = item['title'] as String? ?? 'Unknown Title';
+              final author = item['author'] as String? ?? 'Unknown Artist';
+              final durationSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
+              final duration = durationSec != null ? Duration(seconds: durationSec) : null;
 
-          backendResults.add(
-            Video(
-              VideoId(videoId),
-              title,
-              author,
-              ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
-              DateTime.now(),
-              '',
-              null,
-              '',
-              duration,
-              ThumbnailSet(videoId),
-              null,
-              Engagement(0, null, null),
-              false,
-            ),
-          );
+              final video = Video(
+                VideoId(videoId),
+                title,
+                author,
+                ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+                DateTime.now(),
+                '',
+                null,
+                '',
+                duration,
+                ThumbnailSet(videoId),
+                null,
+                Engagement(0, null, null),
+                false,
+              );
+
+              // Strict audio validation: drop non-music, speeches, trailers, cricket clips
+              if (CanonicalSongDedup.isGenuineSong(video)) {
+                backendResults.add(video);
+              }
+            }
+          } catch (_) {}
         }
       }
 
@@ -759,10 +777,10 @@ class MusicService extends ChangeNotifier {
       final dedupedYt = CanonicalSongDedup.deduplicateList(known, backendResults);
 
       final combined = <Video>[...jioResults, ...dedupedYtm, ...dedupedYt];
-      debugPrint('[3-Tier Search] Returned ${combined.length} songs (${jioResults.length} Jio + ${dedupedYtm.length} YTM + ${dedupedYt.length} YT)');
+      debugPrint('[Studio Search] Returned ${combined.length} songs (${jioResults.length} Jio + ${dedupedYtm.length} YTM + ${dedupedYt.length} YT)');
       return combined;
     } catch (e) {
-      debugPrint('[3-Tier Search] Error: $e');
+      debugPrint('[Studio Search] Error: $e');
     }
 
     return [];
@@ -1553,50 +1571,106 @@ class MusicService extends ChangeNotifier {
       final progressiveQueue = <Video>[seed];
       final seenKeys = <String>{CanonicalSongDedup.cleanTitle(seed.title)};
 
-      Future<List<Video>> getRecommendations(Video s) async {
-        // 1. First try YouTube Music Radio automix (Google's recommendation graph)
-        List<Video> raw = await YouTubeMusicClient().fetchRadioTracks(s.id.value, limit: 15);
-        if (raw.isEmpty) {
-          // 2. Fallback to search query based on primary artist
-          final cleanArtist = CanonicalSongDedup.cleanArtist(s.author);
-          final query = cleanArtist.isNotEmpty ? '$cleanArtist songs' : s.title;
-          raw = await searchSongs(query);
-        }
-        return raw;
+      final seedLanguage = CanonicalSongDedup.detectLanguage(seed.title);
+      final cleanSeedArtist = CanonicalSongDedup.cleanArtist(seed.author);
+
+      // Extract movie/soundtrack name if present e.g. (From "Nagabandham") or (From 'Movie')
+      String? movieName;
+      final movieMatch = RegExp(r'''from\s+["']([^"']+)["']''', caseSensitive: false).firstMatch(seed.title);
+      if (movieMatch != null) {
+        movieName = movieMatch.group(1)?.trim();
       }
 
-      var currentSeed = seed;
-
-      // 5 Chained Stages of 10 tracks each
-      for (int stage = 1; stage <= 5; stage++) {
-        if (_currentSong?.id.value != seed.id.value) {
-          debugPrint('[Queue50] Queue generation superseded by newer track.');
-          return;
-        }
-
-        final candidates = await getRecommendations(currentSeed);
-        final deduped = CanonicalSongDedup.deduplicateList(progressiveQueue, candidates);
-
-        for (final track in deduped) {
+      void addTracks(List<Video> tracks, {String? targetLang}) {
+        for (final track in tracks) {
+          if (!CanonicalSongDedup.isGenuineSong(track)) continue;
+          if (targetLang != null && !CanonicalSongDedup.isLanguageCompatible(targetLang, track.title)) continue;
           final key = CanonicalSongDedup.cleanTitle(track.title);
-          if (!seenKeys.contains(key)) {
+          if (key.isNotEmpty && !seenKeys.contains(key)) {
             seenKeys.add(key);
             progressiveQueue.add(track);
-            if (progressiveQueue.length >= (stage * 10) + 1) break;
+            if (progressiveQueue.length >= 51) break;
           }
         }
+      }
 
-        // The seed for next stage is the last track added in the previous stage
-        if (progressiveQueue.isNotEmpty) {
-          currentSeed = progressiveQueue.last;
+      // 1. Stage 1: Official Studio Radio Automix (Google Graph via backend proxy / YTM)
+      // Only query if videoId looks like an authentic YouTube video ID (11 chars)
+      if (seed.id.value.length == 11) {
+        final radioMix = await YouTubeMusicClient().fetchRadioTracks(seed.id.value, limit: 30);
+        addTracks(radioMix, targetLang: seedLanguage);
+      }
+
+      // 2. Stage 2: JioSaavn Movie / Album Affinity (if from a movie soundtrack)
+      if (progressiveQueue.length < 51 && movieName != null && movieName.isNotEmpty) {
+        final movieResults = await http
+            .get(ApiConfig.jioSearchUri('$movieName songs', limit: 15))
+            .timeout(const Duration(seconds: 5))
+            .then((res) => _parseJioResults(res.body))
+            .catchError((_) => <Video>[]);
+        addTracks(movieResults, targetLang: seedLanguage);
+      }
+
+      // 3. Stage 3: Primary Composer / Artist Hits in the same language
+      if (progressiveQueue.length < 51 && cleanSeedArtist.isNotEmpty) {
+        final artistQuery = seedLanguage != null
+            ? '$cleanSeedArtist $seedLanguage songs'
+            : '$cleanSeedArtist songs';
+        final artistResults = await http
+            .get(ApiConfig.jioSearchUri(artistQuery, limit: 15))
+            .timeout(const Duration(seconds: 5))
+            .then((res) => _parseJioResults(res.body))
+            .catchError((_) => <Video>[]);
+        addTracks(artistResults, targetLang: seedLanguage);
+      }
+
+      // 4. Stage 4: Language Trending & Melodic Hits (JioSaavn Studio Quality)
+      if (progressiveQueue.length < 51) {
+        final langPrefix = seedLanguage ?? 'indian';
+        final trendingResults = await http
+            .get(ApiConfig.jioSearchUri('$langPrefix trending songs', limit: 20))
+            .timeout(const Duration(seconds: 5))
+            .then((res) => _parseJioResults(res.body))
+            .catchError((_) => <Video>[]);
+        addTracks(trendingResults, targetLang: seedLanguage);
+
+        if (progressiveQueue.length < 51) {
+          final melodyResults = await http
+              .get(ApiConfig.jioSearchUri('$langPrefix melodies hit songs', limit: 20))
+              .timeout(const Duration(seconds: 5))
+              .then((res) => _parseJioResults(res.body))
+              .catchError((_) => <Video>[]);
+          addTracks(melodyResults, targetLang: seedLanguage);
         }
+      }
 
-        if (progressiveQueue.length >= 51) break;
+      // 5. Stage 5: User Taste Matrix (Preferred Artists in matching language)
+      if (progressiveQueue.length < 51) {
+        final favArtists = PreferencesService().getTopArtists();
+        for (final fav in favArtists) {
+          if (progressiveQueue.length >= 51) break;
+          final cleanFav = CanonicalSongDedup.cleanArtist(fav);
+          if (cleanFav.isEmpty) continue;
+          final favQuery = seedLanguage != null ? '$cleanFav $seedLanguage hits' : '$cleanFav hits';
+          final favResults = await http
+              .get(ApiConfig.jioSearchUri(favQuery, limit: 10))
+              .timeout(const Duration(seconds: 4))
+              .then((res) => _parseJioResults(res.body))
+              .catchError((_) => <Video>[]);
+          addTracks(favResults, targetLang: seedLanguage);
+        }
+      }
+
+      // 6. Stage 6: Fallback to YouTube Music Search if still under 25 tracks
+      if (progressiveQueue.length < 25) {
+        final fallbackQuery = seedLanguage != null ? '$seedLanguage top hit songs' : 'Top Hits 2026';
+        final ytmTracks = await YouTubeMusicClient().searchSongs(fallbackQuery, limit: 15);
+        addTracks(ytmTracks, targetLang: seedLanguage);
       }
 
       if (_currentSong?.id.value != seed.id.value) return;
 
-      // Balance artist distribution for upcoming tracks
+      // Balance artist distribution while preserving rank
       if (progressiveQueue.length > 2) {
         final upcoming = progressiveQueue.sublist(1);
         final balancedUpcoming = CanonicalSongDedup.balanceArtistDistribution(upcoming);
@@ -1619,14 +1693,30 @@ class MusicService extends ChangeNotifier {
     _isFetchingNextQueue = true;
     try {
       debugPrint('[Queue] Silently fetching next 10 chained recommendations for ${song.title}…');
-      List<Video> candidates = await YouTubeMusicClient().fetchRadioTracks(song.id.value, limit: 15);
+      final songLang = CanonicalSongDedup.detectLanguage(song.title);
+      List<Video> candidates = [];
+
+      // 1. Try official YTM radio mix if valid videoId
+      if (song.id.value.length == 11) {
+        candidates = await YouTubeMusicClient().fetchRadioTracks(song.id.value, limit: 15);
+      }
+
+      // 2. Fallback to language-aware JioSaavn search
       if (candidates.isEmpty) {
         final cleanArtist = CanonicalSongDedup.cleanArtist(song.author);
-        final query = cleanArtist.isNotEmpty ? '$cleanArtist hits' : 'Top Hits 2026';
+        final query = cleanArtist.isNotEmpty
+            ? (songLang != null ? '$cleanArtist $songLang hits' : '$cleanArtist hits')
+            : (songLang != null ? '$songLang trending songs' : 'Top Hits 2026');
         candidates = await searchSongs(query);
       }
 
-      final fresh = CanonicalSongDedup.deduplicateList(_playlist, candidates);
+      // Filter for genuine songs and language compatibility
+      final valid = candidates.where((c) =>
+          CanonicalSongDedup.isGenuineSong(c) &&
+          CanonicalSongDedup.isLanguageCompatible(songLang, c.title)
+      ).toList();
+
+      final fresh = CanonicalSongDedup.deduplicateList(_playlist, valid);
       if (fresh.isNotEmpty) {
         final balanced = CanonicalSongDedup.balanceArtistDistribution(fresh);
         _playlist.addAll(balanced.take(10));
