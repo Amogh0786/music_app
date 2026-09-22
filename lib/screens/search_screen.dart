@@ -5,6 +5,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
 import '../services/preferences_service.dart';
 import '../widgets/song_options_bottom_sheet.dart';
+import '../widgets/category_card.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -34,43 +35,83 @@ class _SearchScreenState extends State<SearchScreen>
   final List<Map<String, dynamic>> _categories = [
     {
       'title': 'Bollywood Hits',
+      'subtitle': 'Top Trending & Classics',
       'query': 'Bollywood Top Hits 2026',
       'colors': [const Color(0xFFFF416C), const Color(0xFFFF4B2B)],
+      'icon': Icons.whatshot_rounded,
+      'badge': 'HOT',
     },
     {
       'title': 'Telugu Beats',
+      'subtitle': 'Groove, Melodies & Mass',
       'query': 'Telugu Top Songs',
       'colors': [const Color(0xFF8E2DE2), const Color(0xFF4A00E0)],
+      'icon': Icons.music_note_rounded,
+      'badge': 'VIRAL',
     },
     {
       'title': 'Pop & Global',
+      'subtitle': 'Chartbusters & Hits',
       'query': 'Global Pop Hits',
       'colors': [const Color(0xFF00c6ff), const Color(0xFF0072ff)],
+      'icon': Icons.public_rounded,
+      'badge': 'GLOBAL',
     },
     {
       'title': 'Punjabi Hits',
+      'subtitle': 'Bhangra, Dhol & Bass',
       'query': 'Punjabi Top Hits',
       'colors': [const Color(0xFFf857a6), const Color(0xFFff5858)],
+      'icon': Icons.speaker_group_rounded,
+      'badge': 'BEATS',
     },
     {
       'title': 'Lo-Fi & Chill',
+      'subtitle': 'Focus, Relax & Study',
       'query': 'Lofi Chill Beats',
       'colors': [const Color(0xFF11998e), const Color(0xFF38ef7d)],
+      'icon': Icons.bedtime_rounded,
+      'badge': 'CHILL',
     },
     {
       'title': 'Workout Energy',
+      'subtitle': 'High BPM & Motivation',
       'query': 'Workout Music Beats',
       'colors': [const Color(0xFFFF8008), const Color(0xFFFFC837)],
+      'icon': Icons.bolt_rounded,
+      'badge': 'PUMP',
     },
     {
       'title': 'Romance & Love',
+      'subtitle': 'Soulful & Melodies',
       'query': 'Romantic Hindi Songs',
-      'colors': [const Color(0xFFee9ca7), const Color(0xFFffdde1)],
+      'colors': [const Color(0xFFee9ca7), const Color(0xFFff758c)],
+      'icon': Icons.favorite_rounded,
+      'badge': 'LOVE',
     },
     {
       'title': 'Hip-Hop & Rap',
+      'subtitle': 'Bars, Trap & 808s',
       'query': 'Hip Hop Hits',
       'colors': [const Color(0xFF3A1C71), const Color(0xFFD76D77)],
+      'icon': Icons.mic_external_on_rounded,
+      'badge': 'FLOW',
+    },
+    {
+      'title': 'Party & Dance',
+      'subtitle': 'Club Nights & EDM',
+      'query': 'Party Dance Club Hits',
+      'colors': [const Color(0xFFFA2D48), const Color(0xFFF7971E)],
+      'icon': Icons.celebration_rounded,
+      'badge': 'PARTY',
+    },
+    {
+      'title': 'Indie & Acoustic',
+      'subtitle': 'Raw, Unplugged & Vibe',
+      'query': 'Indian Indie Acoustic Songs',
+      'colors': [const Color(0xFF4776E6), const Color(0xFF8E54E9)],
+      'icon': Icons.audiotrack_rounded,
+      'badge': 'RAW',
     },
   ];
 
@@ -347,162 +388,208 @@ class _SearchScreenState extends State<SearchScreen>
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text(
-                                    'Recent Searches',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: -0.3,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(5),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(alpha: 0.08),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: const Icon(
+                                          Icons.history_rounded,
+                                          size: 16,
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Text(
+                                        'Recent Searches',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: -0.3,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  TextButton(
+                                  TextButton.icon(
                                     onPressed: () {
                                       HapticFeedback.lightImpact();
                                       _prefs.clearSearchHistory();
                                       setState(() {});
                                     },
-                                    child: Text(
+                                    icon: Icon(
+                                      Icons.delete_sweep_rounded,
+                                      size: 15,
+                                      color: Theme.of(context).primaryColor,
+                                    ),
+                                    label: Text(
                                       'Clear All',
                                       style: TextStyle(
                                         color: Theme.of(context).primaryColor,
-                                        fontWeight: FontWeight.w600,
+                                        fontWeight: FontWeight.w700,
                                         fontSize: 13,
                                       ),
                                     ),
-                                  )
+                                  ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 10),
                               Wrap(
                                 spacing: 8,
                                 runSpacing: 8,
                                 children: history.map((item) {
                                   return Container(
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF181824),
-                                      borderRadius: BorderRadius.circular(24),
+                                      color: const Color(0xFF161622),
+                                      borderRadius: BorderRadius.circular(20),
                                       border: Border.all(
                                         color: Colors.white.withValues(alpha: 0.12),
                                         width: 1,
                                       ),
                                     ),
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(24),
-                                      onTap: () {
-                                        HapticFeedback.lightImpact();
-                                        _searchController.text = item;
-                                        _performSearch(item);
-                                      },
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(Icons.history_rounded, size: 15, color: Colors.white60),
-                                            const SizedBox(width: 6),
-                                            ConstrainedBox(
-                                              constraints: const BoxConstraints(maxWidth: 180),
-                                              child: Text(
-                                                item,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w500,
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(20),
+                                        onTap: () {
+                                          HapticFeedback.lightImpact();
+                                          _searchController.text = item;
+                                          _performSearch(item);
+                                        },
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.search_rounded,
+                                                size: 14,
+                                                color: Theme.of(context).primaryColor.withValues(alpha: 0.8),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              ConstrainedBox(
+                                                constraints: const BoxConstraints(maxWidth: 180),
+                                                child: Text(
+                                                  item,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                            const SizedBox(width: 6),
-                                            GestureDetector(
-                                              behavior: HitTestBehavior.opaque,
-                                              onTap: () {
-                                                HapticFeedback.selectionClick();
-                                                _prefs.removeFromSearchHistory(item);
-                                              },
-                                              child: Container(
-                                                padding: const EdgeInsets.all(2),
-                                                decoration: const BoxDecoration(
-                                                  color: Colors.white12,
-                                                  shape: BoxShape.circle,
+                                              const SizedBox(width: 6),
+                                              GestureDetector(
+                                                behavior: HitTestBehavior.opaque,
+                                                onTap: () {
+                                                  HapticFeedback.selectionClick();
+                                                  _prefs.removeFromSearchHistory(item);
+                                                },
+                                                child: Container(
+                                                  padding: const EdgeInsets.all(2),
+                                                  decoration: const BoxDecoration(
+                                                    color: Colors.white12,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.close_rounded,
+                                                    size: 12,
+                                                    color: Colors.white70,
+                                                  ),
                                                 ),
-                                                child: const Icon(Icons.close_rounded, size: 12, color: Colors.white70),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
                                   );
                                 }).toList(),
                               ),
-                              const SizedBox(height: 24),
+                              const SizedBox(height: 26),
                             ],
-                            const Text(
-                              'Browse Categories',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: -0.3,
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                            GridView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 2,
-                                childAspectRatio: 1.7,
-                                crossAxisSpacing: 12,
-                                mainAxisSpacing: 12,
-                              ),
-                              itemCount: _categories.length,
-                              itemBuilder: (context, index) {
-                                final cat = _categories[index];
-                                final List<Color> colors = cat['colors'];
-
-                                return GestureDetector(
-                                  onTap: () {
-                                    HapticFeedback.lightImpact();
-                                    _searchController.text = cat['title'];
-                                    _performSearch(cat['query']);
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.all(14),
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: colors,
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(
-                                        color: Colors.white.withValues(alpha: 0.15),
-                                        width: 1,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: colors.first.withValues(alpha: 0.35),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Align(
-                                      alignment: Alignment.bottomLeft,
-                                      child: Text(
-                                        cat['title'],
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w800,
-                                          letterSpacing: -0.3,
-                                        ),
-                                      ),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).primaryColor.withValues(alpha: 0.16),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: Theme.of(context).primaryColor.withValues(alpha: 0.35),
+                                      width: 1,
                                     ),
                                   ),
+                                  child: Icon(
+                                    Icons.explore_rounded,
+                                    size: 18,
+                                    color: Theme.of(context).primaryColor,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                const Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Browse Categories',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: -0.3,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Explore curated moods, genres & charts',
+                                      style: TextStyle(
+                                        color: Colors.white54,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final width = constraints.maxWidth;
+                                final crossAxisCount = width > 900
+                                    ? 4
+                                    : (width > 600 ? 3 : 2);
+                                final aspectRatio = width > 600 ? 1.75 : 1.55;
+
+                                return GridView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: crossAxisCount,
+                                    childAspectRatio: aspectRatio,
+                                    crossAxisSpacing: 12,
+                                    mainAxisSpacing: 12,
+                                  ),
+                                  itemCount: _categories.length,
+                                  itemBuilder: (context, index) {
+                                    final cat = _categories[index];
+                                    return CategoryCard(
+                                      title: cat['title'] as String,
+                                      subtitle: cat['subtitle'] as String,
+                                      query: cat['query'] as String,
+                                      colors: cat['colors'] as List<Color>,
+                                      icon: cat['icon'] as IconData,
+                                      badgeText: cat['badge'] as String?,
+                                      onTap: () {
+                                        _searchController.text = cat['title'] as String;
+                                        _performSearch(cat['query'] as String);
+                                      },
+                                    );
+                                  },
                                 );
                               },
                             ),
