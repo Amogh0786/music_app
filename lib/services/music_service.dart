@@ -1045,20 +1045,21 @@ class MusicService extends ChangeNotifier {
   Future<List<String>> fetchSuggestions(String query, {int limit = 8}) async {
     if (query.trim().isEmpty) return [];
 
-    if (kIsWeb) {
-      try {
-        final response = await http
-            .get(ApiConfig.jioSuggestionsUri(query, limit: limit))
-            .timeout(const Duration(seconds: 4));
-        if (response.statusCode == 200) {
-          final List<dynamic> jsonList = json.decode(response.body);
-          return jsonList.map((e) => e.toString()).toList();
-        }
-      } catch (e) {
-        debugPrint('jioSuggestions error: $e');
+    // 1. Primary: JioSaavn Instant Edge Suggestions (both Mobile and Web)
+    try {
+      final response = await http
+          .get(ApiConfig.jioSuggestionsUri(query, limit: limit))
+          .timeout(const Duration(seconds: 4));
+      if (response.statusCode == 200) {
+        final List<dynamic> jsonList = json.decode(response.body);
+        final list = jsonList.map((e) => e.toString()).toList();
+        if (list.isNotEmpty) return list;
       }
+    } catch (e) {
+      debugPrint('jioSuggestions error: $e');
     }
 
+    // 2. Secondary fallback
     try {
       final response = await http
           .get(ApiConfig.suggestionsUri(query, limit: limit))
@@ -1520,9 +1521,11 @@ class MusicService extends ChangeNotifier {
     if (_webStreamUrls[song.id.value] == null || _webStreamUrls[song.id.value]!.isEmpty) {
       try {
         final cleanT = CanonicalSongDedup.cleanTitle(song.title);
+        final cleanA = CanonicalSongDedup.cleanArtist(song.author);
+        final q = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
         if (cleanT.isNotEmpty) {
-          final jioUri = ApiConfig.jioSearchUri(cleanT, limit: 3);
-          final jioResp = await http.get(jioUri).timeout(const Duration(seconds: 2));
+          final jioUri = ApiConfig.jioSearchUri(q, limit: 3);
+          final jioResp = await http.get(jioUri).timeout(const Duration(seconds: 4));
           if (jioResp.statusCode == 200) {
             final List<dynamic> list = json.decode(jioResp.body);
             for (final item in list) {
@@ -1531,12 +1534,12 @@ class MusicService extends ChangeNotifier {
               final itemStream = item['streamUrl'] as String? ?? '';
               final itemThumb = item['thumbnail'] as String? ?? '';
               if (itemStream.isNotEmpty &&
-                  CanonicalSongDedup.areDuplicateSongs(
+                  (CanonicalSongDedup.areDuplicateSongs(
                     titleA: song.title,
                     artistA: song.author,
                     titleB: itemTitle,
                     artistB: itemArtist,
-                  )) {
+                  ) || CanonicalSongDedup.cleanTitle(itemTitle) == cleanT)) {
                 debugPrint('[Play] Upgraded "${song.title}" to JioSaavn 320k studio stream!');
                 _webStreamUrls[song.id.value] = itemStream;
                 if (itemThumb.isNotEmpty) {
@@ -1812,42 +1815,35 @@ class MusicService extends ChangeNotifier {
         }
       }
 
-      // 1. Stage 1: Official Studio Radio Automix (Google Graph via backend proxy / YTM)
-      // Only query if videoId looks like an authentic YouTube video ID (11 chars)
-      if (seed.id.value.length == 11) {
-        final radioMix = await YouTubeMusicClient().fetchRadioTracks(seed.id.value, limit: 30);
-        addTracks(radioMix, targetLang: seedLanguage);
-      }
-
-      // 2. Stage 2: JioSaavn Movie / Album Affinity (if from a movie soundtrack)
+      // 1. Stage 1 (Primary): JioSaavn Movie / Album Affinity (if from a movie soundtrack)
       if (progressiveQueue.length < 51 && movieName != null && movieName.isNotEmpty) {
         final movieResults = await http
-            .get(ApiConfig.jioSearchUri('$movieName songs', limit: 15))
-            .timeout(const Duration(seconds: 5))
+            .get(ApiConfig.jioSearchUri('$movieName songs', limit: 20))
+            .timeout(const Duration(seconds: 4))
             .then((res) => _parseJioResults(res.body))
             .catchError((_) => <Video>[]);
         addTracks(movieResults, targetLang: seedLanguage);
       }
 
-      // 3. Stage 3: Primary Composer / Artist Hits in the same language
+      // 2. Stage 2 (Primary): JioSaavn Primary Composer / Artist Studio Hits in the same language
       if (progressiveQueue.length < 51 && cleanSeedArtist.isNotEmpty) {
         final artistQuery = seedLanguage != null
             ? '$cleanSeedArtist $seedLanguage songs'
             : '$cleanSeedArtist songs';
         final artistResults = await http
-            .get(ApiConfig.jioSearchUri(artistQuery, limit: 15))
-            .timeout(const Duration(seconds: 5))
+            .get(ApiConfig.jioSearchUri(artistQuery, limit: 20))
+            .timeout(const Duration(seconds: 4))
             .then((res) => _parseJioResults(res.body))
             .catchError((_) => <Video>[]);
         addTracks(artistResults, targetLang: seedLanguage);
       }
 
-      // 4. Stage 4: Language Trending & Melodic Hits (JioSaavn Studio Quality)
+      // 3. Stage 3 (Primary): JioSaavn Language Trending & Melodic Hits (320k Studio Quality)
       if (progressiveQueue.length < 51) {
         final langPrefix = seedLanguage ?? 'indian';
         final trendingResults = await http
             .get(ApiConfig.jioSearchUri('$langPrefix trending songs', limit: 20))
-            .timeout(const Duration(seconds: 5))
+            .timeout(const Duration(seconds: 4))
             .then((res) => _parseJioResults(res.body))
             .catchError((_) => <Video>[]);
         addTracks(trendingResults, targetLang: seedLanguage);
@@ -1855,14 +1851,14 @@ class MusicService extends ChangeNotifier {
         if (progressiveQueue.length < 51) {
           final melodyResults = await http
               .get(ApiConfig.jioSearchUri('$langPrefix melodies hit songs', limit: 20))
-              .timeout(const Duration(seconds: 5))
+              .timeout(const Duration(seconds: 4))
               .then((res) => _parseJioResults(res.body))
               .catchError((_) => <Video>[]);
           addTracks(melodyResults, targetLang: seedLanguage);
         }
       }
 
-      // 5. Stage 5: User Taste Matrix (Preferred Artists in matching language)
+      // 4. Stage 4 (Primary): User Taste Matrix from JioSaavn (Preferred Artists in matching language)
       if (progressiveQueue.length < 51) {
         final favArtists = PreferencesService().getTopArtists();
         for (final fav in favArtists) {
@@ -1871,7 +1867,7 @@ class MusicService extends ChangeNotifier {
           if (cleanFav.isEmpty) continue;
           final favQuery = seedLanguage != null ? '$cleanFav $seedLanguage hits' : '$cleanFav hits';
           final favResults = await http
-              .get(ApiConfig.jioSearchUri(favQuery, limit: 10))
+              .get(ApiConfig.jioSearchUri(favQuery, limit: 12))
               .timeout(const Duration(seconds: 4))
               .then((res) => _parseJioResults(res.body))
               .catchError((_) => <Video>[]);
@@ -1879,8 +1875,14 @@ class MusicService extends ChangeNotifier {
         }
       }
 
-      // 6. Stage 6: Fallback to YouTube Music Search if still under 25 tracks
-      if (progressiveQueue.length < 25) {
+      // 5. Stage 5 (Fallback Safety Net ONLY): YouTube Music Radio Automix / Search if still under 25 tracks
+      if (progressiveQueue.length < 25 && seed.id.value.length == 11) {
+        debugPrint('[Queue50] JioSaavn returned < 25 tracks, backfilling from YouTube Music Radio…');
+        final radioMix = await YouTubeMusicClient().fetchRadioTracks(seed.id.value, limit: 25);
+        addTracks(radioMix, targetLang: seedLanguage);
+      }
+
+      if (progressiveQueue.length < 20) {
         final fallbackQuery = seedLanguage != null ? '$seedLanguage top hit songs' : 'Top Hits 2026';
         final ytmTracks = await YouTubeMusicClient().searchSongs(fallbackQuery, limit: 15);
         addTracks(ytmTracks, targetLang: seedLanguage);
@@ -1914,18 +1916,20 @@ class MusicService extends ChangeNotifier {
       final songLang = CanonicalSongDedup.detectLanguage(song.title);
       List<Video> candidates = [];
 
-      // 1. Try official YTM radio mix if valid videoId
-      if (song.id.value.length == 11) {
-        candidates = await YouTubeMusicClient().fetchRadioTracks(song.id.value, limit: 15);
-      }
+      // 1. Primary: JioSaavn Studio catalog query
+      final cleanArtist = CanonicalSongDedup.cleanArtist(song.author);
+      final query = cleanArtist.isNotEmpty
+          ? (songLang != null ? '$cleanArtist $songLang hits' : '$cleanArtist hits')
+          : (songLang != null ? '$songLang trending songs' : 'Top Hits 2026');
+      candidates = await http
+          .get(ApiConfig.jioSearchUri(query, limit: 20))
+          .timeout(const Duration(seconds: 4))
+          .then((res) => _parseJioResults(res.body))
+          .catchError((_) => <Video>[]);
 
-      // 2. Fallback to language-aware JioSaavn search
-      if (candidates.isEmpty) {
-        final cleanArtist = CanonicalSongDedup.cleanArtist(song.author);
-        final query = cleanArtist.isNotEmpty
-            ? (songLang != null ? '$cleanArtist $songLang hits' : '$cleanArtist hits')
-            : (songLang != null ? '$songLang trending songs' : 'Top Hits 2026');
-        candidates = await searchSongs(query);
+      // 2. Secondary Safety Fallback: YouTube Music Radio automix only if JioSaavn was empty
+      if (candidates.isEmpty && song.id.value.length == 11) {
+        candidates = await YouTubeMusicClient().fetchRadioTracks(song.id.value, limit: 15);
       }
 
       // Filter for genuine songs and language compatibility
