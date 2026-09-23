@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'search_screen.dart';
 import 'library_screen.dart';
+import 'spotify_import_screen.dart';
 import '../widgets/mini_player.dart';
 import '../widgets/floating_nav_dock.dart';
 import '../widgets/interactive_update_dialog.dart';
@@ -11,6 +12,7 @@ import '../services/music_service.dart';
 import '../services/preferences_service.dart';
 import '../services/notification_permission_service.dart';
 import '../services/update_service.dart';
+import '../services/spotify_import_service.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -114,6 +116,7 @@ class _MainScreenState extends State<MainScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                const _BackgroundImportBanner(),
                 const MiniPlayer(),
                 FloatingNavDock(
                   selectedIndex: _selectedIndex,
@@ -131,6 +134,138 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Floating background import pill indicating real-time background import progress
+class _BackgroundImportBanner extends StatelessWidget {
+  const _BackgroundImportBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: SpotifyImportService(),
+      builder: (context, _) {
+        final service = SpotifyImportService();
+        if (!service.isImporting) return const SizedBox.shrink();
+
+        final pct = (service.overallProgress * 100).toInt();
+        final playlistText = service.totalPlaylists > 1
+            ? 'Importing ${service.totalPlaylists} Playlists ($pct%)'
+            : 'Importing Playlist ($pct%)';
+        final detailText = service.currentTrackName.isNotEmpty
+            ? '${service.currentPlaylistName} • ${service.currentTrackName}'
+            : service.currentPlaylistName;
+
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SpotifyImportScreen()),
+            );
+          },
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF161622).withValues(alpha: 0.95),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFF1DB954).withValues(alpha: 0.4)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    value: service.overallProgress > 0 ? service.overallProgress : null,
+                    strokeWidth: 2.4,
+                    color: const Color(0xFF1DB954),
+                    backgroundColor: Colors.white12,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              playlistText,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            '$pct%',
+                            style: const TextStyle(
+                              color: Color(0xFF1DB954),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (detailText.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          detailText,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 11,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1DB954).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'VIEW',
+                        style: TextStyle(
+                          color: Color(0xFF1DB954),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      SizedBox(width: 2),
+                      Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF1DB954), size: 9),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

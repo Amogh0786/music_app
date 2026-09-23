@@ -182,14 +182,14 @@
     playViaIframe(currentVideoId, startAt);
   }
 
-  // Create an invisible off-screen container for YouTube IFrame
+  // Create an in-viewport low-opacity container for YouTube IFrame fallback
   function ensureYtContainer() {
     let el = document.getElementById('dilse-yt-host');
     if (!el) {
       el = document.createElement('div');
       el.id = 'dilse-yt-host';
       el.style.cssText =
-        'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0.001;pointer-events:none;z-index:-9999;';
+        'position:fixed;bottom:0;right:0;width:200px;height:200px;opacity:0.005;pointer-events:none;z-index:-999;';
       document.body.appendChild(el);
     }
     return el;
@@ -441,6 +441,15 @@
     ensureAudioElement();
     broadcastState('buffering');
 
+    // Prime HTML5 Audio element synchronously within the user gesture tick.
+    // This unlocks browser autoplay policies so audioEl.play() is permitted
+    // once asynchronous stream resolution finishes.
+    try {
+      if (audioEl && audioEl.paused) {
+        audioEl.play().catch(() => {});
+      }
+    } catch (_) {}
+
     // Update MediaSession with initial metadata
     window.dilseSetMetadata(currentTitle, currentArtist, currentArtwork);
 
@@ -481,9 +490,12 @@
 
     // If a clean song title is available, resolve on JioSaavn for 320k direct audio stream
     if (title && title.trim().length > 1) {
-      const workerBase =
-        window.dilseApiBaseUrl ||
+      // Prioritize low-latency Cloudflare Edge Worker (~200ms) over Render backend
+      const primaryWorker =
         window.dilseWorkerBaseUrl ||
+        'https://dilse-edge-stream.charanteja-kondakalla030206.workers.dev';
+      const secondaryBackend =
+        window.dilseApiBaseUrl ||
         'https://music-backend-4kel.onrender.com';
 
       const cleanTitle = title
@@ -497,20 +509,28 @@
 
       try {
         const fetchPromise = fetch(
-          `${workerBase}/jio?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist || '')}`
-        );
-        // 3.5s timeout for ultra-fast response
+          `${primaryWorker}/jio?title=${encodeURIComponent(cleanTitle || title)}&artist=${encodeURIComponent(artist || '')}`
+        ).then(async (res) => {
+          if (res.ok) {
+            const json = await res.json();
+            if (json.status === 'ok' && json.match && json.data?.streamUrl) {
+              return json;
+            }
+          }
+          // Secondary fallback to Render backend if Cloudflare worker didn't find match
+          return fetch(
+            `${secondaryBackend}/jio?title=${encodeURIComponent(cleanTitle || title)}&artist=${encodeURIComponent(artist || '')}`
+          ).then(r => r.ok ? r.json() : null);
+        });
+
+        // 6.5s timeout for fast response while allowing Render cold starts if needed
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('JioSaavn resolution timeout')), 3500)
+          setTimeout(() => reject(new Error('JioSaavn resolution timeout')), 6500)
         );
 
-        const res = await Promise.race([fetchPromise, timeoutPromise]);
-        if (sessionId !== currentPlaySessionId) return; // Superceded by another play call
-
-        if (res && res.ok) {
-          const data = await res.json();
-          if (data.status === 'ok' && data.match && data.data?.streamUrl) {
-            const jioSong = data.data;
+        const data = await Promise.race([fetchPromise, timeoutPromise]);
+        if (data && data.status === 'ok' && data.match && data.data?.streamUrl) {
+          const jioSong = data.data;
 
             // Validate that the resolved track genuinely matches the requested song/artist
             const reqTitle = (cleanTitle || title || '').toLowerCase();

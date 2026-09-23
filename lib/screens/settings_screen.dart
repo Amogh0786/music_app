@@ -9,6 +9,7 @@ import '../services/update_service.dart';
 import '../services/notification_permission_service.dart';
 import '../services/api_config.dart';
 import '../widgets/interactive_update_dialog.dart';
+import '../widgets/equalizer_bottom_sheet.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -271,11 +272,30 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
           body: ListView(
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             children: [
-              _buildSectionTitle('PLAYBACK'),
+              _buildSectionTitle('PLAYBACK & AUDIO ENGINE'),
               _buildSettingsGroup([
+                // Equalizer Tile
+                ListTile(
+                  title: const Text('Studio Equalizer', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                  subtitle: Text(
+                    _prefs.equalizerEnabled ? 'Preset: ${_prefs.equalizerPreset} • Active' : 'Off',
+                    style: TextStyle(color: _prefs.equalizerEnabled ? _prefs.themeColor : Colors.grey[400], fontSize: 13),
+                  ),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: _prefs.themeColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                    child: Icon(Icons.tune_rounded, color: _prefs.themeColor, size: 20),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white30),
+                  onTap: () => EqualizerBottomSheet.show(context),
+                ),
+
+                const Divider(color: Colors.white10, height: 1, indent: 56),
+
+                // Crossfade Switch
                 SwitchListTile(
                   title: const Text('Crossfade Tracks', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-                  subtitle: Text('Smooth transition between songs', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                  subtitle: Text('Seamlessly merge audio between songs', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
                   activeThumbColor: Colors.white,
                   activeTrackColor: _prefs.themeColor,
                   value: _prefs.crossfadeEnabled,
@@ -289,6 +309,94 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Crossfade set to ${val ? "On" : "Off"}'), backgroundColor: _prefs.themeColor));
                   },
                 ),
+
+                // Crossfade Duration Slider (if crossfade enabled)
+                if (_prefs.crossfadeEnabled) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(56, 4, 16, 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Merge Duration',
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 13, fontWeight: FontWeight.w500),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: _prefs.themeColor.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '${_prefs.crossfadeSeconds} seconds',
+                                style: TextStyle(color: _prefs.themeColor, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                        SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            trackHeight: 3,
+                            activeTrackColor: _prefs.themeColor,
+                            inactiveTrackColor: Colors.white24,
+                            thumbColor: Colors.white,
+                            overlayColor: _prefs.themeColor.withValues(alpha: 0.2),
+                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                          ),
+                          child: Slider(
+                            value: _prefs.crossfadeSeconds.toDouble(),
+                            min: 1,
+                            max: 12,
+                            divisions: 11,
+                            onChanged: (val) {
+                              HapticFeedback.selectionClick();
+                              _prefs.setCrossfadeSeconds(val.round());
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Smart Crossfade Switch
+                  SwitchListTile(
+                    title: const Text('Smart AI Merging', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 14)),
+                    subtitle: Text('Dynamically adapt crossfade duration to song tempo & energy', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                    activeThumbColor: Colors.white,
+                    activeTrackColor: _prefs.themeColor,
+                    value: _prefs.smartCrossfadeEnabled,
+                    contentPadding: const EdgeInsets.only(left: 56, right: 16),
+                    onChanged: (val) {
+                      _prefs.setSmartCrossfade(val);
+                    },
+                  ),
+                ],
+
+                const Divider(color: Colors.white10, height: 1, indent: 56),
+
+                // Fade-In on Start
+                SwitchListTile(
+                  title: const Text('Gentle Fade-In on Start', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                  subtitle: Text('Gently ramps up volume when a song starts fresh to prevent sudden blasts', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                  activeThumbColor: Colors.white,
+                  activeTrackColor: _prefs.themeColor,
+                  value: _prefs.fadeInOnStartEnabled,
+                  secondary: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: _prefs.themeColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                    child: Icon(Icons.volume_up_rounded, color: _prefs.themeColor, size: 20),
+                  ),
+                  onChanged: (val) {
+                    _prefs.setFadeInOnStart(val);
+                  },
+                ),
+
+                const Divider(color: Colors.white10, height: 1, indent: 56),
+
+                // Sleep Timer
                 ListTile(
                   title: const Text('Sleep Timer', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
                   subtitle: Text(_musicService.isSleepTimerActive ? 'Active: ${_musicService.sleepTimerLabel}' : 'Stop playback automatically', style: TextStyle(color: _musicService.isSleepTimerActive ? _prefs.themeColor : Colors.grey[400], fontSize: 13)),

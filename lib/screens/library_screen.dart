@@ -115,7 +115,7 @@ class _LibraryScreenState extends State<LibraryScreen>
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.download_rounded, size: 17),
                 label: const Text(
-                  'Import Spotify',
+                  'Import / Exportify',
                   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                 ),
                 style: ElevatedButton.styleFrom(
@@ -501,7 +501,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                       children: [
                         ElevatedButton.icon(
                           icon: const Icon(Icons.download_rounded, size: 18),
-                          label: const Text('Import Spotify'),
+                          label: const Text('Import Spotify / Exportify'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF1DB954),
                             foregroundColor: Colors.black,

@@ -129,7 +129,7 @@ void showSongOptionsBottomSheet(BuildContext context, Video song) {
                 subtitle: 'Save to your personal playlists',
                 onTap: () {
                   Navigator.pop(ctx);
-                  _showAddToPlaylistDialog(context, song);
+                  showAddToPlaylistSheet(context, song);
                 },
               ),
 
@@ -224,7 +224,7 @@ Widget _buildActionTile({
   );
 }
 
-void _showAddToPlaylistDialog(BuildContext context, Video song) {
+void showAddToPlaylistSheet(BuildContext context, Video song) {
   final musicService = MusicService();
   final playlists = musicService.customPlaylists;
 

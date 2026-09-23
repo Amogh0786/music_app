@@ -75,12 +75,17 @@ class MusicService extends ChangeNotifier {
   // Palette Extraction
   Color _dominantColor = const Color(0xFF1E1E2C);
   Color _vibrantColor = const Color(0xFFFA2D48);
+  Color _darkVibrantColor = const Color(0xFF101018);
 
   // Sleep Timer (DateTime-based: immune to lock-screen throttling)
   DateTime? _sleepEndTime;
   Timer? _sleepCountdownTimer;
   bool _stopAtEndOfTrack = false;
   bool _wasInterruptedBySystem = false;
+
+  // Crossfade & Volume Fading Engine
+  bool _isCrossfading = false;
+  StreamSubscription<Duration>? _positionCrossfadeSub;
 
   Video? get currentSong => _currentSong;
   List<Video> get playlist => _playlist;
@@ -91,6 +96,7 @@ class MusicService extends ChangeNotifier {
   List<Map<String, String>> get likedSongs => _likedSongs;
   List<Map<String, dynamic>> get customPlaylists => _customPlaylists;
   AudioPlayer get audioPlayer => _audioPlayer;
+  bool get isCrossfading => _isCrossfading;
 
   bool get isPlaying => kIsWeb ? WebPlayerBridge.isPlaying : _audioPlayer.playing;
   Duration get position => kIsWeb ? WebPlayerBridge.currentPosition : _audioPlayer.position;
@@ -103,6 +109,7 @@ class MusicService extends ChangeNotifier {
 
   Color get dominantColor => _dominantColor;
   Color get vibrantColor => _vibrantColor;
+  Color get darkVibrantColor => _darkVibrantColor;
 
   bool get isSleepTimerActive =>
       (_sleepEndTime != null && _sleepEndTime!.isAfter(DateTime.now())) || _stopAtEndOfTrack;
@@ -223,6 +230,20 @@ class MusicService extends ChangeNotifier {
   static final Map<String, String> _artworkMap = {};
   static final Map<String, String> _webStreamUrls = {};
 
+  static void cacheWebStreamUrl(String videoId, String streamUrl) {
+    if (videoId.isEmpty || streamUrl.isEmpty) return;
+    _webStreamUrls[videoId] = streamUrl;
+    if (kIsWeb) {
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setString('web_stream_$videoId', streamUrl);
+      }).catchError((_) {});
+    }
+  }
+
+  static String? getCachedWebStreamUrl(String videoId) {
+    return _webStreamUrls[videoId];
+  }
+
   static String getHdThumbnail(String videoId) {
     if (_artworkMap.containsKey(videoId)) {
       return _artworkMap[videoId]!;
@@ -244,9 +265,11 @@ class MusicService extends ChangeNotifier {
   Future<void> preloadHomeData() async {
     if (_hasPreloadedHome) return;
     try {
+      final prefs = PreferencesService();
+      final primaryLang = prefs.preferredLanguages.isNotEmpty ? prefs.preferredLanguages.first : 'Telugu';
       final results = await Future.wait([
-        searchSongs('Top Charts India Music'),
-        searchSongs('Trending Songs 2026'),
+        searchSongs('$primaryLang Top Hits'),
+        searchSongs('$primaryLang Trending'),
       ]);
       _preloadedTopChartsIndia = results[0];
       _preloadedTrending = results[1];
@@ -298,7 +321,7 @@ class MusicService extends ChangeNotifier {
     if (kIsWeb) {
       WebPlayerBridge.init();
       WebPlayerBridge.onTrackEnded.listen((_) async {
-        if (_isTransitioning) return;
+        if (_isTransitioning || _isCrossfading) return;
         _isTransitioning = true;
         try {
           if (_loopMode == LoopMode.one && _currentSong != null) {
@@ -321,7 +344,7 @@ class MusicService extends ChangeNotifier {
     _audioPlayer.playerStateStream.listen((state) async {
       notifyListeners();
       if (state.processingState == ProcessingState.completed) {
-        if (_isTransitioning) return;
+        if (_isTransitioning || _isCrossfading) return;
         _isTransitioning = true;
         try {
           if (_loopMode == LoopMode.one) {
@@ -339,8 +362,119 @@ class MusicService extends ChangeNotifier {
         }
       }
     });
+
+    _positionCrossfadeSub?.cancel();
+    _positionCrossfadeSub = positionStream.listen((pos) {
+      _checkCrossfadeTrigger(pos);
+    });
+
     loadLikedSongs();
     loadCustomPlaylists();
+  }
+
+  Future<void> _setVolume(double vol) async {
+    final clamped = vol.clamp(0.0, 1.0);
+    if (kIsWeb) {
+      WebPlayerBridge.setVolume(clamped);
+    } else {
+      try {
+        await _audioPlayer.setVolume(clamped);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _fadeVolume({
+    required double from,
+    required double to,
+    required Duration duration,
+  }) async {
+    const int steps = 18;
+    final int stepMs = (duration.inMilliseconds / steps).clamp(15, 120).toInt();
+    for (int i = 0; i <= steps; i++) {
+      final double progress = i / steps;
+      final double currentVol = from + (to - from) * progress;
+      await _setVolume(currentVol);
+      await Future.delayed(Duration(milliseconds: stepMs));
+    }
+  }
+
+  Future<void> fadeInCurrentSong({Duration duration = const Duration(milliseconds: 900)}) async {
+    await _fadeVolume(from: 0.0, to: 1.0, duration: duration);
+  }
+
+  void _checkCrossfadeTrigger(Duration pos) {
+    if (_isCrossfading || _isTransitioning || _isLoading || _currentSong == null) return;
+    if (_loopMode == LoopMode.one) return;
+    final prefs = PreferencesService();
+    if (!prefs.crossfadeEnabled) return;
+
+    final dur = duration;
+    if (dur == null || dur.inSeconds <= 15) return;
+
+    // Only crossfade if there is a next track in queue or one can be preloaded
+    if (_playlist.isEmpty) return;
+    if (!_isShuffle && _currentIndex + 1 >= _playlist.length) {
+      _checkAndPreloadNextQueue();
+      if (_currentIndex + 1 >= _playlist.length) return;
+    }
+
+    int crossfadeSec = prefs.crossfadeSeconds;
+    if (prefs.smartCrossfadeEnabled) {
+      // Smart Merging: Adapt merge duration based on track length and tempo
+      if (dur.inMinutes >= 4 && crossfadeSec < 6) {
+        crossfadeSec = (crossfadeSec + 2).clamp(1, 10);
+      } else if (dur.inMinutes <= 2 && crossfadeSec > 4) {
+        crossfadeSec = (crossfadeSec - 1).clamp(2, 6);
+      }
+    }
+
+    final remaining = dur - pos;
+    if (remaining <= Duration(seconds: crossfadeSec) && remaining > const Duration(milliseconds: 600)) {
+      _triggerCrossfade(Duration(seconds: crossfadeSec));
+    }
+  }
+
+  Future<void> _triggerCrossfade(Duration crossfadeDuration) async {
+    if (_isCrossfading || _isTransitioning) return;
+    _isCrossfading = true;
+    debugPrint('[Crossfade] Starting ${crossfadeDuration.inSeconds}s crossfade merge…');
+    try {
+      final fadeDownMs = (crossfadeDuration.inMilliseconds * 0.75).toInt().clamp(500, 6000);
+      await _fadeVolume(
+        from: 1.0,
+        to: 0.05,
+        duration: Duration(milliseconds: fadeDownMs),
+      );
+      if (!_isCrossfading) return;
+      await nextSong(isCrossfade: true);
+    } catch (e) {
+      debugPrint('[Crossfade] Transition error: $e');
+      await _setVolume(1.0);
+    } finally {
+      _isCrossfading = false;
+    }
+  }
+
+  Future<void> _startPlaybackWithFade({
+    required bool isCrossfade,
+    required Future<void> Function() playAction,
+  }) async {
+    final shouldFade = PreferencesService().fadeInOnStartEnabled || isCrossfade;
+    if (shouldFade) {
+      await _setVolume(0.0);
+    } else {
+      await _setVolume(1.0);
+    }
+
+    await playAction();
+
+    if (shouldFade) {
+      unawaited(_fadeVolume(
+        from: 0.0,
+        to: 1.0,
+        duration: isCrossfade ? const Duration(milliseconds: 1400) : const Duration(milliseconds: 900),
+      ));
+    }
   }
 
   Future<void> loadLikedSongs() async {
@@ -454,7 +588,16 @@ class MusicService extends ChangeNotifier {
   }
 
   String createPlaylist(String name) {
-    final playlistId = DateTime.now().millisecondsSinceEpoch.toString();
+    final playlistId = '${DateTime.now().millisecondsSinceEpoch}_${_customPlaylists.length}';
+    return createPlaylistWithId(playlistId, name);
+  }
+
+  String createPlaylistWithId(String playlistId, String name) {
+    // If playlist with this ID already exists, return existing
+    final existingIndex = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
+    if (existingIndex != -1) {
+      return playlistId;
+    }
     _customPlaylists.add({
       'id': playlistId,
       'name': name,
@@ -466,19 +609,54 @@ class MusicService extends ChangeNotifier {
   }
 
   void addSongToPlaylist(String playlistId, Video song) {
+    addSongsToPlaylist(playlistId, [song]);
+  }
+
+  /// High-performance batch addition of songs to avoid repeated disk serialization
+  void addSongsToPlaylist(String playlistId, List<Video> songs, {bool commit = true}) {
+    if (songs.isEmpty) return;
     final playlistIndex = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
     if (playlistIndex != -1) {
-      final songs = List<Map<String, dynamic>>.from(_customPlaylists[playlistIndex]['songs'] ?? []);
-      
-      // Prevent duplicates
-      if (!songs.any((s) => s['id'] == song.id.value)) {
-        songs.add({
-          'id': song.id.value,
-          'title': song.title,
-          'author': song.author,
-          'thumbnail': getHdThumbnail(song.id.value),
-        });
-        _customPlaylists[playlistIndex]['songs'] = songs;
+      final existingSongs = List<Map<String, dynamic>>.from(_customPlaylists[playlistIndex]['songs'] ?? []);
+      final existingIds = existingSongs.map((s) => s['id'] as String).toSet();
+      bool modified = false;
+
+      for (final song in songs) {
+        if (!existingIds.contains(song.id.value)) {
+          existingIds.add(song.id.value);
+          existingSongs.add({
+            'id': song.id.value,
+            'title': song.title,
+            'author': song.author,
+            'thumbnail': getHdThumbnail(song.id.value),
+          });
+          modified = true;
+        }
+      }
+
+      if (modified) {
+        _customPlaylists[playlistIndex]['songs'] = existingSongs;
+        if (commit) {
+          saveCustomPlaylists();
+          notifyListeners();
+        }
+      }
+    }
+  }
+
+  /// Sets or updates all songs in a playlist, preserving exact order and updating storage
+  void setPlaylistSongs(String playlistId, List<Video> songs, {bool commit = true}) {
+    final playlistIndex = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
+    if (playlistIndex != -1) {
+      final songMaps = songs.map((song) => {
+        'id': song.id.value,
+        'title': song.title,
+        'author': song.author,
+        'thumbnail': getHdThumbnail(song.id.value),
+      }).toList();
+
+      _customPlaylists[playlistIndex]['songs'] = songMaps;
+      if (commit) {
         saveCustomPlaylists();
         notifyListeners();
       }
@@ -956,12 +1134,12 @@ class MusicService extends ChangeNotifier {
 
   Future<void> _extractPalette(String videoId) async {
     try {
-      // hqdefault is guaranteed to exist on YouTube CDN, preventing 404 SocketExceptions
-      final imageUrl = 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+      final thumbUrl = getHdThumbnail(videoId);
+      final imageUrl = thumbUrl.isNotEmpty ? thumbUrl : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
       final palette = await PaletteGenerator.fromImageProvider(
         NetworkImage(imageUrl),
         size: const Size(100, 100),
-        maximumColorCount: 8,
+        maximumColorCount: 12,
       ).timeout(const Duration(seconds: 3));
 
       // Guard against race condition: discard if song changed while extracting
@@ -969,12 +1147,22 @@ class MusicService extends ChangeNotifier {
 
       final dominant = palette.dominantColor?.color ?? palette.vibrantColor?.color ?? const Color(0xFF1E1E2C);
       final vibrant = palette.vibrantColor?.color ?? palette.lightVibrantColor?.color ?? dominant;
+      final darkVibrant = palette.darkVibrantColor?.color ?? palette.darkMutedColor?.color ?? dominant;
 
       _dominantColor = dominant;
       _vibrantColor = vibrant;
+      _darkVibrantColor = darkVibrant;
       notifyListeners();
     } catch (e) {
       debugPrint('[Palette] Extraction error: $e');
+      if (_currentSong != null && _currentSong?.id.value == videoId) {
+        final hash = (_currentSong!.title.hashCode ^ _currentSong!.author.hashCode).abs();
+        final hue = (hash % 360).toDouble();
+        _dominantColor = HSLColor.fromAHSL(1.0, hue, 0.65, 0.22).toColor();
+        _vibrantColor = HSLColor.fromAHSL(1.0, hue, 0.85, 0.55).toColor();
+        _darkVibrantColor = HSLColor.fromAHSL(1.0, (hue + 40) % 360, 0.60, 0.15).toColor();
+        notifyListeners();
+      }
     }
   }
 
@@ -1051,7 +1239,12 @@ class MusicService extends ChangeNotifier {
     }
   }
 
-  Future<void> nextSong() async {
+  Future<void> nextSong({bool isCrossfade = false}) async {
+    if (!isCrossfade && _isCrossfading) {
+      _isCrossfading = false;
+      unawaited(_setVolume(1.0));
+    }
+
     if (_stopAtEndOfTrack) {
       debugPrint('[SleepTimer] Reached end of current track. Stopping playback.');
       _stopPlayback();
@@ -1099,7 +1292,7 @@ class MusicService extends ChangeNotifier {
         if (prevSong != null) {
           reportTrackFinished(prevSong.id.value, nextTrack.id.value);
         }
-        await playSong(nextTrack, updateQueue: false);
+        await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
         _checkAndPreloadNextQueue();
         return;
       } else if (_currentIndex + 1 < _playlist.length) {
@@ -1109,7 +1302,7 @@ class MusicService extends ChangeNotifier {
         if (prevSong != null) {
           reportTrackFinished(prevSong.id.value, nextTrack.id.value);
         }
-        await playSong(nextTrack, updateQueue: false);
+        await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
         _checkAndPreloadNextQueue();
         return;
       }
@@ -1127,7 +1320,7 @@ class MusicService extends ChangeNotifier {
         if (prevSong != null) {
           reportTrackFinished(prevSong.id.value, nextTrack.id.value);
         }
-        await playSong(nextTrack, updateQueue: false);
+        await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
         _checkAndPreloadNextQueue();
       } else {
         _isLoading = false;
@@ -1137,6 +1330,11 @@ class MusicService extends ChangeNotifier {
   }
 
   Future<void> previousSong() async {
+    if (_isCrossfading) {
+      _isCrossfading = false;
+      unawaited(_setVolume(1.0));
+    }
+
     // 1. If in shuffle mode and history exists, traverse back through true shuffle history
     if (_isShuffle && _shuffleHistoryPointer > 0) {
       _shuffleHistoryPointer--;
@@ -1158,6 +1356,17 @@ class MusicService extends ChangeNotifier {
         await _audioPlayer.seek(Duration.zero);
       }
     }
+  }
+
+  Future<void> skipToQueueIndex(int index) async {
+    if (index < 0 || index >= _playlist.length) return;
+    if (_currentIndex == index && isPlaying) return;
+    if (_isCrossfading) {
+      _isCrossfading = false;
+      unawaited(_setVolume(1.0));
+    }
+    _currentIndex = index;
+    await playSong(_playlist[_currentIndex], updateQueue: false);
   }
 
   // Full browser headers to avoid CDN 403s and throttling
@@ -1275,7 +1484,7 @@ class MusicService extends ChangeNotifier {
     return candidates;
   }
 
-  Future<void> playSong(Video song, {bool updateQueue = true}) async {
+  Future<void> playSong(Video song, {bool updateQueue = true, bool isCrossfade = false}) async {
     _isLoading = true;
     _currentSong = song;
 
@@ -1365,7 +1574,10 @@ class MusicService extends ChangeNotifier {
             await _audioPlayer.setAudioSource(
               AudioSource.uri(Uri.file(localFile.path), tag: mediaItem),
             );
-            await _audioPlayer.play();
+            await _startPlaybackWithFade(
+              isCrossfade: isCrossfade,
+              playAction: () async => await _audioPlayer.play(),
+            );
             _isLoading = false;
             notifyListeners();
             _checkAndPreloadNextQueue();
@@ -1380,12 +1592,17 @@ class MusicService extends ChangeNotifier {
         final directStreamUrl = _webStreamUrls[song.id.value] ?? '';
         debugPrint('[Play][Web] Playing via Web Dual Engine: ${song.id.value} (directStream: $directStreamUrl)');
         _reportClientLog('web_stream_start', {'videoId': song.id.value, 'engine': 'dual'});
-        WebPlayerBridge.play(
-          song.id.value,
-          title: song.title,
-          artist: song.author,
-          artworkUrl: getHdThumbnail(song.id.value),
-          streamUrl: directStreamUrl,
+        await _startPlaybackWithFade(
+          isCrossfade: isCrossfade,
+          playAction: () async {
+            WebPlayerBridge.play(
+              song.id.value,
+              title: song.title,
+              artist: song.author,
+              artworkUrl: getHdThumbnail(song.id.value),
+              streamUrl: directStreamUrl,
+            );
+          },
         );
         _isLoading = false;
         notifyListeners();
@@ -1405,7 +1622,10 @@ class MusicService extends ChangeNotifier {
           await _audioPlayer.setAudioSource(
             AudioSource.uri(Uri.parse(directStreamUrl), tag: mediaItem),
           );
-          await _audioPlayer.play();
+          await _startPlaybackWithFade(
+            isCrossfade: isCrossfade,
+            playAction: () async => await _audioPlayer.play(),
+          );
           _isLoading = false;
           notifyListeners();
           _checkAndPreloadNextQueue();
@@ -1524,7 +1744,10 @@ class MusicService extends ChangeNotifier {
       if (_currentSong?.id.value != song.id.value) return;
 
       debugPrint('[Play] Starting playback…');
-      await _audioPlayer.play();
+      await _startPlaybackWithFade(
+        isCrossfade: isCrossfade,
+        playAction: () async => await _audioPlayer.play(),
+      );
       _isLoading = false;
       notifyListeners();
 
@@ -1952,6 +2175,10 @@ class MusicService extends ChangeNotifier {
   }
 
   Future<void> seek(Duration position) async {
+    if (_isCrossfading) {
+      _isCrossfading = false;
+      unawaited(_setVolume(1.0));
+    }
     if (kIsWeb) {
       WebPlayerBridge.seek(position);
       notifyListeners();

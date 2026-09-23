@@ -37,23 +37,36 @@ class _MiniPlayerState extends State<MiniPlayer> {
     HapticFeedback.lightImpact();
     Navigator.of(context).push(
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 380),
-        reverseTransitionDuration: const Duration(milliseconds: 320),
+        transitionDuration: const Duration(milliseconds: 440),
+        reverseTransitionDuration: const Duration(milliseconds: 380),
         pageBuilder: (context, animation, secondaryAnimation) => const PlayerScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final curved = CurvedAnimation(
+          final curve = CurvedAnimation(
             parent: animation,
-            curve: Curves.easeOutQuart,
-            reverseCurve: Curves.easeInQuart,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInOutCubic,
           );
+
+          final scale = Tween<double>(begin: 0.88, end: 1.0).animate(curve);
+          final slide = Tween<Offset>(
+            begin: const Offset(0.0, 0.88),
+            end: Offset.zero,
+          ).animate(curve);
+          final fade = Tween<double>(begin: 0.0, end: 1.0).animate(curve);
+          final radius = Tween<double>(begin: 24.0, end: 0.0).animate(curve);
+
           return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0.0, 1.0),
-              end: Offset.zero,
-            ).animate(curved),
-            child: FadeTransition(
-              opacity: Tween<double>(begin: 0.5, end: 1.0).animate(curved),
-              child: child,
+            position: slide,
+            child: Transform.scale(
+              scale: scale.value,
+              alignment: Alignment.bottomCenter,
+              child: ClipRRect(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(radius.value)),
+                child: FadeTransition(
+                  opacity: fade,
+                  child: child,
+                ),
+              ),
             ),
           );
         },
@@ -159,16 +172,22 @@ class _MiniPlayerState extends State<MiniPlayer> {
                               Row(
                                 children: [
                                   Expanded(
-                                    child: Text(
-                                      song?.title ?? 'Loading...',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                        letterSpacing: -0.2,
+                                    child: Hero(
+                                      tag: 'player_title_${song?.id.value}',
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: Text(
+                                          song?.title ?? 'Loading...',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                            letterSpacing: -0.2,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                   const SizedBox(width: 6),

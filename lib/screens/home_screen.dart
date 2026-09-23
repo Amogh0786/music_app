@@ -42,43 +42,46 @@ class _HomeScreenState extends State<HomeScreen>
   bool _isLoadingMood = false;
   final Map<int, List<Video>> _cachedMoodSongs = {};
 
-  final List<Map<String, String>> _moods = const [
-    {
-      'label': '✨ All Hits',
-      'query': 'Top Global Music Hits 2026',
-      'desc': 'All trending and personalized hits curated for you',
-    },
-    {
-      'label': '⚡ Energetic',
-      'query': 'popular energetic songs audio',
-      'desc': 'High-tempo power anthems to fuel your energy',
-    },
-    {
-      'label': '☕ Chill & Relax',
-      'query': 'relaxing acoustic indie chill songs audio',
-      'desc': 'Mellow acoustic melodies to unwind and relax',
-    },
-    {
-      'label': '🎧 Focus / Code',
-      'query': 'lofi hip hop instrumental study coding track',
-      'desc': 'Smooth non-distracting instrumental beats for flow state',
-    },
-    {
-      'label': '💪 Workout',
-      'query': 'gym workout motivation rap edm track',
-      'desc': 'Adrenaline-pumping tracks to power your training session',
-    },
-    {
-      'label': '🌙 Sleep',
-      'query': 'calm ambient sleep night music track',
-      'desc': 'Peaceful, dreamy soundscapes for deep and restful sleep',
-    },
-    {
-      'label': '🎉 Party Hits',
-      'query': 'party dance hits club songs audio',
-      'desc': 'Dancefloor crowd-pleasers and club anthems',
-    },
-  ];
+  List<Map<String, String>> get _moods {
+    final primaryLang = _prefs.preferredLanguages.isNotEmpty ? _prefs.preferredLanguages.first : 'Telugu';
+    return [
+      {
+        'label': '✨ All Hits',
+        'query': '$primaryLang Top Hits',
+        'desc': 'All trending and personalized hits curated for you',
+      },
+      {
+        'label': '⚡ Energetic',
+        'query': '$primaryLang Fast Hits',
+        'desc': 'High-tempo power anthems to fuel your energy',
+      },
+      {
+        'label': '☕ Chill & Relax',
+        'query': '$primaryLang Melodies',
+        'desc': 'Mellow acoustic melodies to unwind and relax',
+      },
+      {
+        'label': '🎧 Focus / Code',
+        'query': 'Lofi Instrumental Chill Beats',
+        'desc': 'Smooth non-distracting instrumental beats for flow state',
+      },
+      {
+        'label': '💪 Workout',
+        'query': '$primaryLang Mass Hits',
+        'desc': 'Adrenaline-pumping tracks to power your training session',
+      },
+      {
+        'label': '🌙 Sleep',
+        'query': '$primaryLang Slow Melodies',
+        'desc': 'Peaceful, dreamy soundscapes for deep and restful sleep',
+      },
+      {
+        'label': '🎉 Party Hits',
+        'query': '$primaryLang Party Hits',
+        'desc': 'Dancefloor crowd-pleasers and club anthems',
+      },
+    ];
+  }
 
   @override
   void initState() {
@@ -100,7 +103,9 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _onPrefsChanged() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      _loadHomeFeeds();
+    }
   }
 
   String _getGreeting() {
@@ -139,12 +144,13 @@ class _HomeScreenState extends State<HomeScreen>
 
     // 2. Background Refresh / Initial Load
     try {
+      final primaryLang = _prefs.preferredLanguages.isNotEmpty ? _prefs.preferredLanguages.first : 'Telugu';
       final futureCircadian = _musicService.searchSongs(_circadianContext!.query);
       final futureMix1 = _musicService.searchSongs(_dailyMixConfigs[0].query);
       final futureMix2 = _musicService.searchSongs(_dailyMixConfigs[1].query);
-      final futureCharts = _musicService.searchSongs('Top Charts India Music');
-      final futureTrending = _musicService.searchSongs('Trending Songs 2026');
-      final futureNewReleases = _musicService.searchSongs('Latest Music Hits');
+      final futureCharts = _musicService.searchSongs('$primaryLang Top Hits');
+      final futureTrending = _musicService.searchSongs('$primaryLang Trending');
+      final futureNewReleases = _musicService.searchSongs('$primaryLang Latest Songs');
       final futurePersonalized = _musicService.searchSongs(_dailyMixConfigs[2].query);
 
       final results = await Future.wait<dynamic>([
@@ -200,6 +206,8 @@ class _HomeScreenState extends State<HomeScreen>
       'title': v.title,
       'author': v.author,
       'durationMs': v.duration?.inMilliseconds ?? 0,
+      'streamUrl': MusicService.getCachedWebStreamUrl(v.id.value) ?? '',
+      'thumbnail': MusicService.getHdThumbnail(v.id.value),
     }).toList();
     return json.encode(list);
   }
@@ -208,21 +216,28 @@ class _HomeScreenState extends State<HomeScreen>
     if (jsonStr == null || jsonStr.isEmpty) return [];
     try {
       final List<dynamic> list = json.decode(jsonStr);
-      return list.map((m) => Video(
-        VideoId(m['id'] as String),
-        m['title'] as String,
-        m['author'] as String,
-        ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
-        DateTime.now(),
-        '',
-        null,
-        '',
-        Duration(milliseconds: (m['durationMs'] as num?)?.toInt() ?? 0),
-        ThumbnailSet(m['id'] as String),
-        null,
-        Engagement(0, null, null),
-        false,
-      )).toList();
+      return list.map((m) {
+        final id = m['id'] as String;
+        final streamUrl = m['streamUrl'] as String?;
+        if (streamUrl != null && streamUrl.isNotEmpty) {
+          MusicService.cacheWebStreamUrl(id, streamUrl);
+        }
+        return Video(
+          VideoId(id),
+          m['title'] as String,
+          m['author'] as String,
+          ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+          DateTime.now(),
+          '',
+          null,
+          '',
+          Duration(milliseconds: (m['durationMs'] as num?)?.toInt() ?? 0),
+          ThumbnailSet(id),
+          null,
+          Engagement(0, null, null),
+          false,
+        );
+      }).toList();
     } catch (_) {
       return [];
     }
@@ -1006,7 +1021,7 @@ class _HomeScreenState extends State<HomeScreen>
         id: 'global_top_50',
         title: 'Top 50 - Global',
         subtitle: 'The hottest chartbusters worldwide',
-        query: 'Top 50 Global Songs 2026',
+        query: 'Global Top Hits',
         gradientColors: [Color(0xFF6B11FF), Color(0xFF2B0A80)],
         icon: Icons.public_rounded,
         tag: 'GLOBAL TRENDS',
@@ -1015,7 +1030,7 @@ class _HomeScreenState extends State<HomeScreen>
         id: 'trending_telugu',
         title: 'Trending Telugu',
         subtitle: 'Tollywood viral hits & chartbusters',
-        query: 'Telugu Hit Songs 2026',
+        query: 'Telugu Top Hits',
         gradientColors: [Color(0xFFFF3366), Color(0xFF990033)],
         icon: Icons.trending_up_rounded,
         tag: 'REGIONAL HITS',
@@ -1024,7 +1039,7 @@ class _HomeScreenState extends State<HomeScreen>
         id: 'bollywood_romance',
         title: 'Bollywood Romance',
         subtitle: 'Heartfelt melodies with Arijit & Pritam',
-        query: 'Bollywood Romantic Songs Arijit Singh',
+        query: 'Hindi Romantic Hits',
         gradientColors: [Color(0xFFFF5E3A), Color(0xFFFF2A68)],
         icon: Icons.favorite_rounded,
         tag: 'ROMANCE',
@@ -1033,7 +1048,7 @@ class _HomeScreenState extends State<HomeScreen>
         id: '90s_nostalgia',
         title: '90s Nostalgia Rewind',
         subtitle: 'Golden evergreen classics & melodies',
-        query: '90s Evergreen Classic Hindi Telugu Songs',
+        query: 'Hindi 90s Classics',
         gradientColors: [Color(0xFF00B4DB), Color(0xFF0083B0)],
         icon: Icons.history_rounded,
         tag: 'RETRO CLASSICS',
@@ -1042,7 +1057,7 @@ class _HomeScreenState extends State<HomeScreen>
         id: 'telugu_2000s',
         title: 'Telugu 2000s Golden Era',
         subtitle: 'DSP, Harris Jayaraj & Mani Sharma hits',
-        query: 'Telugu 2000s Super Hit Songs',
+        query: 'Telugu 2000s Hits',
         gradientColors: [Color(0xFFF7971E), Color(0xFFFF7000)],
         icon: Icons.album_rounded,
         tag: 'GOLDEN ERA',
@@ -1051,7 +1066,7 @@ class _HomeScreenState extends State<HomeScreen>
         id: 'acoustic_chill',
         title: 'Acoustic & Coffee Chill',
         subtitle: 'Soothing acoustic indie melodies',
-        query: 'Acoustic Pop Indie Chill Songs',
+        query: 'Acoustic Pop Melodies',
         gradientColors: [Color(0xFF11998E), Color(0xFF38EF7D)],
         icon: Icons.coffee_rounded,
         tag: 'CHILL MIX',
@@ -1060,7 +1075,7 @@ class _HomeScreenState extends State<HomeScreen>
         id: 'daily_mix_1',
         title: 'Daily Mix 1',
         subtitle: 'Personalized mix featuring $artist',
-        query: '$artist hit songs',
+        query: artist,
         gradientColors: const [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
         icon: Icons.auto_awesome_rounded,
         tag: 'MADE FOR YOU',

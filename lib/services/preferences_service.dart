@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'canonical_song_dedup.dart';
+import 'spotify_import_service.dart';
 
 enum ArtworkStyle { card, vinyl }
 enum ScrubberStyle { waveform, classic }
@@ -60,6 +62,14 @@ class PreferencesService extends ChangeNotifier {
 
   // Settings
   bool _crossfadeEnabled = false;
+  int _crossfadeSeconds = 4;
+  bool _smartCrossfadeEnabled = true;
+  bool _fadeInOnStartEnabled = true;
+  bool _equalizerEnabled = true;
+  String _equalizerPreset = 'Flat';
+  Map<int, double> _equalizerBands = {0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0};
+  double _bassBoost = 0.0;
+  double _virtualizer = 0.0;
   Color _themeColor = const Color(0xFFFA2D48); // Default DilSe Crimson
   double _cacheSizeMB = 500.0;
   String _customServerUrl = '';
@@ -80,9 +90,18 @@ class PreferencesService extends ChangeNotifier {
   final Map<String, int> _artistSkipCounts = {};
   List<String> _preferredLanguages = ['Hindi', 'Telugu', 'Tamil', 'Punjabi', 'English'];
   String _mostPlayedArtist = '';
+  UserAudioProfile _audioProfile = const UserAudioProfile();
 
   bool get isInitialized => _isInitialized;
   bool get crossfadeEnabled => _crossfadeEnabled;
+  int get crossfadeSeconds => _crossfadeSeconds;
+  bool get smartCrossfadeEnabled => _smartCrossfadeEnabled;
+  bool get fadeInOnStartEnabled => _fadeInOnStartEnabled;
+  bool get equalizerEnabled => _equalizerEnabled;
+  String get equalizerPreset => _equalizerPreset;
+  Map<int, double> get equalizerBands => Map.unmodifiable(_equalizerBands);
+  double get bassBoost => _bassBoost;
+  double get virtualizer => _virtualizer;
   Color get themeColor => _themeColor;
   double get cacheSizeMB => _cacheSizeMB;
   String get customServerUrl => _customServerUrl;
@@ -96,6 +115,7 @@ class PreferencesService extends ChangeNotifier {
   List<Map<String, String>> get listeningHistory => _listeningHistory;
   List<String> get preferredLanguages => _preferredLanguages;
   String get mostPlayedArtist => _mostPlayedArtist;
+  UserAudioProfile get audioProfile => _audioProfile;
   int get totalPlays => _artistPlayCounts.values.fold(0, (a, b) => a + b);
   int get totalSkips => _artistSkipCounts.values.fold(0, (a, b) => a + b);
 
@@ -104,6 +124,23 @@ class PreferencesService extends ChangeNotifier {
     _prefs = await SharedPreferences.getInstance();
 
     _crossfadeEnabled = _prefs.getBool('crossfade') ?? false;
+    _crossfadeSeconds = _prefs.getInt('crossfadeSeconds') ?? 4;
+    _smartCrossfadeEnabled = _prefs.getBool('smartCrossfade') ?? true;
+    _fadeInOnStartEnabled = _prefs.getBool('fadeInOnStart') ?? true;
+    _equalizerEnabled = _prefs.getBool('equalizerEnabled') ?? true;
+    _equalizerPreset = _prefs.getString('equalizerPreset') ?? 'Flat';
+    _bassBoost = _prefs.getDouble('bassBoost') ?? 0.0;
+    _virtualizer = _prefs.getDouble('virtualizer') ?? 0.0;
+    final bandsJson = _prefs.getString('equalizerBandsJson');
+    if (bandsJson != null && bandsJson.isNotEmpty) {
+      try {
+        final Map<String, dynamic> decoded = json.decode(bandsJson);
+        final map = <int, double>{};
+        decoded.forEach((k, v) => map[int.parse(k)] = (v as num).toDouble());
+        _equalizerBands = map;
+      } catch (_) {}
+    }
+
     int colorValue = _prefs.getInt('themeColor') ?? 0xFFFA2D48;
     _themeColor = Color(colorValue);
     _cacheSizeMB = _prefs.getDouble('cacheSizeMB') ?? 500.0;
@@ -147,6 +184,13 @@ class PreferencesService extends ChangeNotifier {
     final langs = _prefs.getStringList('preferredLanguages');
     if (langs != null && langs.isNotEmpty) {
       _preferredLanguages = langs;
+    }
+
+    final profileJson = _prefs.getString('userAudioProfileJson');
+    if (profileJson != null && profileJson.isNotEmpty) {
+      try {
+        _audioProfile = UserAudioProfile.fromJson(json.decode(profileJson));
+      } catch (_) {}
     }
 
     _isInitialized = true;
@@ -234,37 +278,39 @@ class PreferencesService extends ChangeNotifier {
   /// Morning (acoustic/ambient), Afternoon (upbeat/tempo), Evening (trending/hits), Late Night (lo-fi/slowed)
   CircadianContext getCircadianContext() {
     final hour = DateTime.now().hour;
+    final primaryLang = _preferredLanguages.isNotEmpty ? _preferredLanguages.first : 'Telugu';
+
     if (hour >= 5 && hour < 12) {
-      return const CircadianContext(
+      return CircadianContext(
         title: 'Morning Melodies',
         subtitle: 'Soft acoustic & ambient vibes to start your day',
-        query: 'Acoustic Ambient Melodies',
+        query: '$primaryLang Melodies',
         tag: 'MORNING',
         emoji: '🌅',
       );
     }
     if (hour >= 12 && hour < 17) {
-      return const CircadianContext(
+      return CircadianContext(
         title: 'Afternoon Energy',
         subtitle: 'High-tempo beats and chartbusters to keep you grooving',
-        query: 'Upbeat High Tempo Indian Hits',
+        query: '$primaryLang Fast Hits',
         tag: 'AFTERNOON',
         emoji: '⚡',
       );
     }
     if (hour >= 17 && hour < 22) {
-      return const CircadianContext(
+      return CircadianContext(
         title: 'Evening Chill',
         subtitle: 'Trending relaxing tracks and chill evening vibes',
-        query: 'Trending Chill Indian Hits',
+        query: '$primaryLang Top Hits',
         tag: 'EVENING',
         emoji: '🌆',
       );
     }
-    return const CircadianContext(
+    return CircadianContext(
       title: 'Late Night Vibes',
       subtitle: 'Dreamy lo-fi and slowed melodies for quiet hours',
-      query: 'Lo-Fi Slowed Reverb Indian Melodies',
+      query: '$primaryLang Slow Melodies',
       tag: 'LATE NIGHT',
       emoji: '🌙',
     );
@@ -277,26 +323,109 @@ class PreferencesService extends ChangeNotifier {
   /// Multi-Seed Daily Mix Synthesizer (Inspired by Spotube)
   List<DailyMixConfig> getDailyMixConfigs() {
     final top = getTopArtists(limit: 5);
-    final artist1 = top.isNotEmpty ? top[0] : 'Arijit Singh';
-    final artist2 = top.length > 1 ? top[1] : 'Anirudh Ravichander';
+    final primaryLang = _preferredLanguages.isNotEmpty ? _preferredLanguages.first : 'Telugu';
+    final artist1 = top.isNotEmpty ? top[0] : (primaryLang == 'Telugu' ? 'Sid Sriram' : 'Arijit Singh');
+    final artist2 = top.length > 1 ? top[1] : (primaryLang == 'Telugu' ? 'Anirudh Ravichander' : 'Pritam');
 
     return [
       DailyMixConfig(
         title: 'Daily Mix 1',
         subtitle: '$artist1 & Friends',
-        query: '$artist1 hits radio songs',
+        query: artist1,
       ),
       DailyMixConfig(
         title: 'Daily Mix 2',
         subtitle: '$artist2 Melodies',
-        query: '$artist2 songs mix',
+        query: artist2,
       ),
       DailyMixConfig(
         title: 'Made For You',
         subtitle: 'Personalized Blend',
-        query: '${top.take(3).join(" ")} hits',
+        query: top.isNotEmpty ? '$primaryLang ${top[0]}' : '$primaryLang Super Hits',
       ),
     ];
+  }
+
+  /// Ingests Exportify / Spotify tracks directly into local Taste Matrix & Audio Profile
+  Future<void> importExportifyTasteData(List<ExportifyTrack> tracks) async {
+    if (!_isInitialized || tracks.isEmpty) return;
+
+    double totalDance = 0;
+    double totalEnergy = 0;
+    double totalValence = 0;
+    double totalTempo = 0;
+    double totalAcoustic = 0;
+    int featureCount = 0;
+
+    final langScores = <String, int>{};
+
+    for (final track in tracks) {
+      final artists = track.artistName
+          .split(RegExp(r'[,;&/|]|(?:\s+feat\.?\s+)|\s+ft\.?\s+', caseSensitive: false))
+          .map((a) => a.trim())
+          .where((a) => a.isNotEmpty && a.length > 1);
+
+      for (final artist in artists) {
+        _artistPlayCounts[artist] = (_artistPlayCounts[artist] ?? 0) + 3;
+      }
+
+      final detected = CanonicalSongDedup.detectLanguage('${track.trackName} ${track.artistName}');
+      if (detected != null) {
+        langScores[detected] = (langScores[detected] ?? 0) + 1;
+      }
+
+      if (track.energy > 0 || track.valence > 0) {
+        totalDance += track.danceability;
+        totalEnergy += track.energy;
+        totalValence += track.valence;
+        totalTempo += track.tempo;
+        totalAcoustic += track.acousticness;
+        featureCount++;
+      }
+    }
+
+    if (featureCount > 0) {
+      _audioProfile = UserAudioProfile(
+        avgDanceability: totalDance / featureCount,
+        avgEnergy: totalEnergy / featureCount,
+        avgValence: totalValence / featureCount,
+        avgTempo: totalTempo / featureCount,
+        avgAcousticness: totalAcoustic / featureCount,
+        tracksAnalyzed: featureCount,
+      );
+      await _prefs.setString('userAudioProfileJson', json.encode(_audioProfile.toJson()));
+    }
+
+    if (langScores.isNotEmpty) {
+      final sortedLangs = langScores.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+      final topDetected = sortedLangs.take(3).map((e) => e.key).toList();
+      for (final l in topDetected) {
+        if (!_preferredLanguages.contains(l)) {
+          _preferredLanguages.insert(0, l);
+        } else {
+          _preferredLanguages.remove(l);
+          _preferredLanguages.insert(0, l);
+        }
+      }
+      await _prefs.setStringList('preferredLanguages', _preferredLanguages);
+    }
+
+    await _prefs.setString('artistPlayCountsJson', json.encode(_artistPlayCounts));
+
+    String topArtist = _mostPlayedArtist;
+    int maxCount = 0;
+    _artistPlayCounts.forEach((key, val) {
+      if (val > maxCount) {
+        maxCount = val;
+        topArtist = key;
+      }
+    });
+    if (topArtist.isNotEmpty) {
+      _mostPlayedArtist = topArtist;
+      await _prefs.setString('mostPlayedArtist', _mostPlayedArtist);
+    }
+
+    notifyListeners();
   }
 
   /// Generates dynamic personalized search seeds for the Home Screen
@@ -333,6 +462,68 @@ class PreferencesService extends ChangeNotifier {
     if (!_isInitialized) return;
     _crossfadeEnabled = value;
     await _prefs.setBool('crossfade', value);
+    notifyListeners();
+  }
+
+  Future<void> setCrossfadeSeconds(int seconds) async {
+    if (!_isInitialized) return;
+    _crossfadeSeconds = seconds.clamp(1, 12);
+    await _prefs.setInt('crossfadeSeconds', _crossfadeSeconds);
+    notifyListeners();
+  }
+
+  Future<void> setSmartCrossfade(bool value) async {
+    if (!_isInitialized) return;
+    _smartCrossfadeEnabled = value;
+    await _prefs.setBool('smartCrossfade', value);
+    notifyListeners();
+  }
+
+  Future<void> setFadeInOnStart(bool value) async {
+    if (!_isInitialized) return;
+    _fadeInOnStartEnabled = value;
+    await _prefs.setBool('fadeInOnStart', value);
+    notifyListeners();
+  }
+
+  Future<void> setEqualizerEnabled(bool value) async {
+    if (!_isInitialized) return;
+    _equalizerEnabled = value;
+    await _prefs.setBool('equalizerEnabled', value);
+    notifyListeners();
+  }
+
+  Future<void> setEqualizerPreset(String preset, Map<int, double> bands) async {
+    if (!_isInitialized) return;
+    _equalizerPreset = preset;
+    _equalizerBands = Map<int, double>.from(bands);
+    await _prefs.setString('equalizerPreset', preset);
+    final mapForJson = _equalizerBands.map((k, v) => MapEntry(k.toString(), v));
+    await _prefs.setString('equalizerBandsJson', json.encode(mapForJson));
+    notifyListeners();
+  }
+
+  Future<void> setEqualizerBand(int bandIndex, double gainDb) async {
+    if (!_isInitialized) return;
+    _equalizerBands[bandIndex] = gainDb.clamp(-12.0, 12.0);
+    _equalizerPreset = 'Custom';
+    await _prefs.setString('equalizerPreset', 'Custom');
+    final mapForJson = _equalizerBands.map((k, v) => MapEntry(k.toString(), v));
+    await _prefs.setString('equalizerBandsJson', json.encode(mapForJson));
+    notifyListeners();
+  }
+
+  Future<void> setBassBoost(double value) async {
+    if (!_isInitialized) return;
+    _bassBoost = value.clamp(0.0, 1.0);
+    await _prefs.setDouble('bassBoost', _bassBoost);
+    notifyListeners();
+  }
+
+  Future<void> setVirtualizer(double value) async {
+    if (!_isInitialized) return;
+    _virtualizer = value.clamp(0.0, 1.0);
+    await _prefs.setDouble('virtualizer', _virtualizer);
     notifyListeners();
   }
 
