@@ -182,14 +182,14 @@
     playViaIframe(currentVideoId, startAt);
   }
 
-  // Create an in-viewport low-opacity container for YouTube IFrame fallback
+  // Create an invisible off-screen container for YouTube IFrame
   function ensureYtContainer() {
     let el = document.getElementById('dilse-yt-host');
     if (!el) {
       el = document.createElement('div');
       el.id = 'dilse-yt-host';
       el.style.cssText =
-        'position:fixed;bottom:0;right:0;width:200px;height:200px;opacity:0.005;pointer-events:none;z-index:-999;';
+        'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0.001;pointer-events:none;z-index:-9999;';
       document.body.appendChild(el);
     }
     return el;
@@ -441,15 +441,6 @@
     ensureAudioElement();
     broadcastState('buffering');
 
-    // Prime HTML5 Audio element synchronously within the user gesture tick.
-    // This unlocks browser autoplay policies so audioEl.play() is permitted
-    // once asynchronous stream resolution finishes.
-    try {
-      if (audioEl && audioEl.paused) {
-        audioEl.play().catch(() => {});
-      }
-    } catch (_) {}
-
     // Update MediaSession with initial metadata
     window.dilseSetMetadata(currentTitle, currentArtist, currentArtwork);
 
@@ -504,7 +495,6 @@
         .replace(/\|.*$/g, '')
         .trim();
 
-      const query = cleanTitle + (artist ? ' ' + artist : '');
       console.log('[DilSe Web Player] Resolving on JioSaavn Smart Engine:', title, '| Artist:', artist);
 
       try {
@@ -529,85 +519,86 @@
         );
 
         const data = await Promise.race([fetchPromise, timeoutPromise]);
+        if (sessionId !== currentPlaySessionId) return; // Superceded by another play call
+
         if (data && data.status === 'ok' && data.match && data.data?.streamUrl) {
           const jioSong = data.data;
 
-            // Validate that the resolved track genuinely matches the requested song/artist
-            const reqTitle = (cleanTitle || title || '').toLowerCase();
-            const reqArtist = (artist || '').toLowerCase().trim();
-            const resTitle = (jioSong.title || '').toLowerCase();
-            const resArtist = (jioSong.artist || '').toLowerCase();
-            const resArtwork = (jioSong.artwork || '').toLowerCase();
+          // Validate that the resolved track genuinely matches the requested song/artist
+          const reqTitle = (cleanTitle || title || '').toLowerCase();
+          const reqArtist = (artist || '').toLowerCase().trim();
+          const resTitle = (jioSong.title || '').toLowerCase();
+          const resArtist = (jioSong.artist || '').toLowerCase();
+          const resArtwork = (jioSong.artwork || '').toLowerCase();
 
-            const isCoverOrInstrumental =
-              resArtwork.includes('-instrumental-') ||
-              resTitle.includes('instrumental') ||
-              resTitle.includes('karaoke') ||
-              resTitle.includes('tribute') ||
-              resTitle.includes('piano version') ||
-              resTitle.includes('easy piano') ||
-              resTitle.includes('originally perfo') ||
-              resArtist.includes('karaoke') ||
-              resArtist.includes('tribute') ||
-              resArtist.includes('strings') ||
-              resArtist.includes('zzang') ||
-              resArtist.includes('luxebeats');
+          const isCoverOrInstrumental =
+            resArtwork.includes('-instrumental-') ||
+            resTitle.includes('instrumental') ||
+            resTitle.includes('karaoke') ||
+            resTitle.includes('tribute') ||
+            resTitle.includes('piano version') ||
+            resTitle.includes('easy piano') ||
+            resTitle.includes('originally perfo') ||
+            resArtist.includes('karaoke') ||
+            resArtist.includes('tribute') ||
+            resArtist.includes('strings') ||
+            resArtist.includes('zzang') ||
+            resArtist.includes('luxebeats');
 
-            // Title validation: ensure core keywords appear
-            const titleWords = reqTitle
+          // Title validation: ensure core keywords appear
+          const titleWords = reqTitle
+            .split(/\s+/)
+            .map(w => w.replace(/[^a-z0-9]/g, ''))
+            .filter(w => w.length >= 3 && !['song', 'audio', 'video', 'from', 'lyrics', 'feat', 'with'].includes(w));
+          const titleMatches = titleWords.length === 0 || titleWords.some(w => resTitle.includes(w));
+
+          // Artist validation: if artist was specified, check it exists in the resolved track
+          let artistMatches = true;
+          if (reqArtist.length >= 3) {
+            const artistWords = reqArtist
               .split(/\s+/)
               .map(w => w.replace(/[^a-z0-9]/g, ''))
-              .filter(w => w.length >= 3 && !['song', 'audio', 'video', 'from', 'lyrics', 'feat', 'with'].includes(w));
-            const titleMatches = titleWords.length === 0 || titleWords.some(w => resTitle.includes(w));
+              .filter(w => w.length >= 3);
+            artistMatches = artistWords.some(w => resArtist.includes(w));
+          }
 
-            // Artist validation: if artist was specified, check it exists in the resolved track
-            let artistMatches = true;
-            if (reqArtist.length >= 3) {
-              const artistWords = reqArtist
-                .split(/\s+/)
-                .map(w => w.replace(/[^a-z0-9]/g, ''))
-                .filter(w => w.length >= 3);
-              artistMatches = artistWords.some(w => resArtist.includes(w));
+          if (!isCoverOrInstrumental && titleMatches && artistMatches) {
+            console.log(
+              `[DilSe Web Player] JioSaavn Confident Match Confirmed: "${jioSong.title}" by "${jioSong.artist}" -> ${jioSong.streamUrl}`
+            );
+
+            activeEngine = ENGINE_AUDIO;
+
+            // Stop YouTube IFrame if running
+            if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
+              try {
+                ytPlayer.stopVideo();
+              } catch (_) {}
             }
+            stopTicker();
 
-            if (!isCoverOrInstrumental && titleMatches && artistMatches) {
-              console.log(
-                `[DilSe Web Player] JioSaavn Confident Match Confirmed: "${jioSong.title}" by "${jioSong.artist}" -> ${jioSong.streamUrl}`
-              );
-
-              activeEngine = ENGINE_AUDIO;
-
-              // Stop YouTube IFrame if running
-              if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
-                try {
-                  ytPlayer.stopVideo();
-                } catch (_) {}
-              }
-              stopTicker();
-
-              audioEl.src = jioSong.streamUrl;
-              if (startSeconds > 0) {
-                audioEl.currentTime = startSeconds;
-              }
-              armFallbackTimer(videoId, startSeconds);
-
-              // Update MediaSession with high-res album artwork from JioSaavn
-              window.dilseSetMetadata(
-                jioSong.title || title,
-                jioSong.artist || artist,
-                jioSong.artwork || artworkUrl
-              );
-
-              audioEl.play().catch((err) => {
-                console.warn('[DilSe Web Player] audioEl.play() rejected:', err);
-                triggerFallback();
-              });
-              return;
-            } else {
-              console.log(
-                `[DilSe Web Player] JioSaavn resolution rejected (Cover: ${isCoverOrInstrumental}, TitleMatch: ${titleMatches}, ArtistMatch: ${artistMatches}). Falling back to YouTube IFrame for authentic audio.`
-              );
+            audioEl.src = jioSong.streamUrl;
+            if (startSeconds > 0) {
+              audioEl.currentTime = startSeconds;
             }
+            armFallbackTimer(videoId, startSeconds);
+
+            // Update MediaSession with high-res album artwork from JioSaavn
+            window.dilseSetMetadata(
+              jioSong.title || title,
+              jioSong.artist || artist,
+              jioSong.artwork || artworkUrl
+            );
+
+            audioEl.play().catch((err) => {
+              console.warn('[DilSe Web Player] audioEl.play() rejected:', err);
+              triggerFallback();
+            });
+            return;
+          } else {
+            console.log(
+              `[DilSe Web Player] JioSaavn resolution rejected (Cover: ${isCoverOrInstrumental}, TitleMatch: ${titleMatches}, ArtistMatch: ${artistMatches}). Falling back to YouTube IFrame for authentic audio.`
+            );
           }
         }
       } catch (err) {

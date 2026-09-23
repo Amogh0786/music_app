@@ -1592,17 +1592,12 @@ class MusicService extends ChangeNotifier {
         final directStreamUrl = _webStreamUrls[song.id.value] ?? '';
         debugPrint('[Play][Web] Playing via Web Dual Engine: ${song.id.value} (directStream: $directStreamUrl)');
         _reportClientLog('web_stream_start', {'videoId': song.id.value, 'engine': 'dual'});
-        await _startPlaybackWithFade(
-          isCrossfade: isCrossfade,
-          playAction: () async {
-            WebPlayerBridge.play(
-              song.id.value,
-              title: song.title,
-              artist: song.author,
-              artworkUrl: getHdThumbnail(song.id.value),
-              streamUrl: directStreamUrl,
-            );
-          },
+        WebPlayerBridge.play(
+          song.id.value,
+          title: song.title,
+          artist: song.author,
+          artworkUrl: getHdThumbnail(song.id.value),
+          streamUrl: directStreamUrl,
         );
         _isLoading = false;
         notifyListeners();

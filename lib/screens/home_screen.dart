@@ -104,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _onPrefsChanged() {
     if (mounted) {
-      _loadHomeFeeds();
+      setState(() {});
     }
   }
 

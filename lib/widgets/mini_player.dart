@@ -53,19 +53,15 @@ class _MiniPlayerState extends State<MiniPlayer> {
             end: Offset.zero,
           ).animate(curve);
           final fade = Tween<double>(begin: 0.0, end: 1.0).animate(curve);
-          final radius = Tween<double>(begin: 24.0, end: 0.0).animate(curve);
 
           return SlideTransition(
             position: slide,
-            child: Transform.scale(
-              scale: scale.value,
+            child: ScaleTransition(
+              scale: scale,
               alignment: Alignment.bottomCenter,
-              child: ClipRRect(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(radius.value)),
-                child: FadeTransition(
-                  opacity: fade,
-                  child: child,
-                ),
+              child: FadeTransition(
+                opacity: fade,
+                child: child,
               ),
             ),
           );

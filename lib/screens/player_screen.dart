@@ -36,8 +36,11 @@ class _PlayerScreenState extends State<PlayerScreen>
     _musicService.addListener(_onStateChanged);
     _prefs.addListener(_onStateChanged);
 
+    final initialPage = _musicService.playlist.isNotEmpty
+        ? _musicService.currentIndex.clamp(0, _musicService.playlist.length - 1)
+        : 0;
     _pageController = PageController(
-      initialPage: _musicService.currentIndex,
+      initialPage: initialPage,
       viewportFraction: 0.82,
     );
 
@@ -938,8 +941,10 @@ class _PlayerScreenState extends State<PlayerScreen>
                                   controller: _pageController,
                                   itemCount: playlist.length,
                                   onPageChanged: (index) {
-                                    HapticFeedback.selectionClick();
-                                    _musicService.skipToQueueIndex(index);
+                                    if (_isUserDraggingPage && index != _musicService.currentIndex) {
+                                      HapticFeedback.selectionClick();
+                                      _musicService.skipToQueueIndex(index);
+                                    }
                                   },
                                   physics: const BouncingScrollPhysics(),
                                   itemBuilder: (context, index) {
