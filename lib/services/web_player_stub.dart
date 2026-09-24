@@ -14,6 +14,7 @@ class WebPlayerBridge {
   static Stream<void> get onTrackEnded => const Stream.empty();
   static Stream<void> get onNext => const Stream.empty();
   static Stream<void> get onPrevious => const Stream.empty();
+  static Stream<int> get onError => const Stream.empty();
 
   static void init() {}
 

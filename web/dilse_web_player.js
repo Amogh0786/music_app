@@ -25,8 +25,33 @@
   let lastReportedPos = 0;
   let lastReportedDur = 0;
   let fallbackTimer = null;
+  let iframeWatchdog = null;
   let switchingEngines = false;
   let currentPlaySessionId = 0;
+
+  function clearIframeWatchdog() {
+    if (iframeWatchdog) {
+      clearTimeout(iframeWatchdog);
+      iframeWatchdog = null;
+    }
+  }
+
+  function armIframeWatchdog() {
+    clearIframeWatchdog();
+    iframeWatchdog = setTimeout(() => {
+      if (activeEngine === ENGINE_IFRAME && ytPlayer && typeof ytPlayer.getPlayerState === 'function') {
+        const state = ytPlayer.getPlayerState();
+        if (state === 3 || state === -1) {
+          console.warn('[DilSe Web Player] YouTube IFrame buffering watchdog expired (7.0s), notifying recovery');
+          window.dispatchEvent(
+            new CustomEvent('dilse_error', {
+              detail: { code: 999 },
+            })
+          );
+        }
+      }
+    }, 7000);
+  }
 
   // Interruption and lifecycle tracking (reels, calls, tab switches)
   let isUserPaused = false;
@@ -265,8 +290,15 @@
         startSeconds: startSeconds || 0,
       });
       ytPlayer.playVideo();
+      armIframeWatchdog();
     } catch (err) {
       console.error('[DilSe Web Player] YouTube play error:', err);
+      clearIframeWatchdog();
+      window.dispatchEvent(
+        new CustomEvent('dilse_error', {
+          detail: { code: 998 },
+        })
+      );
     }
   }
 
@@ -298,21 +330,25 @@
     switch (event.data) {
       case 1:
         stateName = 'playing';
+        clearIframeWatchdog();
         startTicker();
         startBgAudio();
         if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
         break;
       case 2:
         stateName = 'paused';
+        clearIframeWatchdog();
         stopTicker();
         stopBgAudio();
         if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
         break;
       case 3:
         stateName = 'buffering';
+        armIframeWatchdog();
         break;
       case 0:
         stateName = 'ended';
+        clearIframeWatchdog();
         stopTicker();
         stopBgAudio();
         window.dispatchEvent(new CustomEvent('dilse_ended'));
@@ -645,6 +681,7 @@
     wasPlayingBeforeInterruption = false;
     stopBgAudio();
     clearFallbackTimer();
+    clearIframeWatchdog();
     stopTicker();
     if (audioEl) {
       try {
