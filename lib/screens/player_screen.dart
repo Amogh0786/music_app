@@ -93,11 +93,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     return '$minutes:$seconds';
   }
 
-  String _cleanLyrics(String? raw) {
-    if (raw == null) return 'No lyrics available.';
-    final cleaned = raw.replaceAll(RegExp(r'\[\d+:\d+(\.\d+)?\]'), '').trim();
-    return cleaned.isEmpty ? 'No lyrics available.' : cleaned;
-  }
+
 
   void _toggleLyrics(Video song) {
     HapticFeedback.lightImpact();

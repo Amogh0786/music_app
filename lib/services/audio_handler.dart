@@ -32,6 +32,11 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
     mediaItem.add(item);
   }
 
+  @override
+  Future<void> updateMediaItem(MediaItem mediaItem) async {
+    changeMediaItem(mediaItem);
+  }
+
   void _notifyAudioHandlerAboutPlaybackEvents() {
     _player.playbackEventStream.listen((PlaybackEvent event) {
       final playing = _player.playing;

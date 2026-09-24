@@ -467,7 +467,7 @@ class MusicService extends ChangeNotifier {
       await _setVolume(1.0);
     }
 
-    await playAction();
+    unawaited(playAction());
 
     if (shouldFade) {
       unawaited(_fadeVolume(
@@ -769,20 +769,7 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void reorderPlaylistSongs(String playlistId, int oldIndex, int newIndex) {
-    final playlistIndex = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
-    if (playlistIndex != -1) {
-      final songs = List<Map<String, dynamic>>.from(_customPlaylists[playlistIndex]['songs'] ?? []);
-      if (oldIndex < newIndex) {
-        newIndex -= 1;
-      }
-      final item = songs.removeAt(oldIndex);
-      songs.insert(newIndex, item);
-      _customPlaylists[playlistIndex]['songs'] = songs;
-      saveCustomPlaylists();
-      notifyListeners();
-    }
-  }
+
 
   Future<void> playCustomPlaylist(String playlistId, int startIndex) async {
     final playlist = _customPlaylists.firstWhere((p) => p['id'] == playlistId, orElse: () => <String, dynamic>{});
@@ -868,7 +855,11 @@ class MusicService extends ChangeNotifier {
       _loopMode = LoopMode.off;
     }
     if (!kIsWeb) {
-      _audioPlayer.setLoopMode(_loopMode);
+      // just_audio receives only 1 track at a time.
+      // So LoopMode.all would infinitely loop that single track!
+      // We must pass LoopMode.off to just_audio when our internal mode is LoopMode.all,
+      // so that it completes the track and lets our nextSong() manually wrap around.
+      _audioPlayer.setLoopMode(_loopMode == LoopMode.one ? LoopMode.one : LoopMode.off);
     }
     notifyListeners();
   }
@@ -1369,6 +1360,11 @@ class MusicService extends ChangeNotifier {
         }
         await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
         _checkAndPreloadNextQueue();
+      } else if (_loopMode == LoopMode.all && _playlist.isNotEmpty) {
+        _currentIndex = 0;
+        final nextTrack = _playlist[_currentIndex];
+        await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
+        _checkAndPreloadNextQueue();
       } else {
         _isLoading = false;
         notifyListeners();
@@ -1532,6 +1528,14 @@ class MusicService extends ChangeNotifier {
   }
 
   Future<void> playSong(Video song, {bool updateQueue = true, bool isCrossfade = false}) async {
+    if (!isCrossfade) {
+      if (kIsWeb && WebPlayerBridge.isPlaying) {
+        WebPlayerBridge.pause();
+      } else if (!kIsWeb && _audioPlayer.playing) {
+        unawaited(_audioPlayer.pause());
+      }
+    }
+
     _isLoading = true;
     _currentSong = song;
 
@@ -1572,6 +1576,7 @@ class MusicService extends ChangeNotifier {
         if (cleanT.isNotEmpty) {
           final jioUri = ApiConfig.jioSearchUri(q, limit: 3);
           final jioResp = await http.get(jioUri).timeout(const Duration(seconds: 4));
+          if (_currentSong?.id.value != song.id.value) return;
           if (jioResp.statusCode == 200) {
             final List<dynamic> list = json.decode(jioResp.body);
             for (final item in list) {
@@ -1667,9 +1672,11 @@ class MusicService extends ChangeNotifier {
         debugPrint('[Play] Playing via Direct JioSaavn 320k Stream on Mobile: ${song.id.value}');
         _reportClientLog('direct_stream_start', {'videoId': song.id.value, 'engine': 'jiosaavn_320k'});
         try {
+          if (_currentSong?.id.value != song.id.value) return;
           await _audioPlayer.setAudioSource(
             AudioSource.uri(Uri.parse(directStreamUrl), tag: mediaItem),
           );
+          if (_currentSong?.id.value != song.id.value) return;
           await _startPlaybackWithFade(
             isCrossfade: isCrossfade,
             playAction: () async => await _audioPlayer.play(),
