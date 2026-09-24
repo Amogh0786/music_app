@@ -916,16 +916,28 @@ class MusicService extends ChangeNotifier {
       final cleanA = CanonicalSongDedup.cleanArtist(track.author);
       final q = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
       if (cleanT.isNotEmpty) {
-        final jioUri = ApiConfig.jioSearchUri(q, limit: 3);
+        final jioUri = ApiConfig.jioSearchUri(q, limit: 5);
         final resp = await http.get(jioUri).timeout(const Duration(seconds: 4));
         if (resp.statusCode == 200) {
           final List<dynamic> list = json.decode(resp.body);
           for (final item in list) {
+            final itemTitle = item['title'] as String? ?? '';
+            final itemArtist = item['author'] as String? ?? '';
             final itemStream = item['streamUrl'] as String? ?? '';
             final itemThumb = item['thumbnail'] as String? ?? '';
-            if (itemStream.isNotEmpty) {
+            if (itemStream.isEmpty) continue;
+            if (_isCoverOrKaraokeTrack(itemTitle, itemArtist)) continue;
+
+            final isMatch = CanonicalSongDedup.areDuplicateSongs(
+              titleA: track.title,
+              artistA: track.author,
+              titleB: itemTitle,
+              artistB: itemArtist,
+            );
+
+            if (isMatch) {
               _webStreamUrls[trackId] = itemStream;
-              if (itemThumb.isNotEmpty) {
+              if (itemThumb.isNotEmpty && !_artworkMap.containsKey(trackId)) {
                 _artworkMap[trackId] = itemThumb;
               }
               break;
@@ -1009,12 +1021,58 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
   }
 
+  static bool _isCoverOrKaraokeTrack(String title, String author, {String? query}) {
+    final lowerTitle = title.toLowerCase();
+    final lowerAuthor = author.toLowerCase();
+    final q = (query ?? '').toLowerCase();
+
+    // If the user explicitly searched for karaoke, cover, or instrumental, allow it
+    if (q.contains('karaoke') ||
+        q.contains('instrumental') ||
+        q.contains('tribute') ||
+        q.contains('backing track') ||
+        q.contains('cover')) {
+      return false;
+    }
+
+    const badKeywords = [
+      'karaoke',
+      'originally performed',
+      'in the style of',
+      'tribute to',
+      'tribute version',
+      'tribute band',
+      'cover version',
+      'backing track',
+      'piano version',
+      'guitar backing',
+      'sing-along',
+      'acoustic tribute',
+      'zzang',
+      'luxebeats',
+      'sweet strings',
+      'boostereo',
+      'shadow tower',
+      'party hits band',
+      'karaoke party',
+      'the hit crew',
+      'the covers',
+    ];
+
+    for (final bad in badKeywords) {
+      if (lowerTitle.contains(bad) || lowerAuthor.contains(bad)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /// 3-Tier Source Cascade Search:
   /// Tier 1: JioSaavn (320kbps studio master audio)
   /// Tier 2: YouTube Music (Clean official releases, no video sketches)
   /// Tier 3: YouTube Standard (Safety net fallback)
   /// Guaranteed Zero Cross-Source Duplicates via CanonicalSongDedup.
-  List<Video> _parseJioResults(String body) {
+  List<Video> _parseJioResults(String body, {String? query}) {
     final List<Video> list = [];
     try {
       final List<dynamic> jsonList = json.decode(body);
@@ -1027,6 +1085,10 @@ class MusicService extends ChangeNotifier {
         final duration = durationSec != null ? Duration(seconds: durationSec) : null;
         final artwork = item['thumbnail'] as String? ?? '';
         final streamUrl = item['streamUrl'] as String? ?? '';
+
+        if (_isCoverOrKaraokeTrack(title, author, query: query)) {
+          continue;
+        }
 
         final vidString = songId.length >= 11 ? songId.substring(0, 11) : songId.padRight(11, '0');
 
@@ -1081,14 +1143,31 @@ class MusicService extends ChangeNotifier {
       final ytmFuture = YouTubeMusicClient().searchSongs(query, limit: 15);
 
       final jioResponse = await jioFuture.catchError((_) => http.Response('[]', 500));
-      final List<Video> jioResults = jioResponse.statusCode == 200 ? _parseJioResults(jioResponse.body) : [];
+      List<Video> jioResults = jioResponse.statusCode == 200 ? _parseJioResults(jioResponse.body, query: query) : [];
 
       // Await Tier 2 in parallel
       final ytmResults = await ytmFuture.catchError((_) => <Video>[]);
 
+      // Fallback: If JioSaavn from edge worker returned fewer than 8 genuine tracks, query the Render Jio backend
+      if (jioResults.length < 8) {
+        try {
+          final backendJioResp = await http
+              .get(ApiConfig.jioBackendSearchUri(query, limit: 20))
+              .timeout(const Duration(seconds: 8))
+              .catchError((_) => http.Response('[]', 500));
+          if (backendJioResp.statusCode == 200) {
+            final fallbackList = _parseJioResults(backendJioResp.body, query: query);
+            if (fallbackList.isNotEmpty) {
+              final dedupedFallback = CanonicalSongDedup.deduplicateList(jioResults, fallbackList);
+              jioResults = [...jioResults, ...dedupedFallback];
+            }
+          }
+        } catch (_) {}
+      }
+
       // Tier 3: YouTube Standard backend (safety net only if JioSaavn + YTM return fewer than 8 tracks)
       final List<Video> backendResults = [];
-      if (jioResults.length < 8) {
+      if (jioResults.length + ytmResults.length < 8) {
         final backendResponse = await http
             .get(ApiConfig.searchUri(query, page: page, limit: 15))
             .timeout(const Duration(seconds: 10))
@@ -1715,34 +1794,45 @@ class MusicService extends ChangeNotifier {
         final cleanA = CanonicalSongDedup.cleanArtist(song.author);
         final q = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
         if (cleanT.isNotEmpty) {
-          final jioUri = ApiConfig.jioSearchUri(q, limit: 3);
-          final jioResp = await http.get(jioUri).timeout(const Duration(seconds: 4));
-          if (_currentSong?.id.value != song.id.value) return;
-          if (jioResp.statusCode == 200) {
-            final List<dynamic> list = json.decode(jioResp.body);
-            for (final item in list) {
-              final itemTitle = item['title'] as String? ?? '';
-              final itemArtist = item['author'] as String? ?? '';
-              final itemStream = item['streamUrl'] as String? ?? '';
-              final itemThumb = item['thumbnail'] as String? ?? '';
-              if (itemStream.isNotEmpty) {
+          Future<bool> tryResolveFromUri(Uri uri) async {
+            final jioResp = await http.get(uri).timeout(const Duration(seconds: 4));
+            if (_currentSong?.id.value != song.id.value) return false;
+            if (jioResp.statusCode == 200) {
+              final List<dynamic> list = json.decode(jioResp.body);
+              for (final item in list) {
+                final itemTitle = item['title'] as String? ?? '';
+                final itemArtist = item['author'] as String? ?? '';
+                final itemStream = item['streamUrl'] as String? ?? '';
+                final itemThumb = item['thumbnail'] as String? ?? '';
+                if (itemStream.isEmpty) continue;
+                if (_isCoverOrKaraokeTrack(itemTitle, itemArtist)) continue;
+
                 final isMatch = CanonicalSongDedup.areDuplicateSongs(
                   titleA: song.title,
                   artistA: song.author,
                   titleB: itemTitle,
                   artistB: itemArtist,
-                ) || CanonicalSongDedup.cleanTitle(itemTitle) == cleanT;
+                );
 
-                if (isMatch || list.indexOf(item) == 0) {
+                if (isMatch) {
                   debugPrint('[Play] Resolved "${song.title}" to JioSaavn 320k studio stream!');
                   _webStreamUrls[song.id.value] = itemStream;
-                  if (itemThumb.isNotEmpty) {
+                  if (itemThumb.isNotEmpty && !_artworkMap.containsKey(song.id.value)) {
                     _artworkMap[song.id.value] = itemThumb;
                   }
-                  break;
+                  return true;
                 }
               }
             }
+            return false;
+          }
+
+          // 1. Try Cloudflare Worker edge first (ultra-fast 100ms)
+          bool matched = await tryResolveFromUri(ApiConfig.jioSearchUri(q, limit: 5));
+
+          // 2. If edge didn't match, fallback to Render backend
+          if (!matched && _currentSong?.id.value == song.id.value) {
+            await tryResolveFromUri(ApiConfig.jioBackendSearchUri(q, limit: 5));
           }
         }
       } catch (_) {}

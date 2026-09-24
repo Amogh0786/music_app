@@ -27,6 +27,16 @@ const CORS_HEADERS = {
 
 const JIO_CIPHER_KEY = '38346591';
 
+const JIO_GEO_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+  'Cookie':
+    'geo=106.51.1.1%2CIN%2CTelangana%2CHyderabad%2C500001; DL=english; L=english; country=IN; CH=G03%2CA07%2CO00%2CL03',
+  'X-Forwarded-For': '106.51.1.1',
+  'Client-IP': '106.51.1.1',
+  'Accept': 'application/json',
+};
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
@@ -201,10 +211,7 @@ async function searchJioSaavn(query, limit = 20) {
     encodeURIComponent(query);
 
   const res = await fetch(url, {
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
-    },
+    headers: JIO_GEO_HEADERS,
   });
 
   if (!res.ok) return [];
@@ -253,10 +260,7 @@ async function getJioSuggestions(query, limit = 8) {
     '&_format=json&_marker=0&ctx=web6dot0';
 
   const res = await fetch(url, {
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
-    },
+    headers: JIO_GEO_HEADERS,
   });
 
   if (!res.ok) return [];

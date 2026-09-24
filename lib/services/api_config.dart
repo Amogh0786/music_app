@@ -40,6 +40,10 @@ class ApiConfig {
     return Uri.parse('$baseUrl/jio/search?q=${Uri.encodeComponent(query)}&limit=$limit');
   }
 
+  static Uri jioBackendSearchUri(String query, {int limit = 20}) {
+    return Uri.parse('$baseUrl/jio/search?q=${Uri.encodeComponent(query)}&limit=$limit');
+  }
+
   static Uri jioRecommendationsUri(String query, {String language = 'telugu', int limit = 20}) {
     final edge = cloudflareWorkerUrl;
     if (edge.isNotEmpty) {

@@ -236,5 +236,31 @@ void main() {
         isTrue,
       );
     });
+
+    test('Contradictory artists with identical song titles are not duplicates', () {
+      final isDup = CanonicalSongDedup.areDuplicateSongs(
+        titleA: 'Starboy',
+        artistA: 'The Weeknd',
+        titleB: 'Starboy',
+        artistB: 'ZZang KARAOKE',
+      );
+      expect(isDup, isFalse);
+
+      final isDupCover = CanonicalSongDedup.areDuplicateSongs(
+        titleA: 'Blinding Lights',
+        artistA: 'The Weeknd',
+        titleB: 'Blinding Lights',
+        artistB: 'Boostereo',
+      );
+      expect(isDupCover, isFalse);
+
+      final isGenuineDup = CanonicalSongDedup.areDuplicateSongs(
+        titleA: 'Blinding Lights',
+        artistA: 'The Weeknd',
+        titleB: 'Blinding Lights',
+        artistB: 'The Weeknd, Daft Punk',
+      );
+      expect(isGenuineDup, isTrue);
+    });
   });
 }

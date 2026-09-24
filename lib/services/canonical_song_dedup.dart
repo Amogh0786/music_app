@@ -247,7 +247,17 @@ class CanonicalSongDedup {
     if (cleanTA.isEmpty || cleanTB.isEmpty) return false;
 
     // Exact clean title match
-    if (cleanTA == cleanTB) return true;
+    if (cleanTA == cleanTB) {
+      final cleanAA = cleanArtist(artistA);
+      final cleanAB = cleanArtist(artistB);
+      if (cleanAA.isNotEmpty && cleanAB.isNotEmpty) {
+        if (cleanAA == cleanAB || cleanAA.contains(cleanAB) || cleanAB.contains(cleanAA)) {
+          return true;
+        }
+        return false;
+      }
+      return true;
+    }
 
     // Token-set Jaccard overlap
     final tokensA = tokenize(cleanTA);
