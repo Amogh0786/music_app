@@ -1136,7 +1136,10 @@ class _PlayerScreenState extends State<PlayerScreen>
                                 )
                               : AnimatedLyrics(
                                   rawLyrics: _musicService.cachedLyrics ?? '',
-                                  positionStream: _musicService.audioPlayer.positionStream,
+                                  positionStream: _musicService.positionStream,
+                                  onSeek: (targetPosition) {
+                                    _musicService.seek(targetPosition);
+                                  },
                                 ),
                         ),
                       ),

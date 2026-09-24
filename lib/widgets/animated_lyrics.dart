@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class LyricLine {
   final Duration time;
@@ -9,11 +11,13 @@ class LyricLine {
 class AnimatedLyrics extends StatefulWidget {
   final String rawLyrics;
   final Stream<Duration> positionStream;
+  final void Function(Duration)? onSeek;
 
   const AnimatedLyrics({
     super.key,
     required this.rawLyrics,
     required this.positionStream,
+    this.onSeek,
   });
 
   @override
@@ -26,6 +30,10 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
   bool _isSynced = false;
   int _currentIndex = -1;
 
+  // Auto-scroll control
+  bool _isUserScrolling = false;
+  Timer? _userScrollResumeTimer;
+
   @override
   void initState() {
     super.initState();
@@ -36,8 +44,21 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
   void didUpdateWidget(covariant AnimatedLyrics oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.rawLyrics != widget.rawLyrics) {
-      _parseLyrics();
+      setState(() {
+        _currentIndex = -1;
+        _parseLyrics();
+      });
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(0.0);
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _userScrollResumeTimer?.cancel();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _parseLyrics() {
@@ -48,46 +69,76 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
     if (widget.rawLyrics.isEmpty) return;
 
     final lines = widget.rawLyrics.split('\n');
-    final timeRegExp = RegExp(r'\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)');
+    // Flexible regex matching: [01:23.45], [1:23.456], [01:23:45], [01:23]
+    final tagRegex = RegExp(r'\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]');
 
-    for (var line in lines) {
-      final match = timeRegExp.firstMatch(line);
-      if (match != null) {
+    for (final rawLine in lines) {
+      final line = rawLine.trim();
+      if (line.isEmpty) continue;
+
+      // Ignore LRC header metadata tags: [ar:...], [al:...], [ti:...], [length:...]
+      if (RegExp(r'^\[[a-zA-Z]+:.*\]$').hasMatch(line)) continue;
+
+      final matches = tagRegex.allMatches(line);
+      if (matches.isNotEmpty) {
         _isSynced = true;
-        final minutes = int.parse(match.group(1)!);
-        final seconds = int.parse(match.group(2)!);
-        
-        String msStr = match.group(3)!;
-        if (msStr.length == 2) msStr += '0';
-        final milliseconds = int.parse(msStr);
-        
-        final duration = Duration(
-          minutes: minutes,
-          seconds: seconds,
-          milliseconds: milliseconds,
-        );
-        final text = match.group(4)?.trim() ?? '';
-        
-        // Skip empty timestamped lines to keep UI clean
-        if (text.isNotEmpty) {
+        // Text is everything remaining after stripping all timestamp brackets
+        final text = line.replaceAll(tagRegex, '').trim();
+        if (text.isEmpty) continue;
+
+        for (final m in matches) {
+          final minutes = int.parse(m.group(1)!);
+          final seconds = int.parse(m.group(2)!);
+          int milliseconds = 0;
+          final msGroup = m.group(3);
+          if (msGroup != null) {
+            if (msGroup.length == 1) {
+              milliseconds = int.parse(msGroup) * 100;
+            } else if (msGroup.length == 2) {
+              milliseconds = int.parse(msGroup) * 10;
+            } else {
+              milliseconds = int.parse(msGroup.substring(0, 3));
+            }
+          }
+
+          final duration = Duration(
+            minutes: minutes,
+            seconds: seconds,
+            milliseconds: milliseconds,
+          );
           _lyrics.add(LyricLine(duration, text));
         }
       }
     }
 
-    if (!_isSynced) {
-      // If no valid timestamps were found, it's plain text.
-      // We will clean out any malformed tags just in case.
-      final cleanRegex = RegExp(r'\[\d+:\d+(\.\d+)?\]');
-      final cleanedLines = lines
+    if (_isSynced && _lyrics.isNotEmpty) {
+      // Sort strictly by timestamp in ascending order
+      _lyrics.sort((a, b) => a.time.compareTo(b.time));
+    } else {
+      _isSynced = false;
+      final cleanRegex = RegExp(r'\[\d+:\d+(?:[.:]\d+)?\]');
+      final cleaned = lines
           .map((l) => l.replaceAll(cleanRegex, '').trim())
-          .where((l) => l.isNotEmpty)
+          .where((l) => l.isNotEmpty && !RegExp(r'^\[[a-zA-Z]+:.*\]$').hasMatch(l))
           .toList();
-
-      _lyrics = cleanedLines
-          .map((l) => LyricLine(Duration.zero, l))
-          .toList();
+      _lyrics = cleaned.map((l) => LyricLine(Duration.zero, l)).toList();
     }
+  }
+
+  void _scrollToActiveLine(int index) {
+    if (_isUserScrolling || !_scrollController.hasClients || index < 0 || index >= _lyrics.length) return;
+
+    // Approximate height per line with padding
+    final screenH = MediaQuery.of(context).size.height;
+    // Target position: center active lyric vertically
+    final targetOffset = (index * 54.0) - (screenH * 0.18);
+    final clampedOffset = targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent);
+
+    _scrollController.animateTo(
+      clampedOffset,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   @override
@@ -102,17 +153,20 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
     }
 
     if (!_isSynced) {
-      // Plain text view fallback
+      // Plain text fallback view
       return SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        child: Text(
-          _lyrics.map((l) => l.text).join('\n'),
-          textAlign: TextAlign.left,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 22,
-            height: 1.5,
-            fontWeight: FontWeight.w600,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 8.0),
+          child: Text(
+            _lyrics.map((l) => l.text).join('\n\n'),
+            textAlign: TextAlign.left,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              height: 1.6,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       );
@@ -123,57 +177,82 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
       builder: (context, snapshot) {
         final position = snapshot.data ?? Duration.zero;
 
-        // Find the current active line
-        int newIndex = -1;
+        // Binary search or linear scan for current active line
+        int activeIndex = -1;
         for (int i = 0; i < _lyrics.length; i++) {
           if (position >= _lyrics[i].time) {
-            newIndex = i;
+            activeIndex = i;
           } else {
             break;
           }
         }
 
-        if (newIndex != _currentIndex && newIndex != -1) {
-          _currentIndex = newIndex;
-          // Auto-scroll logic
+        if (activeIndex != _currentIndex) {
+          _currentIndex = activeIndex;
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_scrollController.hasClients) {
-              final double offset = (_currentIndex * 42.0) - (MediaQuery.of(context).size.height * 0.2);
-              _scrollController.animateTo(
-                offset.clamp(0.0, _scrollController.position.maxScrollExtent),
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeOutCubic,
-              );
-            }
+            _scrollToActiveLine(_currentIndex);
           });
         }
 
-        return ListView.builder(
-          controller: _scrollController,
-          physics: const BouncingScrollPhysics(),
-          itemCount: _lyrics.length,
-          padding: EdgeInsets.symmetric(vertical: MediaQuery.of(context).size.height * 0.3),
-          itemBuilder: (context, index) {
-            final isCurrent = index == _currentIndex;
-            final isPassed = index < _currentIndex;
-            
-            return AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-              style: TextStyle(
-                color: isCurrent 
-                    ? Theme.of(context).primaryColor 
-                    : (isPassed ? Colors.white70 : Colors.white24),
-                fontSize: isCurrent ? 26 : 22,
-                fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w600,
-                height: 1.5,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6.0),
-                child: Text(_lyrics[index].text),
-              ),
-            );
+        return NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (notification is UserScrollNotification) {
+              _isUserScrolling = true;
+              _userScrollResumeTimer?.cancel();
+              _userScrollResumeTimer = Timer(const Duration(seconds: 3), () {
+                if (mounted) {
+                  _isUserScrolling = false;
+                  _scrollToActiveLine(_currentIndex);
+                }
+              });
+            }
+            return false;
           },
+          child: ListView.builder(
+            controller: _scrollController,
+            physics: const BouncingScrollPhysics(),
+            itemCount: _lyrics.length,
+            padding: EdgeInsets.symmetric(vertical: MediaQuery.of(context).size.height * 0.22),
+            itemBuilder: (context, index) {
+              final isCurrent = index == _currentIndex;
+              final isPassed = index < _currentIndex;
+              final item = _lyrics[index];
+
+              final themeColor = Theme.of(context).primaryColor;
+
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  widget.onSeek?.call(item.time);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                  child: AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutCubic,
+                    style: TextStyle(
+                      color: isCurrent
+                          ? themeColor
+                          : (isPassed ? Colors.white.withValues(alpha: 0.70) : Colors.white.withValues(alpha: 0.28)),
+                      fontSize: isCurrent ? 24 : 19.5,
+                      fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w600,
+                      height: 1.45,
+                      shadows: isCurrent
+                          ? [
+                              Shadow(
+                                color: themeColor.withValues(alpha: 0.5),
+                                blurRadius: 16,
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Text(item.text),
+                  ),
+                ),
+              );
+            },
+          ),
         );
       },
     );

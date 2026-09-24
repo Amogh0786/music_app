@@ -181,42 +181,61 @@ class MusicService extends ChangeNotifier {
       final cleanArtist = _cleanArtistName(song.author);
 
       List<dynamic> results = [];
+      bool hasSynced(List<dynamic> list) => list.any(
+            (r) => r is Map && r['syncedLyrics'] != null && (r['syncedLyrics'] as String).trim().isNotEmpty,
+          );
+
       // Tier 1: Clean Title + Clean Artist
       if (cleanTitle.isNotEmpty && cleanArtist.isNotEmpty) {
         try {
           final url1 = Uri.parse('https://lrclib.net/api/search?q=${Uri.encodeComponent("$cleanTitle $cleanArtist")}');
           final res1 = await http.get(url1, headers: {'User-Agent': 'Mozilla/5.0'}).timeout(const Duration(seconds: 4));
           if (res1.statusCode == 200) {
-            results = json.decode(res1.body);
+            final List<dynamic> list1 = json.decode(res1.body);
+            results = list1;
           }
         } catch (_) {}
       }
 
-      // Tier 2: Clean Title via track_name parameter
-      if (results.isEmpty && cleanTitle.isNotEmpty) {
+      // Tier 2: If no synced lyrics found yet, try track_name = cleanTitle
+      if (!hasSynced(results) && cleanTitle.isNotEmpty) {
         try {
           final url2 = Uri.parse('https://lrclib.net/api/search?track_name=${Uri.encodeComponent(cleanTitle)}');
           final res2 = await http.get(url2, headers: {'User-Agent': 'Mozilla/5.0'}).timeout(const Duration(seconds: 4));
           if (res2.statusCode == 200) {
-            results = json.decode(res2.body);
+            final List<dynamic> list2 = json.decode(res2.body);
+            if (hasSynced(list2)) {
+              results = list2;
+            } else if (results.isEmpty) {
+              results = list2;
+            }
           }
         } catch (_) {}
       }
 
-      // Tier 3: General query with clean title
-      if (results.isEmpty && cleanTitle.isNotEmpty) {
+      // Tier 3: If still no synced lyrics, try general query with clean title
+      if (!hasSynced(results) && cleanTitle.isNotEmpty) {
         try {
           final url3 = Uri.parse('https://lrclib.net/api/search?q=${Uri.encodeComponent(cleanTitle)}');
           final res3 = await http.get(url3, headers: {'User-Agent': 'Mozilla/5.0'}).timeout(const Duration(seconds: 4));
           if (res3.statusCode == 200) {
-            results = json.decode(res3.body);
+            final List<dynamic> list3 = json.decode(res3.body);
+            if (hasSynced(list3)) {
+              results = list3;
+            } else if (results.isEmpty) {
+              results = list3;
+            }
           }
         } catch (_) {}
       }
 
       if (results.isNotEmpty) {
-        final first = results.first;
-        _cachedLyrics = first['syncedLyrics'] ?? first['plainLyrics'] ?? 'No lyrics available.';
+        // Priority 1: Pick the first result that contains synchronized LRC lyrics
+        final match = results.firstWhere(
+          (r) => r is Map && r['syncedLyrics'] != null && (r['syncedLyrics'] as String).trim().isNotEmpty,
+          orElse: () => results.first,
+        );
+        _cachedLyrics = match['syncedLyrics'] ?? match['plainLyrics'] ?? 'No lyrics available.';
       } else {
         _cachedLyrics = 'No lyrics found for "$cleanTitle".';
       }
