@@ -11,6 +11,8 @@ import '../widgets/vinyl_record_player.dart';
 import '../widgets/waveform_scrubber.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/equalizer_bottom_sheet.dart';
+import '../widgets/animated_lyrics.dart';
+
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key});
@@ -1060,19 +1062,9 @@ class _PlayerScreenState extends State<PlayerScreen>
                               ? Center(
                                   child: CircularProgressIndicator(color: Theme.of(context).primaryColor),
                                 )
-                              : SingleChildScrollView(
-                                  physics: const BouncingScrollPhysics(),
-                                  child: Text(
-                                    _cleanLyrics(_musicService.cachedLyrics),
-                                    textAlign: TextAlign.left,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
-                                      height: 1.8,
-                                      letterSpacing: 0.2,
-                                    ),
-                                  ),
+                              : AnimatedLyrics(
+                                  rawLyrics: _musicService.cachedLyrics ?? '',
+                                  positionStream: _musicService.audioPlayer.positionStream,
                                 ),
                         ),
                       ),

@@ -738,6 +738,21 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void reorderPlaylistSongs(String playlistId, int oldIndex, int newIndex) {
+    final playlistIndex = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
+    if (playlistIndex != -1) {
+      final songs = List<Map<String, dynamic>>.from(_customPlaylists[playlistIndex]['songs'] ?? []);
+      if (oldIndex < newIndex) {
+        newIndex -= 1;
+      }
+      final item = songs.removeAt(oldIndex);
+      songs.insert(newIndex, item);
+      _customPlaylists[playlistIndex]['songs'] = songs;
+      saveCustomPlaylists();
+      notifyListeners();
+    }
+  }
+
   Future<void> playCustomPlaylist(String playlistId, int startIndex) async {
     final playlist = _customPlaylists.firstWhere((p) => p['id'] == playlistId, orElse: () => <String, dynamic>{});
     if (playlist.isEmpty) return;
