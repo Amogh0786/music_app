@@ -96,4 +96,10 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> skipToPrevious() async {
     await MusicService().previousSong();
   }
+
+  @override
+  Future<void> fastForward() => seek(_player.position + const Duration(seconds: 10));
+
+  @override
+  Future<void> rewind() => seek(_player.position - const Duration(seconds: 10));
 }
