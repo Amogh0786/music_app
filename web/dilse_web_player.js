@@ -58,8 +58,131 @@
   let isInterrupted = false;
   let wasPlayingBeforeInterruption = false;
 
-  // HTML5 Native Audio Element
-  let audioEl = null;
+  // Dual-Deck HTML5 Native Audio Elements (Deck A & Deck B for true overlapping crossfades)
+  let deckA = null;
+  let deckB = null;
+  let activeDeckId = 'A'; // 'A' or 'B'
+  let audioEl = null; // Always points to active deck
+  let crossfadeInterval = null;
+
+  function getActiveDeck() {
+    return activeDeckId === 'A' ? deckA : deckB;
+  }
+
+  function getInactiveDeck() {
+    return activeDeckId === 'A' ? deckB : deckA;
+  }
+
+  function cancelCrossfade() {
+    if (crossfadeInterval) {
+      clearInterval(crossfadeInterval);
+      crossfadeInterval = null;
+    }
+  }
+
+  // Web Audio API 5-Band Studio Equalizer DSP
+  let audioCtx = null;
+  let eqFilters = []; // 5 BiquadFilterNodes: [60Hz, 230Hz, 910Hz, 3.6kHz, 14kHz]
+  let masterGainNode = null;
+  let eqEnabled = true;
+  let eqBands = { 0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0 };
+
+  const EQ_FREQUENCIES = [60, 230, 910, 3600, 14000];
+  const EQ_TYPES = ['lowshelf', 'peaking', 'peaking', 'peaking', 'highshelf'];
+
+  function getAudioContext() {
+    if (!audioCtx) {
+      const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtxClass) {
+        try {
+          audioCtx = new AudioCtxClass();
+        } catch (_) {}
+      }
+    }
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
+    return audioCtx;
+  }
+
+  function initEqualizerDSP() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    if (eqFilters.length === 5) return;
+
+    try {
+      eqFilters = [];
+      masterGainNode = ctx.createGain();
+      masterGainNode.gain.value = 1.0;
+
+      for (let i = 0; i < EQ_FREQUENCIES.length; i++) {
+        const filter = ctx.createBiquadFilter();
+        filter.type = EQ_TYPES[i];
+        filter.frequency.value = EQ_FREQUENCIES[i];
+        filter.Q.value = 1.2;
+        const val = parseFloat(eqBands[i] !== undefined ? eqBands[i] : eqBands[String(i)]) || 0.0;
+        filter.gain.value = eqEnabled ? Math.max(-12.0, Math.min(12.0, val)) : 0.0;
+        eqFilters.push(filter);
+      }
+
+      for (let i = 0; i < eqFilters.length - 1; i++) {
+        eqFilters[i].connect(eqFilters[i + 1]);
+      }
+      eqFilters[eqFilters.length - 1].connect(masterGainNode);
+      masterGainNode.connect(ctx.destination);
+      console.log('[DilSe Web Player] Web Audio API Studio Equalizer connected (60Hz, 230Hz, 910Hz, 3.6kHz, 14kHz)');
+    } catch (e) {
+      console.warn('[DilSe Web Player] Equalizer DSP initialization warning:', e.message);
+    }
+  }
+
+  function connectDeckToDSP(deck) {
+    if (!deck) return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    initEqualizerDSP();
+
+    if (deck._dilseSourceConnected) return;
+    try {
+      deck.crossOrigin = 'anonymous';
+      const source = ctx.createMediaElementSource(deck);
+      if (eqFilters.length > 0) {
+        source.connect(eqFilters[0]);
+      } else {
+        source.connect(ctx.destination);
+      }
+      deck._dilseSourceConnected = true;
+      console.log(`[DilSe Web Player] Deck ${deck.id} connected to Studio Equalizer DSP`);
+    } catch (e) {
+      console.warn(`[DilSe Web Player] Web Audio routing note for ${deck.id} (direct playback fallback):`, e.message);
+    }
+  }
+
+  window.dilseSetEqualizer = function (enabled, bandsJson) {
+    eqEnabled = Boolean(enabled);
+    if (typeof bandsJson === 'string') {
+      try {
+        eqBands = JSON.parse(bandsJson);
+      } catch (_) {}
+    } else if (typeof bandsJson === 'object' && bandsJson !== null) {
+      eqBands = bandsJson;
+    }
+
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    initEqualizerDSP();
+
+    for (let i = 0; i < eqFilters.length; i++) {
+      const val = parseFloat(eqBands[i] !== undefined ? eqBands[i] : eqBands[String(i)]) || 0.0;
+      const targetGain = eqEnabled ? Math.max(-12.0, Math.min(12.0, val)) : 0.0;
+      try {
+        eqFilters[i].gain.setValueAtTime(targetGain, ctx.currentTime);
+      } catch (_) {
+        eqFilters[i].gain.value = targetGain;
+      }
+    }
+    console.log('[DilSe Web Player] Equalizer bands applied. Enabled:', eqEnabled, 'Bands:', eqBands);
+  };
 
   // YouTube IFrame Player instance
   let ytPlayer = null;
@@ -99,75 +222,83 @@
     }
   }
 
-  // Ensure Native HTML5 Audio Element is ready
+  function createDeckElement(id) {
+    const el = document.createElement('audio');
+    el.id = id;
+    el.setAttribute('playsinline', 'true');
+    el.setAttribute('webkit-playsinline', 'true');
+    el.preload = 'auto';
+    el.volume = 1.0;
+    el.muted = false;
+    el.crossOrigin = 'anonymous';
+    el.style.cssText =
+      'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0.001;pointer-events:none;';
+    document.body.appendChild(el);
+
+    el.addEventListener('playing', () => {
+      if (activeEngine === ENGINE_AUDIO && el === getActiveDeck()) {
+        console.log(`[DilSe Web Player] JioSaavn 320k audio playing (${id})`);
+        clearFallbackTimer();
+        isInterrupted = false;
+        wasPlayingBeforeInterruption = true;
+        broadcastState('playing');
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+      }
+    });
+
+    el.addEventListener('pause', () => {
+      if (activeEngine === ENGINE_AUDIO && !switchingEngines && el === getActiveDeck()) {
+        console.log(`[DilSe Web Player] JioSaavn audio paused (${id})`);
+        if (!isUserPaused && wasPlayingBeforeInterruption && !el.ended && (el.currentTime > 0)) {
+          console.log('[DilSe Web Player] System interruption detected');
+          isInterrupted = true;
+        }
+        broadcastState('paused');
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+      }
+    });
+
+    el.addEventListener('waiting', () => {
+      if (activeEngine === ENGINE_AUDIO && el === getActiveDeck()) {
+        broadcastState('buffering');
+      }
+    });
+
+    el.addEventListener('timeupdate', () => {
+      if (activeEngine === ENGINE_AUDIO && el === getActiveDeck()) {
+        const pos = el.currentTime || 0;
+        const dur = el.duration || 0;
+        lastReportedPos = pos;
+        if (dur > 0) lastReportedDur = dur;
+        broadcastTime(pos, dur);
+        updateMediaSessionPosition(pos, dur);
+      }
+    });
+
+    el.addEventListener('ended', () => {
+      if (activeEngine === ENGINE_AUDIO && el === getActiveDeck()) {
+        console.log(`[DilSe Web Player] JioSaavn audio track ended (${id})`);
+        broadcastState('ended');
+        window.dispatchEvent(new CustomEvent('dilse_ended'));
+      }
+    });
+
+    el.addEventListener('error', (e) => {
+      if (activeEngine === ENGINE_AUDIO && !switchingEngines && el === getActiveDeck()) {
+        console.warn(`[DilSe Web Player] Direct audio error (${id}):`, e);
+        triggerFallback();
+      }
+    });
+
+    connectDeckToDSP(el);
+    return el;
+  }
+
+  // Ensure Native HTML5 Dual-Deck Audio Elements are ready
   function ensureAudioElement() {
-    if (!audioEl) {
-      audioEl = document.createElement('audio');
-      audioEl.id = 'dilse-html5-audio';
-      audioEl.setAttribute('playsinline', 'true');
-      audioEl.setAttribute('webkit-playsinline', 'true');
-      audioEl.preload = 'auto';
-      audioEl.volume = 1.0;
-      audioEl.muted = false;
-      audioEl.style.cssText =
-        'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0.001;pointer-events:none;';
-      document.body.appendChild(audioEl);
-
-      audioEl.addEventListener('playing', () => {
-        if (activeEngine === ENGINE_AUDIO) {
-          console.log('[DilSe Web Player] JioSaavn 320k audio playing');
-          clearFallbackTimer();
-          isInterrupted = false;
-          wasPlayingBeforeInterruption = true;
-          broadcastState('playing');
-          if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
-        }
-      });
-
-      audioEl.addEventListener('pause', () => {
-        if (activeEngine === ENGINE_AUDIO && !switchingEngines) {
-          console.log('[DilSe Web Player] JioSaavn audio paused');
-          if (!isUserPaused && wasPlayingBeforeInterruption && !audioEl.ended && (audioEl.currentTime > 0)) {
-            console.log('[DilSe Web Player] System interruption detected (reel, phone call, or external audio)');
-            isInterrupted = true;
-          }
-          broadcastState('paused');
-          if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
-        }
-      });
-
-      audioEl.addEventListener('waiting', () => {
-        if (activeEngine === ENGINE_AUDIO) {
-          broadcastState('buffering');
-        }
-      });
-
-      audioEl.addEventListener('timeupdate', () => {
-        if (activeEngine === ENGINE_AUDIO) {
-          const pos = audioEl.currentTime || 0;
-          const dur = audioEl.duration || 0;
-          lastReportedPos = pos;
-          if (dur > 0) lastReportedDur = dur;
-          broadcastTime(pos, dur);
-          updateMediaSessionPosition(pos, dur);
-        }
-      });
-
-      audioEl.addEventListener('ended', () => {
-        if (activeEngine === ENGINE_AUDIO) {
-          console.log('[DilSe Web Player] JioSaavn audio track ended');
-          broadcastState('ended');
-          window.dispatchEvent(new CustomEvent('dilse_ended'));
-        }
-      });
-
-      audioEl.addEventListener('error', (e) => {
-        if (activeEngine === ENGINE_AUDIO && !switchingEngines) {
-          console.warn('[DilSe Web Player] Direct audio error encountered:', e);
-          triggerFallback();
-        }
-      });
-    }
+    if (!deckA) deckA = createDeckElement('dilse-deck-a');
+    if (!deckB) deckB = createDeckElement('dilse-deck-b');
+    audioEl = getActiveDeck();
     return audioEl;
   }
 
@@ -502,12 +633,20 @@
     clearFallbackTimer();
     stopTicker();
 
-    // Immediately stop and detach previous audio to eliminate ghost playback
-    if (audioEl) {
+    cancelCrossfade();
+    // Immediately stop and detach both audio decks to eliminate ghost playback
+    if (deckA) {
       try {
-        audioEl.pause();
-        audioEl.removeAttribute('src');
-        audioEl.load();
+        deckA.pause();
+        deckA.removeAttribute('src');
+        deckA.load();
+      } catch (_) {}
+    }
+    if (deckB) {
+      try {
+        deckB.pause();
+        deckB.removeAttribute('src');
+        deckB.load();
       } catch (_) {}
     }
     if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
@@ -700,17 +839,107 @@
     playViaIframe(videoId, startSeconds);
   };
 
+  window.dilseCrossfade = function (videoId, title, artist, artworkUrl) {
+    const streamToPlay = window.dilseCurrentStreamUrl || '';
+    window.dilseCurrentStreamUrl = '';
+    const crossfadeSec = parseInt(window.dilseCrossfadeSeconds, 10) || 4;
+    window.dilseCrossfadeSeconds = 0;
+
+    ensureAudioElement();
+    cancelCrossfade();
+
+    const outgoing = getActiveDeck();
+    const incoming = getInactiveDeck();
+
+    console.log(`[DilSe Web Player] Initiating ${crossfadeSec}s crossfade transition to: "${title}" by "${artist}"`);
+
+    // Update global state & metadata
+    currentVideoId = videoId;
+    currentTitle = title || '';
+    currentArtist = artist || '';
+    currentArtwork = artworkUrl || '';
+    lastReportedPos = 0;
+    isUserPaused = false;
+    isInterrupted = false;
+    wasPlayingBeforeInterruption = true;
+
+    window.dilseSetMetadata(currentTitle, currentArtist, currentArtwork);
+
+    function startRamp() {
+      // Toggle active deck
+      activeDeckId = (activeDeckId === 'A' ? 'B' : 'A');
+      audioEl = incoming;
+      activeEngine = ENGINE_AUDIO;
+
+      incoming.volume = 0.0;
+      incoming.muted = false;
+      incoming.currentTime = 0;
+
+      const durationMs = crossfadeSec * 1000;
+      const startTime = performance.now();
+
+      incoming.play().then(() => {
+        broadcastState('playing');
+        crossfadeInterval = setInterval(() => {
+          const elapsed = performance.now() - startTime;
+          const ratio = Math.min(1.0, elapsed / durationMs);
+
+          // Equal-power crossfade curve for studio smoothness
+          const outVol = Math.cos((ratio * Math.PI) / 2);
+          const inVol = Math.sin((ratio * Math.PI) / 2);
+
+          if (outgoing) {
+            outgoing.volume = Math.max(0, Math.min(1, outVol));
+          }
+          incoming.volume = Math.max(0, Math.min(1, inVol));
+
+          if (ratio >= 1.0) {
+            cancelCrossfade();
+            if (outgoing) {
+              try {
+                outgoing.volume = 0;
+                outgoing.pause();
+                outgoing.removeAttribute('src');
+                outgoing.load();
+              } catch (_) {}
+            }
+            incoming.volume = 1.0;
+            console.log('[DilSe Web Player] Crossfade transition complete. Active deck:', activeDeckId);
+          }
+        }, 40);
+      }).catch((err) => {
+        console.warn('[DilSe Web Player] incoming crossfade play failed:', err);
+        // Fallback to normal play
+        window.dilsePlay(videoId, 0, title, artist, streamToPlay);
+      });
+    }
+
+    if (streamToPlay && streamToPlay.startsWith('http')) {
+      incoming.src = streamToPlay;
+      startRamp();
+    } else {
+      // If direct stream URL was not passed directly, fall back to dilsePlay to resolve and play
+      window.dilsePlay(videoId, 0, title, artist, streamToPlay);
+    }
+  };
+
   window.dilsePause = function () {
     isUserPaused = true;
     isInterrupted = false;
     wasPlayingBeforeInterruption = false;
+    cancelCrossfade();
     stopBgAudio();
     clearFallbackTimer();
     clearIframeWatchdog();
     stopTicker();
-    if (audioEl) {
+    if (deckA) {
       try {
-        audioEl.pause();
+        deckA.pause();
+      } catch (_) {}
+    }
+    if (deckB) {
+      try {
+        deckB.pause();
       } catch (_) {}
     }
     if (ytPlayer && typeof ytPlayer.pauseVideo === 'function') {
@@ -727,12 +956,15 @@
     isInterrupted = false;
     wasPlayingBeforeInterruption = true;
     startBgAudio();
-    if (activeEngine === ENGINE_AUDIO && audioEl) {
-      try {
-        audioEl.muted = false;
-        audioEl.volume = 1.0;
-        audioEl.play();
-      } catch (_) {}
+    if (activeEngine === ENGINE_AUDIO) {
+      const active = getActiveDeck();
+      if (active) {
+        try {
+          active.muted = false;
+          active.volume = 1.0;
+          active.play();
+        } catch (_) {}
+      }
     } else if (activeEngine === ENGINE_IFRAME && ytPlayer && typeof ytPlayer.playVideo === 'function') {
       try {
         if (typeof ytPlayer.unMute === 'function') {
@@ -748,10 +980,13 @@
 
   window.dilseSeek = function (seconds) {
     lastReportedPos = seconds;
-    if (activeEngine === ENGINE_AUDIO && audioEl) {
-      try {
-        audioEl.currentTime = seconds;
-      } catch (_) {}
+    if (activeEngine === ENGINE_AUDIO) {
+      const active = getActiveDeck();
+      if (active) {
+        try {
+          active.currentTime = seconds;
+        } catch (_) {}
+      }
     } else if (activeEngine === ENGINE_IFRAME && ytPlayer && typeof ytPlayer.seekTo === 'function') {
       try {
         ytPlayer.seekTo(seconds, true);
@@ -760,9 +995,11 @@
   };
 
   window.dilseSetVolume = function (volumePercent) {
-    if (audioEl) {
+    const vol = Math.max(0, Math.min(1, volumePercent / 100));
+    const active = getActiveDeck();
+    if (active) {
       try {
-        audioEl.volume = Math.max(0, Math.min(1, volumePercent / 100));
+        active.volume = vol;
       } catch (_) {}
     }
     if (ytPlayer && typeof ytPlayer.setVolume === 'function') {

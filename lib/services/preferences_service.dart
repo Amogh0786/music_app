@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'canonical_song_dedup.dart';
 import 'spotify_import_service.dart';
+import 'web_player_bridge.dart';
 
 enum ArtworkStyle { card, vinyl }
 enum ScrubberStyle { waveform, classic }
@@ -194,6 +195,7 @@ class PreferencesService extends ChangeNotifier {
     }
 
     _isInitialized = true;
+    WebPlayerBridge.setEqualizer(_equalizerEnabled, _equalizerBands);
     notifyListeners();
   }
 
@@ -490,6 +492,7 @@ class PreferencesService extends ChangeNotifier {
     if (!_isInitialized) return;
     _equalizerEnabled = value;
     await _prefs.setBool('equalizerEnabled', value);
+    WebPlayerBridge.setEqualizer(_equalizerEnabled, _equalizerBands);
     notifyListeners();
   }
 
@@ -500,6 +503,7 @@ class PreferencesService extends ChangeNotifier {
     await _prefs.setString('equalizerPreset', preset);
     final mapForJson = _equalizerBands.map((k, v) => MapEntry(k.toString(), v));
     await _prefs.setString('equalizerBandsJson', json.encode(mapForJson));
+    WebPlayerBridge.setEqualizer(_equalizerEnabled, _equalizerBands);
     notifyListeners();
   }
 
@@ -510,6 +514,7 @@ class PreferencesService extends ChangeNotifier {
     await _prefs.setString('equalizerPreset', 'Custom');
     final mapForJson = _equalizerBands.map((k, v) => MapEntry(k.toString(), v));
     await _prefs.setString('equalizerBandsJson', json.encode(mapForJson));
+    WebPlayerBridge.setEqualizer(_equalizerEnabled, _equalizerBands);
     notifyListeners();
   }
 

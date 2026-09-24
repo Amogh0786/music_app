@@ -34,4 +34,15 @@ class WebPlayerBridge {
   static void seek(Duration position) {}
 
   static void setVolume(double volumePercent) {}
+
+  static void crossfade({
+    required String videoId,
+    String? title,
+    String? artist,
+    String? artworkUrl,
+    String? streamUrl,
+    int crossfadeSeconds = 4,
+  }) {}
+
+  static void setEqualizer(bool enabled, Map<int, double> bands) {}
 }

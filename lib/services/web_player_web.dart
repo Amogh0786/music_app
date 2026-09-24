@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 import 'package:web/web.dart' as web;
@@ -221,6 +222,66 @@ class WebPlayerBridge {
     final globalWindow = web.window as JSObject;
     if (globalWindow.hasProperty('dilseSetVolume'.toJS).toDart) {
       globalWindow.callMethod('dilseSetVolume'.toJS, (volumePercent * 100).toJS);
+    }
+  }
+
+  static void crossfade({
+    required String videoId,
+    String? title,
+    String? artist,
+    String? artworkUrl,
+    String? streamUrl,
+    int crossfadeSeconds = 4,
+  }) {
+    init();
+    _isPlaying = true;
+    _stateController.add('playing');
+
+    final globalWindow = web.window as JSObject;
+
+    final apiBase = ApiConfig.baseUrl;
+    globalWindow.setProperty('dilseApiBaseUrl'.toJS, apiBase.toJS);
+
+    final workerBase = ApiConfig.cloudflareWorkerUrl;
+    globalWindow.setProperty('dilseWorkerBaseUrl'.toJS, workerBase.toJS);
+
+    globalWindow.setProperty('dilseCurrentStreamUrl'.toJS, (streamUrl ?? '').toJS);
+    globalWindow.setProperty('dilseCrossfadeSeconds'.toJS, crossfadeSeconds.toJS);
+
+    if (globalWindow.hasProperty('dilseSetMetadata'.toJS).toDart) {
+      globalWindow.callMethod(
+        'dilseSetMetadata'.toJS,
+        (title ?? 'DilSe Song').toJS,
+        (artist ?? 'DilSe Music').toJS,
+        (artworkUrl ?? '').toJS,
+      );
+    }
+
+    if (globalWindow.hasProperty('dilseCrossfade'.toJS).toDart) {
+      globalWindow.callMethod(
+        'dilseCrossfade'.toJS,
+        videoId.toJS,
+        (title ?? '').toJS,
+        (artist ?? '').toJS,
+        (artworkUrl ?? '').toJS,
+      );
+    } else {
+      play(
+        videoId,
+        title: title,
+        artist: artist,
+        artworkUrl: artworkUrl,
+        streamUrl: streamUrl,
+      );
+    }
+  }
+
+  static void setEqualizer(bool enabled, Map<int, double> bands) {
+    final globalWindow = web.window as JSObject;
+    if (globalWindow.hasProperty('dilseSetEqualizer'.toJS).toDart) {
+      final mapForJson = bands.map((k, v) => MapEntry(k.toString(), v));
+      final bandsJson = json.encode(mapForJson);
+      globalWindow.callMethod('dilseSetEqualizer'.toJS, enabled.toJS, bandsJson.toJS);
     }
   }
 }
