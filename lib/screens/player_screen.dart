@@ -717,6 +717,13 @@ class _PlayerScreenState extends State<PlayerScreen>
     int? badgeCount,
   }) {
     final effectiveColor = activeColor ?? Theme.of(context).primaryColor;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 360;
+    final pillPaddingH = isCompact ? 10.0 : 16.0;
+    final pillPaddingV = isCompact ? 7.0 : 9.0;
+    final pillIconSize = isCompact ? 18.0 : 20.0;
+    final pillFontSize = isCompact ? 12.0 : 13.0;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -730,7 +737,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          padding: EdgeInsets.symmetric(horizontal: pillPaddingH, vertical: pillPaddingV),
           decoration: BoxDecoration(
             color: isActive
                 ? effectiveColor.withValues(alpha: 0.24)
@@ -760,7 +767,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                 children: [
                   Icon(
                     icon,
-                    size: 20,
+                    size: pillIconSize,
                     color: isActive ? effectiveColor : Colors.white.withValues(alpha: 0.9),
                   ),
                   if (badgeCount != null && badgeCount > 0)
@@ -791,12 +798,12 @@ class _PlayerScreenState extends State<PlayerScreen>
                     ),
                 ],
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: isCompact ? 6 : 8),
               Text(
                 label,
                 style: TextStyle(
                   color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.85),
-                  fontSize: 13,
+                  fontSize: pillFontSize,
                   fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
                   letterSpacing: -0.2,
                 ),
@@ -938,7 +945,10 @@ class _PlayerScreenState extends State<PlayerScreen>
             // 2. Main Player Content
             SafeArea(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                padding: EdgeInsets.symmetric(
+                  horizontal: (MediaQuery.of(context).size.width * 0.05).clamp(12.0, 24.0),
+                  vertical: 10,
+                ),
                 child: Column(
                   children: [
                     // Top Grabber & Header Actions
@@ -1217,123 +1227,169 @@ class _PlayerScreenState extends State<PlayerScreen>
 
                     const SizedBox(height: 8),
 
-                    // Unified Playback Controls: Shuffle, -10s, Prev, Play/Pause, Next, +10s, Repeat
+                    // Unified Responsive Playback Controls: Shuffle, -10s, Prev, Play/Pause, Next, +10s, Repeat
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          IconButton(
-                            icon: Icon(
-                              Icons.shuffle_rounded,
-                              color: _musicService.isShuffle ? const Color(0xFF1DB954) : Colors.white54,
-                              size: 22,
-                            ),
-                            onPressed: () {
-                              HapticFeedback.selectionClick();
-                              _musicService.toggleShuffle();
-                            },
-                          ),
-                          Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(20),
-                              onTap: () {
-                                HapticFeedback.lightImpact();
-                                _musicService.seekRelative(const Duration(seconds: -10));
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                                ),
-                                child: const Icon(Icons.replay_10_rounded, color: Colors.white, size: 20),
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.skip_previous_rounded, color: Colors.white, size: 40),
-                            onPressed: () {
-                              HapticFeedback.mediumImpact();
-                              _musicService.previousSong();
-                            },
-                          ),
-                          // Elevated Play/Pause Circle with Ambient Glow
-                          Container(
-                            width: 72,
-                            height: 72,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: vibrantColor.withValues(alpha: 0.5),
-                                  blurRadius: 22,
-                                  spreadRadius: 2,
-                                ),
-                              ],
-                            ),
-                            child: isLoading
-                                ? const Padding(
-                                    padding: EdgeInsets.all(22.0),
-                                    child: CircularProgressIndicator(color: Colors.black, strokeWidth: 3),
-                                  )
-                                : IconButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final availableWidth = constraints.maxWidth;
+                          final bool isCompact = availableWidth < 360;
+                          final bool isUltraCompact = availableWidth < 325;
+
+                          final double playSize = isUltraCompact ? 58.0 : (isCompact ? 64.0 : 72.0);
+                          final double playIconSize = isUltraCompact ? 34.0 : (isCompact ? 38.0 : 42.0);
+                          final double skipIconSize = isUltraCompact ? 30.0 : (isCompact ? 34.0 : 38.0);
+                          final double skipBtnSize = isUltraCompact ? 38.0 : (isCompact ? 42.0 : 46.0);
+                          final double subIconSize = isUltraCompact ? 19.0 : 22.0;
+                          final double subBtnSize = isUltraCompact ? 34.0 : 38.0;
+                          final double skip10IconSize = isUltraCompact ? 15.0 : (isCompact ? 17.0 : 19.0);
+                          final double skip10PadH = isUltraCompact ? 5.0 : (isCompact ? 6.0 : 8.0);
+                          final double skip10PadV = isUltraCompact ? 4.0 : (isCompact ? 5.0 : 6.0);
+
+                          // Min intrinsic width ensuring all 7 items lay out comfortably without collision
+                          final double minRequiredWidth = (subBtnSize * 2) +
+                              (((skip10IconSize + (skip10PadH * 2) + 2)) * 2) +
+                              (skipBtnSize * 2) +
+                              playSize +
+                              20.0;
+
+                          return FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.center,
+                            child: SizedBox(
+                              width: math.max(availableWidth, minRequiredWidth),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  IconButton(
+                                    padding: EdgeInsets.zero,
+                                    constraints: BoxConstraints(minWidth: subBtnSize, minHeight: subBtnSize),
+                                    visualDensity: VisualDensity.compact,
                                     icon: Icon(
-                                      isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                                      color: Colors.black,
-                                      size: 42,
+                                      Icons.shuffle_rounded,
+                                      color: _musicService.isShuffle ? const Color(0xFF1DB954) : Colors.white54,
+                                      size: subIconSize,
                                     ),
                                     onPressed: () {
-                                      HapticFeedback.mediumImpact();
-                                      _musicService.togglePlayPause();
+                                      HapticFeedback.selectionClick();
+                                      _musicService.toggleShuffle();
                                     },
                                   ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.skip_next_rounded, color: Colors.white, size: 40),
-                            onPressed: () {
-                              HapticFeedback.mediumImpact();
-                              _musicService.nextSong();
-                            },
-                          ),
-                          Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(20),
-                              onTap: () {
-                                HapticFeedback.lightImpact();
-                                _musicService.seekRelative(const Duration(seconds: 10));
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                                ),
-                                child: const Icon(Icons.forward_10_rounded, color: Colors.white, size: 20),
+                                  Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(20),
+                                      onTap: () {
+                                        HapticFeedback.lightImpact();
+                                        _musicService.seekRelative(const Duration(seconds: -10));
+                                      },
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(horizontal: skip10PadH, vertical: skip10PadV),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(alpha: 0.08),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                                        ),
+                                        child: Icon(Icons.replay_10_rounded, color: Colors.white, size: skip10IconSize),
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    padding: EdgeInsets.zero,
+                                    constraints: BoxConstraints(minWidth: skipBtnSize, minHeight: skipBtnSize),
+                                    visualDensity: VisualDensity.compact,
+                                    icon: Icon(Icons.skip_previous_rounded, color: Colors.white, size: skipIconSize),
+                                    onPressed: () {
+                                      HapticFeedback.mediumImpact();
+                                      _musicService.previousSong();
+                                    },
+                                  ),
+                                  // Elevated Play/Pause Circle with Ambient Glow
+                                  Container(
+                                    width: playSize,
+                                    height: playSize,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.white,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: vibrantColor.withValues(alpha: 0.5),
+                                          blurRadius: isUltraCompact ? 14 : 22,
+                                          spreadRadius: isUltraCompact ? 1 : 2,
+                                        ),
+                                      ],
+                                    ),
+                                    child: isLoading
+                                        ? Padding(
+                                            padding: EdgeInsets.all(isUltraCompact ? 16.0 : 20.0),
+                                            child: const CircularProgressIndicator(color: Colors.black, strokeWidth: 3),
+                                          )
+                                        : IconButton(
+                                            padding: EdgeInsets.zero,
+                                            icon: Icon(
+                                              isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                              color: Colors.black,
+                                              size: playIconSize,
+                                            ),
+                                            onPressed: () {
+                                              HapticFeedback.mediumImpact();
+                                              _musicService.togglePlayPause();
+                                            },
+                                          ),
+                                  ),
+                                  IconButton(
+                                    padding: EdgeInsets.zero,
+                                    constraints: BoxConstraints(minWidth: skipBtnSize, minHeight: skipBtnSize),
+                                    visualDensity: VisualDensity.compact,
+                                    icon: Icon(Icons.skip_next_rounded, color: Colors.white, size: skipIconSize),
+                                    onPressed: () {
+                                      HapticFeedback.mediumImpact();
+                                      _musicService.nextSong();
+                                    },
+                                  ),
+                                  Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(20),
+                                      onTap: () {
+                                        HapticFeedback.lightImpact();
+                                        _musicService.seekRelative(const Duration(seconds: 10));
+                                      },
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(horizontal: skip10PadH, vertical: skip10PadV),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(alpha: 0.08),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                                        ),
+                                        child: Icon(Icons.forward_10_rounded, color: Colors.white, size: skip10IconSize),
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    padding: EdgeInsets.zero,
+                                    constraints: BoxConstraints(minWidth: subBtnSize, minHeight: subBtnSize),
+                                    visualDensity: VisualDensity.compact,
+                                    icon: Icon(
+                                      _musicService.loopMode == LoopMode.one
+                                          ? Icons.repeat_one_rounded
+                                          : Icons.repeat_rounded,
+                                      color: _musicService.loopMode != LoopMode.off
+                                          ? const Color(0xFF1DB954)
+                                          : Colors.white54,
+                                      size: subIconSize,
+                                    ),
+                                    onPressed: () {
+                                      HapticFeedback.selectionClick();
+                                      _musicService.toggleRepeat();
+                                    },
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              _musicService.loopMode == LoopMode.one
-                                  ? Icons.repeat_one_rounded
-                                  : Icons.repeat_rounded,
-                              color: _musicService.loopMode != LoopMode.off
-                                  ? const Color(0xFF1DB954)
-                                  : Colors.white54,
-                              size: 22,
-                            ),
-                            onPressed: () {
-                              HapticFeedback.selectionClick();
-                              _musicService.toggleRepeat();
-                            },
-                          ),
-                        ],
+                          );
+                        },
                       ),
                     ),
 
@@ -1375,40 +1431,44 @@ class _PlayerScreenState extends State<PlayerScreen>
                               ),
                             );
                           },
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              // 1. Lyrics
-                              _buildBarPillButton(
-                                context: context,
-                                icon: _showLyrics ? Icons.lyrics_rounded : Icons.lyrics_outlined,
-                                label: 'Lyrics',
-                                isActive: _showLyrics,
-                                activeColor: vibrantColor,
-                                onTap: () => _toggleLyrics(song),
-                              ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.center,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                // 1. Lyrics
+                                _buildBarPillButton(
+                                  context: context,
+                                  icon: _showLyrics ? Icons.lyrics_rounded : Icons.lyrics_outlined,
+                                  label: 'Lyrics',
+                                  isActive: _showLyrics,
+                                  activeColor: vibrantColor,
+                                  onTap: () => _toggleLyrics(song),
+                                ),
 
-                              // 2. Queue (Up Next)
-                              _buildBarPillButton(
-                                context: context,
-                                icon: Icons.queue_music_rounded,
-                                label: 'Queue',
-                                badgeCount: _musicService.playlist.length,
-                                isActive: false,
-                                activeColor: vibrantColor,
-                                onTap: () => _showQueueSheet(context),
-                              ),
+                                // 2. Queue (Up Next)
+                                _buildBarPillButton(
+                                  context: context,
+                                  icon: Icons.queue_music_rounded,
+                                  label: 'Queue',
+                                  badgeCount: _musicService.playlist.length,
+                                  isActive: false,
+                                  activeColor: vibrantColor,
+                                  onTap: () => _showQueueSheet(context),
+                                ),
 
-                              // 3. Three Lines (More Options Layer)
-                              _buildBarPillButton(
-                                context: context,
-                                icon: Icons.segment_rounded,
-                                label: 'More',
-                                isActive: false,
-                                activeColor: vibrantColor,
-                                onTap: () => _showCurrentSongActionsSheet(context, song),
-                              ),
-                            ],
+                                // 3. Three Lines (More Options Layer)
+                                _buildBarPillButton(
+                                  context: context,
+                                  icon: Icons.segment_rounded,
+                                  label: 'More',
+                                  isActive: false,
+                                  activeColor: vibrantColor,
+                                  onTap: () => _showCurrentSongActionsSheet(context, song),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
