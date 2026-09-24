@@ -136,7 +136,7 @@ def _clean_jio_text(text: Optional[str]) -> str:
     )
 
 def _search_jiosaavn_api(query: str, limit: int = 20) -> List[dict]:
-    url = f"https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&api_version=4&ctx=android&n={limit}&p=1&q={urllib.parse.quote(query)}"
+    url = f"https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&api_version=4&ctx=android&n={limit}&p=1&q={urllib.parse.quote(query)}"
     headers = {
         "User-Agent": "SaavnAndroid/9.0.0",
         "Accept": "application/json",

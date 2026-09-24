@@ -205,7 +205,7 @@ function decryptMediaUrl(encryptedUrl) {
  */
 async function searchJioSaavn(query, limit = 20) {
   const url =
-    'https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&api_version=4&ctx=android&n=' +
+    'https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&api_version=4&ctx=android&n=' +
     limit +
     '&p=1&q=' +
     encodeURIComponent(query);
@@ -299,8 +299,14 @@ async function getJioSuggestions(query, limit = 8) {
  */
 async function resolveSingleTrack(rawTitle, rawArtist) {
   const songs = await searchJioSaavn(rawTitle + (rawArtist ? ' ' + rawArtist : ''), 5);
-  if (songs.length > 0 && songs[0].streamUrl) {
-    const s = songs[0];
+  for (const s of songs) {
+    if (!s.streamUrl) continue;
+    if (rawArtist) {
+      const artWords = rawArtist.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
+      if (artWords.length > 0 && !artWords.some((w) => s.author.toLowerCase().includes(w))) {
+        continue;
+      }
+    }
     return {
       title: s.title,
       artist: s.author,
