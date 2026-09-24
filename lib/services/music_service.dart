@@ -401,6 +401,13 @@ class MusicService extends ChangeNotifier {
     loadCustomPlaylists();
   }
 
+  int _fadeSession = 0;
+
+  void _cancelActiveFade() {
+    _fadeSession++;
+    _isCrossfading = false;
+  }
+
   Future<void> _setVolume(double vol) async {
     final clamped = vol.clamp(0.0, 1.0);
     if (kIsWeb) {
@@ -417,17 +424,19 @@ class MusicService extends ChangeNotifier {
     required double to,
     required Duration duration,
   }) async {
+    final session = ++_fadeSession;
     const int steps = 18;
     final int stepMs = (duration.inMilliseconds / steps).clamp(15, 120).toInt();
     try {
       for (int i = 0; i <= steps; i++) {
+        if (_fadeSession != session) return;
         final double progress = i / steps;
         final double currentVol = from + (to - from) * progress;
         await _setVolume(currentVol);
         await Future.delayed(Duration(milliseconds: stepMs));
       }
     } catch (_) {}
-    if (to >= 0.9) {
+    if (_fadeSession == session && to >= 0.9) {
       await _setVolume(1.0);
     }
   }
@@ -1747,6 +1756,7 @@ class MusicService extends ChangeNotifier {
   }
 
   Future<void> playSong(Video song, {bool updateQueue = true, bool isCrossfade = false}) async {
+    _cancelActiveFade();
     if (!isCrossfade) {
       if (kIsWeb && WebPlayerBridge.isPlaying) {
         WebPlayerBridge.pause();
@@ -1899,6 +1909,8 @@ class MusicService extends ChangeNotifier {
         if (_currentSong?.id.value != song.id.value) return;
         debugPrint('[Play][Web] Playing via Web Dual Engine: $webVideoId (directStream: $directStreamUrl)');
         _reportClientLog('web_stream_start', {'videoId': webVideoId, 'engine': 'dual'});
+        _cancelActiveFade();
+        unawaited(_setVolume(1.0));
         WebPlayerBridge.play(
           webVideoId,
           title: song.title,
@@ -1927,6 +1939,7 @@ class MusicService extends ChangeNotifier {
             AudioSource.uri(Uri.parse(directStreamUrl), tag: mediaItem),
           );
           if (_currentSong?.id.value != song.id.value) return;
+          _cancelActiveFade();
           await _startPlaybackWithFade(
             isCrossfade: isCrossfade,
             playAction: () async => await _audioPlayer.play(),
@@ -2085,6 +2098,7 @@ class MusicService extends ChangeNotifier {
       }
 
       debugPrint('[Play] Starting playback…');
+      _cancelActiveFade();
       await _startPlaybackWithFade(
         isCrossfade: isCrossfade,
         playAction: () async => await _audioPlayer.play(),

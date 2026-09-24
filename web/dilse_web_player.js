@@ -107,6 +107,8 @@
       audioEl.setAttribute('playsinline', 'true');
       audioEl.setAttribute('webkit-playsinline', 'true');
       audioEl.preload = 'auto';
+      audioEl.volume = 1.0;
+      audioEl.muted = false;
       audioEl.style.cssText =
         'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0.001;pointer-events:none;';
       document.body.appendChild(audioEl);
@@ -285,11 +287,20 @@
     }
 
     try {
+      if (typeof ytPlayer.unMute === 'function') {
+        try { ytPlayer.unMute(); } catch (_) {}
+      }
+      if (typeof ytPlayer.setVolume === 'function') {
+        try { ytPlayer.setVolume(100); } catch (_) {}
+      }
       ytPlayer.loadVideoById({
         videoId: videoId,
         startSeconds: startSeconds || 0,
       });
       ytPlayer.playVideo();
+      if (typeof ytPlayer.unMute === 'function') {
+        try { ytPlayer.unMute(); } catch (_) {}
+      }
       armIframeWatchdog();
     } catch (err) {
       console.error('[DilSe Web Player] YouTube play error:', err);
@@ -333,6 +344,12 @@
         clearIframeWatchdog();
         startTicker();
         startBgAudio();
+        if (ytPlayer && typeof ytPlayer.isMuted === 'function' && ytPlayer.isMuted()) {
+          try {
+            ytPlayer.unMute();
+            ytPlayer.setVolume(100);
+          } catch (_) {}
+        }
         if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
         break;
       case 2:
@@ -501,6 +518,10 @@
 
     startBgAudio();
     ensureAudioElement();
+    if (audioEl) {
+      audioEl.muted = false;
+      audioEl.volume = 1.0;
+    }
     broadcastState('buffering');
 
     // Update MediaSession with initial metadata
@@ -529,6 +550,8 @@
       stopTicker();
 
       audioEl.src = streamToPlay;
+      audioEl.muted = false;
+      audioEl.volume = 1.0;
       if (startSeconds > 0) {
         audioEl.currentTime = startSeconds;
       }
@@ -640,6 +663,8 @@
             stopTicker();
 
             audioEl.src = jioSong.streamUrl;
+            audioEl.muted = false;
+            audioEl.volume = 1.0;
             if (startSeconds > 0) {
               audioEl.currentTime = startSeconds;
             }
@@ -704,10 +729,16 @@
     startBgAudio();
     if (activeEngine === ENGINE_AUDIO && audioEl) {
       try {
+        audioEl.muted = false;
+        audioEl.volume = 1.0;
         audioEl.play();
       } catch (_) {}
     } else if (activeEngine === ENGINE_IFRAME && ytPlayer && typeof ytPlayer.playVideo === 'function') {
       try {
+        if (typeof ytPlayer.unMute === 'function') {
+          ytPlayer.unMute();
+          ytPlayer.setVolume(100);
+        }
         ytPlayer.playVideo();
       } catch (_) {}
     }
