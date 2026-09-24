@@ -24,6 +24,8 @@ class WebPlayerBridge {
       StreamController<void>.broadcast();
   static final StreamController<void> _prevController =
       StreamController<void>.broadcast();
+  static final StreamController<int> _errorController =
+      StreamController<int>.broadcast();
 
   static bool get isPlaying => _isPlaying;
   static Duration get currentPosition => _currentPosition;
@@ -35,6 +37,7 @@ class WebPlayerBridge {
   static Stream<void> get onTrackEnded => _endedController.stream;
   static Stream<void> get onNext => _nextController.stream;
   static Stream<void> get onPrevious => _prevController.stream;
+  static Stream<int> get onError => _errorController.stream;
 
   static bool _initialized = false;
 
@@ -119,6 +122,24 @@ class WebPlayerBridge {
       ((web.Event _) {
         _isPlaying = false;
         _stateController.add('paused');
+      }).toJS,
+    );
+
+    web.window.addEventListener(
+      'dilse_error',
+      ((web.Event event) {
+        try {
+          final customEvent = event as web.CustomEvent;
+          final detail = customEvent.detail;
+          int code = 0;
+          if (detail != null) {
+            final jsObj = detail as JSObject;
+            final codeVal = jsObj.getProperty('code'.toJS);
+            code = (codeVal as JSNumber?)?.toDartInt ?? 0;
+          }
+          _isPlaying = false;
+          _errorController.add(code);
+        } catch (_) {}
       }).toJS,
     );
   }

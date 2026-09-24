@@ -32,6 +32,11 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
     mediaItem.add(item);
   }
 
+  @override
+  Future<void> updateMediaItem(MediaItem mediaItem) async {
+    changeMediaItem(mediaItem);
+  }
+
   void _notifyAudioHandlerAboutPlaybackEvents() {
     _player.playbackEventStream.listen((PlaybackEvent event) {
       final playing = _player.playing;
@@ -91,4 +96,10 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> skipToPrevious() async {
     await MusicService().previousSong();
   }
+
+  @override
+  Future<void> fastForward() => seek(_player.position + const Duration(seconds: 10));
+
+  @override
+  Future<void> rewind() => seek(_player.position - const Duration(seconds: 10));
 }

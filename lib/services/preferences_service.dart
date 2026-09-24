@@ -64,7 +64,7 @@ class PreferencesService extends ChangeNotifier {
   bool _crossfadeEnabled = false;
   int _crossfadeSeconds = 4;
   bool _smartCrossfadeEnabled = true;
-  bool _fadeInOnStartEnabled = true;
+  bool _fadeInOnStartEnabled = false;
   bool _equalizerEnabled = true;
   String _equalizerPreset = 'Flat';
   Map<int, double> _equalizerBands = {0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0};
@@ -126,7 +126,7 @@ class PreferencesService extends ChangeNotifier {
     _crossfadeEnabled = _prefs.getBool('crossfade') ?? false;
     _crossfadeSeconds = _prefs.getInt('crossfadeSeconds') ?? 4;
     _smartCrossfadeEnabled = _prefs.getBool('smartCrossfade') ?? true;
-    _fadeInOnStartEnabled = _prefs.getBool('fadeInOnStart') ?? true;
+    _fadeInOnStartEnabled = _prefs.getBool('fadeInOnStart') ?? false;
     _equalizerEnabled = _prefs.getBool('equalizerEnabled') ?? true;
     _equalizerPreset = _prefs.getString('equalizerPreset') ?? 'Flat';
     _bassBoost = _prefs.getDouble('bassBoost') ?? 0.0;

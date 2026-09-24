@@ -340,6 +340,15 @@ class MusicService extends ChangeNotifier {
       WebPlayerBridge.onNext.listen((_) => nextSong());
       WebPlayerBridge.onPrevious.listen((_) => previousSong());
       WebPlayerBridge.stateStream.listen((_) => notifyListeners());
+      WebPlayerBridge.onError.listen((code) async {
+        debugPrint('[WebPlayer] Error $code encountered. Handling recovery…');
+        _isLoading = false;
+        notifyListeners();
+        if (_playlist.length > 1 && _currentIndex + 1 < _playlist.length) {
+          await Future.delayed(const Duration(milliseconds: 500));
+          await nextSong();
+        }
+      });
     }
 
     _audioPlayer.playerStateStream.listen((state) async {
@@ -391,11 +400,16 @@ class MusicService extends ChangeNotifier {
   }) async {
     const int steps = 18;
     final int stepMs = (duration.inMilliseconds / steps).clamp(15, 120).toInt();
-    for (int i = 0; i <= steps; i++) {
-      final double progress = i / steps;
-      final double currentVol = from + (to - from) * progress;
-      await _setVolume(currentVol);
-      await Future.delayed(Duration(milliseconds: stepMs));
+    try {
+      for (int i = 0; i <= steps; i++) {
+        final double progress = i / steps;
+        final double currentVol = from + (to - from) * progress;
+        await _setVolume(currentVol);
+        await Future.delayed(Duration(milliseconds: stepMs));
+      }
+    } catch (_) {}
+    if (to >= 0.9) {
+      await _setVolume(1.0);
     }
   }
 
@@ -460,22 +474,31 @@ class MusicService extends ChangeNotifier {
     required bool isCrossfade,
     required Future<void> Function() playAction,
   }) async {
-    final shouldFade = PreferencesService().fadeInOnStartEnabled || isCrossfade;
-    if (shouldFade) {
-      await _setVolume(0.0);
-    } else {
+    final prefs = PreferencesService();
+    final shouldFade = isCrossfade || prefs.fadeInOnStartEnabled;
+
+    if (!shouldFade) {
       await _setVolume(1.0);
+      unawaited(playAction());
+      return;
     }
 
-    await playAction();
+    // Never mute to 0.0 because Android hardware AudioTrack can initialize muted.
+    // Start from 0.3 so it is audible from the first millisecond and smoothly reaches 1.0.
+    await _setVolume(0.3);
+    unawaited(playAction());
 
-    if (shouldFade) {
-      unawaited(_fadeVolume(
-        from: 0.0,
-        to: 1.0,
-        duration: isCrossfade ? const Duration(milliseconds: 1400) : const Duration(milliseconds: 900),
-      ));
-    }
+    unawaited(() async {
+      try {
+        await _fadeVolume(
+          from: 0.3,
+          to: 1.0,
+          duration: isCrossfade ? const Duration(milliseconds: 1000) : const Duration(milliseconds: 600),
+        );
+      } catch (_) {} finally {
+        await _setVolume(1.0);
+      }
+    }());
   }
 
   Future<void> loadLikedSongs() async {
@@ -486,6 +509,7 @@ class MusicService extends ChangeNotifier {
         if (raw != null && raw.isNotEmpty) {
           final List<dynamic> jsonList = json.decode(raw);
           _likedSongs = jsonList.map((e) => Map<String, String>.from(e)).toList();
+          _restoreLikedSongsMemoryCaches();
           notifyListeners();
         }
         return;
@@ -496,10 +520,23 @@ class MusicService extends ChangeNotifier {
         final content = await file.readAsString();
         final List<dynamic> jsonList = json.decode(content);
         _likedSongs = jsonList.map((e) => Map<String, String>.from(e)).toList();
+        _restoreLikedSongsMemoryCaches();
         notifyListeners();
       }
     } catch (e) {
       debugPrint('Error loading liked songs: $e');
+    }
+  }
+
+  void _restoreLikedSongsMemoryCaches() {
+    for (final item in _likedSongs) {
+      final id = item['id'] ?? '';
+      final thumb = item['thumbnail'] ?? '';
+      final stream = item['streamUrl'] ?? '';
+      if (id.isNotEmpty) {
+        if (thumb.isNotEmpty && !_artworkMap.containsKey(id)) _artworkMap[id] = thumb;
+        if (stream.isNotEmpty && !_webStreamUrls.containsKey(id)) _webStreamUrls[id] = stream;
+      }
     }
   }
 
@@ -513,6 +550,7 @@ class MusicService extends ChangeNotifier {
         'title': song.title,
         'author': song.author,
         'thumbnail': getHdThumbnail(song.id.value),
+        'streamUrl': _webStreamUrls[song.id.value] ?? '',
       });
     }
     notifyListeners();
@@ -556,6 +594,7 @@ class MusicService extends ChangeNotifier {
         if (raw != null && raw.isNotEmpty) {
           final List<dynamic> jsonList = json.decode(raw);
           _customPlaylists = List<Map<String, dynamic>>.from(jsonList);
+          _restorePlaylistMemoryCaches();
           notifyListeners();
         }
         return;
@@ -566,10 +605,32 @@ class MusicService extends ChangeNotifier {
         final content = await file.readAsString();
         final List<dynamic> jsonList = json.decode(content);
         _customPlaylists = List<Map<String, dynamic>>.from(jsonList);
+        _restorePlaylistMemoryCaches();
         notifyListeners();
       }
     } catch (e) {
       debugPrint('Error loading custom playlists: $e');
+    }
+  }
+
+  void _restorePlaylistMemoryCaches() {
+    for (final playlist in _customPlaylists) {
+      final songs = playlist['songs'] as List<dynamic>? ?? [];
+      for (final s in songs) {
+        if (s is Map<String, dynamic>) {
+          final id = s['id'] as String? ?? '';
+          final thumb = s['thumbnail'] as String? ?? '';
+          final streamUrl = s['streamUrl'] as String? ?? '';
+          if (id.isNotEmpty) {
+            if (thumb.isNotEmpty && !_artworkMap.containsKey(id)) {
+              _artworkMap[id] = thumb;
+            }
+            if (streamUrl.isNotEmpty && !_webStreamUrls.containsKey(id)) {
+              _webStreamUrls[id] = streamUrl;
+            }
+          }
+        }
+      }
     }
   }
 
@@ -630,6 +691,7 @@ class MusicService extends ChangeNotifier {
             'title': song.title,
             'author': song.author,
             'thumbnail': getHdThumbnail(song.id.value),
+            'streamUrl': _webStreamUrls[song.id.value] ?? '',
           });
           modified = true;
         }
@@ -654,6 +716,7 @@ class MusicService extends ChangeNotifier {
         'title': song.title,
         'author': song.author,
         'thumbnail': getHdThumbnail(song.id.value),
+        'streamUrl': _webStreamUrls[song.id.value] ?? '',
       }).toList();
 
       _customPlaylists[playlistIndex]['songs'] = songMaps;
@@ -769,6 +832,8 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
   }
 
+
+
   Future<void> playCustomPlaylist(String playlistId, int startIndex) async {
     final playlist = _customPlaylists.firstWhere((p) => p['id'] == playlistId, orElse: () => <String, dynamic>{});
     if (playlist.isEmpty) return;
@@ -776,6 +841,15 @@ class MusicService extends ChangeNotifier {
     final songs = List<Map<String, dynamic>>.from(playlist['songs'] ?? []);
     if (songs.isEmpty) return;
 
+    for (final item in songs) {
+      final id = (item['id'] as String?) ?? '';
+      final thumb = (item['thumbnail'] as String?) ?? '';
+      final stream = (item['streamUrl'] as String?) ?? '';
+      if (id.isNotEmpty) {
+        if (thumb.isNotEmpty) _artworkMap[id] = thumb;
+        if (stream.isNotEmpty) _webStreamUrls[id] = stream;
+      }
+    }
 
     _playlist = songs.map((item) => Video(
       VideoId((item['id'] as String?) ?? ''),
@@ -796,11 +870,64 @@ class MusicService extends ChangeNotifier {
     _currentIndex = startIndex;
     if (_currentIndex < 0 || _currentIndex >= _playlist.length) _currentIndex = 0;
     
+    // Proactively pre-warm upcoming tracks in background so instant rapid skips never buffer!
+    _prewarmUpcomingTracks(_currentIndex, count: 4);
+
     await playSong(_playlist[_currentIndex], updateQueue: false);
   }
 
+  void _prewarmUpcomingTracks(int fromIndex, {int count = 3}) {
+    if (_playlist.isEmpty) return;
+    final toIndex = (fromIndex + count).clamp(0, _playlist.length);
+    for (int i = fromIndex; i < toIndex; i++) {
+      final track = _playlist[i];
+      final trackId = track.id.value;
+      if (_webStreamUrls[trackId] != null && _webStreamUrls[trackId]!.isNotEmpty) {
+        continue;
+      }
+      _prewarmSingleTrack(track);
+    }
+  }
+
+  Future<void> _prewarmSingleTrack(Video track) async {
+    final trackId = track.id.value;
+    if (_webStreamUrls[trackId] != null && _webStreamUrls[trackId]!.isNotEmpty) return;
+    try {
+      final cleanT = CanonicalSongDedup.cleanTitle(track.title);
+      final cleanA = CanonicalSongDedup.cleanArtist(track.author);
+      final q = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
+      if (cleanT.isNotEmpty) {
+        final jioUri = ApiConfig.jioSearchUri(q, limit: 3);
+        final resp = await http.get(jioUri).timeout(const Duration(seconds: 4));
+        if (resp.statusCode == 200) {
+          final List<dynamic> list = json.decode(resp.body);
+          for (final item in list) {
+            final itemStream = item['streamUrl'] as String? ?? '';
+            final itemThumb = item['thumbnail'] as String? ?? '';
+            if (itemStream.isNotEmpty) {
+              _webStreamUrls[trackId] = itemStream;
+              if (itemThumb.isNotEmpty) {
+                _artworkMap[trackId] = itemThumb;
+              }
+              break;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
 
   Future<void> playLikedSong(Map<String, String> songData) async {
+    for (final item in _likedSongs) {
+      final id = item['id'] ?? '';
+      final thumb = item['thumbnail'] ?? '';
+      final stream = item['streamUrl'] ?? '';
+      if (id.isNotEmpty) {
+        if (thumb.isNotEmpty) _artworkMap[id] = thumb;
+        if (stream.isNotEmpty) _webStreamUrls[id] = stream;
+      }
+    }
+
     _playlist = _likedSongs.map((item) => Video(
       VideoId(item['id'] ?? ''),
       item['title'] ?? 'Unknown Title',
@@ -820,6 +947,7 @@ class MusicService extends ChangeNotifier {
     _currentIndex = _likedSongs.indexWhere((item) => item['id'] == songData['id']);
     if (_currentIndex == -1) _currentIndex = 0;
     if (_playlist.isNotEmpty) {
+      _prewarmUpcomingTracks(_currentIndex, count: 4);
       await playSong(_playlist[_currentIndex], updateQueue: false);
     }
   }
@@ -853,7 +981,11 @@ class MusicService extends ChangeNotifier {
       _loopMode = LoopMode.off;
     }
     if (!kIsWeb) {
-      _audioPlayer.setLoopMode(_loopMode);
+      // just_audio receives only 1 track at a time.
+      // So LoopMode.all would infinitely loop that single track!
+      // We must pass LoopMode.off to just_audio when our internal mode is LoopMode.all,
+      // so that it completes the track and lets our nextSong() manually wrap around.
+      _audioPlayer.setLoopMode(_loopMode == LoopMode.one ? LoopMode.one : LoopMode.off);
     }
     notifyListeners();
   }
@@ -1325,6 +1457,7 @@ class MusicService extends ChangeNotifier {
           reportTrackFinished(prevSong.id.value, nextTrack.id.value);
         }
         await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
+        _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
         _checkAndPreloadNextQueue();
         return;
       } else if (_currentIndex + 1 < _playlist.length) {
@@ -1335,6 +1468,7 @@ class MusicService extends ChangeNotifier {
           reportTrackFinished(prevSong.id.value, nextTrack.id.value);
         }
         await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
+        _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
         _checkAndPreloadNextQueue();
         return;
       }
@@ -1353,6 +1487,13 @@ class MusicService extends ChangeNotifier {
           reportTrackFinished(prevSong.id.value, nextTrack.id.value);
         }
         await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
+        _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
+        _checkAndPreloadNextQueue();
+      } else if (_loopMode == LoopMode.all && _playlist.isNotEmpty) {
+        _currentIndex = 0;
+        final nextTrack = _playlist[_currentIndex];
+        await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
+        _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
         _checkAndPreloadNextQueue();
       } else {
         _isLoading = false;
@@ -1372,6 +1513,7 @@ class MusicService extends ChangeNotifier {
       _shuffleHistoryPointer--;
       _currentIndex = _shuffleHistory[_shuffleHistoryPointer];
       await playSong(_playlist[_currentIndex], updateQueue: false);
+      _prewarmUpcomingTracks(_currentIndex + 1, count: 2);
       return;
     }
 
@@ -1379,6 +1521,7 @@ class MusicService extends ChangeNotifier {
     if (_playlist.isNotEmpty && _currentIndex - 1 >= 0) {
       _currentIndex--;
       await playSong(_playlist[_currentIndex], updateQueue: false);
+      _prewarmUpcomingTracks(_currentIndex + 1, count: 2);
     } else if (_playlist.isNotEmpty && position.inSeconds > 3) {
       // Replay current track from start
       if (kIsWeb) {
@@ -1398,6 +1541,7 @@ class MusicService extends ChangeNotifier {
       unawaited(_setVolume(1.0));
     }
     _currentIndex = index;
+    _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
     await playSong(_playlist[_currentIndex], updateQueue: false);
   }
 
@@ -1457,22 +1601,10 @@ class MusicService extends ChangeNotifier {
     try {
       manifest = await _ytExplode.videos.streamsClient
           .getManifest(videoId)
-          .timeout(const Duration(seconds: 20));
+          .timeout(const Duration(seconds: 7));
     } catch (e) {
-      debugPrint('[StreamResolver] Primary instance error for $videoId: $e. Retrying with fresh instance…');
-      try {
-        final freshYt = YoutubeExplode();
-        try {
-          manifest = await freshYt.videos.streamsClient
-              .getManifest(videoId)
-              .timeout(const Duration(seconds: 20));
-        } finally {
-          freshYt.close();
-        }
-      } catch (e2) {
-        debugPrint('[StreamResolver] Fresh instance error for $videoId: $e2');
-        _reportClientLog('resolve_error', {'videoId': videoId, 'error': e2.toString()});
-      }
+      debugPrint('[StreamResolver] StreamClient error for $videoId: $e');
+      _reportClientLog('resolve_error', {'videoId': videoId, 'error': e.toString()});
     }
 
     if (manifest == null) return [];
@@ -1517,6 +1649,15 @@ class MusicService extends ChangeNotifier {
   }
 
   Future<void> playSong(Video song, {bool updateQueue = true, bool isCrossfade = false}) async {
+    if (!isCrossfade) {
+      if (kIsWeb && WebPlayerBridge.isPlaying) {
+        WebPlayerBridge.pause();
+      } else if (!kIsWeb && _audioPlayer.playing) {
+        unawaited(_audioPlayer.pause());
+      }
+      unawaited(_setVolume(1.0));
+    }
+
     _isLoading = true;
     _currentSong = song;
 
@@ -1557,6 +1698,7 @@ class MusicService extends ChangeNotifier {
         if (cleanT.isNotEmpty) {
           final jioUri = ApiConfig.jioSearchUri(q, limit: 3);
           final jioResp = await http.get(jioUri).timeout(const Duration(seconds: 4));
+          if (_currentSong?.id.value != song.id.value) return;
           if (jioResp.statusCode == 200) {
             final List<dynamic> list = json.decode(jioResp.body);
             for (final item in list) {
@@ -1564,19 +1706,22 @@ class MusicService extends ChangeNotifier {
               final itemArtist = item['author'] as String? ?? '';
               final itemStream = item['streamUrl'] as String? ?? '';
               final itemThumb = item['thumbnail'] as String? ?? '';
-              if (itemStream.isNotEmpty &&
-                  (CanonicalSongDedup.areDuplicateSongs(
-                    titleA: song.title,
-                    artistA: song.author,
-                    titleB: itemTitle,
-                    artistB: itemArtist,
-                  ) || CanonicalSongDedup.cleanTitle(itemTitle) == cleanT)) {
-                debugPrint('[Play] Upgraded "${song.title}" to JioSaavn 320k studio stream!');
-                _webStreamUrls[song.id.value] = itemStream;
-                if (itemThumb.isNotEmpty) {
-                  _artworkMap[song.id.value] = itemThumb;
+              if (itemStream.isNotEmpty) {
+                final isMatch = CanonicalSongDedup.areDuplicateSongs(
+                  titleA: song.title,
+                  artistA: song.author,
+                  titleB: itemTitle,
+                  artistB: itemArtist,
+                ) || CanonicalSongDedup.cleanTitle(itemTitle) == cleanT;
+
+                if (isMatch || list.indexOf(item) == 0) {
+                  debugPrint('[Play] Resolved "${song.title}" to JioSaavn 320k studio stream!');
+                  _webStreamUrls[song.id.value] = itemStream;
+                  if (itemThumb.isNotEmpty) {
+                    _artworkMap[song.id.value] = itemThumb;
+                  }
+                  break;
                 }
-                break;
               }
             }
           }
@@ -1618,6 +1763,7 @@ class MusicService extends ChangeNotifier {
             );
             _isLoading = false;
             notifyListeners();
+            _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
             _checkAndPreloadNextQueue();
             return;
           }
@@ -1628,10 +1774,24 @@ class MusicService extends ChangeNotifier {
       // Dual Engine: Cloudflare Edge Direct Stream (<audio>) + YouTube IFrame Fallback
       if (kIsWeb) {
         final directStreamUrl = _webStreamUrls[song.id.value] ?? '';
-        debugPrint('[Play][Web] Playing via Web Dual Engine: ${song.id.value} (directStream: $directStreamUrl)');
-        _reportClientLog('web_stream_start', {'videoId': song.id.value, 'engine': 'dual'});
+        String webVideoId = song.id.value;
+        // If direct stream URL is empty, resolve genuine YouTube ID for web fallback
+        if (directStreamUrl.isEmpty) {
+          try {
+            final cleanT = CanonicalSongDedup.cleanTitle(song.title);
+            final cleanA = CanonicalSongDedup.cleanArtist(song.author);
+            final ytmQuery = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
+            final ytmResults = await YouTubeMusicClient().searchSongs(ytmQuery, limit: 1).timeout(const Duration(seconds: 4));
+            if (ytmResults.isNotEmpty) {
+              webVideoId = ytmResults.first.id.value;
+            }
+          } catch (_) {}
+        }
+        if (_currentSong?.id.value != song.id.value) return;
+        debugPrint('[Play][Web] Playing via Web Dual Engine: $webVideoId (directStream: $directStreamUrl)');
+        _reportClientLog('web_stream_start', {'videoId': webVideoId, 'engine': 'dual'});
         WebPlayerBridge.play(
-          song.id.value,
+          webVideoId,
           title: song.title,
           artist: song.author,
           artworkUrl: getHdThumbnail(song.id.value),
@@ -1639,6 +1799,7 @@ class MusicService extends ChangeNotifier {
         );
         _isLoading = false;
         notifyListeners();
+        _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
         _checkAndPreloadNextQueue();
         return;
       }
@@ -1652,15 +1813,18 @@ class MusicService extends ChangeNotifier {
         debugPrint('[Play] Playing via Direct JioSaavn 320k Stream on Mobile: ${song.id.value}');
         _reportClientLog('direct_stream_start', {'videoId': song.id.value, 'engine': 'jiosaavn_320k'});
         try {
+          if (_currentSong?.id.value != song.id.value) return;
           await _audioPlayer.setAudioSource(
             AudioSource.uri(Uri.parse(directStreamUrl), tag: mediaItem),
           );
+          if (_currentSong?.id.value != song.id.value) return;
           await _startPlaybackWithFade(
             isCrossfade: isCrossfade,
             playAction: () async => await _audioPlayer.play(),
           );
           _isLoading = false;
           notifyListeners();
+          _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
           _checkAndPreloadNextQueue();
           return;
         } catch (e) {
@@ -1671,80 +1835,97 @@ class MusicService extends ChangeNotifier {
       // Direct On-Device Multi-Candidate Resolution (Format 18 progressive AAC / itag 251)
       try {
         debugPrint('[Play] Resolving direct audio candidates on mobile device for ${song.id.value}…');
-        final candidates = await _resolveStreamCandidates(song.id.value);
+        String effectiveYtId = song.id.value;
+        List<StreamCandidate> candidates = [];
+        try {
+          candidates = await _resolveStreamCandidates(effectiveYtId);
+        } catch (_) {}
+
+        if (candidates.isEmpty && _currentSong?.id.value == song.id.value) {
+          // If song.id.value is not a YouTube ID (e.g. JioSaavn ID from Spotify import),
+          // search YouTube Music to get the real official YouTube video ID!
+          try {
+            debugPrint('[Play] Searching YouTube Music for real video ID of "${song.title}"…');
+            final cleanT = CanonicalSongDedup.cleanTitle(song.title);
+            final cleanA = CanonicalSongDedup.cleanArtist(song.author);
+            final ytmQuery = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
+            final ytmResults = await YouTubeMusicClient().searchSongs(ytmQuery, limit: 3).timeout(const Duration(seconds: 5));
+            if (_currentSong?.id.value != song.id.value) return;
+            if (ytmResults.isNotEmpty) {
+              effectiveYtId = ytmResults.first.id.value;
+              debugPrint('[Play] Found real YouTube track: $effectiveYtId ("${ytmResults.first.title}")');
+              candidates = await _resolveStreamCandidates(effectiveYtId);
+            }
+          } catch (ytmErr) {
+            debugPrint('[Play] YouTube Music search fallback error: $ytmErr');
+          }
+        }
+
         if (_currentSong?.id.value != song.id.value) return;
 
+        if (candidates.isNotEmpty) {
+          final tempDir = await getTemporaryDirectory();
 
-          if (candidates.isNotEmpty) {
-            final tempDir = await getTemporaryDirectory();
+          for (final candidate in candidates) {
+            if (_currentSong?.id.value != song.id.value) return;
 
-            for (final candidate in candidates) {
-              if (_currentSong?.id.value != song.id.value) return;
+            debugPrint('[Play] Trying stream candidate (tag: ${candidate.tag}, type: ${candidate.type})…');
+            _reportClientLog('trying_stream_candidate', {
+              'videoId': effectiveYtId,
+              'tag': candidate.tag,
+              'type': candidate.type,
+            });
 
-              debugPrint('[Play] Trying stream candidate (tag: ${candidate.tag}, type: ${candidate.type})…');
-              _reportClientLog('trying_stream_candidate', {
-                'videoId': song.id.value,
+            // 1. First attempt: Direct native AudioSource.uri (fastest, progressive hardware decoding)
+            try {
+              await _audioPlayer.setAudioSource(
+                AudioSource.uri(Uri.parse(candidate.url), tag: mediaItem),
+                preload: true,
+              );
+              playbackSourceSet = true;
+              _reportClientLog('playback_started_uri', {
+                'videoId': effectiveYtId,
                 'tag': candidate.tag,
-                'type': candidate.type,
               });
-
-              // 1. First attempt: Direct native AudioSource.uri (fastest, progressive hardware decoding)
+              break;
+            } catch (uriError) {
+              debugPrint('[Play] AudioSource.uri failed ($uriError), trying LockCachingAudioSource…');
+              // 2. Second attempt: LockCachingAudioSource fallback
               try {
+                final cacheFile = File('${tempDir.path}/track_${effectiveYtId}_${candidate.tag}.m4a');
+                if (await cacheFile.exists() && await cacheFile.length() == 0) {
+                  await cacheFile.delete();
+                }
                 await _audioPlayer.setAudioSource(
-                  AudioSource.uri(Uri.parse(candidate.url), tag: mediaItem),
+                  // ignore: experimental_member_use
+                  LockCachingAudioSource(
+                    Uri.parse(candidate.url),
+                    cacheFile: cacheFile,
+                    tag: mediaItem,
+                  ),
                   preload: true,
                 );
                 playbackSourceSet = true;
-                _reportClientLog('playback_started_uri', {
-                  'videoId': song.id.value,
+                _reportClientLog('playback_started_lockcache', {
+                  'videoId': effectiveYtId,
                   'tag': candidate.tag,
                 });
                 break;
-              } catch (uriError) {
-                debugPrint('[Play] AudioSource.uri failed ($uriError), trying LockCachingAudioSource…');
-                // 2. Second attempt: LockCachingAudioSource fallback
-                try {
-                  final cacheFile = File('${tempDir.path}/track_${song.id.value}_${candidate.tag}.m4a');
-                  if (await cacheFile.exists() && await cacheFile.length() == 0) {
-                    await cacheFile.delete();
-                  }
-                  await _audioPlayer.setAudioSource(
-                    // ignore: experimental_member_use
-                    LockCachingAudioSource(
-                      Uri.parse(candidate.url),
-                      cacheFile: cacheFile,
-                      tag: mediaItem,
-                    ),
-                    preload: true,
-                  );
-                  playbackSourceSet = true;
-                  _reportClientLog('playback_started_lockcache', {
-                    'videoId': song.id.value,
-                    'tag': candidate.tag,
-                  });
-                  break;
-                } catch (lockError) {
-                  debugPrint('[Play] Candidate tag ${candidate.tag} failed: $lockError');
-                  _reportClientLog('candidate_failed', {
-                    'videoId': song.id.value,
-                    'tag': candidate.tag,
-                    'uriError': uriError.toString(),
-                    'lockError': lockError.toString(),
-                  });
-                }
+              } catch (lockError) {
+                debugPrint('[Play] Candidate tag ${candidate.tag} failed: $lockError');
               }
             }
           }
-        } catch (directError) {
-          if (_isInterrupted(directError)) {
-            debugPrint('[Play] Load interrupted by newer request');
-            return;
-          }
-          debugPrint('[Play] Direct resolution error ($directError), trying fallbacks…');
-          _reportClientLog('direct_play_failed', {'videoId': song.id.value, 'error': directError.toString()});
         }
+      } catch (directError) {
+        if (_isInterrupted(directError)) {
+          debugPrint('[Play] Load interrupted by newer request');
+          return;
+        }
+        debugPrint('[Play] Direct resolution error ($directError), trying fallbacks…');
+      }
 
-      // 3. Fallback 1: Backend /stream_url
+      // 4. Fallback 1: Backend /stream_url
       if (!playbackSourceSet) {
         if (_currentSong?.id.value != song.id.value) return;
         try {
@@ -1763,18 +1944,36 @@ class MusicService extends ChangeNotifier {
         }
       }
 
-      // 4. Fallback 2: Backend proxy /stream/{id}.m4a
+      // 5. Fallback 2: Backend proxy /stream/{id}.m4a
       if (!playbackSourceSet) {
         if (_currentSong?.id.value != song.id.value) return;
         final proxyUri = ApiConfig.streamProxyUri(song.id.value);
         debugPrint('[Play] Fallback 2: Setting audio source to proxy: $proxyUri');
-        await _audioPlayer.setAudioSource(
-          AudioSource.uri(proxyUri, tag: mediaItem),
-          preload: true,
-        );
+        try {
+          await _audioPlayer.setAudioSource(
+            AudioSource.uri(proxyUri, tag: mediaItem),
+            preload: true,
+          );
+          playbackSourceSet = true;
+        } catch (proxyError) {
+          debugPrint('[Play] Proxy error: $proxyError');
+        }
       }
 
       if (_currentSong?.id.value != song.id.value) return;
+
+      if (!playbackSourceSet) {
+        debugPrint('[Play] Could not resolve audio source for "${song.title}". Auto-skipping to next track…');
+        _isLoading = false;
+        notifyListeners();
+        if (_playlist.length > 1 && _currentIndex + 1 < _playlist.length) {
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (_currentSong?.id.value == song.id.value) {
+            await nextSong();
+          }
+        }
+        return;
+      }
 
       debugPrint('[Play] Starting playback…');
       await _startPlaybackWithFade(
@@ -1789,6 +1988,7 @@ class MusicService extends ChangeNotifier {
         'title': song.title,
       });
 
+      _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
       _preloadUpcomingTracks();
       _checkAndPreloadNextQueue();
     } catch (e, st) {
@@ -2234,6 +2434,7 @@ class MusicService extends ChangeNotifier {
     if (_audioPlayer.playing) {
       _audioPlayer.pause();
     } else {
+      unawaited(_setVolume(1.0));
       _audioPlayer.play();
     }
     notifyListeners();

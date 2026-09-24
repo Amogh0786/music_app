@@ -31,8 +31,8 @@ class MainActivity : AudioServiceActivity() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channelId = "com.example.music_app.channel.audio_playback_v2"
-            val channelName = "Music Playback & Controls"
+            val channelId = "com.example.music_app.channel.audio_playback_v3"
+            val channelName = "DilSe Music Playback"
             val channelDescription = "Music playback controls and lock screen notification"
             val importance = NotificationManager.IMPORTANCE_LOW
             val channel = NotificationChannel(channelId, channelName, importance).apply {
