@@ -4,7 +4,8 @@ import 'dart:io';
 import 'dart:math';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
+import 'package:audio_service/audio_service.dart';
+import 'audio_handler.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -661,6 +662,36 @@ class MusicService extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  Future<void> reorderPlaylistSongs(String playlistId, int oldIndex, int newIndex) async {
+    final playlistIndex = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
+    if (playlistIndex == -1) return;
+
+    final songs = List<Map<String, dynamic>>.from(_customPlaylists[playlistIndex]['songs'] ?? []);
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    if (oldIndex < 0 || oldIndex >= songs.length || newIndex < 0 || newIndex >= songs.length) return;
+
+    final item = songs.removeAt(oldIndex);
+    songs.insert(newIndex, item);
+
+    _customPlaylists[playlistIndex]['songs'] = songs;
+    await saveCustomPlaylists();
+    notifyListeners();
+  }
+
+  Future<void> removeSongFromPlaylist(String playlistId, String songId) async {
+    final playlistIndex = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
+    if (playlistIndex == -1) return;
+
+    final songs = List<Map<String, dynamic>>.from(_customPlaylists[playlistIndex]['songs'] ?? []);
+    songs.removeWhere((s) => s['id'] == songId);
+
+    _customPlaylists[playlistIndex]['songs'] = songs;
+    await saveCustomPlaylists();
+    notifyListeners();
   }
 
   bool isLiked(String videoId) {
@@ -1561,6 +1592,10 @@ class MusicService extends ChangeNotifier {
       artUri: Uri.tryParse(getHdThumbnail(song.id.value)),
       duration: song.duration,
     );
+
+    if (!kIsWeb && audioHandler != null) {
+      audioHandler!.changeMediaItem(mediaItem);
+    }
 
     try {
       // 1. If this song is downloaded locally, play directly from disk (mobile only)

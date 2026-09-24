@@ -1,4 +1,6 @@
+import 'dart:io' show Platform;
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -656,6 +658,20 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
+                      color: Colors.redAccent.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.bug_report_rounded, color: Colors.redAccent, size: 20),
+                  ),
+                  title: const Text('Report a Bug', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                  subtitle: Text('Found an issue? Let us know via Email', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white30),
+                  onTap: _reportBug,
+                ),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
                       color: const Color(0xFFFA2D48).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -743,6 +759,48 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         ],
       ),
     );
+  }
+
+  Future<void> _reportBug() async {
+    final osInfo = kIsWeb
+        ? 'Web Browser'
+        : '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
+
+    final String subject = Uri.encodeComponent('Bug Report: DilSe Music App (v$_appVersion)');
+    final String body = Uri.encodeComponent(
+      'Please describe the bug you encountered:\n\n\n\n'
+      '--- App Info ---\n'
+      'Version: $_appVersion\n'
+      'Build: $_buildNumber\n'
+      'OS: $osInfo',
+    );
+    final Uri emailLaunchUri = Uri.parse(
+      'mailto:charanteja.kondakalla030206@gmail.com,balaamoghraj@gmail.com?subject=$subject&body=$body',
+    );
+
+    try {
+      if (await canLaunchUrl(emailLaunchUri)) {
+        await launchUrl(emailLaunchUri);
+      } else {
+        await Clipboard.setData(const ClipboardData(
+          text: 'charanteja.kondakalla030206@gmail.com, balaamoghraj@gmail.com',
+        ));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Support emails copied to clipboard (charanteja & balaamoghraj)'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
   }
 
   Future<void> _handleCheckForUpdates() async {
