@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../services/music_service.dart';
 import '../services/preferences_service.dart';
 import 'spotify_import_screen.dart';
+import 'custom_playlist_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -658,7 +659,11 @@ class _LibraryScreenState extends State<LibraryScreen>
                         ),
                         onTap: () {
                           HapticFeedback.lightImpact();
-                          _showPlaylistSongsSheet(playlist);
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => CustomPlaylistScreen(playlistId: id),
+                            ),
+                          );
                         },
                       );
                     },
@@ -915,147 +920,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     );
   }
 
-  void _showPlaylistSongsSheet(Map<String, dynamic> playlist) {
-    final playlistId = (playlist['id'] as String?) ?? '';
-    final playlistName = (playlist['name'] as String?) ?? 'Playlist';
-    final songs = List<Map<String, dynamic>>.from(playlist['songs'] ?? []);
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF14141E),
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.65,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          expand: false,
-          builder: (_, scrollController) {
-            return Column(
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 10, bottom: 12),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    playlistName,
-                                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  Text(
-                                    '${songs.length} tracks',
-                                    style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined, color: Colors.white70, size: 20),
-                              tooltip: 'Rename playlist',
-                              onPressed: () {
-                                Navigator.pop(ctx);
-                                _showRenamePlaylistDialog(playlistId, playlistName);
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (songs.isNotEmpty)
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.play_arrow_rounded, size: 20),
-                          label: const Text('Play All'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: Colors.black,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                          onPressed: () {
-                            Navigator.pop(ctx);
-                            _musicService.playCustomPlaylist(playlistId, 0);
-                          },
-                        ),
-                    ],
-                  ),
-                ),
-                const Divider(color: Colors.white10),
-                Expanded(
-                  child: songs.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No songs in this playlist yet.',
-                            style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
-                          ),
-                        )
-                      : ListView.builder(
-                          controller: scrollController,
-                          itemCount: songs.length,
-                          itemBuilder: (context, index) {
-                            final song = songs[index];
-                            return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                              leading: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(
-                                  song['thumbnail'] ?? '',
-                                  width: 48,
-                                  height: 48,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => Container(
-                                    width: 48,
-                                    height: 48,
-                                    color: const Color(0xFF1E1E28),
-                                    child: const Icon(Icons.music_note, color: Colors.white54),
-                                  ),
-
-                                ),
-                              ),
-                              title: Text(
-                                song['title'] ?? 'Unknown',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                              ),
-                              subtitle: Text(
-                                song['author'] ?? 'Unknown Artist',
-                                maxLines: 1,
-                                style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 12),
-                              ),
-                              onTap: () {
-                                Navigator.pop(ctx);
-                                _musicService.playCustomPlaylist(playlistId, index);
-                              },
-                            );
-                          },
-                        ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
 
   Widget _buildEmptyState({
     required IconData icon,

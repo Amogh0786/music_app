@@ -41,7 +41,7 @@ dependencies:
   path_provider: ^2.1.2
   shared_preferences: ^2.2.2
   palette_generator: ^0.3.3+3
-  just_audio_background: ^0.0.1-beta.17
+  audio_service: ^0.18.19
   ota_update: ^7.1.0
   package_info_plus: ^10.2.1
   permission_handler: ^11.3.1

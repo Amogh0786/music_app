@@ -1,8 +1,10 @@
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
@@ -600,6 +602,19 @@ class _PlayerScreenState extends State<PlayerScreen>
                         );
                       },
                     ),
+
+                    // 6. Report a Bug (Music player options at last)
+                    _buildSongActionTile(
+                      icon: Icons.bug_report_rounded,
+                      iconColor: Colors.redAccent,
+                      title: 'Report a Bug',
+                      subtitle: 'Found an issue with playback or app?',
+                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white30, size: 20),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _reportBug(context, song: song);
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -643,6 +658,57 @@ class _PlayerScreenState extends State<PlayerScreen>
         onTap();
       },
     );
+  }
+
+  Future<void> _reportBug(BuildContext context, {Video? song}) async {
+    final osInfo = kIsWeb
+        ? 'Web Browser'
+        : '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
+
+    final songDetails = song != null
+        ? '\n\n--- Current Playing Song ---\n'
+          'Title: ${song.title}\n'
+          'Artist: ${song.author}\n'
+          'Song ID: ${song.id.value}\n'
+          'URL: ${song.url}'
+        : '';
+
+    final subject = Uri.encodeComponent('Bug Report: DilSe Music App');
+    final body = Uri.encodeComponent(
+      'Please describe the bug or issue you encountered:\n\n\n\n'
+      '--- Diagnostic Info ---\n'
+      'App: DilSe Music v3.3.0\n'
+      'Platform: $osInfo'
+      '$songDetails',
+    );
+
+    final emailLaunchUri = Uri.parse(
+      'mailto:charanteja.kondakalla030206@gmail.com,balaamoghraj@gmail.com?subject=$subject&body=$body',
+    );
+
+    try {
+      if (await canLaunchUrl(emailLaunchUri)) {
+        await launchUrl(emailLaunchUri);
+      } else {
+        await Clipboard.setData(const ClipboardData(
+          text: 'charanteja.kondakalla030206@gmail.com, balaamoghraj@gmail.com',
+        ));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Support emails copied to clipboard (charanteja & balaamoghraj)'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error opening email: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
   }
 
   Widget _buildBarPillButton({
