@@ -391,11 +391,16 @@ class MusicService extends ChangeNotifier {
   }) async {
     const int steps = 18;
     final int stepMs = (duration.inMilliseconds / steps).clamp(15, 120).toInt();
-    for (int i = 0; i <= steps; i++) {
-      final double progress = i / steps;
-      final double currentVol = from + (to - from) * progress;
-      await _setVolume(currentVol);
-      await Future.delayed(Duration(milliseconds: stepMs));
+    try {
+      for (int i = 0; i <= steps; i++) {
+        final double progress = i / steps;
+        final double currentVol = from + (to - from) * progress;
+        await _setVolume(currentVol);
+        await Future.delayed(Duration(milliseconds: stepMs));
+      }
+    } catch (_) {}
+    if (to >= 0.9) {
+      await _setVolume(1.0);
     }
   }
 
@@ -460,22 +465,31 @@ class MusicService extends ChangeNotifier {
     required bool isCrossfade,
     required Future<void> Function() playAction,
   }) async {
-    final shouldFade = PreferencesService().fadeInOnStartEnabled || isCrossfade;
-    if (shouldFade) {
-      await _setVolume(0.0);
-    } else {
+    final prefs = PreferencesService();
+    final shouldFade = isCrossfade || prefs.fadeInOnStartEnabled;
+
+    if (!shouldFade) {
       await _setVolume(1.0);
+      unawaited(playAction());
+      return;
     }
 
+    // Never mute to 0.0 because Android hardware AudioTrack can initialize muted.
+    // Start from 0.3 so it is audible from the first millisecond and smoothly reaches 1.0.
+    await _setVolume(0.3);
     unawaited(playAction());
 
-    if (shouldFade) {
-      unawaited(_fadeVolume(
-        from: 0.0,
-        to: 1.0,
-        duration: isCrossfade ? const Duration(milliseconds: 1400) : const Duration(milliseconds: 900),
-      ));
-    }
+    unawaited(() async {
+      try {
+        await _fadeVolume(
+          from: 0.3,
+          to: 1.0,
+          duration: isCrossfade ? const Duration(milliseconds: 1000) : const Duration(milliseconds: 600),
+        );
+      } catch (_) {} finally {
+        await _setVolume(1.0);
+      }
+    }());
   }
 
   Future<void> loadLikedSongs() async {
@@ -1534,6 +1548,7 @@ class MusicService extends ChangeNotifier {
       } else if (!kIsWeb && _audioPlayer.playing) {
         unawaited(_audioPlayer.pause());
       }
+      unawaited(_setVolume(1.0));
     }
 
     _isLoading = true;
@@ -2256,6 +2271,7 @@ class MusicService extends ChangeNotifier {
     if (_audioPlayer.playing) {
       _audioPlayer.pause();
     } else {
+      unawaited(_setVolume(1.0));
       _audioPlayer.play();
     }
     notifyListeners();
