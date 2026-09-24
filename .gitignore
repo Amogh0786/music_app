@@ -50,3 +50,6 @@ backend/__pycache__/
 # Node / Cloudflare
 node_modules/
 **/node_modules/
+
+# Nested clone
+music_app/
