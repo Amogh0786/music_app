@@ -243,6 +243,15 @@
     activeEngine = ENGINE_IFRAME;
     startBgAudio();
 
+    // Ensure direct HTML5 audio is completely stopped to prevent ghost playback collisions
+    if (audioEl) {
+      try {
+        audioEl.pause();
+        audioEl.removeAttribute('src');
+        audioEl.load();
+      } catch (_) {}
+    }
+
     if (!ytReady || !ytPlayer || typeof ytPlayer.loadVideoById !== 'function') {
       console.log('[DilSe Web Player] YouTube Player not ready yet. Queuing:', videoId);
       pendingVideoId = videoId;
@@ -437,6 +446,23 @@
     currentArtwork = artworkUrl || currentArtwork || '';
     lastReportedPos = startSeconds || 0;
 
+    clearFallbackTimer();
+    stopTicker();
+
+    // Immediately stop and detach previous audio to eliminate ghost playback
+    if (audioEl) {
+      try {
+        audioEl.pause();
+        audioEl.removeAttribute('src');
+        audioEl.load();
+      } catch (_) {}
+    }
+    if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
+      try {
+        ytPlayer.stopVideo();
+      } catch (_) {}
+    }
+
     startBgAudio();
     ensureAudioElement();
     broadcastState('buffering');
@@ -618,11 +644,14 @@
     isInterrupted = false;
     wasPlayingBeforeInterruption = false;
     stopBgAudio();
-    if (activeEngine === ENGINE_AUDIO && audioEl) {
+    clearFallbackTimer();
+    stopTicker();
+    if (audioEl) {
       try {
         audioEl.pause();
       } catch (_) {}
-    } else if (activeEngine === ENGINE_IFRAME && ytPlayer && typeof ytPlayer.pauseVideo === 'function') {
+    }
+    if (ytPlayer && typeof ytPlayer.pauseVideo === 'function') {
       try {
         ytPlayer.pauseVideo();
       } catch (_) {}
