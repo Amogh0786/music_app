@@ -6748,20 +6748,27 @@ function decryptMediaUrl(encryptedUrl) {
   }
 }
 async function searchJioSaavn(query, limit = 20) {
-  const url = "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&n=" + limit + "&p=1&q=" + encodeURIComponent(query);
+  const url = "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&api_version=4&ctx=android&n=" + limit + "&p=1&q=" + encodeURIComponent(query);
   const res = await fetch(url, {
-    headers: JIO_GEO_HEADERS
+    headers: {
+      "User-Agent": "SaavnAndroid/9.0.0",
+      "Accept": "application/json",
+      ...JIO_GEO_HEADERS
+    }
   });
   if (!res.ok) return [];
   const data = await res.json();
   const results = data.results || [];
   return results.map((r) => {
-    const streamUrl = decryptMediaUrl(r.encrypted_media_url);
+    const mi = r.more_info || {};
+    const encMedia = mi.encrypted_media_url || r.encrypted_media_url || "";
+    const streamUrl = decryptMediaUrl(encMedia);
     const artwork = (r.image || "").replace("150x150", "500x500");
-    const title = (r.song || "").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, "&");
-    const artist = (r.primary_artists || r.singers || r.music || "").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, "&");
-    const album = (r.album || "").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, "&");
-    const duration = parseInt(r.duration || "0") || 0;
+    const title = (r.title || r.song || "").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, "&");
+    const primaryArtists = (mi.artistMap?.primary_artists || []).map((a) => a.name).join(", ");
+    const artist = (primaryArtists || r.subtitle || r.primary_artists || mi.music || r.singers || "").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, "&");
+    const album = (mi.album || r.album || "").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, "&");
+    const duration = parseInt(mi.duration || r.duration || "0") || 0;
     return {
       id: r.id,
       title: title || "Unknown Title",

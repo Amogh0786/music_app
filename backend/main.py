@@ -136,8 +136,13 @@ def _clean_jio_text(text: Optional[str]) -> str:
     )
 
 def _search_jiosaavn_api(query: str, limit: int = 20) -> List[dict]:
-    url = f"https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&n={limit}&p=1&q={urllib.parse.quote(query)}"
-    req = urllib.request.Request(url, headers=JIO_GEO_HEADERS)
+    url = f"https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&api_version=4&ctx=android&n={limit}&p=1&q={urllib.parse.quote(query)}"
+    headers = {
+        "User-Agent": "SaavnAndroid/9.0.0",
+        "Accept": "application/json",
+        **JIO_GEO_HEADERS,
+    }
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=10) as resp:
         data = json.loads(resp.read().decode("utf-8"))
         results = data.get("results", [])
@@ -146,14 +151,22 @@ def _search_jiosaavn_api(query: str, limit: int = 20) -> List[dict]:
             song_id = r.get("id") or ""
             if not song_id:
                 continue
-            enc_media = r.get("encrypted_media_url") or ""
+            mi = r.get("more_info") or {}
+            enc_media = mi.get("encrypted_media_url") or r.get("encrypted_media_url") or ""
             stream_url = _decrypt_jio_url(enc_media)
             artwork = (r.get("image") or "").replace("150x150", "500x500")
-            title = _clean_jio_text(r.get("song"))
-            artist = _clean_jio_text(r.get("primary_artists") or r.get("singers") or r.get("music"))
-            album = _clean_jio_text(r.get("album"))
+            title = _clean_jio_text(r.get("title") or r.get("song"))
+            
+            primary_artists_list = mi.get("artistMap", {}).get("primary_artists", [])
+            if primary_artists_list:
+                artist_names = [a.get("name") for a in primary_artists_list if a.get("name")]
+                artist = ", ".join(artist_names)
+            else:
+                artist = r.get("subtitle") or r.get("primary_artists") or mi.get("music") or r.get("singers") or ""
+            artist = _clean_jio_text(artist)
+            album = _clean_jio_text(mi.get("album") or r.get("album"))
             try:
-                duration = int(r.get("duration") or 0)
+                duration = int(mi.get("duration") or r.get("duration") or 0)
             except (ValueError, TypeError):
                 duration = 0
 

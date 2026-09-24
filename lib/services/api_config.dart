@@ -33,10 +33,6 @@ class ApiConfig {
   }
 
   static Uri jioSearchUri(String query, {int limit = 20}) {
-    final edge = cloudflareWorkerUrl;
-    if (edge.isNotEmpty) {
-      return Uri.parse('$edge/jio/search?q=${Uri.encodeComponent(query)}&limit=$limit');
-    }
     return Uri.parse('$baseUrl/jio/search?q=${Uri.encodeComponent(query)}&limit=$limit');
   }
 
@@ -45,18 +41,10 @@ class ApiConfig {
   }
 
   static Uri jioRecommendationsUri(String query, {String language = 'telugu', int limit = 20}) {
-    final edge = cloudflareWorkerUrl;
-    if (edge.isNotEmpty) {
-      return Uri.parse('$edge/jio/search?q=${Uri.encodeComponent(query)}&limit=$limit');
-    }
     return Uri.parse('$baseUrl/jio/recommendations?q=${Uri.encodeComponent(query)}&language=${Uri.encodeComponent(language)}&limit=$limit');
   }
 
   static Uri jioSuggestionsUri(String query, {int limit = 8}) {
-    final edge = cloudflareWorkerUrl;
-    if (edge.isNotEmpty) {
-      return Uri.parse('$edge/jio/suggestions?q=${Uri.encodeComponent(query)}&limit=$limit');
-    }
     return Uri.parse('$baseUrl/jio/suggestions?q=${Uri.encodeComponent(query)}&limit=$limit');
   }
 
