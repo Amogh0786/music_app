@@ -103,6 +103,15 @@ class MusicService extends ChangeNotifier {
   AudioPlayer get audioPlayer => _audioPlayer;
   bool get isCrossfading => _isCrossfading;
 
+  @visibleForTesting
+  void setTestState({Video? currentSong, List<Video>? playlist, int? currentIndex, bool? isLoading}) {
+    if (currentSong != null) _currentSong = currentSong;
+    if (playlist != null) _playlist = playlist;
+    if (currentIndex != null) _currentIndex = currentIndex;
+    if (isLoading != null) _isLoading = isLoading;
+    notifyListeners();
+  }
+
   bool get isPlaying => kIsWeb ? WebPlayerBridge.isPlaying : _audioPlayer.playing;
   Duration get position => kIsWeb ? WebPlayerBridge.currentPosition : _audioPlayer.position;
   Duration? get duration => kIsWeb ? WebPlayerBridge.currentDuration : _audioPlayer.duration;
@@ -1663,7 +1672,11 @@ class MusicService extends ChangeNotifier {
       _currentIndex--;
       await playSong(_playlist[_currentIndex], updateQueue: false);
       _prewarmUpcomingTracks(_currentIndex + 1, count: 2);
-    } else if (_playlist.isNotEmpty && position.inSeconds > 3) {
+    } else if (_loopMode == LoopMode.all && _playlist.isNotEmpty) {
+      _currentIndex = _playlist.length - 1;
+      await playSong(_playlist[_currentIndex], updateQueue: false);
+      _prewarmUpcomingTracks(0, count: 2);
+    } else if (_playlist.isNotEmpty) {
       // Replay current track from start
       if (kIsWeb) {
         WebPlayerBridge.seek(Duration.zero);

@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import '../services/music_service.dart';
 import '../screens/player_screen.dart';
-import 'animated_equalizer.dart';
 
 class MiniPlayer extends StatefulWidget {
   const MiniPlayer({super.key});
@@ -159,39 +158,28 @@ class _MiniPlayerState extends State<MiniPlayer> {
                         ),
                         const SizedBox(width: 12),
 
-                        // Song Title, Equalizer, and Artist
+                        // Song Title and Artist
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Hero(
-                                      tag: 'player_title_${song?.id.value}',
-                                      child: Material(
-                                        color: Colors.transparent,
-                                        child: Text(
-                                          song?.title ?? 'Loading...',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                            letterSpacing: -0.2,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
+                              Hero(
+                                tag: 'player_title_${song?.id.value}',
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: Text(
+                                    song?.title ?? 'Loading...',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                      letterSpacing: -0.2,
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(width: 6),
-                                  AnimatedEqualizer(
-                                    isPlaying: isPlaying,
-                                    color: Theme.of(context).primaryColor,
-                                  ),
-                                ],
+                                ),
                               ),
                               const SizedBox(height: 2),
                               Text(
@@ -208,33 +196,65 @@ class _MiniPlayerState extends State<MiniPlayer> {
                           ),
                         ),
 
-                        // Control Buttons (Play/Pause & Next)
-                        isLoading
-                            ? const Padding(
-                                padding: EdgeInsets.all(12.0),
-                                child: SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                ),
-                              )
-                            : IconButton(
-                                icon: Icon(
-                                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                                  color: Colors.white,
-                                  size: 32,
-                                ),
-                                onPressed: () {
-                                  HapticFeedback.mediumImpact();
-                                  _musicService.togglePlayPause();
-                                },
+                        // Control Buttons (Previous, Play/Pause & Next)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(
+                                Icons.skip_previous_rounded,
+                                color: Colors.white,
+                                size: 28,
                               ),
-                        IconButton(
-                          icon: const Icon(Icons.skip_next_rounded, color: Colors.white, size: 28),
-                          onPressed: () {
-                            HapticFeedback.lightImpact();
-                            _musicService.nextSong();
-                          },
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+                              splashRadius: 20,
+                              tooltip: 'Previous',
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                _musicService.previousSong();
+                              },
+                            ),
+                            isLoading
+                                ? const Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 8.0),
+                                    child: SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    ),
+                                  )
+                                : IconButton(
+                                    icon: Icon(
+                                      isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                      color: Colors.white,
+                                      size: 32,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                                    splashRadius: 22,
+                                    tooltip: isPlaying ? 'Pause' : 'Play',
+                                    onPressed: () {
+                                      HapticFeedback.mediumImpact();
+                                      _musicService.togglePlayPause();
+                                    },
+                                  ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.skip_next_rounded,
+                                color: Colors.white,
+                                size: 28,
+                              ),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+                              splashRadius: 20,
+                              tooltip: 'Next',
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                _musicService.nextSong();
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),
