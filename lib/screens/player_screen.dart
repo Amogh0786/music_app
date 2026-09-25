@@ -669,7 +669,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final body = Uri.encodeComponent(
       'Please describe the bug or issue you encountered:\n\n\n\n'
       '--- Diagnostic Info ---\n'
-      'App: DilSe Music v3.3.0\n'
+      'App: DilSe Music v3.4.0\n'
       'Platform: $osInfo'
       '$songDetails',
     );
@@ -1286,58 +1286,148 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                       ),
                                     ),
                                   ),
-                                  IconButton(
-                                    padding: EdgeInsets.zero,
-                                    constraints: BoxConstraints(minWidth: skipBtnSize, minHeight: skipBtnSize),
-                                    visualDensity: VisualDensity.compact,
-                                    icon: Icon(Icons.skip_previous_rounded, color: Colors.white, size: skipIconSize),
-                                    onPressed: () {
-                                      HapticFeedback.mediumImpact();
-                                      _musicService.previousSong();
-                                    },
-                                  ),
-                                  // Elevated Play/Pause Circle with Ambient Glow
-                                  Container(
-                                    width: playSize,
-                                    height: playSize,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Colors.white,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: vibrantColor.withValues(alpha: 0.5),
-                                          blurRadius: isUltraCompact ? 14 : 22,
-                                          spreadRadius: isUltraCompact ? 1 : 2,
-                                        ),
-                                      ],
-                                    ),
-                                    child: isLoading
-                                        ? Padding(
-                                            padding: EdgeInsets.all(isUltraCompact ? 16.0 : 20.0),
-                                            child: const CircularProgressIndicator(color: Colors.black, strokeWidth: 3),
-                                          )
-                                        : IconButton(
-                                            padding: EdgeInsets.zero,
-                                            icon: Icon(
-                                              isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                                              color: Colors.black,
-                                              size: playIconSize,
-                                            ),
-                                            onPressed: () {
-                                              HapticFeedback.mediumImpact();
-                                              _musicService.togglePlayPause();
-                                            },
+                                  // Modern Frosted Capsule Action Button - Previous
+                                  Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      customBorder: const CircleBorder(),
+                                      onTap: () {
+                                        HapticFeedback.mediumImpact();
+                                        _musicService.previousSong();
+                                      },
+                                      child: Container(
+                                        width: skipBtnSize,
+                                        height: skipBtnSize,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Colors.white.withValues(alpha: 0.10),
+                                          border: Border.all(
+                                            color: Colors.white.withValues(alpha: 0.16),
+                                            width: 1.2,
                                           ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(alpha: 0.2),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.skip_previous_rounded,
+                                            color: Colors.white,
+                                            size: skipIconSize * 0.76,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                  IconButton(
-                                    padding: EdgeInsets.zero,
-                                    constraints: BoxConstraints(minWidth: skipBtnSize, minHeight: skipBtnSize),
-                                    visualDensity: VisualDensity.compact,
-                                    icon: Icon(Icons.skip_next_rounded, color: Colors.white, size: skipIconSize),
-                                    onPressed: () {
-                                      HapticFeedback.mediumImpact();
-                                      _musicService.nextSong();
-                                    },
+                                  // Modern Elevated Play/Pause Button with Multi-layered Glow & Smooth Morph
+                                  Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      customBorder: const CircleBorder(),
+                                      onTap: () {
+                                        HapticFeedback.mediumImpact();
+                                        _musicService.togglePlayPause();
+                                      },
+                                      child: Container(
+                                        width: playSize,
+                                        height: playSize,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          gradient: const LinearGradient(
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                            colors: [
+                                              Color(0xFFFFFFFF),
+                                              Color(0xFFEFF2F6),
+                                            ],
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.white.withValues(alpha: 0.90),
+                                            width: 1.5,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: vibrantColor.withValues(alpha: 0.50),
+                                              blurRadius: isUltraCompact ? 16 : 24,
+                                              spreadRadius: isUltraCompact ? 1 : 2,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                            BoxShadow(
+                                              color: Colors.black.withValues(alpha: 0.28),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        child: isLoading
+                                            ? Center(
+                                                child: SizedBox(
+                                                  width: playSize * 0.42,
+                                                  height: playSize * 0.42,
+                                                  child: const CircularProgressIndicator(
+                                                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0F141C)),
+                                                    strokeWidth: 3,
+                                                  ),
+                                                ),
+                                              )
+                                            : Center(
+                                                child: AnimatedSwitcher(
+                                                  duration: const Duration(milliseconds: 220),
+                                                  transitionBuilder: (child, animation) => ScaleTransition(
+                                                    scale: animation,
+                                                    child: FadeTransition(opacity: animation, child: child),
+                                                  ),
+                                                  child: Icon(
+                                                    isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                                    key: ValueKey<bool>(isPlaying),
+                                                    color: const Color(0xFF0F141C),
+                                                    size: playIconSize,
+                                                  ),
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                  ),
+                                  // Modern Frosted Capsule Action Button - Next
+                                  Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      customBorder: const CircleBorder(),
+                                      onTap: () {
+                                        HapticFeedback.mediumImpact();
+                                        _musicService.nextSong();
+                                      },
+                                      child: Container(
+                                        width: skipBtnSize,
+                                        height: skipBtnSize,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Colors.white.withValues(alpha: 0.10),
+                                          border: Border.all(
+                                            color: Colors.white.withValues(alpha: 0.16),
+                                            width: 1.2,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(alpha: 0.2),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.skip_next_rounded,
+                                            color: Colors.white,
+                                            size: skipIconSize * 0.76,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                   Material(
                                     color: Colors.transparent,

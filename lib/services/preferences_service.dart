@@ -62,7 +62,7 @@ class PreferencesService extends ChangeNotifier {
   bool _isInitialized = false;
 
   // Settings
-  bool _crossfadeEnabled = false;
+  bool _crossfadeEnabled = true;
   int _crossfadeSeconds = 4;
   bool _smartCrossfadeEnabled = true;
   bool _fadeInOnStartEnabled = false;
@@ -124,8 +124,16 @@ class PreferencesService extends ChangeNotifier {
     if (_isInitialized) return;
     _prefs = await SharedPreferences.getInstance();
 
-    _crossfadeEnabled = _prefs.getBool('crossfade') ?? false;
-    _crossfadeSeconds = _prefs.getInt('crossfadeSeconds') ?? 4;
+    final hasUserSetCrossfade = _prefs.getBool('crossfade_user_set') ?? false;
+    if (!hasUserSetCrossfade) {
+      _crossfadeEnabled = true;
+      _crossfadeSeconds = 4;
+      await _prefs.setBool('crossfade', true);
+      await _prefs.setInt('crossfadeSeconds', 4);
+    } else {
+      _crossfadeEnabled = _prefs.getBool('crossfade') ?? true;
+      _crossfadeSeconds = _prefs.getInt('crossfadeSeconds') ?? 4;
+    }
     _smartCrossfadeEnabled = _prefs.getBool('smartCrossfade') ?? true;
     _fadeInOnStartEnabled = _prefs.getBool('fadeInOnStart') ?? false;
     _equalizerEnabled = _prefs.getBool('equalizerEnabled') ?? false;
@@ -464,6 +472,7 @@ class PreferencesService extends ChangeNotifier {
     if (!_isInitialized) return;
     _crossfadeEnabled = value;
     await _prefs.setBool('crossfade', value);
+    await _prefs.setBool('crossfade_user_set', true);
     notifyListeners();
   }
 
@@ -471,6 +480,7 @@ class PreferencesService extends ChangeNotifier {
     if (!_isInitialized) return;
     _crossfadeSeconds = seconds.clamp(1, 12);
     await _prefs.setInt('crossfadeSeconds', _crossfadeSeconds);
+    await _prefs.setBool('crossfade_user_set', true);
     notifyListeners();
   }
 
