@@ -62,6 +62,7 @@ class MusicService extends ChangeNotifier {
   bool _isLoading = false;
   bool _isShuffle = false;
   LoopMode _loopMode = LoopMode.off;
+  bool _hasRepeatedOnce = false;
   List<Map<String, String>> _likedSongs = [];
   List<Map<String, dynamic>> _customPlaylists = [];
 
@@ -434,8 +435,18 @@ class MusicService extends ChangeNotifier {
         _isTransitioning = true;
         try {
           if (_loopMode == LoopMode.one && _currentSong != null) {
-            WebPlayerBridge.seek(Duration.zero);
-            WebPlayerBridge.resume();
+            if (!_hasRepeatedOnce) {
+              _hasRepeatedOnce = true;
+              debugPrint('[WebPlayer] LoopMode.one active: repeating track once…');
+              WebPlayerBridge.seek(Duration.zero);
+              WebPlayerBridge.resume();
+            } else {
+              debugPrint('[WebPlayer] Single repeat complete. Resetting repeat mode and advancing…');
+              _hasRepeatedOnce = false;
+              _loopMode = LoopMode.off;
+              notifyListeners();
+              await nextSong();
+            }
           } else {
             await nextSong();
           }
@@ -466,9 +477,18 @@ class MusicService extends ChangeNotifier {
         _isTransitioning = true;
         try {
           if (_loopMode == LoopMode.one) {
-            debugPrint('[AudioPlayer] LoopMode.one active: repeating current track…');
-            await _audioPlayer.seek(Duration.zero);
-            await _audioPlayer.play();
+            if (!_hasRepeatedOnce) {
+              _hasRepeatedOnce = true;
+              debugPrint('[AudioPlayer] LoopMode.one active: repeating current track once…');
+              await _audioPlayer.seek(Duration.zero);
+              await _audioPlayer.play();
+            } else {
+              debugPrint('[AudioPlayer] Track completed its single repeat. Resetting repeat and advancing…');
+              _hasRepeatedOnce = false;
+              _loopMode = LoopMode.off;
+              notifyListeners();
+              await nextSong();
+            }
           } else {
             debugPrint('[AudioPlayer] Track completed. Advancing to next song…');
             await nextSong();
@@ -1123,6 +1143,7 @@ class MusicService extends ChangeNotifier {
   }
 
   void toggleRepeat() {
+    _hasRepeatedOnce = false;
     if (_loopMode == LoopMode.off) {
       _loopMode = LoopMode.all;
     } else if (_loopMode == LoopMode.all) {
@@ -1131,11 +1152,9 @@ class MusicService extends ChangeNotifier {
       _loopMode = LoopMode.off;
     }
     if (!kIsWeb) {
-      // just_audio receives only 1 track at a time.
-      // So LoopMode.all would infinitely loop that single track!
-      // We must pass LoopMode.off to just_audio when our internal mode is LoopMode.all,
-      // so that it completes the track and lets our nextSong() manually wrap around.
-      _audioPlayer.setLoopMode(_loopMode == LoopMode.one ? LoopMode.one : LoopMode.off);
+      // Keep just_audio loop mode at off so track completion events are dispatched to Dart,
+      // allowing us to repeat the track once and advance cleanly without infinite loops.
+      _audioPlayer.setLoopMode(LoopMode.off);
     }
     notifyListeners();
   }
@@ -1883,6 +1902,7 @@ class MusicService extends ChangeNotifier {
 
     _isLoading = true;
     _currentSong = song;
+    _hasRepeatedOnce = false;
 
     if (updateQueue) {
       final existingIndex = _playlist.indexWhere((item) => item.id == song.id);

@@ -8,7 +8,6 @@ import '../services/preferences_service.dart';
 import '../services/music_service.dart';
 import '../services/update_service.dart';
 import '../services/notification_permission_service.dart';
-import '../services/api_config.dart';
 import '../widgets/interactive_update_dialog.dart';
 import '../widgets/equalizer_bottom_sheet.dart';
 
@@ -182,75 +181,6 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
             ),
           );
         },
-    );
-  }
-
-  void _showCloudflareWorkerDialog(BuildContext context) {
-    final controller = TextEditingController(text: _prefs.cloudflareWorkerUrl);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.cloud_sync_rounded, color: Colors.amber, size: 22),
-            SizedBox(width: 10),
-            Text('Edge Audio Worker', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Powers seamless iOS background playback & lock screen notifications without IP blocks.',
-              style: TextStyle(color: Colors.white70, fontSize: 13),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: controller,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: 'https://your-worker.workers.dev',
-                hintStyle: const TextStyle(color: Colors.white30),
-                filled: true,
-                fillColor: Colors.black38,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white24)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.amber)),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              _prefs.setCloudflareWorkerUrl('');
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Reset to default Cloudflare worker'), backgroundColor: Colors.amber),
-              );
-            },
-            child: const Text('Reset', style: TextStyle(color: Colors.white60)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              _prefs.setCloudflareWorkerUrl(controller.text.trim());
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Cloudflare Worker URL saved!'), backgroundColor: Colors.amber),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.amber,
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Save', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
     );
   }
 
@@ -576,27 +506,6 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                     await NotificationPermissionService.requestNotificationPermission(context);
                     _checkNotificationStatus();
                   },
-                ),
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.cloud_sync_rounded, color: Colors.amber, size: 20),
-                  ),
-                  title: const Text('Edge Audio Worker (iOS/Web)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-                  subtitle: Text(
-                    _prefs.cloudflareWorkerUrl.isNotEmpty
-                        ? _prefs.cloudflareWorkerUrl
-                        : 'Default (${ApiConfig.defaultCloudflareWorkerUrl})',
-                    style: TextStyle(color: Colors.grey[400], fontSize: 13),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white30),
-                  onTap: () => _showCloudflareWorkerDialog(context),
                 ),
                 ListTile(
                   title: const Text('Clear Search History', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
