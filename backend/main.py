@@ -892,8 +892,8 @@ def import_spotify_playlist(request: SpotifyImportRequest):
 
 
 @app.get("/lyrics")
-def get_lyrics(title: str, artist: str = ""):
-    """Fetches synced LRC or plain lyrics for a track with zero CORS blocks."""
+def get_lyrics(title: str, artist: str = "", lang: str = "", duration: int = 0):
+    """Fetches synced LRC or plain lyrics for a track with zero cross-language mismatch and zero CORS blocks."""
     if not title or not title.strip():
         raise HTTPException(status_code=400, detail="Missing title query parameter")
 
@@ -905,17 +905,143 @@ def get_lyrics(title: str, artist: str = ""):
     clean_title = re.sub(r"(?i)\b(official video|music video|full song|lyric video|audio song|video song|lyrics)\b", "", clean_title).strip()
     clean_artist = re.sub(r"[\(\[\{].*?[\)\]\}]", "", artist).strip()
 
+    unicode_scripts = {
+        "telugu": (0x0C00, 0x0C7F),
+        "tamil": (0x0B80, 0x0BFF),
+        "hindi": (0x0900, 0x097F),
+        "kannada": (0x0C80, 0x0CFF),
+        "malayalam": (0x0D00, 0x0D7F),
+        "punjabi": (0x0A00, 0x0A7F),
+        "bengali": (0x0980, 0x09FF),
+        "gujarati": (0x0A80, 0x0AFF),
+    }
+
+    all_langs = ["telugu", "tamil", "hindi", "kannada", "malayalam", "punjabi", "bengali", "gujarati", "marathi", "english"]
+
+    def detect_lyrics_script(text: str):
+        if not text:
+            return None
+        clean = re.sub(r"\[\d+:\d+\.?\d*\]", "", text)
+        counts = {k: 0 for k in unicode_scripts}
+        for char in clean:
+            cp = ord(char)
+            for l_key, (start, end) in unicode_scripts.items():
+                if start <= cp <= end:
+                    counts[l_key] += 1
+        best_lang, best_count = max(counts.items(), key=lambda x: x[1])
+        return best_lang if best_count >= 8 else None
+
+    def detect_meta_lang(text: str):
+        if not text:
+            return None
+        lower = text.lower()
+        for l in all_langs:
+            if re.search(r"\b" + l + r"\b", lower):
+                return l
+        return None
+
+    # Resolve target language
+    target_lang = (lang or "").lower().strip()
+    if not target_lang:
+        target_lang = detect_lyrics_script(title) or detect_meta_lang(f"{title} {artist}") or ""
+
+    def score_candidate(cand: dict) -> int:
+        lyrics = (cand.get("syncedLyrics") or cand.get("plainLyrics") or "").strip()
+        if not lyrics:
+            return -9999
+
+        script = detect_lyrics_script(lyrics)
+        album = (cand.get("albumName") or "").lower()
+        track = (cand.get("trackName") or "").lower()
+        meta_lang = detect_meta_lang(f"{album} {track}")
+
+        score = 0
+
+        # 1. Script checks (Strict non-Latin script matching)
+        if target_lang:
+            if script:
+                if script != target_lang:
+                    return -9999  # Hard reject wrong script!
+                else:
+                    score += 500
+            elif target_lang == "english" and script is not None:
+                return -9999
+
+        # 2. Metadata language tag conflict in album/track title
+        if target_lang and meta_lang:
+            if meta_lang != target_lang:
+                return -9999  # Hard reject conflicting language release
+            else:
+                score += 300
+
+        # 3. Title match
+        c_title = re.sub(r"[\(\[\{].*?[\)\]\}]", "", track).strip().lower()
+        t_title = clean_title.lower()
+        if c_title == t_title:
+            score += 250
+        elif c_title in t_title or t_title in c_title:
+            score += 150
+        else:
+            score -= 100
+
+        # 4. Artist match
+        if clean_artist and cand.get("artistName"):
+            t_tokens = set(re.findall(r"\w+", clean_artist.lower()))
+            c_tokens = set(re.findall(r"\w+", cand["artistName"].lower()))
+            if t_tokens.intersection(c_tokens):
+                score += 150
+            elif len(t_tokens) >= 1:
+                score -= 150
+
+        # 5. Duration match
+        c_dur = cand.get("duration") or 0
+        if duration > 0 and c_dur > 0:
+            diff = abs(c_dur - duration)
+            if diff <= 5:
+                score += 100
+            elif diff <= 12:
+                score += 50
+            elif diff > 35:
+                score -= 200
+
+        # 6. Synced lyrics preference
+        if cand.get("syncedLyrics") and str(cand["syncedLyrics"]).strip():
+            score += 50
+
+        return score
+
     search_headers = {
         "User-Agent": "DilSeMusicApp/1.0 (https://dilse.app; contact@dilse.app)",
         "Accept": "application/json",
     }
 
+    # Optional fast path: exact match
+    if clean_title and clean_artist and duration > 0:
+        try:
+            get_url = f"https://lrclib.net/api/get?track_name={urllib.parse.quote(clean_title)}&artist_name={urllib.parse.quote(clean_artist)}&duration={round(duration)}"
+            req = urllib.request.Request(get_url, headers=search_headers)
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                if resp.status == 200:
+                    cand = json.loads(resp.read().decode("utf-8"))
+                    if cand and (cand.get("syncedLyrics") or cand.get("plainLyrics")):
+                        if score_candidate(cand) >= 100:
+                            return {"status": "ok", "match": True, "data": cand}
+        except Exception:
+            pass
+
     queries = []
+    if clean_title and target_lang:
+        queries.append(f"https://lrclib.net/api/search?q={urllib.parse.quote(f'{clean_title} {target_lang}')}")
     if clean_title and clean_artist:
+        queries.append(f"https://lrclib.net/api/search?track_name={urllib.parse.quote(clean_title)}&artist_name={urllib.parse.quote(clean_artist)}")
         queries.append(f"https://lrclib.net/api/search?q={urllib.parse.quote(f'{clean_title} {clean_artist}')}")
     if clean_title:
         queries.append(f"https://lrclib.net/api/search?track_name={urllib.parse.quote(clean_title)}")
         queries.append(f"https://lrclib.net/api/search?q={urllib.parse.quote(clean_title)}")
+
+    seen_ids = set()
+    best_candidate = None
+    best_score = 99  # Minimum score threshold is 100
 
     for u in queries:
         try:
@@ -923,14 +1049,23 @@ def get_lyrics(title: str, artist: str = ""):
             with urllib.request.urlopen(req, timeout=4) as response:
                 if response.status == 200:
                     data = json.loads(response.read().decode("utf-8"))
-                    if isinstance(data, list) and len(data) > 0:
-                        # Prioritize synchronized lyrics
+                    if isinstance(data, list):
                         for item in data:
-                            if item.get("syncedLyrics") and str(item["syncedLyrics"]).strip():
-                                return {"status": "ok", "match": True, "data": item}
-                        return {"status": "ok", "match": True, "data": data[0]}
+                            cand_id = item.get("id")
+                            if cand_id in seen_ids:
+                                continue
+                            seen_ids.add(cand_id)
+                            score = score_candidate(item)
+                            if score > best_score:
+                                best_score = score
+                                best_candidate = item
+                        if best_candidate and best_score >= 400:
+                            return {"status": "ok", "match": True, "data": best_candidate}
         except Exception:
             continue
+
+    if best_candidate:
+        return {"status": "ok", "match": True, "data": best_candidate}
 
     return {"status": "not_found", "match": False, "message": f"No lyrics found for '{clean_title}'"}
 

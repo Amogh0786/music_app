@@ -179,16 +179,32 @@ class MusicService extends ChangeNotifier {
     try {
       final cleanTitle = _cleanSongTitle(song.title);
       final cleanArtist = _cleanArtistName(song.author);
+      final durationSec = song.duration?.inSeconds;
 
-      List<dynamic> results = [];
-      bool hasSynced(List<dynamic> list) => list.any(
-            (r) => r is Map && r['syncedLyrics'] != null && (r['syncedLyrics'] as String).trim().isNotEmpty,
-          );
+      // High-precision language detection:
+      // 1. Check registered song language (from JioSaavn or Spotify import)
+      String? targetLang = CanonicalSongDedup.getSongLanguage(song.id.value);
+      // 2. Check title (native Unicode script or keywords)
+      targetLang ??= CanonicalSongDedup.detectLanguage(song.title);
+      // 3. Check author / channel
+      targetLang ??= CanonicalSongDedup.detectLanguage(song.author);
+      // 4. Check user's preferred primary language if available and not generic English
+      if (targetLang == null && PreferencesService().preferredLanguages.isNotEmpty) {
+        final pref = PreferencesService().preferredLanguages.first.toLowerCase();
+        if (pref != 'english') {
+          targetLang = pref;
+        }
+      }
 
-      // Tier 1: Cloudflare Edge Worker Lyrics Proxy (Zero CORS blocks, ~200ms latency, works on all PWA devices)
+      // Tier 1: Cloudflare Edge Worker Lyrics Proxy (Zero CORS blocks, ~200ms latency, language & script scored)
       if (cleanTitle.isNotEmpty) {
         try {
-          final edgeUri = ApiConfig.cloudflareLyricsUri(cleanTitle, artist: cleanArtist);
+          final edgeUri = ApiConfig.cloudflareLyricsUri(
+            cleanTitle,
+            artist: cleanArtist,
+            lang: targetLang,
+            duration: durationSec,
+          );
           final res = await http.get(edgeUri, headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 5));
           if (res.statusCode == 200) {
             final data = json.decode(res.body);
@@ -208,10 +224,15 @@ class MusicService extends ChangeNotifier {
         } catch (_) {}
       }
 
-      // Tier 2: Render Backend Lyrics Proxy Fallback
+      // Tier 2: Render Backend Lyrics Proxy Fallback (language & script scored)
       if (cleanTitle.isNotEmpty) {
         try {
-          final backendUri = ApiConfig.backendLyricsUri(cleanTitle, artist: cleanArtist);
+          final backendUri = ApiConfig.backendLyricsUri(
+            cleanTitle,
+            artist: cleanArtist,
+            lang: targetLang,
+            duration: durationSec,
+          );
           final res = await http.get(backendUri, headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 5));
           if (res.statusCode == 200) {
             final data = json.decode(res.body);
@@ -231,60 +252,78 @@ class MusicService extends ChangeNotifier {
         } catch (_) {}
       }
 
-      // Tier 3: Direct lrclib.net fallback (Safe headers without forbidden User-Agent)
+      // Tier 3: Direct lrclib.net fallback with client-side script & language validation
       final safeHeaders = {'Accept': 'application/json'};
+      final List<dynamic> candidatePool = [];
 
-      // 3A: Clean Title + Clean Artist
+      // 3A: Language-augmented search if targetLang is known
+      if (cleanTitle.isNotEmpty && targetLang != null && targetLang.isNotEmpty) {
+        try {
+          final urlLang = Uri.parse('https://lrclib.net/api/search?q=${Uri.encodeComponent("$cleanTitle $targetLang")}');
+          final resLang = await http.get(urlLang, headers: safeHeaders).timeout(const Duration(seconds: 5));
+          if (resLang.statusCode == 200) {
+            final list = json.decode(resLang.body);
+            if (list is List) candidatePool.addAll(list);
+          }
+        } catch (_) {}
+      }
+
+      // 3B: Clean Title + Clean Artist search
       if (cleanTitle.isNotEmpty && cleanArtist.isNotEmpty) {
         try {
           final url1 = Uri.parse('https://lrclib.net/api/search?q=${Uri.encodeComponent("$cleanTitle $cleanArtist")}');
           final res1 = await http.get(url1, headers: safeHeaders).timeout(const Duration(seconds: 5));
           if (res1.statusCode == 200) {
-            final List<dynamic> list1 = json.decode(res1.body);
-            results = list1;
+            final list = json.decode(res1.body);
+            if (list is List) candidatePool.addAll(list);
           }
         } catch (_) {}
       }
 
-      // 3B: If no synced lyrics found yet, try track_name = cleanTitle
-      if (!hasSynced(results) && cleanTitle.isNotEmpty) {
+      // 3C: Title-only search
+      if (cleanTitle.isNotEmpty) {
         try {
           final url2 = Uri.parse('https://lrclib.net/api/search?track_name=${Uri.encodeComponent(cleanTitle)}');
           final res2 = await http.get(url2, headers: safeHeaders).timeout(const Duration(seconds: 5));
           if (res2.statusCode == 200) {
-            final List<dynamic> list2 = json.decode(res2.body);
-            if (hasSynced(list2)) {
-              results = list2;
-            } else if (results.isEmpty) {
-              results = list2;
-            }
+            final list = json.decode(res2.body);
+            if (list is List) candidatePool.addAll(list);
           }
         } catch (_) {}
       }
 
-      // 3C: If still no synced lyrics, try general query with clean title
-      if (!hasSynced(results) && cleanTitle.isNotEmpty) {
-        try {
-          final url3 = Uri.parse('https://lrclib.net/api/search?q=${Uri.encodeComponent(cleanTitle)}');
-          final res3 = await http.get(url3, headers: safeHeaders).timeout(const Duration(seconds: 5));
-          if (res3.statusCode == 200) {
-            final List<dynamic> list3 = json.decode(res3.body);
-            if (hasSynced(list3)) {
-              results = list3;
-            } else if (results.isEmpty) {
-              results = list3;
-            }
-          }
-        } catch (_) {}
-      }
+      // Score all candidates through CanonicalSongDedup to eliminate cross-language dubs
+      final seenIds = <dynamic>{};
+      Map<String, dynamic>? bestCandidate;
+      int bestScore = 99; // Minimum threshold 100
 
-      if (results.isNotEmpty) {
-        // Priority: Pick the first result that contains synchronized LRC lyrics
-        final match = results.firstWhere(
-          (r) => r is Map && r['syncedLyrics'] != null && (r['syncedLyrics'] as String).trim().isNotEmpty,
-          orElse: () => results.first,
+      for (final item in candidatePool) {
+        if (item is! Map) continue;
+        final map = Map<String, dynamic>.from(item);
+        final id = map['id'];
+        if (id != null && seenIds.contains(id)) continue;
+        if (id != null) seenIds.add(id);
+
+        final score = CanonicalSongDedup.scoreLyricsCandidate(
+          targetLang: targetLang,
+          targetTitle: cleanTitle,
+          targetArtist: cleanArtist,
+          targetDuration: durationSec,
+          candidate: map,
         );
-        _cachedLyrics = match['syncedLyrics'] ?? match['plainLyrics'] ?? 'No lyrics available.';
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestCandidate = map;
+        }
+      }
+
+      if (bestCandidate != null) {
+        final synced = (bestCandidate['syncedLyrics'] as String?)?.trim();
+        final plain = (bestCandidate['plainLyrics'] as String?)?.trim();
+        _cachedLyrics = (synced != null && synced.isNotEmpty)
+            ? synced
+            : (plain != null && plain.isNotEmpty ? plain : 'No lyrics available.');
       } else {
         _cachedLyrics = 'No lyrics found for "$cleanTitle".';
       }
@@ -715,12 +754,16 @@ class MusicService extends ChangeNotifier {
           final id = s['id'] as String? ?? '';
           final thumb = s['thumbnail'] as String? ?? '';
           final streamUrl = s['streamUrl'] as String? ?? '';
+          final lang = s['language'] as String? ?? '';
           if (id.isNotEmpty) {
             if (thumb.isNotEmpty && !_artworkMap.containsKey(id)) {
               _artworkMap[id] = thumb;
             }
             if (streamUrl.isNotEmpty && !_webStreamUrls.containsKey(id)) {
               _webStreamUrls[id] = streamUrl;
+            }
+            if (lang.isNotEmpty) {
+              CanonicalSongDedup.registerSongLanguage(id, lang);
             }
           }
         }
@@ -1174,6 +1217,11 @@ class MusicService extends ChangeNotifier {
         if (streamUrl.isNotEmpty) {
           _webStreamUrls[songId] = streamUrl;
           _webStreamUrls[vidString] = streamUrl;
+        }
+        final lang = item['language'] as String? ?? '';
+        if (lang.isNotEmpty) {
+          CanonicalSongDedup.registerSongLanguage(songId, lang);
+          CanonicalSongDedup.registerSongLanguage(vidString, lang);
         }
 
         final video = Video(
@@ -2257,6 +2305,10 @@ class MusicService extends ChangeNotifier {
 
     Video toVideo(Map<String, dynamic> item) {
       final id = (item['id'] as String?) ?? '';
+      final lang = (item['language'] as String?) ?? '';
+      if (id.isNotEmpty && lang.isNotEmpty) {
+        CanonicalSongDedup.registerSongLanguage(id, lang);
+      }
       return Video(
         VideoId(id),
         (item['title'] as String?) ?? 'Unknown Title',

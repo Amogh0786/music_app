@@ -6731,6 +6731,8 @@ var worker_source_default = {
     if (url.pathname === "/lyrics") {
       const rawTitle = url.searchParams.get("title") || url.searchParams.get("q") || "";
       const rawArtist = url.searchParams.get("artist") || "";
+      const rawLang = url.searchParams.get("lang") || "";
+      const rawDuration = parseInt(url.searchParams.get("duration") || "0", 10);
       if (!rawTitle || rawTitle.trim().length < 1) {
         return new Response(
           JSON.stringify({ status: "error", message: "Missing title (?title=...)" }),
@@ -6738,7 +6740,7 @@ var worker_source_default = {
         );
       }
       try {
-        const result = await fetchLyricsEdge(rawTitle.trim(), rawArtist.trim());
+        const result = await fetchLyricsEdge(rawTitle.trim(), rawArtist.trim(), rawLang.trim(), rawDuration);
         if (result && (result.syncedLyrics || result.plainLyrics)) {
           return new Response(
             JSON.stringify({ status: "ok", match: true, data: result }),
@@ -6766,59 +6768,174 @@ var worker_source_default = {
     return new Response("Not Found", { status: 404, headers: CORS_HEADERS });
   }
 };
-async function fetchLyricsEdge(title, artist) {
+var UNICODE_SCRIPTS = {
+  telugu: [3072, 3199],
+  tamil: [2944, 3071],
+  hindi: [2304, 2431],
+  kannada: [3200, 3327],
+  malayalam: [3328, 3455],
+  punjabi: [2560, 2687],
+  bengali: [2432, 2559],
+  gujarati: [2688, 2815]
+};
+var ALL_LANGUAGES = ["telugu", "tamil", "hindi", "kannada", "malayalam", "punjabi", "bengali", "gujarati", "marathi", "english"];
+function detectLyricsScript(text) {
+  if (!text) return null;
+  const clean = text.replace(/\[\d+:\d+\.?\d*\]/g, "");
+  const counts = {};
+  for (const lang of Object.keys(UNICODE_SCRIPTS)) counts[lang] = 0;
+  for (let i = 0; i < clean.length; i++) {
+    const cp = clean.charCodeAt(i);
+    for (const [lang, [start, end]] of Object.entries(UNICODE_SCRIPTS)) {
+      if (cp >= start && cp <= end) {
+        counts[lang]++;
+      }
+    }
+  }
+  let best = null;
+  let maxCount = 0;
+  for (const [lang, count] of Object.entries(counts)) {
+    if (count > maxCount) {
+      maxCount = count;
+      best = lang;
+    }
+  }
+  return maxCount >= 8 ? best : null;
+}
+function detectMetaLanguage(text) {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  for (const l of ALL_LANGUAGES) {
+    const reg = new RegExp(`\\b${l}\\b`, "i");
+    if (reg.test(lower)) return l;
+  }
+  return null;
+}
+function scoreLyricsCandidate(cand, targetTitle, targetArtist, targetLang, targetDuration) {
+  const lyrics = (cand.syncedLyrics || cand.plainLyrics || "").trim();
+  if (!lyrics) return -9999;
+  const script = detectLyricsScript(lyrics);
+  const album = (cand.albumName || "").toLowerCase();
+  const track = (cand.trackName || "").toLowerCase();
+  const metaLang = detectMetaLanguage(`${album} ${track}`);
+  let score = 0;
+  if (targetLang) {
+    if (script) {
+      if (script !== targetLang) {
+        return -9999;
+      } else {
+        score += 500;
+      }
+    } else if (targetLang === "english" && script !== null) {
+      return -9999;
+    }
+  }
+  if (targetLang && metaLang) {
+    if (metaLang !== targetLang) {
+      return -9999;
+    } else {
+      score += 300;
+    }
+  }
+  const cTitle = (cand.trackName || "").replace(/[\(\[\{].*?[\)\]\}]/g, "").toLowerCase().trim();
+  const tTitle = targetTitle.replace(/[\(\[\{].*?[\)\]\}]/g, "").toLowerCase().trim();
+  if (cTitle === tTitle) {
+    score += 250;
+  } else if (cTitle.includes(tTitle) || tTitle.includes(cTitle)) {
+    score += 150;
+  } else {
+    score -= 100;
+  }
+  if (targetArtist && cand.artistName) {
+    const tTokens = targetArtist.toLowerCase().split(/[\s,;&]+/).filter((w) => w.length > 2);
+    const cTokens = cand.artistName.toLowerCase().split(/[\s,;&]+/).filter((w) => w.length > 2);
+    const hasOverlap = tTokens.some((t) => cTokens.includes(t));
+    if (hasOverlap) {
+      score += 150;
+    } else if (tTokens.length > 0) {
+      score -= 150;
+    }
+  }
+  const cDur = cand.duration || 0;
+  if (targetDuration > 0 && cDur > 0) {
+    const diff = Math.abs(cDur - targetDuration);
+    if (diff <= 5) {
+      score += 100;
+    } else if (diff <= 12) {
+      score += 50;
+    } else if (diff > 35) {
+      score -= 200;
+    }
+  }
+  if (cand.syncedLyrics && cand.syncedLyrics.trim().length > 0) {
+    score += 50;
+  }
+  return score;
+}
+async function fetchLyricsEdge(title, artist, lang, duration) {
   const cleanTitle = title.replace(/[\(\[\{].*?[\)\]\}]/g, "").replace(/official video|music video|full song|lyric video|audio song|video song|lyrics/gi, "").trim();
   const cleanArtist = artist.replace(/[\(\[\{].*?[\)\]\}]/g, "").trim();
+  let targetLang = (lang || "").toLowerCase().trim();
+  if (!targetLang) {
+    targetLang = detectLyricsScript(title) || detectMetaLanguage(`${title} ${artist}`) || "";
+  }
   const searchHeaders = {
     "User-Agent": "DilSeMusicApp/1.0 (https://dilse.app; contact@dilse.app)",
     "Accept": "application/json"
   };
+  const queries = [];
+  if (cleanTitle && targetLang) {
+    queries.push(`https://lrclib.net/api/search?q=${encodeURIComponent(`${cleanTitle} ${targetLang}`)}`);
+  }
   if (cleanTitle && cleanArtist) {
-    try {
-      const q = encodeURIComponent(`${cleanTitle} ${cleanArtist}`);
-      const res = await fetch(`https://lrclib.net/api/search?q=${q}`, { headers: searchHeaders });
-      if (res.ok) {
-        const list = await res.json();
-        if (Array.isArray(list) && list.length > 0) {
-          const synced = list.find((item) => item.syncedLyrics && item.syncedLyrics.trim().length > 0);
-          if (synced) return synced;
-          return list[0];
-        }
-      }
-    } catch (_) {
-    }
+    queries.push(`https://lrclib.net/api/search?track_name=${encodeURIComponent(cleanTitle)}&artist_name=${encodeURIComponent(cleanArtist)}`);
+    queries.push(`https://lrclib.net/api/search?q=${encodeURIComponent(`${cleanTitle} ${cleanArtist}`)}`);
   }
   if (cleanTitle) {
+    queries.push(`https://lrclib.net/api/search?track_name=${encodeURIComponent(cleanTitle)}`);
+    queries.push(`https://lrclib.net/api/search?q=${encodeURIComponent(cleanTitle)}`);
+  }
+  if (cleanTitle && cleanArtist && duration > 0) {
     try {
-      const t = encodeURIComponent(cleanTitle);
-      const res = await fetch(`https://lrclib.net/api/search?track_name=${t}`, { headers: searchHeaders });
+      const getUrl = `https://lrclib.net/api/get?track_name=${encodeURIComponent(cleanTitle)}&artist_name=${encodeURIComponent(cleanArtist)}&duration=${Math.round(duration)}`;
+      const res = await fetch(getUrl, { headers: searchHeaders });
       if (res.ok) {
-        const list = await res.json();
-        if (Array.isArray(list) && list.length > 0) {
-          const synced = list.find((item) => item.syncedLyrics && item.syncedLyrics.trim().length > 0);
-          if (synced) return synced;
-          return list[0];
+        const item = await res.json();
+        if (item && (item.syncedLyrics || item.plainLyrics)) {
+          const s = scoreLyricsCandidate(item, cleanTitle, cleanArtist, targetLang, duration);
+          if (s >= 100) return item;
         }
       }
     } catch (_) {
     }
   }
-  if (cleanTitle) {
+  const seenIds = /* @__PURE__ */ new Set();
+  let bestCandidate = null;
+  let bestScore = 99;
+  for (const url of queries) {
     try {
-      const q = encodeURIComponent(cleanTitle);
-      const res = await fetch(`https://lrclib.net/api/search?q=${q}`, { headers: searchHeaders });
+      const res = await fetch(url, { headers: searchHeaders });
       if (res.ok) {
         const list = await res.json();
-        if (Array.isArray(list) && list.length > 0) {
-          const synced = list.find((item) => item.syncedLyrics && item.syncedLyrics.trim().length > 0);
-          if (synced) return synced;
-          return list[0];
+        if (Array.isArray(list)) {
+          for (const item of list) {
+            if (!item || seenIds.has(item.id)) continue;
+            seenIds.add(item.id);
+            const score = scoreLyricsCandidate(item, cleanTitle, cleanArtist, targetLang, duration);
+            if (score > bestScore) {
+              bestScore = score;
+              bestCandidate = item;
+            }
+          }
+          if (bestCandidate && bestScore >= 400) {
+            return bestCandidate;
+          }
         }
       }
     } catch (_) {
     }
   }
-  return null;
+  return bestCandidate;
 }
 function decryptMediaUrl(encryptedUrl) {
   if (!encryptedUrl) return "";

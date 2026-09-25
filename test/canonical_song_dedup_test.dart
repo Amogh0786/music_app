@@ -262,5 +262,115 @@ void main() {
       );
       expect(isGenuineDup, isTrue);
     });
+
+    test('Unicode script detection detects Indian scripts with high accuracy', () {
+      expect(CanonicalSongDedup.detectScript('నిను చూస్తూ ఉంటె కన్నులు రెండు తిప్పేస్తావే'), equals('telugu'));
+      expect(CanonicalSongDedup.detectScript('நான் பாக்குறேன் பாக்குறேன் பாக்காம நீ எங்க போற?'), equals('tamil'));
+      expect(CanonicalSongDedup.detectScript('എൻ കൺമണി, കൺമണി കണ്ണുകളെന്നെ കാണുന്നില്ലേ?'), equals('malayalam'));
+      expect(CanonicalSongDedup.detectScript('मुझको इतना बताए कोई'), equals('hindi'));
+      expect(CanonicalSongDedup.detectScript('ನಿನ ನೋಡುವುದಾದರೆ ಕಣ್ಣಿನ ನೋಟ'), equals('kannada'));
+      expect(CanonicalSongDedup.detectScript('This is an English sentence without Indian scripts'), isNull);
+    });
+
+    test('scoreLyricsCandidate strictly rejects cross-language dubs and accepts genuine lyrics', () {
+      final teluguSongTitle = 'Srivalli';
+      final teluguSongArtist = 'Sid Sriram';
+
+      // Candidate 1: Malayalam dub lyrics
+      final malayalamCandidate = {
+        'id': 101,
+        'trackName': 'Srivalli (From "Pushpa - The Rise")',
+        'artistName': 'Sid Sriram',
+        'albumName': 'Soulful Hits Of Sid Sriram',
+        'duration': 221.0,
+        'syncedLyrics': '[00:22.01] എൻ കൺമണി, കൺമണി കണ്ണുകളെന്നെ കാണുന്നില്ലേ?\n[00:28.00] ...',
+      };
+
+      // Candidate 2: Tamil dub lyrics
+      final tamilCandidate = {
+        'id': 102,
+        'trackName': 'Srivalli',
+        'artistName': 'Sid Sriram',
+        'albumName': 'Srivalli (From "Pushpa - The Rise Part - 01 ")',
+        'duration': 221.0,
+        'syncedLyrics': '[00:22.23] நான் பாக்குறேன் பாக்குறேன் பாக்காம நீ எங்க போற?\n[00:28.00] ...',
+      };
+
+      // Candidate 3: Hindi dub candidate with [Hindi] tag
+      final hindiCandidate = {
+        'id': 103,
+        'trackName': 'Srivalli - Hindi',
+        'artistName': 'Javed Ali',
+        'albumName': 'Pushpa - The Rise [Hindi]',
+        'duration': 224.0,
+        'syncedLyrics': '[00:22.68] नज़रें मिलते ही नज़रों से नज़रों को चुराए\n[00:28.00] ...',
+      };
+
+      // Candidate 4: Genuine Telugu lyrics
+      final teluguCandidate = {
+        'id': 104,
+        'trackName': 'Srivalli',
+        'artistName': 'Sid Sriram, Devi Sri Prasad',
+        'albumName': 'Srivalli (From "Pushpa - The Rise")(Telugu)',
+        'duration': 221.0,
+        'syncedLyrics': '[00:21.81] నిను చూస్తూ ఉంటె కన్నులు రెండు తిప్పేస్తావే\n[00:28.00] ...',
+      };
+
+      // When target language is Telugu:
+      final scoreMalayalam = CanonicalSongDedup.scoreLyricsCandidate(
+        targetLang: 'telugu',
+        targetTitle: teluguSongTitle,
+        targetArtist: teluguSongArtist,
+        targetDuration: 221,
+        candidate: malayalamCandidate,
+      );
+      expect(scoreMalayalam, lessThan(0), reason: 'Malayalam lyrics must be rejected for Telugu song');
+
+      final scoreTamil = CanonicalSongDedup.scoreLyricsCandidate(
+        targetLang: 'telugu',
+        targetTitle: teluguSongTitle,
+        targetArtist: teluguSongArtist,
+        targetDuration: 221,
+        candidate: tamilCandidate,
+      );
+      expect(scoreTamil, lessThan(0), reason: 'Tamil lyrics must be rejected for Telugu song');
+
+      final scoreHindi = CanonicalSongDedup.scoreLyricsCandidate(
+        targetLang: 'telugu',
+        targetTitle: teluguSongTitle,
+        targetArtist: teluguSongArtist,
+        targetDuration: 221,
+        candidate: hindiCandidate,
+      );
+      expect(scoreHindi, lessThan(0), reason: 'Hindi lyrics/album must be rejected for Telugu song');
+
+      final scoreTelugu = CanonicalSongDedup.scoreLyricsCandidate(
+        targetLang: 'telugu',
+        targetTitle: teluguSongTitle,
+        targetArtist: teluguSongArtist,
+        targetDuration: 221,
+        candidate: teluguCandidate,
+      );
+      expect(scoreTelugu, greaterThanOrEqualTo(500), reason: 'Authentic Telugu lyrics must score high');
+
+      // Conversely, if target language is Tamil:
+      final scoreTamilForTamil = CanonicalSongDedup.scoreLyricsCandidate(
+        targetLang: 'tamil',
+        targetTitle: teluguSongTitle,
+        targetArtist: teluguSongArtist,
+        targetDuration: 221,
+        candidate: tamilCandidate,
+      );
+      expect(scoreTamilForTamil, greaterThanOrEqualTo(500), reason: 'Tamil lyrics must be accepted for Tamil target');
+
+      final scoreTeluguForTamil = CanonicalSongDedup.scoreLyricsCandidate(
+        targetLang: 'tamil',
+        targetTitle: teluguSongTitle,
+        targetArtist: teluguSongArtist,
+        targetDuration: 221,
+        candidate: teluguCandidate,
+      );
+      expect(scoreTeluguForTamil, lessThan(0), reason: 'Telugu lyrics must be rejected for Tamil target');
+    });
   });
 }

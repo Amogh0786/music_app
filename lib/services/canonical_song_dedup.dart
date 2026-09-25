@@ -156,8 +156,65 @@ class CanonicalSongDedup {
     return true;
   }
 
+  static final Map<String, String> _songLanguageCache = {};
+
+  /// Caches the confirmed language for a song (e.g. from JioSaavn or Spotify metadata)
+  static void registerSongLanguage(String songId, String language) {
+    if (songId.isEmpty || language.isEmpty) return;
+    _songLanguageCache[songId] = language.toLowerCase().trim();
+  }
+
+  /// Retrieves cached song language
+  static String? getSongLanguage(String songId) {
+    if (songId.isEmpty) return null;
+    return _songLanguageCache[songId];
+  }
+
+  static const Map<String, List<int>> _unicodeScripts = {
+    'telugu': [0x0C00, 0x0C7F],
+    'tamil': [0x0B80, 0x0BFF],
+    'hindi': [0x0900, 0x097F],
+    'kannada': [0x0C80, 0x0CFF],
+    'malayalam': [0x0D00, 0x0D7F],
+    'punjabi': [0x0A00, 0x0A7F],
+    'bengali': [0x0980, 0x09FF],
+    'gujarati': [0x0A80, 0x0AFF],
+  };
+
+  /// Detects native Unicode script in text
+  static String? detectScript(String text, {int minCount = 4}) {
+    if (text.isEmpty) return null;
+    final counts = <String, int>{};
+    for (final k in _unicodeScripts.keys) {
+      counts[k] = 0;
+    }
+    for (int i = 0; i < text.length; i++) {
+      final cp = text.codeUnitAt(i);
+      for (final entry in _unicodeScripts.entries) {
+        if (cp >= entry.value[0] && cp <= entry.value[1]) {
+          counts[entry.key] = (counts[entry.key] ?? 0) + 1;
+        }
+      }
+    }
+    String? bestLang;
+    int maxCount = 0;
+    for (final entry in counts.entries) {
+      if (entry.value > maxCount) {
+        maxCount = entry.value;
+        bestLang = entry.key;
+      }
+    }
+    return maxCount >= minCount ? bestLang : null;
+  }
+
   /// Detects language from title or metadata tags (e.g. Telugu, Hindi, Tamil)
   static String? detectLanguage(String text) {
+    if (text.isEmpty) return null;
+
+    // 1. Check native Unicode script first
+    final script = detectScript(text, minCount: 3);
+    if (script != null) return script;
+
     final lower = text.toLowerCase();
     if (RegExp(r'\b(telugu)\b').hasMatch(lower)) return 'telugu';
     if (RegExp(r'\b(tamil)\b').hasMatch(lower)) return 'tamil';
@@ -165,8 +222,109 @@ class CanonicalSongDedup {
     if (RegExp(r'\b(punjabi)\b').hasMatch(lower)) return 'punjabi';
     if (RegExp(r'\b(kannada)\b').hasMatch(lower)) return 'kannada';
     if (RegExp(r'\b(malayalam)\b').hasMatch(lower)) return 'malayalam';
+    if (RegExp(r'\b(bengali)\b').hasMatch(lower)) return 'bengali';
+    if (RegExp(r'\b(marathi)\b').hasMatch(lower)) return 'marathi';
+    if (RegExp(r'\b(gujarati)\b').hasMatch(lower)) return 'gujarati';
+    if (RegExp(r'\b(bhojpuri)\b').hasMatch(lower)) return 'bhojpuri';
     if (RegExp(r'\b(english)\b').hasMatch(lower)) return 'english';
+
+    // Channel / Record Label language associations
+    if (lower.contains('aditya music') || lower.contains('madhura audio')) return 'telugu';
+    if (lower.contains('think music')) return 'tamil';
+
     return null;
+  }
+
+  /// Evaluates whether lyrics candidate matches the expected language and artist
+  static int scoreLyricsCandidate({
+    required String? targetLang,
+    required String targetTitle,
+    required String targetArtist,
+    int? targetDuration,
+    required Map<String, dynamic> candidate,
+  }) {
+    final synced = candidate['syncedLyrics'] as String?;
+    final plain = candidate['plainLyrics'] as String?;
+    final lyrics = (synced?.isNotEmpty == true ? synced! : (plain ?? '')).trim();
+    if (lyrics.isEmpty) return -9999;
+
+    // Strip timestamps for script analysis
+    final cleanLyrics = lyrics.replaceAll(RegExp(r'\[\d+:\d+\.?\d*\]'), '');
+    final script = detectScript(cleanLyrics, minCount: 8);
+
+    final trackName = (candidate['trackName'] as String? ?? '').toLowerCase();
+    final albumName = (candidate['albumName'] as String? ?? '').toLowerCase();
+    final metaLang = detectLanguage('$albumName $trackName');
+
+    final tLang = targetLang?.toLowerCase().trim();
+    int score = 0;
+
+    // 1. Strict script compatibility
+    if (tLang != null && tLang.isNotEmpty) {
+      if (script != null) {
+        if (script != tLang) {
+          // Hard reject conflicting script (e.g. Malayalam or Tamil lyrics for Telugu song)
+          return -9999;
+        } else {
+          score += 500;
+        }
+      } else if (tLang == 'english' && script != null) {
+        return -9999;
+      }
+    }
+
+    // 2. Strict metadata language compatibility
+    if (tLang != null && tLang.isNotEmpty && metaLang != null) {
+      if (metaLang != tLang) {
+        // Hard reject conflicting dubbed album tags
+        return -9999;
+      } else {
+        score += 300;
+      }
+    }
+
+    // 3. Title match
+    final cTitle = cleanTitle(trackName);
+    final tTitle = cleanTitle(targetTitle);
+    if (cTitle == tTitle) {
+      score += 250;
+    } else if (cTitle.contains(tTitle) || tTitle.contains(cTitle)) {
+      score += 150;
+    } else {
+      score -= 100;
+    }
+
+    // 4. Artist match
+    final cArtist = candidate['artistName'] as String? ?? '';
+    if (targetArtist.isNotEmpty && cArtist.isNotEmpty) {
+      final tTokens = tokenize(cleanArtist(targetArtist));
+      final cTokens = tokenize(cleanArtist(cArtist));
+      if (tTokens.intersection(cTokens).isNotEmpty) {
+        score += 150;
+      } else if (tTokens.isNotEmpty) {
+        score -= 150;
+      }
+    }
+
+    // 5. Duration match
+    final cDur = (candidate['duration'] as num?)?.toDouble() ?? 0.0;
+    if (targetDuration != null && targetDuration > 0 && cDur > 0) {
+      final diff = (cDur - targetDuration).abs();
+      if (diff <= 5) {
+        score += 100;
+      } else if (diff <= 12) {
+        score += 50;
+      } else if (diff > 35) {
+        score -= 200;
+      }
+    }
+
+    // 6. Synced lyrics preference
+    if (synced != null && synced.trim().isNotEmpty) {
+      score += 50;
+    }
+
+    return score;
   }
 
   /// Verifies that candidate does not violate the seed track's language affinity

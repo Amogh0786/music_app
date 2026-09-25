@@ -98,18 +98,30 @@ class ApiConfig {
     return Uri.parse('$baseUrl/client_log');
   }
 
-  static Uri cloudflareLyricsUri(String title, {String? artist}) {
+  static Uri cloudflareLyricsUri(String title, {String? artist, String? lang, int? duration}) {
     final buffer = StringBuffer('$cloudflareWorkerUrl/lyrics?title=${Uri.encodeComponent(title)}');
     if (artist != null && artist.isNotEmpty) {
       buffer.write('&artist=${Uri.encodeComponent(artist)}');
     }
+    if (lang != null && lang.isNotEmpty) {
+      buffer.write('&lang=${Uri.encodeComponent(lang)}');
+    }
+    if (duration != null && duration > 0) {
+      buffer.write('&duration=$duration');
+    }
     return Uri.parse(buffer.toString());
   }
 
-  static Uri backendLyricsUri(String title, {String? artist}) {
+  static Uri backendLyricsUri(String title, {String? artist, String? lang, int? duration}) {
     final buffer = StringBuffer('$baseUrl/lyrics?title=${Uri.encodeComponent(title)}');
     if (artist != null && artist.isNotEmpty) {
       buffer.write('&artist=${Uri.encodeComponent(artist)}');
+    }
+    if (lang != null && lang.isNotEmpty) {
+      buffer.write('&lang=${Uri.encodeComponent(lang)}');
+    }
+    if (duration != null && duration > 0) {
+      buffer.write('&duration=$duration');
     }
     return Uri.parse(buffer.toString());
   }

@@ -177,9 +177,12 @@ export default {
     }
 
     // 5. Lyrics resolver: /lyrics?title=...&artist=...
+    // 5. Lyrics resolver: /lyrics?title=...&artist=...&lang=...&duration=...
     if (url.pathname === '/lyrics') {
       const rawTitle = url.searchParams.get('title') || url.searchParams.get('q') || '';
       const rawArtist = url.searchParams.get('artist') || '';
+      const rawLang = url.searchParams.get('lang') || '';
+      const rawDuration = parseInt(url.searchParams.get('duration') || '0', 10);
 
       if (!rawTitle || rawTitle.trim().length < 1) {
         return new Response(
@@ -189,7 +192,7 @@ export default {
       }
 
       try {
-        const result = await fetchLyricsEdge(rawTitle.trim(), rawArtist.trim());
+        const result = await fetchLyricsEdge(rawTitle.trim(), rawArtist.trim(), rawLang.trim(), rawDuration);
         if (result && (result.syncedLyrics || result.plainLyrics)) {
           return new Response(
             JSON.stringify({ status: 'ok', match: true, data: result }),
@@ -219,67 +222,210 @@ export default {
   },
 };
 
+const UNICODE_SCRIPTS = {
+  telugu: [0x0C00, 0x0C7F],
+  tamil: [0x0B80, 0x0BFF],
+  hindi: [0x0900, 0x097F],
+  kannada: [0x0C80, 0x0CFF],
+  malayalam: [0x0D00, 0x0D7F],
+  punjabi: [0x0A00, 0x0A7F],
+  bengali: [0x0980, 0x09FF],
+  gujarati: [0x0A80, 0x0AFF],
+};
+
+const ALL_LANGUAGES = ['telugu', 'tamil', 'hindi', 'kannada', 'malayalam', 'punjabi', 'bengali', 'gujarati', 'marathi', 'english'];
+
+function detectLyricsScript(text) {
+  if (!text) return null;
+  const clean = text.replace(/\[\d+:\d+\.?\d*\]/g, '');
+  const counts = {};
+  for (const lang of Object.keys(UNICODE_SCRIPTS)) counts[lang] = 0;
+  for (let i = 0; i < clean.length; i++) {
+    const cp = clean.charCodeAt(i);
+    for (const [lang, [start, end]] of Object.entries(UNICODE_SCRIPTS)) {
+      if (cp >= start && cp <= end) {
+        counts[lang]++;
+      }
+    }
+  }
+  let best = null;
+  let maxCount = 0;
+  for (const [lang, count] of Object.entries(counts)) {
+    if (count > maxCount) {
+      maxCount = count;
+      best = lang;
+    }
+  }
+  return maxCount >= 8 ? best : null;
+}
+
+function detectMetaLanguage(text) {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  for (const l of ALL_LANGUAGES) {
+    const reg = new RegExp(`\\b${l}\\b`, 'i');
+    if (reg.test(lower)) return l;
+  }
+  return null;
+}
+
+function scoreLyricsCandidate(cand, targetTitle, targetArtist, targetLang, targetDuration) {
+  const lyrics = (cand.syncedLyrics || cand.plainLyrics || '').trim();
+  if (!lyrics) return -9999;
+
+  const script = detectLyricsScript(lyrics);
+  const album = (cand.albumName || '').toLowerCase();
+  const track = (cand.trackName || '').toLowerCase();
+  const metaLang = detectMetaLanguage(`${album} ${track}`);
+
+  let score = 0;
+
+  // 1. Script checks (Strict non-Latin script matching)
+  if (targetLang) {
+    if (script) {
+      if (script !== targetLang) {
+        // Severe script contradiction (e.g. Malayalam or Tamil lyrics for Telugu song)
+        return -9999;
+      } else {
+        score += 500;
+      }
+    } else if (targetLang === 'english' && script !== null) {
+      return -9999;
+    }
+  }
+
+  // 2. Metadata language tag conflict in album/track title
+  if (targetLang && metaLang) {
+    if (metaLang !== targetLang) {
+      // e.g. candidate says [Hindi] or (Tamil) when target is Telugu
+      return -9999;
+    } else {
+      score += 300;
+    }
+  }
+
+  // 3. Title match
+  const cTitle = (cand.trackName || '').replace(/[\(\[\{].*?[\)\]\}]/g, '').toLowerCase().trim();
+  const tTitle = targetTitle.replace(/[\(\[\{].*?[\)\]\}]/g, '').toLowerCase().trim();
+  if (cTitle === tTitle) {
+    score += 250;
+  } else if (cTitle.includes(tTitle) || tTitle.includes(cTitle)) {
+    score += 150;
+  } else {
+    score -= 100;
+  }
+
+  // 4. Artist match
+  if (targetArtist && cand.artistName) {
+    const tTokens = targetArtist.toLowerCase().split(/[\s,;&]+/).filter((w) => w.length > 2);
+    const cTokens = cand.artistName.toLowerCase().split(/[\s,;&]+/).filter((w) => w.length > 2);
+    const hasOverlap = tTokens.some((t) => cTokens.includes(t));
+    if (hasOverlap) {
+      score += 150;
+    } else if (tTokens.length > 0) {
+      score -= 150;
+    }
+  }
+
+  // 5. Duration match
+  const cDur = cand.duration || 0;
+  if (targetDuration > 0 && cDur > 0) {
+    const diff = Math.abs(cDur - targetDuration);
+    if (diff <= 5) {
+      score += 100;
+    } else if (diff <= 12) {
+      score += 50;
+    } else if (diff > 35) {
+      score -= 200;
+    }
+  }
+
+  // 6. Synced lyrics preference
+  if (cand.syncedLyrics && cand.syncedLyrics.trim().length > 0) {
+    score += 50;
+  }
+
+  return score;
+}
+
 /**
- * Searches and fetches synchronized LRC or plain lyrics with zero CORS issues.
+ * Searches and fetches synchronized LRC or plain lyrics with zero cross-language mismatch.
  */
-async function fetchLyricsEdge(title, artist) {
+async function fetchLyricsEdge(title, artist, lang, duration) {
   const cleanTitle = title
     .replace(/[\(\[\{].*?[\)\]\}]/g, '')
     .replace(/official video|music video|full song|lyric video|audio song|video song|lyrics/gi, '')
     .trim();
   const cleanArtist = artist.replace(/[\(\[\{].*?[\)\]\}]/g, '').trim();
 
+  // If lang not explicitly provided, attempt detection from title or artist
+  let targetLang = (lang || '').toLowerCase().trim();
+  if (!targetLang) {
+    targetLang = detectLyricsScript(title) || detectMetaLanguage(`${title} ${artist}`) || '';
+  }
+
   const searchHeaders = {
     'User-Agent': 'DilSeMusicApp/1.0 (https://dilse.app; contact@dilse.app)',
     'Accept': 'application/json',
   };
 
+  const queries = [];
+  if (cleanTitle && targetLang) {
+    queries.push(`https://lrclib.net/api/search?q=${encodeURIComponent(`${cleanTitle} ${targetLang}`)}`);
+  }
   if (cleanTitle && cleanArtist) {
-    try {
-      const q = encodeURIComponent(`${cleanTitle} ${cleanArtist}`);
-      const res = await fetch(`https://lrclib.net/api/search?q=${q}`, { headers: searchHeaders });
-      if (res.ok) {
-        const list = await res.json();
-        if (Array.isArray(list) && list.length > 0) {
-          const synced = list.find((item) => item.syncedLyrics && item.syncedLyrics.trim().length > 0);
-          if (synced) return synced;
-          return list[0];
-        }
-      }
-    } catch (_) {}
+    queries.push(`https://lrclib.net/api/search?track_name=${encodeURIComponent(cleanTitle)}&artist_name=${encodeURIComponent(cleanArtist)}`);
+    queries.push(`https://lrclib.net/api/search?q=${encodeURIComponent(`${cleanTitle} ${cleanArtist}`)}`);
   }
-
   if (cleanTitle) {
+    queries.push(`https://lrclib.net/api/search?track_name=${encodeURIComponent(cleanTitle)}`);
+    queries.push(`https://lrclib.net/api/search?q=${encodeURIComponent(cleanTitle)}`);
+  }
+
+  // If exact match endpoint can be tried first:
+  if (cleanTitle && cleanArtist && duration > 0) {
     try {
-      const t = encodeURIComponent(cleanTitle);
-      const res = await fetch(`https://lrclib.net/api/search?track_name=${t}`, { headers: searchHeaders });
+      const getUrl = `https://lrclib.net/api/get?track_name=${encodeURIComponent(cleanTitle)}&artist_name=${encodeURIComponent(cleanArtist)}&duration=${Math.round(duration)}`;
+      const res = await fetch(getUrl, { headers: searchHeaders });
       if (res.ok) {
-        const list = await res.json();
-        if (Array.isArray(list) && list.length > 0) {
-          const synced = list.find((item) => item.syncedLyrics && item.syncedLyrics.trim().length > 0);
-          if (synced) return synced;
-          return list[0];
+        const item = await res.json();
+        if (item && (item.syncedLyrics || item.plainLyrics)) {
+          const s = scoreLyricsCandidate(item, cleanTitle, cleanArtist, targetLang, duration);
+          if (s >= 100) return item;
         }
       }
     } catch (_) {}
   }
 
-  if (cleanTitle) {
+  const seenIds = new Set();
+  let bestCandidate = null;
+  let bestScore = 99; // Minimum threshold to accept lyrics is 100
+
+  for (const url of queries) {
     try {
-      const q = encodeURIComponent(cleanTitle);
-      const res = await fetch(`https://lrclib.net/api/search?q=${q}`, { headers: searchHeaders });
+      const res = await fetch(url, { headers: searchHeaders });
       if (res.ok) {
         const list = await res.json();
-        if (Array.isArray(list) && list.length > 0) {
-          const synced = list.find((item) => item.syncedLyrics && item.syncedLyrics.trim().length > 0);
-          if (synced) return synced;
-          return list[0];
+        if (Array.isArray(list)) {
+          for (const item of list) {
+            if (!item || seenIds.has(item.id)) continue;
+            seenIds.add(item.id);
+            const score = scoreLyricsCandidate(item, cleanTitle, cleanArtist, targetLang, duration);
+            if (score > bestScore) {
+              bestScore = score;
+              bestCandidate = item;
+            }
+          }
+          // If we found a high quality match (score >= 400), return early
+          if (bestCandidate && bestScore >= 400) {
+            return bestCandidate;
+          }
         }
       }
     } catch (_) {}
   }
 
-  return null;
+  return bestCandidate;
 }
 
 /**
