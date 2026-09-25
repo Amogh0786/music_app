@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -122,41 +121,50 @@ class _MiniPlayerState extends State<MiniPlayer> {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(18),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-            child: Container(
+          child: Container(
+            decoration: BoxDecoration(
               color: Color.alphaBlend(
-                _musicService.dominantColor.withValues(alpha: 0.28),
-                const Color(0xFF1E1E24).withValues(alpha: 0.90),
+                _musicService.dominantColor.withValues(alpha: 0.22),
+                const Color(0xFF14141E).withValues(alpha: 0.94),
               ),
-              child: Stack(
-                children: [
-                  // Main Player Content Row
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Row(
-                      children: [
-                        // Album Thumbnail with Hero Tag
-                        Hero(
-                          tag: 'player_artwork_${song?.id.value}',
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: SizedBox(
-                              width: 48,
-                              height: 48,
-                              child: song != null
-                                  ? Image.network(
-                                      hdThumbnail,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.08),
+                width: 1,
+              ),
+            ),
+            child: Stack(
+              children: [
+                // Main Player Content Row
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      // Album Thumbnail with Hero Tag
+                      Hero(
+                        tag: 'player_artwork_${song?.id.value}',
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: SizedBox(
+                            width: 48,
+                            height: 48,
+                            child: song != null
+                                ? Image.network(
+                                    hdThumbnail,
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 100,
+                                    cacheHeight: 100,
+                                    errorBuilder: (_, _, _) => Image.network(
+                                      song.thumbnails.lowResUrl,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, _, _) => Image.network(
-                                        song.thumbnails.lowResUrl,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    )
-                                  : Container(color: Colors.grey[850]),
-                            ),
+                                      cacheWidth: 100,
+                                      cacheHeight: 100,
+                                    ),
+                                  )
+                                : Container(color: Colors.grey[850]),
                           ),
                         ),
+                      ),
                         const SizedBox(width: 12),
 
                         // Song Title, Equalizer, and Artist
@@ -286,7 +294,6 @@ class _MiniPlayerState extends State<MiniPlayer> {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }

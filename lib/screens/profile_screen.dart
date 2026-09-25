@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/preferences_service.dart';
@@ -23,15 +22,13 @@ class ProfileScreen extends StatelessWidget {
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(ctx).viewInsets.bottom,
           ),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: const Color(0xFF181824).withValues(alpha: 0.96),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border.all(color: Colors.white12),
-              ),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF181824).withValues(alpha: 0.96),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              border: Border.all(color: Colors.white12),
+            ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -102,9 +99,8 @@ class ProfileScreen extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
     );
   }
 

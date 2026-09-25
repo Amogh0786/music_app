@@ -192,23 +192,24 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                   ),
                 )
               else
-                SliverToBoxAdapter(
-                  child: ReorderableListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: songs.length,
-                    // ignore: deprecated_member_use
-                    onReorder: (oldIndex, newIndex) {
-                      HapticFeedback.lightImpact();
-                      _musicService.reorderPlaylistSongs(widget.playlistId, oldIndex, newIndex);
-                    },
-                    itemBuilder: (context, index) {
-                      final song = songs[index];
-                      final songId = (song['id'] as String?) ?? '';
-                      final isCurrent = _musicService.currentSong?.id.value == songId;
-                      final thumb = song['thumbnail'] as String? ?? '';
+                SliverReorderableList(
+                  itemCount: songs.length,
+                  itemExtent: 72.0,
+                  // ignore: deprecated_member_use
+                  onReorder: (oldIndex, newIndex) {
+                    HapticFeedback.lightImpact();
+                    _musicService.reorderPlaylistSongs(widget.playlistId, oldIndex, newIndex);
+                  },
+                  itemBuilder: (context, index) {
+                    final song = songs[index];
+                    final songId = (song['id'] as String?) ?? '';
+                    final isCurrent = _musicService.currentSong?.id.value == songId;
+                    final thumb = song['thumbnail'] as String? ?? '';
 
-                      return Dismissible(
+                    return ReorderableDelayedDragStartListener(
+                      key: ValueKey('song_${songId}_$index'),
+                      index: index,
+                      child: Dismissible(
                         key: ValueKey('dismiss_${songId}_$index'),
                         direction: DismissDirection.endToStart,
                         background: Container(
@@ -222,11 +223,12 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                           _musicService.removeSongFromPlaylist(widget.playlistId, songId);
                         },
                         child: Container(
-                          key: ValueKey('song_${songId}_$index'),
+                          height: 72.0,
                           color: isCurrent
                               ? Theme.of(context).primaryColor.withValues(alpha: 0.12)
                               : Colors.transparent,
                           child: ListTile(
+                            dense: true,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                             leading: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -255,6 +257,10 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                                     child: thumb.isNotEmpty
                                         ? Image.network(
                                             thumb,
+                                            width: 48,
+                                            height: 48,
+                                            cacheWidth: 120,
+                                            cacheHeight: 120,
                                             fit: BoxFit.cover,
                                             errorBuilder: (context, error, stackTrace) => const Icon(
                                               Icons.music_note_rounded,
@@ -318,9 +324,9 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                             },
                           ),
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  },
                 ),
 
               // Bottom spacing for miniplayer

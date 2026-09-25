@@ -18,6 +18,7 @@ import 'package:audio_session/audio_session.dart';
 import 'web_player_bridge.dart';
 import 'canonical_song_dedup.dart';
 import 'youtube_music_client.dart';
+import 'album_color_deriver.dart';
 
 enum SearchSuggestionType { artist, song, album, history, query }
 
@@ -1537,15 +1538,15 @@ class MusicService extends ChangeNotifier {
       _dominantColor = dominant;
       _vibrantColor = vibrant;
       _darkVibrantColor = darkVibrant;
+      AlbumColorDeriver.registerExtractedPalette(videoId, dominant, vibrant, darkVibrant);
       notifyListeners();
     } catch (e) {
       debugPrint('[Palette] Extraction error: $e');
       if (_currentSong != null && _currentSong?.id.value == videoId) {
-        final hash = (_currentSong!.title.hashCode ^ _currentSong!.author.hashCode).abs();
-        final hue = (hash % 360).toDouble();
-        _dominantColor = HSLColor.fromAHSL(1.0, hue, 0.65, 0.22).toColor();
-        _vibrantColor = HSLColor.fromAHSL(1.0, hue, 0.85, 0.55).toColor();
-        _darkVibrantColor = HSLColor.fromAHSL(1.0, (hue + 40) % 360, 0.60, 0.15).toColor();
+        final palette = AlbumColorDeriver.getPalette(_currentSong!);
+        _dominantColor = palette.dominant;
+        _vibrantColor = palette.vibrant;
+        _darkVibrantColor = palette.darkVibrant;
         notifyListeners();
       }
     }

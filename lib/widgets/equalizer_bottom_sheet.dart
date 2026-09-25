@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/preferences_service.dart';
@@ -63,15 +62,13 @@ class _EqualizerBottomSheetState extends State<EqualizerBottomSheet> {
     final bassBoost = _prefs.bassBoost;
     final virtualizer = _prefs.virtualizer;
 
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-        decoration: BoxDecoration(
-          color: const Color(0xFF14141E).withValues(alpha: 0.96),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-        ),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF14141E).withValues(alpha: 0.96),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -366,7 +363,6 @@ class _EqualizerBottomSheetState extends State<EqualizerBottomSheet> {
             ),
           ],
         ),
-      ),
-    );
+      );
   }
 }

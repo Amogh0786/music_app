@@ -1,5 +1,4 @@
 import 'dart:io' show Platform;
-import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -82,15 +81,13 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E1E24).withValues(alpha: 0.95),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              border: Border.all(color: Colors.white10),
-            ),
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF14141E).withValues(alpha: 0.96),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -183,9 +180,8 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                 const SizedBox(height: 12),
               ],
             ),
-          ),
-        );
-      },
+          );
+        },
     );
   }
 

@@ -1,6 +1,5 @@
 import 'dart:io' show Platform;
 import 'dart:math' as math;
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -9,6 +8,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
 import '../services/preferences_service.dart';
+import '../services/album_color_deriver.dart';
 import '../widgets/vinyl_record_player.dart';
 import '../widgets/waveform_scrubber.dart';
 import '../widgets/song_options_bottom_sheet.dart';
@@ -23,14 +23,12 @@ class PlayerScreen extends StatefulWidget {
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends State<PlayerScreen>
-    with TickerProviderStateMixin {
+class _PlayerScreenState extends State<PlayerScreen> {
   final MusicService _musicService = MusicService();
   final PreferencesService _prefs = PreferencesService();
 
-  late AnimationController _ambientController;
-  late AnimationController _bubbleController;
   late PageController _pageController;
+  int _activePageIndex = 0;
   bool _isUserDraggingPage = false;
   bool _showLyrics = false;
 
@@ -43,32 +41,32 @@ class _PlayerScreenState extends State<PlayerScreen>
     final initialPage = _musicService.playlist.isNotEmpty
         ? _musicService.currentIndex.clamp(0, _musicService.playlist.length - 1)
         : 0;
+    _activePageIndex = initialPage;
     _pageController = PageController(
       initialPage: initialPage,
       viewportFraction: 0.82,
     );
-
-    // Continuous slow rotation for living ambient aura
-    _ambientController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 24),
-    )..repeat();
-
-    // Subtle fluid bubble movement controller for bottom glass bar
-    _bubbleController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 14),
-    )..repeat();
+    _pageController.addListener(_onPageScrolled);
   }
 
   @override
   void dispose() {
-    _ambientController.dispose();
-    _bubbleController.dispose();
+    _pageController.removeListener(_onPageScrolled);
     _pageController.dispose();
     _musicService.removeListener(_onStateChanged);
     _prefs.removeListener(_onStateChanged);
     super.dispose();
+  }
+
+  void _onPageScrolled() {
+    if (_pageController.hasClients && _pageController.position.hasContentDimensions) {
+      final page = (_pageController.page ?? _musicService.currentIndex.toDouble()).round();
+      if (page != _activePageIndex && page >= 0) {
+        setState(() {
+          _activePageIndex = page;
+        });
+      }
+    }
   }
 
   void _onStateChanged() {
@@ -82,6 +80,9 @@ class _PlayerScreenState extends State<PlayerScreen>
           curve: Curves.easeOutCubic,
         );
       }
+    }
+    if (!_isUserDraggingPage && _musicService.playlist.isNotEmpty) {
+      _activePageIndex = _musicService.currentIndex.clamp(0, _musicService.playlist.length - 1);
     }
     setState(() {});
   }
@@ -117,15 +118,13 @@ class _PlayerScreenState extends State<PlayerScreen>
             final playlist = _musicService.playlist;
             final currentIndex = _musicService.currentIndex;
 
-            return BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-              child: Container(
-                height: MediaQuery.of(context).size.height * 0.78,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF16161E).withValues(alpha: 0.96),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                  border: Border.all(color: Colors.white12),
-                ),
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.78,
+              decoration: BoxDecoration(
+                color: const Color(0xFF14141E).withValues(alpha: 0.96),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
                 child: Column(
                   children: [
                     const SizedBox(height: 12),
@@ -244,11 +243,15 @@ class _PlayerScreenState extends State<PlayerScreen>
                                                 hdThumbnail,
                                                 width: 44,
                                                 height: 44,
+                                                cacheWidth: 100,
+                                                cacheHeight: 100,
                                                 fit: BoxFit.cover,
                                                 errorBuilder: (_, _, _) => Image.network(
                                                   song.thumbnails.lowResUrl,
                                                   width: 44,
                                                   height: 44,
+                                                  cacheWidth: 100,
+                                                  cacheHeight: 100,
                                                   fit: BoxFit.cover,
                                                 ),
                                               ),
@@ -319,13 +322,12 @@ class _PlayerScreenState extends State<PlayerScreen>
                     ),
                   ],
                 ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
+              );
+            },
+          );
+        },
+      );
+    }
 
   void _showSleepTimerSheet(BuildContext context) {
     HapticFeedback.lightImpact();
@@ -333,15 +335,13 @@ class _PlayerScreenState extends State<PlayerScreen>
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF16161E).withValues(alpha: 0.96),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-              border: Border.all(color: Colors.white12),
-            ),
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF14141E).withValues(alpha: 0.96),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -394,9 +394,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                 const SizedBox(height: 12),
               ],
             ),
-          ),
-        );
-      },
+          );
+        },
     );
   }
 
@@ -429,15 +428,13 @@ class _PlayerScreenState extends State<PlayerScreen>
             final isLiked = _musicService.likedSongs.any((s) => s['id'] == song.id.value);
             final isDownloaded = _musicService.downloadedSongs.any((s) => s['id'] == song.id.value);
 
-            return BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-              child: Container(
-                padding: const EdgeInsets.only(top: 14, bottom: 28),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF14141E).withValues(alpha: 0.95),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                ),
+            return Container(
+              padding: const EdgeInsets.only(top: 14, bottom: 28),
+              decoration: BoxDecoration(
+                color: const Color(0xFF14141E).withValues(alpha: 0.96),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -613,9 +610,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                     ),
                   ],
                 ),
-              ),
-            );
-          },
+              );
+            },
         );
       },
     );
@@ -832,9 +828,22 @@ class _PlayerScreenState extends State<PlayerScreen>
       );
     }
 
-    final dominantColor = _musicService.dominantColor;
-    final vibrantColor = _musicService.vibrantColor;
-    final darkVibrantColor = _musicService.darkVibrantColor;
+    final playlist = _musicService.playlist.isNotEmpty
+        ? _musicService.playlist
+        : [song];
+    final activeIndex = _activePageIndex.clamp(0, playlist.length - 1);
+    final shownSong = playlist[activeIndex];
+    final isCurrentSong = shownSong.id.value == song.id.value;
+
+    final palette = AlbumColorDeriver.getPalette(
+      shownSong,
+      fallbackDominant: isCurrentSong ? _musicService.dominantColor : null,
+      fallbackVibrant: isCurrentSong ? _musicService.vibrantColor : null,
+      fallbackDarkVibrant: isCurrentSong ? _musicService.darkVibrantColor : null,
+    );
+    final dominantColor = palette.dominant;
+    final vibrantColor = palette.vibrant;
+    final darkVibrantColor = palette.darkVibrant;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0B0B0F),
@@ -852,92 +861,66 @@ class _PlayerScreenState extends State<PlayerScreen>
         },
         child: Stack(
           children: [
-            // 1. Dynamic Living Ambient Gradient Mesh Aura
+            // 1. Dynamic Adaptive Ambient Background (Static glass styling, GPU-accelerated gradient with zero blur passes)
             Positioned.fill(
-              child: AnimatedBuilder(
-                animation: _ambientController,
-                builder: (context, child) {
-                  final progress = _ambientController.value;
-                  final angle = progress * 2 * math.pi;
-
-                  return Stack(
-                    children: [
-                      // Deep base color
-                      Container(color: const Color(0xFF09090D)),
-
-                      // Blob 1 (Top Left, rotating)
-                      Positioned(
-                        top: -100 + (math.sin(angle) * 40),
-                        left: -100 + (math.cos(angle) * 40),
-                        width: 440,
-                        height: 440,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: dominantColor.withValues(alpha: 0.68),
-                          ),
-                        ),
-                      ),
-
-                      // Blob 2 (Mid Right, reverse rotating)
-                      Positioned(
-                        top: 180 + (math.cos(angle) * 50),
-                        right: -120 + (math.sin(angle) * 50),
-                        width: 400,
-                        height: 400,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: vibrantColor.withValues(alpha: 0.60),
-                          ),
-                        ),
-                      ),
-
-                      // Central Dynamic Ambient Flare (anchored to artwork)
-                      Positioned(
-                        top: 140 + (math.sin(angle * 0.8) * 20),
-                        left: -30,
-                        right: -30,
-                        height: 420,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: RadialGradient(
-                              colors: [
-                                vibrantColor.withValues(alpha: 0.35),
-                                dominantColor.withValues(alpha: 0.18),
-                                Colors.transparent,
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Blob 3 (Bottom Center, breathing)
-                      Positioned(
-                        bottom: -80 + (math.sin(angle * 1.5) * 30),
-                        left: 40 + (math.cos(angle * 1.5) * 30),
-                        width: 360,
-                        height: 360,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: darkVibrantColor.withValues(alpha: 0.55),
-                          ),
-                        ),
-                      ),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeOutCubic,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color.alphaBlend(vibrantColor.withValues(alpha: 0.32), const Color(0xFF0C0C12)),
+                      Color.alphaBlend(dominantColor.withValues(alpha: 0.18), const Color(0xFF08080C)),
+                      Color.alphaBlend(darkVibrantColor.withValues(alpha: 0.20), const Color(0xFF07070A)),
                     ],
-                  );
-                },
+                    stops: const [0.0, 0.52, 1.0],
+                  ),
+                ),
               ),
             ),
 
-            // Frost blur overlay
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 65, sigmaY: 65),
-                child: Container(
-                  color: Colors.black.withValues(alpha: 0.42),
+            // Soft Central Ambient Aura directly behind the album artwork
+            Positioned(
+              top: 80,
+              left: 0,
+              right: 0,
+              height: 480,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeOutCubic,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      vibrantColor.withValues(alpha: 0.28),
+                      dominantColor.withValues(alpha: 0.12),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.55, 1.0],
+                  ),
+                ),
+              ),
+            ),
+
+            // Top subtle corner ambient highlight
+            Positioned(
+              top: -60,
+              right: -60,
+              width: 240,
+              height: 240,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeOutCubic,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      dominantColor.withValues(alpha: 0.22),
+                      Colors.transparent,
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1015,6 +998,11 @@ class _PlayerScreenState extends State<PlayerScreen>
                                   controller: _pageController,
                                   itemCount: playlist.length,
                                   onPageChanged: (index) {
+                                    if (_activePageIndex != index) {
+                                      setState(() {
+                                        _activePageIndex = index;
+                                      });
+                                    }
                                     if (_isUserDraggingPage && index != _musicService.currentIndex) {
                                       HapticFeedback.selectionClick();
                                       _musicService.skipToQueueIndex(index);
@@ -1398,81 +1386,62 @@ class _PlayerScreenState extends State<PlayerScreen>
 
                     const SizedBox(height: 8),
 
-                    // Bottom Screen Options: 3 Main Glassmorphic Bubble Buttons
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(30),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-                        child: AnimatedBuilder(
-                          animation: _bubbleController,
-                          builder: (context, child) {
-                            return CustomPaint(
-                              painter: BubbleMovementPainter(
-                                animationValue: _bubbleController.value,
-                                dominantColor: dominantColor,
-                                vibrantColor: vibrantColor,
-                              ),
-                              child: Container(
-                                margin: const EdgeInsets.only(top: 4, bottom: 2),
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(30),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.16),
-                                    width: 1.1,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.25),
-                                      blurRadius: 18,
-                                      offset: const Offset(0, 6),
-                                    ),
-                                  ],
-                                ),
-                                child: child,
-                              ),
-                            );
-                          },
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.center,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                // 1. Lyrics
-                                _buildBarPillButton(
-                                  context: context,
-                                  icon: _showLyrics ? Icons.lyrics_rounded : Icons.lyrics_outlined,
-                                  label: 'Lyrics',
-                                  isActive: _showLyrics,
-                                  activeColor: vibrantColor,
-                                  onTap: () => _toggleLyrics(song),
-                                ),
-
-                                // 2. Queue (Up Next)
-                                _buildBarPillButton(
-                                  context: context,
-                                  icon: Icons.queue_music_rounded,
-                                  label: 'Queue',
-                                  badgeCount: _musicService.playlist.length,
-                                  isActive: false,
-                                  activeColor: vibrantColor,
-                                  onTap: () => _showQueueSheet(context),
-                                ),
-
-                                // 3. Three Lines (More Options Layer)
-                                _buildBarPillButton(
-                                  context: context,
-                                  icon: Icons.segment_rounded,
-                                  label: 'More',
-                                  isActive: false,
-                                  activeColor: vibrantColor,
-                                  onTap: () => _showCurrentSongActionsSheet(context, song),
-                                ),
-                              ],
-                            ),
+                    // Bottom Screen Options: 3 Main Static Glass Pill Buttons (Low-end static glass)
+                    Container(
+                      margin: const EdgeInsets.only(top: 4, bottom: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF14141E).withValues(alpha: 0.90),
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          width: 1.0,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.35),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
                           ),
+                        ],
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.center,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            // 1. Lyrics
+                            _buildBarPillButton(
+                              context: context,
+                              icon: _showLyrics ? Icons.lyrics_rounded : Icons.lyrics_outlined,
+                              label: 'Lyrics',
+                              isActive: _showLyrics,
+                              activeColor: vibrantColor,
+                              onTap: () => _toggleLyrics(song),
+                            ),
+
+                            // 2. Queue (Up Next)
+                            _buildBarPillButton(
+                              context: context,
+                              icon: Icons.queue_music_rounded,
+                              label: 'Queue',
+                              badgeCount: _musicService.playlist.length,
+                              isActive: false,
+                              activeColor: vibrantColor,
+                              onTap: () => _showQueueSheet(context),
+                            ),
+
+                            // 3. Three Lines (More Options Layer)
+                            _buildBarPillButton(
+                              context: context,
+                              icon: Icons.segment_rounded,
+                              label: 'More',
+                              isActive: false,
+                              activeColor: vibrantColor,
+                              onTap: () => _showCurrentSongActionsSheet(context, song),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -1550,61 +1519,4 @@ class _PlayerScreenState extends State<PlayerScreen>
       ),
     );
   }
-}
-
-/// Custom painter for dynamic organic liquid bubble movement in the bottom glass bar
-class BubbleMovementPainter extends CustomPainter {
-  final double animationValue;
-  final Color dominantColor;
-  final Color vibrantColor;
-
-  BubbleMovementPainter({
-    required this.animationValue,
-    required this.dominantColor,
-    required this.vibrantColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final progress = animationValue * 2 * math.pi;
-
-    // Bubble 1: drifting left-to-center with vibrant hue
-    final b1X = size.width * 0.22 + math.sin(progress) * (size.width * 0.12);
-    final b1Y = size.height * 0.5 + math.cos(progress * 1.3) * (size.height * 0.25);
-    final p1 = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          vibrantColor.withValues(alpha: 0.35),
-          vibrantColor.withValues(alpha: 0.0),
-        ],
-      ).createShader(Rect.fromCircle(center: Offset(b1X, b1Y), radius: 42));
-    canvas.drawCircle(Offset(b1X, b1Y), 42, p1);
-
-    // Bubble 2: drifting center-right with dominant hue
-    final b2X = size.width * 0.70 + math.cos(progress * 0.9) * (size.width * 0.15);
-    final b2Y = size.height * 0.45 + math.sin(progress * 1.6) * (size.height * 0.28);
-    final p2 = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          dominantColor.withValues(alpha: 0.42),
-          dominantColor.withValues(alpha: 0.0),
-        ],
-      ).createShader(Rect.fromCircle(center: Offset(b2X, b2Y), radius: 48));
-    canvas.drawCircle(Offset(b2X, b2Y), 48, p2);
-
-    // Bubble 3: subtle white luminous orb floating across center
-    final b3X = size.width * 0.48 + math.sin(progress * 1.5) * (size.width * 0.18);
-    final b3Y = size.height * 0.55 + math.cos(progress) * (size.height * 0.22);
-    final p3 = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          Colors.white.withValues(alpha: 0.16),
-          Colors.white.withValues(alpha: 0.0),
-        ],
-      ).createShader(Rect.fromCircle(center: Offset(b3X, b3Y), radius: 30));
-    canvas.drawCircle(Offset(b3X, b3Y), 30, p3);
-  }
-
-  @override
-  bool shouldRepaint(covariant BubbleMovementPainter oldDelegate) => true;
 }

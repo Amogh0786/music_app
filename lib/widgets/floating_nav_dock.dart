@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -41,31 +40,29 @@ class FloatingNavDock extends StatelessWidget {
         padding: const EdgeInsets.only(left: 16, right: 16, top: 0, bottom: 8),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(32),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-            child: Container(
-              height: 64,
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xC4141420),
-                borderRadius: BorderRadius.circular(34),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.14),
-                  width: 0.75,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    blurRadius: 28,
-                    offset: const Offset(0, 10),
-                  ),
-                  BoxShadow(
-                    color: primaryColor.withValues(alpha: 0.09),
-                    blurRadius: 18,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+          child: Container(
+            height: 64,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xF2141420),
+              borderRadius: BorderRadius.circular(34),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.10),
+                width: 0.75,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  blurRadius: 28,
+                  offset: const Offset(0, 10),
+                ),
+                BoxShadow(
+                  color: primaryColor.withValues(alpha: 0.09),
+                  blurRadius: 18,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final tabWidth = constraints.maxWidth / tabs.length;
@@ -162,8 +159,7 @@ class FloatingNavDock extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }
 

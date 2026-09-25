@@ -24,12 +24,14 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   int _totalDownloadedBytes = 0;
   final Map<String, int> _songFileSizes = {};
+  int _lastDownloadedCount = -1;
 
   @override
   void initState() {
     super.initState();
     _musicService.addListener(_onStateChanged);
     _prefs.addListener(_onStateChanged);
+    _lastDownloadedCount = _musicService.downloadedSongs.length;
     _calculateStorageUsage();
   }
 
@@ -42,7 +44,11 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   void _onStateChanged() {
     if (mounted) {
-      _calculateStorageUsage();
+      final currentCount = _musicService.downloadedSongs.length;
+      if (currentCount != _lastDownloadedCount) {
+        _lastDownloadedCount = currentCount;
+        _calculateStorageUsage();
+      }
       setState(() {});
     }
   }
@@ -322,6 +328,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                             height: 52,
                             child: Image.network(
                               song['thumbnail'] ?? '',
+                              cacheWidth: 120,
+                              cacheHeight: 120,
                               fit: BoxFit.cover,
                               errorBuilder: (_, _, _) => Container(
                                 color: const Color(0xFF1E1E28),
@@ -450,6 +458,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                             child: Image.network(
                               song['thumbnail'] ?? '',
                               fit: BoxFit.cover,
+                              cacheWidth: 120,
+                              cacheHeight: 120,
                               errorBuilder: (_, _, _) => Container(
                                 color: const Color(0xFF1E1E28),
                                 child: const Icon(Icons.music_note, color: Colors.white54),
@@ -593,6 +603,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                                 ? Image.network(
                                     firstThumbnail,
                                     fit: BoxFit.cover,
+                                    cacheWidth: 120,
+                                    cacheHeight: 120,
                                     errorBuilder: (_, _, _) => const Icon(
                                       Icons.featured_play_list_rounded,
                                       color: Color(0xFF1DB954),
@@ -720,6 +732,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                             child: Image.network(
                               song['thumbnail'] ?? '',
                               fit: BoxFit.cover,
+                              cacheWidth: 120,
+                              cacheHeight: 120,
                               errorBuilder: (_, _, _) => Container(
                                 color: const Color(0xFF1E1E28),
                                 child: const Icon(Icons.music_note, color: Colors.white54),

@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
@@ -18,49 +17,49 @@ void showSongOptionsBottomSheet(BuildContext context, Video song) {
       final isDownloaded = musicService.isDownloaded(song.id.value);
       final hdThumbnail = MusicService.getHdThumbnail(song.id.value);
 
-      return BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-        child: Container(
-          padding: const EdgeInsets.only(top: 12, bottom: 28),
-          decoration: BoxDecoration(
-            color: const Color(0xFF14141E).withValues(alpha: 0.95),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Pill Handle
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+      return Container(
+        padding: const EdgeInsets.only(top: 12, bottom: 28),
+        decoration: BoxDecoration(
+          color: const Color(0xFF14141E).withValues(alpha: 0.96),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Pill Handle
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
               ),
-              const SizedBox(height: 16),
+            ),
+            const SizedBox(height: 16),
 
-              // Song Header Info
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.network(
-                        hdThumbnail,
+            // Song Header Info
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.network(
+                      hdThumbnail,
+                      width: 52,
+                      height: 52,
+                      fit: BoxFit.cover,
+                      cacheWidth: 120,
+                      cacheHeight: 120,
+                      errorBuilder: (_, _, _) => Container(
                         width: 52,
                         height: 52,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
-                          width: 52,
-                          height: 52,
-                          color: const Color(0xFF1E1E28),
-                          child: const Icon(Icons.music_note, color: Colors.white54),
-                        ),
+                        color: const Color(0xFF1E1E28),
+                        child: const Icon(Icons.music_note, color: Colors.white54),
                       ),
                     ),
+                  ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
@@ -185,9 +184,8 @@ void showSongOptionsBottomSheet(BuildContext context, Video song) {
               ),
             ],
           ),
-        ),
-      );
-    },
+        );
+      },
   );
 }
 

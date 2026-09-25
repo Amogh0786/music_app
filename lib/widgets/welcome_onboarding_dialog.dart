@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -159,13 +158,10 @@ class _WelcomeOnboardingDialogState extends State<WelcomeOnboardingDialog>
       body: Stack(
         alignment: Alignment.center,
         children: [
-          // Background ambient gradient mesh
+          // Background static glass overlay
           Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.6),
-              ),
+            child: Container(
+              color: Colors.black.withValues(alpha: 0.75),
             ),
           ),
 
