@@ -176,9 +176,111 @@ export default {
       );
     }
 
+    // 5. Lyrics resolver: /lyrics?title=...&artist=...
+    if (url.pathname === '/lyrics') {
+      const rawTitle = url.searchParams.get('title') || url.searchParams.get('q') || '';
+      const rawArtist = url.searchParams.get('artist') || '';
+
+      if (!rawTitle || rawTitle.trim().length < 1) {
+        return new Response(
+          JSON.stringify({ status: 'error', message: 'Missing title (?title=...)' }),
+          { status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        );
+      }
+
+      try {
+        const result = await fetchLyricsEdge(rawTitle.trim(), rawArtist.trim());
+        if (result && (result.syncedLyrics || result.plainLyrics)) {
+          return new Response(
+            JSON.stringify({ status: 'ok', match: true, data: result }),
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'public, max-age=86400',
+                ...CORS_HEADERS,
+              },
+            }
+          );
+        } else {
+          return new Response(
+            JSON.stringify({ status: 'not_found', match: false, message: 'No lyrics found' }),
+            { headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+          );
+        }
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ status: 'error', message: err.message || 'Lyrics fetch error' }),
+          { status: 500, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        );
+      }
+    }
+
     return new Response('Not Found', { status: 404, headers: CORS_HEADERS });
   },
 };
+
+/**
+ * Searches and fetches synchronized LRC or plain lyrics with zero CORS issues.
+ */
+async function fetchLyricsEdge(title, artist) {
+  const cleanTitle = title
+    .replace(/[\(\[\{].*?[\)\]\}]/g, '')
+    .replace(/official video|music video|full song|lyric video|audio song|video song|lyrics/gi, '')
+    .trim();
+  const cleanArtist = artist.replace(/[\(\[\{].*?[\)\]\}]/g, '').trim();
+
+  const searchHeaders = {
+    'User-Agent': 'DilSeMusicApp/1.0 (https://dilse.app; contact@dilse.app)',
+    'Accept': 'application/json',
+  };
+
+  if (cleanTitle && cleanArtist) {
+    try {
+      const q = encodeURIComponent(`${cleanTitle} ${cleanArtist}`);
+      const res = await fetch(`https://lrclib.net/api/search?q=${q}`, { headers: searchHeaders });
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list) && list.length > 0) {
+          const synced = list.find((item) => item.syncedLyrics && item.syncedLyrics.trim().length > 0);
+          if (synced) return synced;
+          return list[0];
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (cleanTitle) {
+    try {
+      const t = encodeURIComponent(cleanTitle);
+      const res = await fetch(`https://lrclib.net/api/search?track_name=${t}`, { headers: searchHeaders });
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list) && list.length > 0) {
+          const synced = list.find((item) => item.syncedLyrics && item.syncedLyrics.trim().length > 0);
+          if (synced) return synced;
+          return list[0];
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (cleanTitle) {
+    try {
+      const q = encodeURIComponent(cleanTitle);
+      const res = await fetch(`https://lrclib.net/api/search?q=${q}`, { headers: searchHeaders });
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list) && list.length > 0) {
+          const synced = list.find((item) => item.syncedLyrics && item.syncedLyrics.trim().length > 0);
+          if (synced) return synced;
+          return list[0];
+        }
+      }
+    } catch (_) {}
+  }
+
+  return null;
+}
 
 /**
  * Decrypts JioSaavn encrypted_media_url into 320kbps direct CDN MP4 stream URL.

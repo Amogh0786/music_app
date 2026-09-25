@@ -12,6 +12,12 @@
  */
 
 (function () {
+  if ('audioSession' in navigator) {
+    try {
+      navigator.audioSession.type = 'playback';
+    } catch (_) {}
+  }
+
   const ENGINE_NONE = 0;
   const ENGINE_AUDIO = 1;
   const ENGINE_IFRAME = 2;
@@ -84,7 +90,7 @@
   let audioCtx = null;
   let eqFilters = []; // 5 BiquadFilterNodes: [60Hz, 230Hz, 910Hz, 3.6kHz, 14kHz]
   let masterGainNode = null;
-  let eqEnabled = true;
+  let eqEnabled = false; // Default off so native 320k hardware audio is 100% active
   let eqBands = { 0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0 };
 
   const EQ_FREQUENCIES = [60, 230, 910, 3600, 14000];
@@ -99,11 +105,19 @@
         } catch (_) {}
       }
     }
+    return audioCtx;
+  }
+
+  function unlockAudioContext() {
     if (audioCtx && audioCtx.state === 'suspended') {
       audioCtx.resume().catch(() => {});
     }
-    return audioCtx;
   }
+
+  // Synchronous unlock listeners on all user interactions
+  window.addEventListener('click', unlockAudioContext, { passive: true, capture: true });
+  window.addEventListener('touchstart', unlockAudioContext, { passive: true, capture: true });
+  window.addEventListener('pointerdown', unlockAudioContext, { passive: true, capture: true });
 
   function initEqualizerDSP() {
     const ctx = getAudioContext();
@@ -158,7 +172,51 @@
     }
   }
 
+  function recreateDecksForDirectAudio() {
+    console.log('[DilSe Web Player] Restoring pure native HTML5 audio decks for 100% background playback');
+    const wasDeckA = (activeDeckId === 'A');
+    const active = getActiveDeck();
+    const currentSrc = active ? active.src : '';
+    const currentPos = active ? (active.currentTime || 0) : 0;
+    const isPlaying = active && !active.paused && (active.currentTime > 0);
+
+    // Remove old elements from DOM
+    if (deckA) {
+      try {
+        deckA.pause();
+        deckA.removeAttribute('src');
+        deckA.load();
+        if (deckA.parentNode) deckA.parentNode.removeChild(deckA);
+      } catch (_) {}
+      deckA = null;
+    }
+    if (deckB) {
+      try {
+        deckB.pause();
+        deckB.removeAttribute('src');
+        deckB.load();
+        if (deckB.parentNode) deckB.parentNode.removeChild(deckB);
+      } catch (_) {}
+      deckB = null;
+    }
+
+    // Recreate clean native decks with NO Web Audio attachment
+    deckA = createDeckElement('dilse-deck-a');
+    deckB = createDeckElement('dilse-deck-b');
+    activeDeckId = wasDeckA ? 'A' : 'B';
+    audioEl = getActiveDeck();
+
+    if (currentSrc && currentSrc.startsWith('http')) {
+      audioEl.src = currentSrc;
+      if (currentPos > 0) audioEl.currentTime = currentPos;
+      if (isPlaying) {
+        audioEl.play().catch(() => {});
+      }
+    }
+  }
+
   window.dilseSetEqualizer = function (enabled, bandsJson) {
+    const wasEnabled = eqEnabled;
     eqEnabled = Boolean(enabled);
     if (typeof bandsJson === 'string') {
       try {
@@ -168,18 +226,35 @@
       eqBands = bandsJson;
     }
 
-    const ctx = getAudioContext();
-    if (!ctx) return;
-    initEqualizerDSP();
-
-    for (let i = 0; i < eqFilters.length; i++) {
+    let hasNonZeroGain = false;
+    for (let i = 0; i < 5; i++) {
       const val = parseFloat(eqBands[i] !== undefined ? eqBands[i] : eqBands[String(i)]) || 0.0;
-      const targetGain = eqEnabled ? Math.max(-12.0, Math.min(12.0, val)) : 0.0;
-      try {
-        eqFilters[i].gain.setValueAtTime(targetGain, ctx.currentTime);
-      } catch (_) {
-        eqFilters[i].gain.value = targetGain;
+      if (Math.abs(val) > 0.1) {
+        hasNonZeroGain = true;
+        break;
       }
+    }
+
+    if (eqEnabled && hasNonZeroGain) {
+      const ctx = getAudioContext();
+      if (ctx) {
+        unlockAudioContext();
+        initEqualizerDSP();
+        for (let i = 0; i < eqFilters.length; i++) {
+          const val = parseFloat(eqBands[i] !== undefined ? eqBands[i] : eqBands[String(i)]) || 0.0;
+          const targetGain = Math.max(-12.0, Math.min(12.0, val));
+          try {
+            eqFilters[i].gain.setValueAtTime(targetGain, ctx.currentTime);
+          } catch (_) {
+            eqFilters[i].gain.value = targetGain;
+          }
+        }
+        if (deckA) connectDeckToDSP(deckA);
+        if (deckB) connectDeckToDSP(deckB);
+      }
+    } else if (!eqEnabled && wasEnabled) {
+      // Revert to direct native hardware audio for 100% background playback stability
+      recreateDecksForDirectAudio();
     }
     console.log('[DilSe Web Player] Equalizer bands applied. Enabled:', eqEnabled, 'Bands:', eqBands);
   };
@@ -238,6 +313,7 @@
     el.addEventListener('playing', () => {
       if (activeEngine === ENGINE_AUDIO && el === getActiveDeck()) {
         console.log(`[DilSe Web Player] JioSaavn 320k audio playing (${id})`);
+        unlockAudioContext();
         clearFallbackTimer();
         isInterrupted = false;
         wasPlayingBeforeInterruption = true;
@@ -279,6 +355,7 @@
       if (activeEngine === ENGINE_AUDIO && el === getActiveDeck()) {
         console.log(`[DilSe Web Player] JioSaavn audio track ended (${id})`);
         broadcastState('ended');
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
         window.dispatchEvent(new CustomEvent('dilse_ended'));
       }
     });
@@ -290,7 +367,10 @@
       }
     });
 
-    connectDeckToDSP(el);
+    // Only attach Web Audio DSP if equalizer is actively enabled
+    if (eqEnabled) {
+      connectDeckToDSP(el);
+    }
     return el;
   }
 
@@ -552,15 +632,17 @@
   }
 
   function attemptAutoResumeAfterInterruption() {
-    if (isInterrupted && !isUserPaused) {
+    if (isInterrupted && !isUserPaused && document.visibilityState === 'visible') {
       console.log('[DilSe Web Player] Attempting auto-resume after interruption...');
       if (activeEngine === ENGINE_AUDIO && audioEl && audioEl.paused) {
+        audioEl.muted = false;
+        audioEl.volume = 1.0;
         audioEl.play().then(() => {
           console.log('[DilSe Web Player] Successfully auto-resumed playback after interruption');
           isInterrupted = false;
           wasPlayingBeforeInterruption = true;
+          unlockAudioContext();
         }).catch((err) => {
-          // Secondary audio (e.g. reel) may still be playing; will retry
           console.log('[DilSe Web Player] Auto-resume deferred:', err.message);
         });
       } else if (activeEngine === ENGINE_IFRAME && ytPlayer && typeof ytPlayer.playVideo === 'function') {
@@ -595,9 +677,9 @@
   window.addEventListener('focus', attemptAutoResumeAfterInterruption);
   window.addEventListener('pageshow', attemptAutoResumeAfterInterruption);
 
-  // Periodic poll to resume immediately once the reel or call finishes
+  // Periodic poll to resume immediately once the reel or call finishes (only when visible to avoid notification glitch)
   setInterval(() => {
-    if (isInterrupted && !isUserPaused) {
+    if (isInterrupted && !isUserPaused && document.visibilityState === 'visible') {
       attemptAutoResumeAfterInterruption();
     }
   }, 2000);
@@ -622,6 +704,7 @@
     artworkUrl,
     directStreamUrl
   ) {
+    unlockAudioContext();
     const sessionId = ++currentPlaySessionId;
     currentVideoId = videoId;
     currentStartSec = startSeconds || 0;
@@ -661,6 +744,13 @@
       audioEl.muted = false;
       audioEl.volume = 1.0;
     }
+    if (masterGainNode && audioCtx) {
+      try {
+        masterGainNode.gain.setValueAtTime(1.0, audioCtx.currentTime);
+      } catch (_) {
+        masterGainNode.gain.value = 1.0;
+      }
+    }
     broadcastState('buffering');
 
     // Update MediaSession with initial metadata
@@ -691,12 +781,21 @@
       audioEl.src = streamToPlay;
       audioEl.muted = false;
       audioEl.volume = 1.0;
+      if (masterGainNode && audioCtx) {
+        try {
+          masterGainNode.gain.setValueAtTime(1.0, audioCtx.currentTime);
+        } catch (_) {
+          masterGainNode.gain.value = 1.0;
+        }
+      }
       if (startSeconds > 0) {
         audioEl.currentTime = startSeconds;
       }
       armFallbackTimer(videoId, startSeconds);
 
-      audioEl.play().catch((err) => {
+      audioEl.play().then(() => {
+        unlockAudioContext();
+      }).catch((err) => {
         console.warn('[DilSe Web Player] audioEl.play() rejected:', err);
         triggerFallback();
       });
@@ -804,6 +903,13 @@
             audioEl.src = jioSong.streamUrl;
             audioEl.muted = false;
             audioEl.volume = 1.0;
+            if (masterGainNode && audioCtx) {
+              try {
+                masterGainNode.gain.setValueAtTime(1.0, audioCtx.currentTime);
+              } catch (_) {
+                masterGainNode.gain.value = 1.0;
+              }
+            }
             if (startSeconds > 0) {
               audioEl.currentTime = startSeconds;
             }
@@ -816,7 +922,9 @@
               jioSong.artwork || artworkUrl
             );
 
-            audioEl.play().catch((err) => {
+            audioEl.play().then(() => {
+              unlockAudioContext();
+            }).catch((err) => {
               console.warn('[DilSe Web Player] audioEl.play() rejected:', err);
               triggerFallback();
             });
@@ -923,6 +1031,45 @@
     }
   };
 
+  function cleanUpOnAppExit() {
+    stopBgAudio();
+    cancelCrossfade();
+    clearFallbackTimer();
+    clearIframeWatchdog();
+    stopTicker();
+    if (masterGainNode && audioCtx) {
+      try { masterGainNode.gain.value = 0.0; } catch (_) {}
+    }
+    if (deckA) {
+      try {
+        deckA.muted = true;
+        deckA.pause();
+        deckA.removeAttribute('src');
+        deckA.load();
+      } catch (_) {}
+    }
+    if (deckB) {
+      try {
+        deckB.muted = true;
+        deckB.pause();
+        deckB.removeAttribute('src');
+        deckB.load();
+      } catch (_) {}
+    }
+    if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
+      try { ytPlayer.stopVideo(); } catch (_) {}
+    }
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = 'none';
+      if (typeof navigator.mediaSession.setPositionState === 'function') {
+        try { navigator.mediaSession.setPositionState(null); } catch (_) {}
+      }
+    }
+  }
+
+  window.addEventListener('pagehide', cleanUpOnAppExit);
+  window.addEventListener('beforeunload', cleanUpOnAppExit);
+
   window.dilsePause = function () {
     isUserPaused = true;
     isInterrupted = false;
@@ -932,12 +1079,26 @@
     clearFallbackTimer();
     clearIframeWatchdog();
     stopTicker();
+
+    // 1. Instantly silence Web Audio master gain to prevent render quantum stutter loop
+    if (masterGainNode && audioCtx) {
+      try {
+        masterGainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+        masterGainNode.gain.setValueAtTime(0.0, audioCtx.currentTime);
+      } catch (_) {
+        masterGainNode.gain.value = 0.0;
+      }
+    }
+
+    // 2. Mute decks before pausing to avoid driver buffer clicks/repeats
     if (deckA) {
+      deckA.muted = true;
       try {
         deckA.pause();
       } catch (_) {}
     }
     if (deckB) {
+      deckB.muted = true;
       try {
         deckB.pause();
       } catch (_) {}
@@ -947,22 +1108,44 @@
         ytPlayer.pauseVideo();
       } catch (_) {}
     }
+
+    // 3. Suspend AudioContext to stop Web Audio loop completely
+    if (audioCtx && audioCtx.state === 'running') {
+      try {
+        audioCtx.suspend().catch(() => {});
+      } catch (_) {}
+    }
+
     broadcastState('paused');
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
   };
 
   window.dilseResume = function () {
+    unlockAudioContext();
     isUserPaused = false;
     isInterrupted = false;
     wasPlayingBeforeInterruption = true;
     startBgAudio();
+
+    // Restore master gain if equalizer DSP is active
+    if (masterGainNode && audioCtx) {
+      try {
+        masterGainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+        masterGainNode.gain.setValueAtTime(1.0, audioCtx.currentTime);
+      } catch (_) {
+        masterGainNode.gain.value = 1.0;
+      }
+    }
+
     if (activeEngine === ENGINE_AUDIO) {
       const active = getActiveDeck();
       if (active) {
         try {
           active.muted = false;
           active.volume = 1.0;
-          active.play();
+          active.play().then(() => {
+            unlockAudioContext();
+          }).catch(() => {});
         } catch (_) {}
       }
     } else if (activeEngine === ENGINE_IFRAME && ytPlayer && typeof ytPlayer.playVideo === 'function') {

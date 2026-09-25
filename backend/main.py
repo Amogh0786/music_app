@@ -891,6 +891,50 @@ def import_spotify_playlist(request: SpotifyImportRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.get("/lyrics")
+def get_lyrics(title: str, artist: str = ""):
+    """Fetches synced LRC or plain lyrics for a track with zero CORS blocks."""
+    if not title or not title.strip():
+        raise HTTPException(status_code=400, detail="Missing title query parameter")
+
+    import re
+    import urllib.parse
+    import urllib.request
+
+    clean_title = re.sub(r"[\(\[\{].*?[\)\]\}]", "", title)
+    clean_title = re.sub(r"(?i)\b(official video|music video|full song|lyric video|audio song|video song|lyrics)\b", "", clean_title).strip()
+    clean_artist = re.sub(r"[\(\[\{].*?[\)\]\}]", "", artist).strip()
+
+    search_headers = {
+        "User-Agent": "DilSeMusicApp/1.0 (https://dilse.app; contact@dilse.app)",
+        "Accept": "application/json",
+    }
+
+    queries = []
+    if clean_title and clean_artist:
+        queries.append(f"https://lrclib.net/api/search?q={urllib.parse.quote(f'{clean_title} {clean_artist}')}")
+    if clean_title:
+        queries.append(f"https://lrclib.net/api/search?track_name={urllib.parse.quote(clean_title)}")
+        queries.append(f"https://lrclib.net/api/search?q={urllib.parse.quote(clean_title)}")
+
+    for u in queries:
+        try:
+            req = urllib.request.Request(u, headers=search_headers)
+            with urllib.request.urlopen(req, timeout=4) as response:
+                if response.status == 200:
+                    data = json.loads(response.read().decode("utf-8"))
+                    if isinstance(data, list) and len(data) > 0:
+                        # Prioritize synchronized lyrics
+                        for item in data:
+                            if item.get("syncedLyrics") and str(item["syncedLyrics"]).strip():
+                                return {"status": "ok", "match": True, "data": item}
+                        return {"status": "ok", "match": True, "data": data[0]}
+        except Exception:
+            continue
+
+    return {"status": "not_found", "match": False, "message": f"No lyrics found for '{clean_title}'"}
+
+
 if __name__ == "__main__":
     import uvicorn
 

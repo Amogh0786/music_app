@@ -97,4 +97,20 @@ class ApiConfig {
   static Uri clientLogUri() {
     return Uri.parse('$baseUrl/client_log');
   }
+
+  static Uri cloudflareLyricsUri(String title, {String? artist}) {
+    final buffer = StringBuffer('$cloudflareWorkerUrl/lyrics?title=${Uri.encodeComponent(title)}');
+    if (artist != null && artist.isNotEmpty) {
+      buffer.write('&artist=${Uri.encodeComponent(artist)}');
+    }
+    return Uri.parse(buffer.toString());
+  }
+
+  static Uri backendLyricsUri(String title, {String? artist}) {
+    final buffer = StringBuffer('$baseUrl/lyrics?title=${Uri.encodeComponent(title)}');
+    if (artist != null && artist.isNotEmpty) {
+      buffer.write('&artist=${Uri.encodeComponent(artist)}');
+    }
+    return Uri.parse(buffer.toString());
+  }
 }
