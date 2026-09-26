@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:archive/archive.dart';
@@ -168,7 +169,7 @@ class ExportifyCsvParser {
     }
   }
 
-  /// Parses standard Exportify CSV text content into a list of [ExportifyTrack]
+  /// Parses standard Exportify, Soundiiz, TuneMyMusic, or custom CSV text content into a list of [ExportifyTrack]
   static List<ExportifyTrack> parse(String csvContent) {
     if (csvContent.trim().isEmpty) return [];
 
@@ -181,7 +182,42 @@ class ExportifyCsvParser {
     final lines = _splitCsvLines(cleanCsv);
     if (lines.isEmpty) return [];
 
-    final headerTokens = _parseCsvRow(lines[0]);
+    // Detect delimiter by inspecting candidate header lines: count commas, semicolons, tabs, and pipes outside quotes
+    String delimiter = ',';
+    int headerLineIdx = 0;
+
+    for (int l = 0; l < min(lines.length, 5); l++) {
+      final line = lines[l].trim();
+      if (line.isEmpty) continue;
+
+      int commas = 0, semicolons = 0, tabs = 0, pipes = 0;
+      bool inQ = false;
+      for (int i = 0; i < line.length; i++) {
+        final c = line[i];
+        if (c == '"') inQ = !inQ;
+        if (!inQ) {
+          if (c == ',') {
+            commas++;
+          } else if (c == ';') {
+            semicolons++;
+          } else if (c == '\t') {
+            tabs++;
+          } else if (c == '|') {
+            pipes++;
+          }
+        }
+      }
+
+      final counts = {',': commas, ';': semicolons, '\t': tabs, '|': pipes};
+      final best = counts.entries.reduce((a, b) => a.value >= b.value ? a : b);
+      if (best.value > 0) {
+        delimiter = best.key;
+        headerLineIdx = l;
+        break;
+      }
+    }
+
+    final headerTokens = _parseCsvRow(lines[headerLineIdx], delimiter: delimiter);
     final columnMap = <String, int>{};
 
     for (int i = 0; i < headerTokens.length; i++) {
@@ -189,12 +225,20 @@ class ExportifyCsvParser {
       columnMap[token] = i;
     }
 
-    // Dynamic column index resolution
-    final trackNameIdx = _findColumnIndex(columnMap, ['track name', 'track', 'song', 'title', 'name']);
-    final artistIdx = _findColumnIndex(columnMap, ['artist name(s)', 'artist name', 'artist', 'artists']);
-    final albumIdx = _findColumnIndex(columnMap, ['album name', 'album']);
-    final durationIdx = _findColumnIndex(columnMap, ['track duration (ms)', 'duration (ms)', 'duration', 'duration_ms']);
-    final spotifyIdIdx = _findColumnIndex(columnMap, ['spotify id', 'track uri', 'spotify uri', 'id', 'uri']);
+    // Dynamic column index resolution with comprehensive aliases
+    int trackNameIdx = _findColumnIndex(columnMap, [
+      'track name', 'track_name', 'track', 'song', 'title', 'name', 'track title', 'track name(s)', 'song name', 'song_name'
+    ]);
+    int artistIdx = _findColumnIndex(columnMap, [
+      'artist name(s)', 'artist name', 'artist(s)', 'artist', 'artists', 'track artist', 'lead artist', 'performer', 'artist_name'
+    ]);
+    final albumIdx = _findColumnIndex(columnMap, ['album name', 'album', 'album title', 'release', 'album_name']);
+    final durationIdx = _findColumnIndex(columnMap, [
+      'track duration (ms)', 'duration (ms)', 'duration', 'duration_ms', 'duration ms', 'length', 'time'
+    ]);
+    final spotifyIdIdx = _findColumnIndex(columnMap, [
+      'spotify id', 'track uri', 'spotify uri', 'id', 'uri', 'spotify_id', 'url', 'link'
+    ]);
     final danceIdx = _findColumnIndex(columnMap, ['danceability']);
     final energyIdx = _findColumnIndex(columnMap, ['energy']);
     final valenceIdx = _findColumnIndex(columnMap, ['valence']);
@@ -203,23 +247,34 @@ class ExportifyCsvParser {
     final instrumentalIdx = _findColumnIndex(columnMap, ['instrumentalness']);
     final popularityIdx = _findColumnIndex(columnMap, ['popularity']);
 
+    // Fallback: If no recognized header is found, check if line 0 is raw 2-column data (Title, Artist)
+    int dataStartRow = headerLineIdx + 1;
     if (trackNameIdx == -1 && artistIdx == -1) {
-      debugPrint('[ExportifyParser] Warning: CSV missing required Track Name or Artist columns');
-      return [];
+      if (headerTokens.length >= 2) {
+        // Assume Column 0 = Track Title, Column 1 = Artist Name, data starts at line 0
+        trackNameIdx = 0;
+        artistIdx = 1;
+        dataStartRow = headerLineIdx;
+      } else {
+        debugPrint('[ExportifyParser] Warning: CSV missing required Track Name or Artist columns');
+        return [];
+      }
     }
 
     final tracks = <ExportifyTrack>[];
 
-    for (int r = 1; r < lines.length; r++) {
+    for (int r = dataStartRow; r < lines.length; r++) {
       final line = lines[r].trim();
       if (line.isEmpty) continue;
 
-      final row = _parseCsvRow(line);
+      final row = _parseCsvRow(line, delimiter: delimiter);
       if (row.isEmpty) continue;
 
       final trackName = _getValue(row, trackNameIdx, defaultValue: 'Unknown Track');
       final artistName = _getValue(row, artistIdx, defaultValue: 'Unknown Artist');
       if (trackName.isEmpty && artistName.isEmpty) continue;
+      // Skip repeated header line if present inside file
+      if (trackName.toLowerCase() == 'track name' || trackName.toLowerCase() == 'title') continue;
 
       final albumName = _getValue(row, albumIdx, defaultValue: '');
       final spotifyId = _getValue(row, spotifyIdIdx, defaultValue: '');
@@ -256,7 +311,7 @@ class ExportifyCsvParser {
     for (final alias in aliases) {
       if (map.containsKey(alias)) return map[alias]!;
       for (final entry in map.entries) {
-        if (entry.key.contains(alias)) return entry.value;
+        if (entry.key == alias || entry.key.contains(alias)) return entry.value;
       }
     }
     return -1;
@@ -300,8 +355,8 @@ class ExportifyCsvParser {
     return lines;
   }
 
-  /// Parses a single CSV row into fields respecting commas inside quotes and escaped quotes
-  static List<String> _parseCsvRow(String line) {
+  /// Parses a single CSV row into fields respecting commas/semicolons inside quotes and escaped quotes
+  static List<String> _parseCsvRow(String line, {String delimiter = ','}) {
     final fields = <String>[];
     final buffer = StringBuffer();
     bool inQuotes = false;
@@ -316,7 +371,7 @@ class ExportifyCsvParser {
         } else {
           inQuotes = !inQuotes;
         }
-      } else if (char == ',' && !inQuotes) {
+      } else if (char == delimiter && !inQuotes) {
         fields.add(buffer.toString());
         buffer.clear();
       } else {
@@ -450,9 +505,22 @@ class SpotifyImportService extends ChangeNotifier {
           song = _resolvedTrackCache[key];
           _cacheHitCount++;
         } else {
-          final query = '${track.trackName} ${track.artistName}'.trim();
+          String cleanTrack = track.trackName
+              .replaceAll(RegExp(r'\s*[\(\[\{](?:feat\.?|with|remaster(?:ed)?|bonus|live|radio edit|deluxe|version|edit|mono|stereo|anniversary).*?[\)\]\}]', caseSensitive: false), '')
+              .replaceAll(RegExp(r'\s*-\s*(?:remaster(?:ed)?|bonus|live|radio edit|deluxe|version|edit).*$', caseSensitive: false), '')
+              .trim();
+          if (cleanTrack.isEmpty) cleanTrack = track.trackName.trim();
+
+          final primaryQuery = cleanTrack.isNotEmpty && track.artistName.isNotEmpty
+              ? '$cleanTrack ${track.artistName}'.trim()
+              : (cleanTrack.isNotEmpty ? cleanTrack : '${track.trackName} ${track.artistName}'.trim());
+
           try {
-            final searchResults = await _musicService.searchSongs(query, page: 1);
+            var searchResults = await _musicService.searchSongs(primaryQuery, page: 1);
+            if (searchResults.isEmpty && cleanTrack.isNotEmpty && track.artistName.isNotEmpty) {
+              // Fallback to title-only search
+              searchResults = await _musicService.searchSongs(cleanTrack, page: 1);
+            }
             if (searchResults.isNotEmpty) {
               song = searchResults.firstWhere(
                 (v) => CanonicalSongDedup.isGenuineSong(v),
@@ -460,7 +528,7 @@ class SpotifyImportService extends ChangeNotifier {
               );
             }
           } catch (e) {
-            debugPrint('[SpotifyImport] Search error for "$query": $e');
+            debugPrint('[SpotifyImport] Search error for "$primaryQuery": $e');
           }
           _resolvedTrackCache[key] = song;
         }

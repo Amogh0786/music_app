@@ -342,6 +342,8 @@ class PreferencesService extends ChangeNotifier {
   }
 
   /// Multi-Seed Daily Mix Synthesizer (Inspired by Spotube)
+  static void Function(bool enabled, Map<int, double> bands)? onEqualizerChanged;
+
   List<DailyMixConfig> getDailyMixConfigs() {
     final top = getTopArtists(limit: 5);
     final primaryLang = _preferredLanguages.isNotEmpty ? _preferredLanguages.first : 'Telugu';
@@ -352,17 +354,17 @@ class PreferencesService extends ChangeNotifier {
       DailyMixConfig(
         title: 'Daily Mix 1',
         subtitle: '$artist1 & Friends',
-        query: artist1,
+        query: '$artist1 hit songs',
       ),
       DailyMixConfig(
         title: 'Daily Mix 2',
         subtitle: '$artist2 Melodies',
-        query: artist2,
+        query: '$artist2 songs',
       ),
       DailyMixConfig(
         title: 'Made For You',
         subtitle: 'Personalized Blend',
-        query: top.isNotEmpty ? '$primaryLang ${top[0]}' : '$primaryLang Super Hits',
+        query: top.isNotEmpty ? '$primaryLang ${top[0]} hit songs' : '$primaryLang Super Hits',
       ),
     ];
   }
@@ -514,6 +516,7 @@ class PreferencesService extends ChangeNotifier {
     _equalizerEnabled = value;
     await _prefs.setBool('equalizerEnabled', value);
     WebPlayerBridge.setEqualizer(_equalizerEnabled, _equalizerBands);
+    onEqualizerChanged?.call(_equalizerEnabled, _equalizerBands);
     notifyListeners();
   }
 
@@ -525,6 +528,7 @@ class PreferencesService extends ChangeNotifier {
     final mapForJson = _equalizerBands.map((k, v) => MapEntry(k.toString(), v));
     await _prefs.setString('equalizerBandsJson', json.encode(mapForJson));
     WebPlayerBridge.setEqualizer(_equalizerEnabled, _equalizerBands);
+    onEqualizerChanged?.call(_equalizerEnabled, _equalizerBands);
     notifyListeners();
   }
 
@@ -536,6 +540,7 @@ class PreferencesService extends ChangeNotifier {
     final mapForJson = _equalizerBands.map((k, v) => MapEntry(k.toString(), v));
     await _prefs.setString('equalizerBandsJson', json.encode(mapForJson));
     WebPlayerBridge.setEqualizer(_equalizerEnabled, _equalizerBands);
+    onEqualizerChanged?.call(_equalizerEnabled, _equalizerBands);
     notifyListeners();
   }
 

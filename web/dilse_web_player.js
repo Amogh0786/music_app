@@ -119,6 +119,8 @@
   window.addEventListener('touchstart', unlockAudioContext, { passive: true, capture: true });
   window.addEventListener('pointerdown', unlockAudioContext, { passive: true, capture: true });
 
+  let limiterNode = null;
+
   function initEqualizerDSP() {
     const ctx = getAudioContext();
     if (!ctx) return;
@@ -127,7 +129,15 @@
     try {
       eqFilters = [];
       masterGainNode = ctx.createGain();
-      masterGainNode.gain.value = 1.0;
+      // +3.5 dB studio makeup gain to fully eliminate insertion loss & low volume
+      masterGainNode.gain.value = 1.48;
+
+      limiterNode = ctx.createDynamicsCompressor();
+      limiterNode.threshold.value = -0.5;
+      limiterNode.knee.value = 12;
+      limiterNode.ratio.value = 12;
+      limiterNode.attack.value = 0.003;
+      limiterNode.release.value = 0.25;
 
       for (let i = 0; i < EQ_FREQUENCIES.length; i++) {
         const filter = ctx.createBiquadFilter();
@@ -143,8 +153,9 @@
         eqFilters[i].connect(eqFilters[i + 1]);
       }
       eqFilters[eqFilters.length - 1].connect(masterGainNode);
-      masterGainNode.connect(ctx.destination);
-      console.log('[DilSe Web Player] Web Audio API Studio Equalizer connected (60Hz, 230Hz, 910Hz, 3.6kHz, 14kHz)');
+      masterGainNode.connect(limiterNode);
+      limiterNode.connect(ctx.destination);
+      console.log('[DilSe Web Player] Web Audio API Studio Equalizer connected (60Hz, 230Hz, 910Hz, 3.6kHz, 14kHz) with Studio Limiter');
     } catch (e) {
       console.warn('[DilSe Web Player] Equalizer DSP initialization warning:', e.message);
     }
@@ -158,7 +169,7 @@
 
     if (deck._dilseSourceConnected) return;
     try {
-      deck.crossOrigin = 'anonymous';
+      // NOTE: crossOrigin is already set on creation in createDeckElement. Do not re-assign mid-playback!
       const source = ctx.createMediaElementSource(deck);
       if (eqFilters.length > 0) {
         source.connect(eqFilters[0]);
@@ -216,7 +227,6 @@
   }
 
   window.dilseSetEqualizer = function (enabled, bandsJson) {
-    const wasEnabled = eqEnabled;
     eqEnabled = Boolean(enabled);
     if (typeof bandsJson === 'string') {
       try {
@@ -226,37 +236,27 @@
       eqBands = bandsJson;
     }
 
-    let hasNonZeroGain = false;
-    for (let i = 0; i < 5; i++) {
-      const val = parseFloat(eqBands[i] !== undefined ? eqBands[i] : eqBands[String(i)]) || 0.0;
-      if (Math.abs(val) > 0.1) {
-        hasNonZeroGain = true;
-        break;
-      }
-    }
+    const ctx = getAudioContext();
+    if (ctx) {
+      unlockAudioContext();
+      initEqualizerDSP();
 
-    if (eqEnabled && hasNonZeroGain) {
-      const ctx = getAudioContext();
-      if (ctx) {
-        unlockAudioContext();
-        initEqualizerDSP();
-        for (let i = 0; i < eqFilters.length; i++) {
-          const val = parseFloat(eqBands[i] !== undefined ? eqBands[i] : eqBands[String(i)]) || 0.0;
-          const targetGain = Math.max(-12.0, Math.min(12.0, val));
-          try {
-            eqFilters[i].gain.setValueAtTime(targetGain, ctx.currentTime);
-          } catch (_) {
-            eqFilters[i].gain.value = targetGain;
-          }
+      for (let i = 0; i < eqFilters.length; i++) {
+        const val = eqEnabled
+            ? (parseFloat(eqBands[i] !== undefined ? eqBands[i] : eqBands[String(i)]) || 0.0)
+            : 0.0;
+        const targetGain = Math.max(-12.0, Math.min(12.0, val));
+        try {
+          eqFilters[i].gain.setTargetAtTime(targetGain, ctx.currentTime, 0.03);
+        } catch (_) {
+          eqFilters[i].gain.value = targetGain;
         }
-        if (deckA) connectDeckToDSP(deckA);
-        if (deckB) connectDeckToDSP(deckB);
       }
-    } else if (!eqEnabled && wasEnabled) {
-      // Revert to direct native hardware audio for 100% background playback stability
-      recreateDecksForDirectAudio();
+
+      if (deckA) connectDeckToDSP(deckA);
+      if (deckB) connectDeckToDSP(deckB);
     }
-    console.log('[DilSe Web Player] Equalizer bands applied. Enabled:', eqEnabled, 'Bands:', eqBands);
+    console.log('[DilSe Web Player] Equalizer applied smoothly. Enabled:', eqEnabled, 'Bands:', eqBands);
   };
 
   // YouTube IFrame Player instance

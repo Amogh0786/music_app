@@ -1,18 +1,36 @@
 import 'preferences_service.dart';
 
 class ApiConfig {
-  static const String _defaultCloudUrl = 'https://music-backend-4kel.onrender.com';
+  static const String _defaultRenderUrl = 'https://music-backend-4kel.onrender.com';
+  static String? _huggingFaceUrl;
+
+  /// Sets or updates the active Hugging Face backend Space URL.
+  static void setHuggingFaceUrl(String? url) {
+    if (url != null && url.trim().isNotEmpty) {
+      final clean = url.trim();
+      _huggingFaceUrl = clean.endsWith('/') ? clean.substring(0, clean.length - 1) : clean;
+    } else {
+      _huggingFaceUrl = null;
+    }
+  }
+
+  /// Returns the configured Hugging Face URL if present.
+  static String? get huggingFaceUrl => _huggingFaceUrl;
 
   /// Returns the base URL for the backend API.
-  /// Uses custom URL if configured by the user, otherwise defaults to the live Render cloud backend.
+  /// Priority:
+  /// 1. Custom URL explicitly configured by the user in Settings
+  /// 2. Active Hugging Face Space backend (if set)
+  /// 3. Render cloud backend (fallback)
   static String get baseUrl {
     final customUrl = PreferencesService().customServerUrl;
     if (customUrl.isNotEmpty) {
-      // Remove trailing slash if present
       return customUrl.endsWith('/') ? customUrl.substring(0, customUrl.length - 1) : customUrl;
     }
-
-    return _defaultCloudUrl;
+    if (_huggingFaceUrl != null && _huggingFaceUrl!.isNotEmpty) {
+      return _huggingFaceUrl!;
+    }
+    return _defaultRenderUrl;
   }
 
   static const String defaultCloudflareWorkerUrl =

@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'lyrics_transliteration_service.dart';
 
 /// Industrial-grade Canonical Song Normalizer & Deduplicator.
 ///
@@ -19,20 +20,24 @@ class CanonicalSongDedup {
     caseSensitive: false,
   );
 
-  // Non-music video noise patterns (speeches, interviews, launch events, cricket, sketches)
+  // Non-music video noise patterns (speeches, interviews, launch events, cricket, sketches, jukeboxes, amateur covers, reels)
   static final RegExp _nonMusicTitleNoise = RegExp(
     r'\b(speech|speech\s*@|press\s+meet|success\s+meet|launch\s+event|song\s+launch|audio\s+launch|'
     r'pre\s+release|trailer|teaser|glimpse|promo|first\s+look|motion\s+poster|title\s+reveal|'
-    r'interview|talk\s+show|podcast|episode|review|reaction|behind\s+the\s+scenes|making\s+of|bts|'
+    r'interview|talk\s+show|podcast|episode|review|reaction|reacting|behind\s+the\s+scenes|making\s+of|bts|'
     r'dances?\s+to|dance\s+performance|dance\s+cover|dance\s+video|stage\s+performance|'
     r'status\s+video|whatsapp\s+status|cricket|ipl|match\s+highlights|trophy|shreyas\s+iyer|'
-    r'full\s+movie|movie\s+scene|comedy\s+scene|action\s+scene|climax\s+scene|scenes|'
-    r'ringtone|bgm\s+only|shorts|#shorts)\b',
+    r'full\s+movie|movie\s+scene|comedy\s+scene|action\s+scene|fight\s+scene|climax\s+scene|scenes|comedy\s+scenes|'
+    r'ringtone|bgm\s+only|shorts|#shorts|shorts\s+video|reels?|tiktok|troll|parody|spoof|'
+    r'jukebox|all\s+songs|audio\s+jukebox|video\s+jukebox|full\s+album|mega\s+jukebox|'
+    r'slowed\s*(?:\+|\band\b)?\s*reverb|speed\s*up|sped\s*up|nightcore|8d\s+audio|bass\s+boosted|'
+    r'acoustic\s+cover|guitar\s+cover|piano\s+cover|vocal\s+cover|making\s+video|bloopers|deleted\s+scenes?|'
+    r'exclusive\s+interview|success\s+celebrations?|song\s+teaser)\b',
     caseSensitive: false,
   );
 
   static final RegExp _nonMusicAuthorNoise = RegExp(
-    r'\b(media|news|tv|filmnagar|events|buzz|sports|daily|cinema\s+news|vlogs?|cricket)\b',
+    r'\b(media|news|tv|filmnagar|events|buzz|sports|daily|cinema\s+news|vlogs?|cricket|gaming|memes?|creations?|edits?)\b',
     caseSensitive: false,
   );
 
@@ -191,11 +196,11 @@ class CanonicalSongDedup {
       }
     }
 
-    // 3. Duration boundaries (authentic music tracks are 75s to 660s)
+    // 3. Duration boundaries (authentic music tracks are 60s to 480s)
     final duration = video.duration;
     if (duration != null) {
       final sec = duration.inSeconds;
-      if (sec > 0 && (sec < 75 || sec > 660)) {
+      if (sec > 0 && (sec < 60 || sec > 480)) {
         return false;
       }
     }
@@ -254,7 +259,7 @@ class CanonicalSongDedup {
     return maxCount >= minCount ? bestLang : null;
   }
 
-  /// Detects language from title or metadata tags (e.g. Telugu, Hindi, Tamil)
+  /// Detects language from title or metadata tags (e.g. Telugu, Hindi, Tamil, English)
   static String? detectLanguage(String text) {
     if (text.isEmpty) return null;
 
@@ -279,8 +284,22 @@ class CanonicalSongDedup {
     if (lower.contains('aditya music') || lower.contains('madhura audio')) return 'telugu';
     if (lower.contains('think music')) return 'tamil';
 
+    // Check Romanized Indic scripts
+    if (LyricsTransliterationService.isRomanizedTelugu(text)) return 'telugu';
+    if (LyricsTransliterationService.isRomanizedIndic(text)) return 'telugu';
+
+    // If text contains recognized English vocabulary and is not Romanized Indic
+    if (_commonEnglishWords.hasMatch(lower)) {
+      return 'english';
+    }
+
     return null;
   }
+
+  static final RegExp _commonEnglishWords = RegExp(
+    r'\b(?:the|of|and|in|to|a|is|that|for|you|it|with|on|as|are|at|be|this|have|from|or|one|had|by|word|but|not|what|all|were|we|when|your|can|said|there|use|an|each|which|she|do|how|their|if|will|up|other|about|out|many|then|them|these|so|some|her|would|make|like|him|into|time|has|look|two|more|write|go|see|number|no|way|could|people|my|than|first|water|been|call|who|oil|its|now|find|long|down|day|did|get|come|made|may|part|love|night|heart|tonight|girl|baby|never|forever|lights|star|dream|world|sun|rain|feel|away|home|life|eyes|sweet|mind|hold|dance|summer|kiss|die|fly|run|fall|again|sky|fire|magic|alone|together|perfect|shape|bad|habits|believer|blinding|closer|dynamite|senorita|stay|memories|peaches|industry|levitating|save|tears)\b',
+    caseSensitive: false,
+  );
 
   /// Evaluates whether lyrics candidate matches the expected language, artist, duration, and context
   static int scoreLyricsCandidate({
@@ -334,7 +353,7 @@ class CanonicalSongDedup {
     }
 
     // 2. Strict metadata language compatibility
-    if (tLang != null && tLang.isNotEmpty && metaLang != null) {
+    if (tLang != null && tLang.isNotEmpty && metaLang != null && metaLang != 'english') {
       if (metaLang != tLang) {
         // Hard reject conflicting dubbed album tags
         return -9999;
@@ -393,9 +412,9 @@ class CanonicalSongDedup {
       }
     }
 
-    // 7. Synced lyrics preference
+    // 7. Synced lyrics preference (massive preference for synced over plain)
     if (synced != null && synced.trim().isNotEmpty) {
-      score += 50;
+      score += 300;
     }
 
     return score;
@@ -482,13 +501,34 @@ class CanonicalSongDedup {
     if (cleanTA == cleanTB) {
       final cleanAA = cleanArtist(artistA);
       final cleanAB = cleanArtist(artistB);
-      if (cleanAA.isNotEmpty && cleanAB.isNotEmpty) {
-        if (cleanAA == cleanAB || cleanAA.contains(cleanAB) || cleanAB.contains(cleanAA)) {
-          return true;
-        }
-        return false;
+      if (cleanAA.isEmpty || cleanAB.isEmpty) return true;
+      if (cleanAA == cleanAB || cleanAA.contains(cleanAB) || cleanAB.contains(cleanAA)) {
+        return true;
       }
-      return true;
+      final tokensAA = tokenize(cleanAA);
+      final tokensAB = tokenize(cleanAB);
+      if (tokensAA.intersection(tokensAB).isNotEmpty) return true;
+
+      // In Indian cinema, one credit may list composer and the other playback singer
+      final isIndicA = detectLanguage(artistA) != null || LyricsTransliterationService.isRomanizedTelugu(artistA);
+      final isIndicB = detectLanguage(artistB) != null || LyricsTransliterationService.isRomanizedTelugu(artistB);
+      if (isIndicA && isIndicB) {
+        return true;
+      }
+      return false;
+    }
+
+    // Check if one title has 'Movie - Song' or 'Song (From Movie)' format matching the other
+    final ctxA = extractSongContext(titleA, artistA);
+    final ctxB = extractSongContext(titleB, artistB);
+    final kwA = (ctxA['contextKeywords'] as List<String>?) ?? [];
+    final kwB = (ctxB['contextKeywords'] as List<String>?) ?? [];
+
+    for (final k in kwA) {
+      if (cleanTitle(k) == cleanTB && cleanTB.length >= 4) return true;
+    }
+    for (final k in kwB) {
+      if (cleanTitle(k) == cleanTA && cleanTA.length >= 4) return true;
     }
 
     // Token-set Jaccard overlap
@@ -499,7 +539,7 @@ class CanonicalSongDedup {
       final jaccard = jaccardSimilarity(tokensA, tokensB);
       if (jaccard >= 0.70) return true;
 
-      // Check if one token set is a complete subset of the other (e.g. "Kesariya" in "Kesariya Dance")
+      // Check if one token set is a complete subset of the other (e.g. 'Kesariya' in 'Kesariya Dance')
       final intersection = tokensA.intersection(tokensB).length;
       final smallerLen = min(tokensA.length, tokensB.length);
       if (smallerLen > 0 && intersection == smallerLen && smallerLen >= 2) {
@@ -519,6 +559,9 @@ class CanonicalSongDedup {
         if (cleanAA == cleanAB || cleanAA.contains(cleanAB) || cleanAB.contains(cleanAA)) {
           return true;
         }
+        final tokensAA = tokenize(cleanAA);
+        final tokensAB = tokenize(cleanAB);
+        if (tokensAA.intersection(tokensAB).isNotEmpty) return true;
       }
     }
 

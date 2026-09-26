@@ -182,6 +182,24 @@ def _search_jiosaavn_api(query: str, limit: int = 20) -> List[dict]:
                 "source": "jiosaavn",
                 "bitrate": "320kbps",
             })
+
+        # Prioritize original movie soundtracks over generic compilation albums
+        import re
+        def _album_rank(item):
+            alb = (item.get("album") or "").lower()
+            is_comp = bool(re.search(
+                r'\b(best\s+of|top\s+hits|hits\s+of|chartbusters|mashup|collection|party\s+songs|love\s+songs|melodies\s+of|top\s+telugu|super\s+hits|golden\s+hits|best\s+telugu\s+songs|latest\s+telugu\s+hits|jukebox)\b',
+                alb
+            ))
+            q_clean = query.lower()
+            q_match = bool(alb and (alb in q_clean or any(word in alb for word in q_clean.split() if len(word) >= 4)))
+            if q_match:
+                return -2
+            if not is_comp:
+                return -1
+            return 1
+
+        formatted.sort(key=_album_rank)
         return formatted
 
 @app.get("/jio/recommendations")
@@ -1004,9 +1022,9 @@ def get_lyrics(title: str, artist: str = "", lang: str = "", duration: int = 0):
             elif diff > 35:
                 score -= 200
 
-        # 6. Synced lyrics preference
+        # 6. Synced lyrics preference (massive preference for synced lyrics)
         if cand.get("syncedLyrics") and str(cand["syncedLyrics"]).strip():
-            score += 50
+            score += 350
 
         return score
 
@@ -1023,7 +1041,7 @@ def get_lyrics(title: str, artist: str = "", lang: str = "", duration: int = 0):
             with urllib.request.urlopen(req, timeout=3) as resp:
                 if resp.status == 200:
                     cand = json.loads(resp.read().decode("utf-8"))
-                    if cand and (cand.get("syncedLyrics") or cand.get("plainLyrics")):
+                    if cand and cand.get("syncedLyrics") and str(cand["syncedLyrics"]).strip():
                         if score_candidate(cand) >= 100:
                             return {"status": "ok", "match": True, "data": cand}
         except Exception:
@@ -1041,7 +1059,9 @@ def get_lyrics(title: str, artist: str = "", lang: str = "", duration: int = 0):
 
     seen_ids = set()
     best_candidate = None
+    best_synced_candidate = None
     best_score = 99  # Minimum score threshold is 100
+    best_synced_score = 99
 
     for u in queries:
         try:
@@ -1059,12 +1079,18 @@ def get_lyrics(title: str, artist: str = "", lang: str = "", duration: int = 0):
                             if score > best_score:
                                 best_score = score
                                 best_candidate = item
-                        if best_candidate and best_score >= 400:
-                            return {"status": "ok", "match": True, "data": best_candidate}
+                            has_synced = bool(item.get("syncedLyrics") and str(item["syncedLyrics"]).strip())
+                            if has_synced and score > best_synced_score:
+                                best_synced_score = score
+                                best_synced_candidate = item
+                        if best_synced_candidate and best_synced_score >= 450:
+                            return {"status": "ok", "match": True, "data": best_synced_candidate}
         except Exception:
             continue
 
-    if best_candidate:
+    if best_synced_candidate and best_synced_score >= 120:
+        return {"status": "ok", "match": True, "data": best_synced_candidate}
+    if best_candidate and best_score >= 100:
         return {"status": "ok", "match": True, "data": best_candidate}
 
     return {"status": "not_found", "match": False, "message": f"No lyrics found for '{clean_title}'"}

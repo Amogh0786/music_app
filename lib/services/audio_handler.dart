@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
@@ -22,10 +23,12 @@ Future<void> initAudioService() async {
 }
 
 class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
-  final AudioPlayer _player = MusicService().audioPlayer;
+  AudioPlayer _player = MusicService().audioPlayer;
+  StreamSubscription<PlaybackEvent>? _playbackEventSub;
+  StreamSubscription<Duration?>? _durationSub;
 
   DilSeAudioHandler() {
-    _notifyAudioHandlerAboutPlaybackEvents();
+    bindPlayer(_player);
   }
 
   void changeMediaItem(MediaItem item) {
@@ -37,8 +40,12 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
     changeMediaItem(mediaItem);
   }
 
-  void _notifyAudioHandlerAboutPlaybackEvents() {
-    _player.playbackEventStream.listen((PlaybackEvent event) {
+  void bindPlayer(AudioPlayer player) {
+    _playbackEventSub?.cancel();
+    _durationSub?.cancel();
+    _player = player;
+
+    _playbackEventSub = _player.playbackEventStream.listen((PlaybackEvent event) {
       final playing = _player.playing;
       playbackState.add(playbackState.value.copyWith(
         controls: [
@@ -68,7 +75,7 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
       ));
     });
 
-    _player.durationStream.listen((Duration? duration) {
+    _durationSub = _player.durationStream.listen((Duration? duration) {
       if (mediaItem.value != null && duration != null) {
         mediaItem.add(mediaItem.value!.copyWith(duration: duration));
       }

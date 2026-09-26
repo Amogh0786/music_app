@@ -372,5 +372,88 @@ void main() {
       );
       expect(scoreTeluguForTamil, lessThan(0), reason: 'Telugu lyrics must be rejected for Tamil target');
     });
+
+    test('areDuplicateSongs rejects identical titles with contradictory/disjoint artists', () {
+      final isDup = CanonicalSongDedup.areDuplicateSongs(
+        titleA: 'Blinding Lights',
+        artistA: 'The Weeknd',
+        titleB: 'Blinding Lights',
+        artistB: 'ZZang KARAOKE',
+      );
+      expect(isDup, isFalse, reason: 'Different non-overlapping artists must not be treated as duplicates');
+    });
+
+    test('detectLanguage detects English via vocabulary check and preserves unlabelled Indic Latin', () {
+      expect(CanonicalSongDedup.detectLanguage('Perfect'), equals('english'));
+      expect(CanonicalSongDedup.detectLanguage('Shape of You'), equals('english'));
+      expect(CanonicalSongDedup.detectLanguage('Love Story'), equals('english'));
+      // Latin script Indic title with no English stopwords should remain unlabelled/neutral
+      expect(CanonicalSongDedup.detectLanguage('Chanti Chanti Gaadi Ra'), isNull);
+    });
+
+    test('scoreLyricsCandidate gives large priority bonus to synced lyrics over plain lyrics', () {
+      final plainCandidate = {
+        'id': 201,
+        'trackName': 'Perfect',
+        'artistName': 'Ed Sheeran',
+        'albumName': 'Divide',
+        'duration': 263.0,
+        'plainLyrics': 'I found a love for me\nDarling, just dive right in...',
+      };
+
+      final syncedCandidate = {
+        'id': 202,
+        'trackName': 'Perfect',
+        'artistName': 'Ed Sheeran',
+        'albumName': 'Divide',
+        'duration': 263.0,
+        'syncedLyrics': '[00:03.10] I found a love for me\n[00:07.50] Darling, just dive right in...',
+      };
+
+      final plainScore = CanonicalSongDedup.scoreLyricsCandidate(
+        targetLang: 'english',
+        targetTitle: 'Perfect',
+        targetArtist: 'Ed Sheeran',
+        targetDuration: 263,
+        candidate: plainCandidate,
+      );
+
+      final syncedScore = CanonicalSongDedup.scoreLyricsCandidate(
+        targetLang: 'english',
+        targetTitle: 'Perfect',
+        targetArtist: 'Ed Sheeran',
+        targetDuration: 263,
+        candidate: syncedCandidate,
+      );
+
+      expect(syncedScore, greaterThan(plainScore + 250),
+          reason: 'Synced lyrics candidate must receive +300 bonus to win over plain lyrics');
+    });
+
+    test('isGenuineSong rejects YouTube non-music video noise', () {
+      Video makeVideo(String title, {Duration? duration}) => Video(
+            VideoId('dQw4w9WgXcQ'),
+            title,
+            'Channel Name',
+            ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+            DateTime.now(),
+            '',
+            null,
+            '',
+            duration ?? const Duration(minutes: 3, seconds: 30),
+            ThumbnailSet('dQw4w9WgXcQ'),
+            null,
+            Engagement(0, null, null),
+            false,
+          );
+
+      expect(CanonicalSongDedup.isGenuineSong(makeVideo('Match Highlights | IND vs AUS Cricket 2024')), isFalse);
+      expect(CanonicalSongDedup.isGenuineSong(makeVideo('Political Speech LIVE in Hyderabad')), isFalse);
+      expect(CanonicalSongDedup.isGenuineSong(makeVideo('Official Trailer 4K Ultra HD')), isFalse);
+      expect(CanonicalSongDedup.isGenuineSong(makeVideo('Viral Dance Reel #shorts')), isFalse);
+      expect(CanonicalSongDedup.isGenuineSong(makeVideo('Podcast Episode 42: How to Code')), isFalse);
+      // Legitimate studio song
+      expect(CanonicalSongDedup.isGenuineSong(makeVideo('Shape of You - Ed Sheeran (Official Music Video)')), isTrue);
+    });
   });
 }

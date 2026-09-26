@@ -167,8 +167,8 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
     _initDisplayMode(isRomanized: isRomanized);
 
     final lines = widget.rawLyrics.split('\n');
-    // Flexible regex matching: [01:23.45], [1:23.456], [01:23:45], [01:23]
-    final tagRegex = RegExp(r'\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]');
+    // Ultra-flexible regex matching: [01:23.45], [1:23.456], [01:23:45], [00:01:23.45], [ 01:23.45 ]
+    final tagRegex = RegExp(r'\[\s*(?:(\d{1,2})\s*:\s*)?(\d{1,2})\s*:\s*(\d{2})(?:[.:](\d{1,4}))?\s*\]');
 
     final parsedSynced = <LyricLine>[];
 
@@ -177,17 +177,19 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
       if (line.isEmpty) continue;
 
       // Ignore LRC header metadata tags: [ar:...], [al:...], [ti:...], [length:...]
-      if (RegExp(r'^\[[a-zA-Z]+:.*\]$').hasMatch(line)) continue;
+      if (RegExp(r'^\[\s*[a-zA-Z]+:.*\]$').hasMatch(line)) continue;
 
       final matches = tagRegex.allMatches(line);
       if (matches.isNotEmpty) {
         final text = line.replaceAll(tagRegex, '').trim();
-        if (text.isEmpty) continue;
 
         final String originalText;
         final String pronunciationText;
 
-        if (isRomanized) {
+        if (text.isEmpty) {
+          originalText = '♪ ♪ ♪';
+          pronunciationText = '♪ ♪ ♪';
+        } else if (isRomanized) {
           // Romanized English lyrics ("Rajamandri raagamajari") are placed in the English pronunciation slot
           pronunciationText = text;
           originalText = LyricsTransliterationService.toTeluguScript(text);
@@ -198,10 +200,14 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
         }
 
         for (final m in matches) {
-          final minutes = int.parse(m.group(1)!);
-          final seconds = int.parse(m.group(2)!);
+          int hours = 0;
+          if (m.group(1) != null) {
+            hours = int.tryParse(m.group(1)!) ?? 0;
+          }
+          final minutes = int.parse(m.group(2)!);
+          final seconds = int.parse(m.group(3)!);
           int milliseconds = 0;
-          final msGroup = m.group(3);
+          final msGroup = m.group(4);
           if (msGroup != null) {
             if (msGroup.length == 1) {
               milliseconds = int.parse(msGroup) * 100;
@@ -213,6 +219,7 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
           }
 
           final duration = Duration(
+            hours: hours,
             minutes: minutes,
             seconds: seconds,
             milliseconds: milliseconds,
@@ -229,7 +236,7 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
     } else {
       // Unsynced Plain Text fallback
       _isSynced = false;
-      final cleanRegex = RegExp(r'\[\d+:\d+(?:[.:]\d+)?\]');
+      final cleanRegex = RegExp(r'\[\s*(?:\d+\s*:\s*)?\d+\s*:\s*\d+(?:[.:]\d+)?\s*\]');
       final cleaned = <LyricLine>[];
       bool prevWasEmpty = false;
 
