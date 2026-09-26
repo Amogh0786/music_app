@@ -89,6 +89,33 @@ export default {
       }
     }
 
+    // 1b. Recommendations: /jio/recommendations?q=...&language=...&limit=20
+    if (url.pathname === '/jio/recommendations') {
+      const query = url.searchParams.get('q') || '';
+      const language = url.searchParams.get('language') || 'telugu';
+      const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') || '20')));
+
+      try {
+        const searchQuery = query.trim() ? `${query.trim()} songs` : `${language} trending songs`;
+        const results = await searchJioSaavn(searchQuery, limit);
+        return new Response(
+          JSON.stringify(results),
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'public, max-age=3600',
+              ...CORS_HEADERS,
+            },
+          }
+        );
+      } catch (err) {
+        return new Response(
+          JSON.stringify([]),
+          { headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        );
+      }
+    }
+
     // 2. Autocomplete Suggestions: /jio/suggestions?q=...&limit=8
     if (url.pathname === '/jio/suggestions') {
       const query = url.searchParams.get('q') || '';
@@ -340,9 +367,9 @@ function scoreLyricsCandidate(cand, targetTitle, targetArtist, targetLang, targe
     }
   }
 
-  // 6. Synced lyrics preference
+  // 6. Synced lyrics preference (large bonus to prioritize synced LRC over plain text)
   if (cand.syncedLyrics && cand.syncedLyrics.trim().length > 0) {
-    score += 50;
+    score += 350;
   }
 
   return score;
@@ -471,7 +498,7 @@ async function searchJioSaavn(query, limit = 20) {
   const data = await res.json();
   const results = data.results || [];
 
-  return results.map((r) => {
+  const formatted = results.map((r) => {
     const mi = r.more_info || {};
     const encMedia = mi.encrypted_media_url || r.encrypted_media_url || '';
     const streamUrl = decryptMediaUrl(encMedia);
@@ -503,6 +530,15 @@ async function searchJioSaavn(query, limit = 20) {
       bitrate: '320kbps',
     };
   });
+
+  const COMPILATION_REGEX = /\b(?:best of|top hits|greatest hits|party mix|mashup|compilation|collection|all time hits|vol\b|volume\b|anniversary|super hits|jukebox|blockbuster)\b/i;
+  formatted.sort((a, b) => {
+    const isAComp = COMPILATION_REGEX.test(a.album || '') ? 1 : 0;
+    const isBComp = COMPILATION_REGEX.test(b.album || '') ? 1 : 0;
+    return isAComp - isBComp;
+  });
+
+  return formatted;
 }
 
 /**

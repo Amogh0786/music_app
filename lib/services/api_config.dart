@@ -50,20 +50,36 @@ class ApiConfig {
     return Uri.parse('$cloudflareWorkerUrl/stream?v=$videoId');
   }
 
+  /// Primary JioSaavn catalog search via Cloudflare Edge Worker (instant, zero cold start).
   static Uri jioSearchUri(String query, {int limit = 20}) {
-    return Uri.parse('$baseUrl/jio/search?q=${Uri.encodeComponent(query)}&limit=$limit');
+    final customUrl = PreferencesService().customServerUrl;
+    final base = customUrl.isNotEmpty
+        ? (customUrl.endsWith('/') ? customUrl.substring(0, customUrl.length - 1) : customUrl)
+        : cloudflareWorkerUrl;
+    return Uri.parse('$base/jio/search?q=${Uri.encodeComponent(query)}&limit=$limit');
   }
 
+  /// Secondary JioSaavn catalog search via Render cloud backend (fallback).
   static Uri jioBackendSearchUri(String query, {int limit = 20}) {
     return Uri.parse('$baseUrl/jio/search?q=${Uri.encodeComponent(query)}&limit=$limit');
   }
 
+  /// Recommendations via Cloudflare Edge Worker (falls back to search on edge or Render).
   static Uri jioRecommendationsUri(String query, {String language = 'telugu', int limit = 20}) {
-    return Uri.parse('$baseUrl/jio/recommendations?q=${Uri.encodeComponent(query)}&language=${Uri.encodeComponent(language)}&limit=$limit');
+    final customUrl = PreferencesService().customServerUrl;
+    final base = customUrl.isNotEmpty
+        ? (customUrl.endsWith('/') ? customUrl.substring(0, customUrl.length - 1) : customUrl)
+        : cloudflareWorkerUrl;
+    return Uri.parse('$base/jio/recommendations?q=${Uri.encodeComponent(query)}&language=${Uri.encodeComponent(language)}&limit=$limit');
   }
 
+  /// Autocomplete search suggestions via Cloudflare Edge Worker (< 100ms response).
   static Uri jioSuggestionsUri(String query, {int limit = 8}) {
-    return Uri.parse('$baseUrl/jio/suggestions?q=${Uri.encodeComponent(query)}&limit=$limit');
+    final customUrl = PreferencesService().customServerUrl;
+    final base = customUrl.isNotEmpty
+        ? (customUrl.endsWith('/') ? customUrl.substring(0, customUrl.length - 1) : customUrl)
+        : cloudflareWorkerUrl;
+    return Uri.parse('$base/jio/suggestions?q=${Uri.encodeComponent(query)}&limit=$limit');
   }
 
   static Uri radioUri(String videoId, {int limit = 30, String? title, String? artist}) {
