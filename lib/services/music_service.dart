@@ -183,8 +183,14 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final cleanTitle = _cleanSongTitle(song.title);
-      final cleanArtist = _cleanArtistName(song.author);
+      final songCtx = CanonicalSongDedup.extractSongContext(song.title, song.author);
+      final cleanTitle = (songCtx['title'] as String?)?.isNotEmpty == true
+          ? songCtx['title'] as String
+          : _cleanSongTitle(song.title);
+      final cleanArtist = (songCtx['artist'] as String?)?.isNotEmpty == true
+          ? songCtx['artist'] as String
+          : _cleanArtistName(song.author);
+      final contextKeywords = (songCtx['contextKeywords'] as List<String>?) ?? [];
       final durationSec = song.duration?.inSeconds;
 
       // High-precision language detection:
@@ -258,7 +264,7 @@ class MusicService extends ChangeNotifier {
         } catch (_) {}
       }
 
-      // Tier 3: Direct lrclib.net fallback with client-side script & language validation
+      // Tier 3: Direct lrclib.net fallback with client-side script, context & language validation
       final safeHeaders = {'Accept': 'application/json'};
       final List<dynamic> candidatePool = [];
 
@@ -274,7 +280,19 @@ class MusicService extends ChangeNotifier {
         } catch (_) {}
       }
 
-      // 3B: Clean Title + Clean Artist search
+      // 3B: Clean Title + Context Keyword search (e.g. movie/album name like "Devara")
+      if (cleanTitle.isNotEmpty && contextKeywords.isNotEmpty) {
+        try {
+          final urlCtx = Uri.parse('https://lrclib.net/api/search?q=${Uri.encodeComponent("$cleanTitle ${contextKeywords.first}")}');
+          final resCtx = await http.get(urlCtx, headers: safeHeaders).timeout(const Duration(seconds: 5));
+          if (resCtx.statusCode == 200) {
+            final list = json.decode(resCtx.body);
+            if (list is List) candidatePool.addAll(list);
+          }
+        } catch (_) {}
+      }
+
+      // 3C: Clean Title + Clean Artist search
       if (cleanTitle.isNotEmpty && cleanArtist.isNotEmpty) {
         try {
           final url1 = Uri.parse('https://lrclib.net/api/search?q=${Uri.encodeComponent("$cleanTitle $cleanArtist")}');
@@ -286,7 +304,7 @@ class MusicService extends ChangeNotifier {
         } catch (_) {}
       }
 
-      // 3C: Title-only search
+      // 3D: Title-only search
       if (cleanTitle.isNotEmpty) {
         try {
           final url2 = Uri.parse('https://lrclib.net/api/search?track_name=${Uri.encodeComponent(cleanTitle)}');
@@ -298,10 +316,10 @@ class MusicService extends ChangeNotifier {
         } catch (_) {}
       }
 
-      // Score all candidates through CanonicalSongDedup to eliminate cross-language dubs
+      // Score all candidates through CanonicalSongDedup with context keywords & strict filtering
       final seenIds = <dynamic>{};
       Map<String, dynamic>? bestCandidate;
-      int bestScore = 99; // Minimum threshold 100
+      int bestScore = 120; // Strict minimum threshold
 
       for (final item in candidatePool) {
         if (item is! Map) continue;
@@ -316,6 +334,7 @@ class MusicService extends ChangeNotifier {
           targetArtist: cleanArtist,
           targetDuration: durationSec,
           candidate: map,
+          contextKeywords: contextKeywords,
         );
 
         if (score > bestScore) {
