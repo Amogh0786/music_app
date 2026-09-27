@@ -484,6 +484,7 @@ class MusicService extends ChangeNotifier {
     try {
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
+      await session.setActive(true);
       session.interruptionEventStream.listen((event) {
         if (event.begin) {
           switch (event.type) {
@@ -601,6 +602,9 @@ class MusicService extends ChangeNotifier {
             if (_isTransitioning || _isCrossfading || !identical(player, _activePlayer)) return;
             _isTransitioning = true;
             try {
+              if (!kIsWeb && audioHandler != null) {
+                audioHandler!.notifyLoading(isLoading: true);
+              }
               if (_loopMode == LoopMode.one) {
                 if (!_hasRepeatedOnce) {
                   _hasRepeatedOnce = true;
@@ -638,6 +642,7 @@ class MusicService extends ChangeNotifier {
 
     _positionCrossfadeSub?.cancel();
     _positionCrossfadeSub = positionStream.listen((pos) {
+      _checkContinuousPlaybackPrewarm(pos);
       _checkCrossfadeTrigger(pos);
     });
 
@@ -806,6 +811,38 @@ class MusicService extends ChangeNotifier {
     await _fadeVolume(from: 0.0, to: 1.0, duration: duration);
   }
 
+  void _checkContinuousPlaybackPrewarm(Duration pos) {
+    if (_isCrossfading || _isTransitioning || _isLoading || _playlist.isEmpty || _currentSong == null) return;
+    if (_loopMode == LoopMode.one) return;
+    final dur = duration;
+    if (dur == null || dur.inSeconds <= 20) return;
+
+    final remaining = dur - pos;
+    // Prewarm next track 10 to 15 seconds before song ends regardless of crossfade setting
+    if (remaining <= const Duration(seconds: 15) && remaining > const Duration(seconds: 5)) {
+      Video? nextTrack;
+      if (_isShuffle && _playlist.length > 1) {
+        if (_shuffleHistoryPointer + 1 < _shuffleHistory.length) {
+          final nextIdx = _shuffleHistory[_shuffleHistoryPointer + 1];
+          if (nextIdx >= 0 && nextIdx < _playlist.length) {
+            nextTrack = _playlist[nextIdx];
+          }
+        }
+      } else if (_currentIndex + 1 < _playlist.length) {
+        nextTrack = _playlist[_currentIndex + 1];
+      } else if (_loopMode == LoopMode.all && _playlist.isNotEmpty) {
+        nextTrack = _playlist[0];
+      }
+
+      if (nextTrack != null) {
+        final trackId = nextTrack.id.value;
+        if (_webStreamUrls[trackId] == null || _webStreamUrls[trackId]!.isEmpty) {
+          _prewarmSingleTrack(nextTrack);
+        }
+      }
+    }
+  }
+
   void _checkCrossfadeTrigger(Duration pos) {
     if (_isCrossfading || _isTransitioning || _isLoading || _currentSong == null) return;
     if (_loopMode == LoopMode.one) return;
@@ -818,8 +855,10 @@ class MusicService extends ChangeNotifier {
     // Only crossfade if there is a next track in queue or one can be preloaded
     if (_playlist.isEmpty) return;
     if (!_isShuffle && _currentIndex + 1 >= _playlist.length) {
-      _checkAndPreloadNextQueue();
-      if (_currentIndex + 1 >= _playlist.length) return;
+      if (_loopMode != LoopMode.all) {
+        _checkAndPreloadNextQueue();
+        if (_currentIndex + 1 >= _playlist.length) return;
+      }
     }
 
     int crossfadeSec = prefs.crossfadeSeconds;
@@ -840,8 +879,15 @@ class MusicService extends ChangeNotifier {
     final remaining = dur - pos;
     // Proactively pre-resolve upcoming track 5 seconds before crossfade initiates so network delay is eliminated
     if (remaining <= Duration(seconds: crossfadeSec + 5) && remaining > Duration(seconds: crossfadeSec)) {
-      if (_currentIndex + 1 < _playlist.length) {
+      if (_isShuffle && _shuffleHistoryPointer + 1 < _shuffleHistory.length) {
+        final nextIdx = _shuffleHistory[_shuffleHistoryPointer + 1];
+        if (nextIdx >= 0 && nextIdx < _playlist.length) {
+          _prewarmSingleTrack(_playlist[nextIdx]);
+        }
+      } else if (_currentIndex + 1 < _playlist.length) {
         _prewarmSingleTrack(_playlist[_currentIndex + 1]);
+      } else if (_loopMode == LoopMode.all && _playlist.isNotEmpty) {
+        _prewarmSingleTrack(_playlist[0]);
       }
     }
 
@@ -1310,9 +1356,16 @@ class MusicService extends ChangeNotifier {
 
   void _prewarmUpcomingTracks(int fromIndex, {int count = 3}) {
     if (_playlist.isEmpty) return;
-    final toIndex = (fromIndex + count).clamp(0, _playlist.length);
-    for (int i = fromIndex; i < toIndex; i++) {
-      final track = _playlist[i];
+    for (int offset = 0; offset < count; offset++) {
+      int idx = fromIndex + offset;
+      if (idx >= _playlist.length) {
+        if (_loopMode == LoopMode.all) {
+          idx = idx % _playlist.length;
+        } else {
+          break;
+        }
+      }
+      final track = _playlist[idx];
       final trackId = track.id.value;
       if (_webStreamUrls[trackId] != null && _webStreamUrls[trackId]!.isNotEmpty) {
         continue;
@@ -1353,9 +1406,17 @@ class MusicService extends ChangeNotifier {
               if (itemThumb.isNotEmpty && !_artworkMap.containsKey(trackId)) {
                 _artworkMap[trackId] = itemThumb;
               }
-              break;
+              return;
             }
           }
+        }
+      }
+
+      // Proactively pre-resolve native YouTube stream candidate if JioSaavn wasn't matched
+      if (!kIsWeb && (_webStreamUrls[trackId] == null || _webStreamUrls[trackId]!.isEmpty)) {
+        final candidates = await _resolveStreamCandidates(trackId);
+        if (candidates.isNotEmpty) {
+          _webStreamUrls[trackId] = candidates.first.url;
         }
       }
     } catch (_) {}
@@ -1430,7 +1491,9 @@ class MusicService extends ChangeNotifier {
     if (!kIsWeb) {
       // Keep just_audio loop mode at off so track completion events are dispatched to Dart,
       // allowing us to repeat the track once and advance cleanly without infinite loops.
-      _audioPlayer.setLoopMode(LoopMode.off);
+      try {
+        _audioPlayer.setLoopMode(LoopMode.off);
+      } catch (_) {}
     }
     notifyListeners();
   }
@@ -2233,6 +2296,20 @@ class MusicService extends ChangeNotifier {
     }
     notifyListeners();
 
+    final mediaItem = MediaItem(
+      id: song.id.value,
+      album: 'DilSe',
+      title: song.title,
+      artist: song.author,
+      artUri: Uri.tryParse(getHdThumbnail(song.id.value)),
+      duration: song.duration,
+    );
+
+    if (!kIsWeb && audioHandler != null) {
+      audioHandler!.changeMediaItem(mediaItem);
+      audioHandler!.notifyLoading(isLoading: true);
+    }
+
     // Trigger palette extraction asynchronously with race-condition guard
     _extractPalette(song.id.value);
 
@@ -2298,19 +2375,6 @@ class MusicService extends ChangeNotifier {
           }
         }
       } catch (_) {}
-    }
-
-    final mediaItem = MediaItem(
-      id: song.id.value,
-      album: 'DilSe',
-      title: song.title,
-      artist: song.author,
-      artUri: Uri.tryParse(getHdThumbnail(song.id.value)),
-      duration: song.duration,
-    );
-
-    if (!kIsWeb && audioHandler != null) {
-      audioHandler!.changeMediaItem(mediaItem);
     }
 
     try {
@@ -3552,5 +3616,10 @@ class MusicService extends ChangeNotifier {
   @visibleForTesting
   void setIsCrossfadingForTesting(bool value) {
     _isCrossfading = value;
+  }
+
+  @visibleForTesting
+  void setLoopModeForTesting(LoopMode mode) {
+    _loopMode = mode;
   }
 }

@@ -13,8 +13,8 @@ Future<void> initAudioService() async {
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.example.music_app.channel.audio_playback_v3',
       androidNotificationChannelName: 'DilSe Music Playback',
-      androidNotificationOngoing: true,
-      androidStopForegroundOnPause: true,
+      androidNotificationOngoing: false,
+      androidStopForegroundOnPause: false,
       androidShowNotificationBadge: true,
       androidNotificationIcon: 'drawable/ic_stat_music',
       notificationColor: Color(0xFFFA2D48),
@@ -33,6 +33,20 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
 
   void changeMediaItem(MediaItem item) {
     mediaItem.add(item);
+  }
+
+  /// Proactively keeps Android Foreground Service alive during screen-off song transitions.
+  void notifyLoading({bool isLoading = true}) {
+    playbackState.add(playbackState.value.copyWith(
+      processingState: isLoading ? AudioProcessingState.loading : AudioProcessingState.ready,
+      playing: true,
+      controls: [
+        MediaControl.skipToPrevious,
+        MediaControl.pause,
+        MediaControl.stop,
+        MediaControl.skipToNext,
+      ],
+    ));
   }
 
   @override
