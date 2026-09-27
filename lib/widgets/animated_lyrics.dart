@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/lyrics_transliteration_service.dart';
 import '../services/preferences_service.dart';
+import '../services/screen_wake_service.dart';
 
 enum LyricsDisplayMode {
   original,
@@ -63,6 +64,7 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
     super.initState();
     _parseLyrics();
     _subscribeToPosition();
+    ScreenWakeService.enableWakeLock('animated_lyrics');
   }
 
   void _initDisplayMode({bool isRomanized = false}) {
@@ -133,6 +135,7 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
 
   @override
   void dispose() {
+    ScreenWakeService.disableWakeLock('animated_lyrics');
     _positionSubscription?.cancel();
     _userScrollResumeTimer?.cancel();
     _scrollController.dispose();

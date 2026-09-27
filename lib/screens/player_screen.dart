@@ -14,6 +14,7 @@ import '../widgets/waveform_scrubber.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/equalizer_bottom_sheet.dart';
 import '../widgets/animated_lyrics.dart';
+import '../services/screen_wake_service.dart';
 
 
 class PlayerScreen extends StatefulWidget {
@@ -51,6 +52,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   void dispose() {
+    ScreenWakeService.disableWakeLock('lyrics_screen');
     _pageController.removeListener(_onPageScrolled);
     _pageController.dispose();
     _musicService.removeListener(_onStateChanged);
@@ -102,7 +104,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _showLyrics = !_showLyrics;
     });
     if (_showLyrics) {
+      ScreenWakeService.enableWakeLock('lyrics_screen');
       _musicService.fetchLyrics(song);
+    } else {
+      ScreenWakeService.disableWakeLock('lyrics_screen');
     }
   }
 

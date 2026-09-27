@@ -3342,6 +3342,102 @@ class MusicService extends ChangeNotifier {
     }
   }
 
+  Future<void> playMostPlayedSong(
+    Map<String, dynamic> songData, {
+    List<Map<String, dynamic>>? allSongs,
+    int? startIndex,
+  }) async {
+    final list = allSongs ?? PreferencesService().mostPlayedSongs;
+    if (list.isEmpty) return;
+
+    for (final item in list) {
+      final id = (item['id'] as String?) ?? '';
+      final thumb = (item['thumbnail'] as String?) ?? '';
+      final stream = (item['streamUrl'] as String?) ?? '';
+      if (id.isNotEmpty) {
+        if (thumb.isNotEmpty) _artworkMap[id] = thumb;
+        if (stream.isNotEmpty) _webStreamUrls[id] = stream;
+      }
+    }
+
+    VideoId safeVideoId(String rawId) {
+      try {
+        return VideoId(rawId);
+      } catch (_) {
+        final padded = '${rawId}___________'.substring(0, 11);
+        try {
+          return VideoId(padded);
+        } catch (_) {
+          return VideoId('00000000000');
+        }
+      }
+    }
+
+    _playlist = list.map((item) => Video(
+      safeVideoId((item['id'] as String?) ?? ''),
+      (item['title'] as String?) ?? 'Unknown Title',
+      (item['author'] as String?) ?? 'Unknown Artist',
+      ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+      DateTime.now(),
+      '',
+      null,
+      '',
+      null,
+      ThumbnailSet((item['id'] as String?) ?? ''),
+      null,
+      Engagement(0, null, null),
+      false,
+    )).toList();
+
+    if (startIndex != null && startIndex >= 0 && startIndex < _playlist.length) {
+      _currentIndex = startIndex;
+    } else {
+      _currentIndex = list.indexWhere((item) => item['id'] == songData['id']);
+      if (_currentIndex == -1) _currentIndex = 0;
+    }
+
+    if (_playlist.isNotEmpty) {
+      _seedPlaylistArtists = _extractArtistsFromSongs(_playlist);
+      _playlistArtistRecommendationOffset = 0;
+      _prewarmUpcomingTracks(_currentIndex, count: 4);
+      await playSong(_playlist[_currentIndex], updateQueue: false);
+    }
+  }
+
+  void toggleLikeMap(Map<String, dynamic> song) {
+    final id = (song['id'] as String?) ?? '';
+    if (id.isEmpty) return;
+    final title = (song['title'] as String?) ?? 'Unknown';
+    final author = (song['author'] as String?) ?? 'Unknown';
+    VideoId safeVideoId(String rawId) {
+      try {
+        return VideoId(rawId);
+      } catch (_) {
+        final padded = '${rawId}___________'.substring(0, 11);
+        try {
+          return VideoId(padded);
+        } catch (_) {
+          return VideoId('00000000000');
+        }
+      }
+    }
+    toggleLike(Video(
+      safeVideoId(id),
+      title,
+      author,
+      ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+      DateTime.now(),
+      '',
+      null,
+      '',
+      null,
+      ThumbnailSet(id),
+      null,
+      Engagement(0, null, null),
+      false,
+    ));
+  }
+
   Future<int> getTotalDownloadedBytes() async {
     int total = 0;
     for (final song in _downloadedSongs) {

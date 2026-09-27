@@ -93,6 +93,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     super.build(context);
     final downloaded = _musicService.downloadedSongs;
     final liked = _musicService.likedSongs;
+    final mostPlayed = _prefs.mostPlayedSongs;
     final history = _prefs.listeningHistory;
     final primaryColor = Theme.of(context).primaryColor;
 
@@ -101,7 +102,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     final storageFraction = (usedMB / allocatedMB).clamp(0.0, 1.0);
 
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         backgroundColor: const Color(0xFF0B0B0F),
         appBar: AppBar(
@@ -261,6 +262,8 @@ class _LibraryScreenState extends State<LibraryScreen>
 
                 // Modern Pill TabBar
                 TabBar(
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
                   indicatorColor: primaryColor,
                   indicatorWeight: 3,
                   indicatorSize: TabBarIndicatorSize.label,
@@ -278,6 +281,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                   tabs: [
                     Tab(text: 'Downloaded (${downloaded.length})'),
                     Tab(text: 'Liked (${liked.length})'),
+                    Tab(text: 'Most Played (${mostPlayed.length})'),
                     Tab(text: 'Playlists (${_musicService.customPlaylists.length})'),
                     Tab(text: 'History (${history.length})'),
                   ],
@@ -501,7 +505,228 @@ class _LibraryScreenState extends State<LibraryScreen>
                     },
                   ),
 
-            // TAB 3: PLAYLISTS
+            // TAB 3: MOST PLAYED SONGS (Top 100 on-device playback streams)
+            mostPlayed.isEmpty
+                ? _buildEmptyState(
+                    icon: Icons.local_fire_department_rounded,
+                    title: 'No most played songs yet',
+                    subtitle: 'Songs you stream will be ranked here up to your top 100 most played in real time.',
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.only(bottom: 160, top: 12),
+                    itemCount: mostPlayed.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildActionHeader(
+                              count: mostPlayed.length,
+                              onPlayAll: () {
+                                HapticFeedback.lightImpact();
+                                _musicService.playMostPlayedSong(mostPlayed.first, allSongs: mostPlayed, startIndex: 0);
+                              },
+                              onShuffle: () {
+                                HapticFeedback.lightImpact();
+                                _musicService.toggleShuffle();
+                                _musicService.playMostPlayedSong(mostPlayed.first, allSongs: mostPlayed);
+                              },
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    'TOP ${mostPlayed.length} STREAMED TRACKS',
+                                    style: const TextStyle(
+                                      color: Colors.white54,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.1,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: primaryColor.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: primaryColor.withValues(alpha: 0.35)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          width: 6,
+                                          height: 6,
+                                          decoration: BoxDecoration(
+                                            color: primaryColor,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 5),
+                                        Text(
+                                          'Live Sync',
+                                          style: TextStyle(
+                                            color: primaryColor,
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+
+                      final song = mostPlayed[index - 1];
+                      final rank = index;
+                      final isTop3 = rank <= 3;
+                      final playCount = (song['playCount'] as num?)?.toInt() ?? 1;
+                      final songId = (song['id'] as String?) ?? '';
+                      final isCurrent = _musicService.currentSong?.id.value == songId;
+                      final isLiked = _musicService.isLiked(songId);
+
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        leading: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 26,
+                              child: Center(
+                                child: Text(
+                                  '$rank',
+                                  style: TextStyle(
+                                    color: isTop3 ? primaryColor : Colors.white54,
+                                    fontWeight: isTop3 ? FontWeight.w900 : FontWeight.w600,
+                                    fontSize: rank > 99 ? 12 : 14,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: SizedBox(
+                                width: 52,
+                                height: 52,
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    Image.network(
+                                      song['thumbnail'] ?? '',
+                                      fit: BoxFit.cover,
+                                      cacheWidth: 120,
+                                      cacheHeight: 120,
+                                      errorBuilder: (_, _, _) => Container(
+                                        color: const Color(0xFF1E1E28),
+                                        child: const Icon(Icons.music_note, color: Colors.white54),
+                                      ),
+                                    ),
+                                    if (isCurrent)
+                                      Container(
+                                        color: Colors.black54,
+                                        child: Center(
+                                          child: Icon(
+                                            _musicService.isPlaying ? Icons.equalizer_rounded : Icons.play_arrow_rounded,
+                                            color: primaryColor,
+                                            size: 24,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        title: Text(
+                          song['title'] ?? 'Unknown Track',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: isCurrent ? primaryColor : Colors.white,
+                            fontSize: 14.5,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        subtitle: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                song['author'] ?? 'Unknown Artist',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.6),
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: isTop3 ? primaryColor.withValues(alpha: 0.15) : const Color(0xFF1E1E28),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: isTop3 ? primaryColor.withValues(alpha: 0.4) : Colors.white12,
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.play_arrow_rounded,
+                                    size: 13,
+                                    color: isTop3 ? primaryColor : Colors.white60,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    '$playCount ${playCount == 1 ? "play" : "plays"}',
+                                    style: TextStyle(
+                                      color: isTop3 ? Colors.white : Colors.white70,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              icon: Icon(
+                                isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                color: isLiked ? const Color(0xFFFA2D48) : Colors.white38,
+                                size: 20,
+                              ),
+                              onPressed: () {
+                                HapticFeedback.selectionClick();
+                                _musicService.toggleLikeMap(song);
+                              },
+                            ),
+                          ],
+                        ),
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          _musicService.playMostPlayedSong(song, allSongs: mostPlayed, startIndex: index - 1);
+                        },
+                      );
+                    },
+                  ),
+
+            // TAB 4: PLAYLISTS
             _musicService.customPlaylists.isEmpty
                 ? _buildEmptyState(
                     icon: Icons.featured_play_list_outlined,

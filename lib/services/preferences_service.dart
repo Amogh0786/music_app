@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'canonical_song_dedup.dart';
+import 'playlist_artist_filter.dart';
 import 'spotify_import_service.dart';
 import 'web_player_bridge.dart';
 
@@ -90,6 +91,11 @@ class PreferencesService extends ChangeNotifier {
   // Listening Preferences & Play Counts (Local Private Taste Matrix)
   final Map<String, int> _artistPlayCounts = {};
   final Map<String, int> _artistSkipCounts = {};
+  // Real-time On-Device Playback Stream Counts (Tracks actual listening sessions)
+  final Map<String, int> _realPlaybackCounts = {};
+  // Real-time Most Played Tracks (Top 100 on-device playback streams)
+  final Map<String, Map<String, dynamic>> _mostPlayedSongs = {};
+  int _topArtistPlayCount = 0;
   List<String> _preferredLanguages = ['Hindi', 'Telugu', 'Tamil', 'Punjabi', 'English'];
   String _mostPlayedArtist = '';
   UserAudioProfile _audioProfile = const UserAudioProfile();
@@ -118,8 +124,32 @@ class PreferencesService extends ChangeNotifier {
   List<Map<String, String>> get listeningHistory => _listeningHistory;
   List<String> get preferredLanguages => _preferredLanguages;
   String get mostPlayedArtist => _mostPlayedArtist;
+  int get topArtistPlayCount => _topArtistPlayCount;
+  Map<String, int> get realPlaybackCounts => Map.unmodifiable(_realPlaybackCounts);
+
+  /// Top 100 Most Played Tracks on this device, sorted descending by stream count
+  List<Map<String, dynamic>> get mostPlayedSongs {
+    final list = _mostPlayedSongs.values.map((item) => Map<String, dynamic>.from(item)).toList();
+    list.sort((a, b) {
+      final countA = (a['playCount'] as num?)?.toInt() ?? 0;
+      final countB = (b['playCount'] as num?)?.toInt() ?? 0;
+      if (countB != countA) {
+        return countB.compareTo(countA);
+      }
+      final dateA = (a['lastPlayedAt'] as String?) ?? '';
+      final dateB = (b['lastPlayedAt'] as String?) ?? '';
+      return dateB.compareTo(dateA);
+    });
+    return list.take(100).toList();
+  }
+
   UserAudioProfile get audioProfile => _audioProfile;
-  int get totalPlays => _artistPlayCounts.values.fold(0, (a, b) => a + b);
+  int get totalPlays {
+    final realTotal = _realPlaybackCounts.values.fold(0, (a, b) => a + b);
+    if (realTotal > 0) return realTotal;
+    if (_listeningHistory.isNotEmpty) return _listeningHistory.length;
+    return _artistPlayCounts.values.fold(0, (a, b) => a + b);
+  }
   int get totalSkips => _artistSkipCounts.values.fold(0, (a, b) => a + b);
 
   Future<void> init() async {
@@ -185,6 +215,55 @@ class PreferencesService extends ChangeNotifier {
       } catch (_) {}
     }
 
+    final realPlaysJson = _prefs.getString('realPlaybackCountsJson');
+    if (realPlaysJson != null && realPlaysJson.isNotEmpty) {
+      try {
+        final Map<String, dynamic> decoded = json.decode(realPlaysJson);
+        decoded.forEach((k, v) => _realPlaybackCounts[k] = (v as num).toInt());
+      } catch (_) {}
+    }
+
+    // If realPlaybackCounts is empty, seed from listening history
+    if (_realPlaybackCounts.isEmpty && _listeningHistory.isNotEmpty) {
+      _rebuildRealPlaybackCountsFromHistory();
+    }
+
+    _recalculateTopArtist();
+
+    final mostPlayedJson = _prefs.getString('mostPlayedSongsJson');
+    if (mostPlayedJson != null && mostPlayedJson.isNotEmpty) {
+      try {
+        final Map<String, dynamic> decoded = json.decode(mostPlayedJson);
+        decoded.forEach((k, v) {
+          if (v is Map) {
+            _mostPlayedSongs[k] = Map<String, dynamic>.from(v);
+          }
+        });
+      } catch (_) {}
+    }
+
+    // If _mostPlayedSongs is empty, backfill from _listeningHistory
+    if (_mostPlayedSongs.isEmpty && _listeningHistory.isNotEmpty) {
+      for (final song in _listeningHistory) {
+        final id = song['id'];
+        if (id != null && id.isNotEmpty) {
+          final existing = _mostPlayedSongs[id];
+          if (existing != null) {
+            existing['playCount'] = ((existing['playCount'] as int?) ?? 1) + 1;
+          } else {
+            _mostPlayedSongs[id] = {
+              'id': id,
+              'title': song['title'] ?? 'Unknown Track',
+              'author': song['author'] ?? 'Unknown Artist',
+              'thumbnail': song['thumbnail'] ?? '',
+              'playCount': 1,
+              'lastPlayedAt': song['playedAt'] ?? DateTime.now().toIso8601String(),
+            };
+          }
+        }
+      }
+    }
+
     final skipsJson = _prefs.getString('artistSkipCountsJson');
     if (skipsJson != null && skipsJson.isNotEmpty) {
       try {
@@ -210,26 +289,130 @@ class PreferencesService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> recordSongPlay(String artist, String title) async {
-    if (!_isInitialized) return;
-    if (artist.trim().isEmpty) return;
+  /// Canonicalizes artist names with popular Indian/global aliases and proper formatting
+  static String _canonicalizeArtistName(String raw) {
+    final clean = PlaylistArtistFilter.normalize(raw);
+    if (clean == 'dsp' || clean == 'devi sri prasad') return 'Devi Sri Prasad';
+    if (clean == 'anirudh' || clean == 'anirudh ravichander') return 'Anirudh Ravichander';
+    if (clean == 'sid' || clean == 'sid sriram') return 'Sid Sriram';
+    if (clean == 'arijit' || clean == 'arijit singh') return 'Arijit Singh';
+    if (clean == 'arr' || clean == 'ar rahman' || clean == 'a r rahman' || clean == 'rahman') return 'A.R. Rahman';
+    if (clean == 'shreya' || clean == 'shreya ghoshal') return 'Shreya Ghoshal';
+    if (clean == 'thaman' || clean == 'thaman s' || clean == 's thaman') return 'Thaman S';
+    if (clean == 'spb' || clean == 's p balasubrahmanyam' || clean == 'balasubrahmanyam') return 'S.P. Balasubrahmanyam';
+    if (clean == 'keeravani' || clean == 'm m keeravani' || clean == 'keeravaani') return 'M.M. Keeravaani';
+    if (clean == 'pritam' || clean == 'pritam chakraborty') return 'Pritam';
+    if (clean == 'yuvan' || clean == 'yuvan shankar raja') return 'Yuvan Shankar Raja';
+    if (clean == 'santhosh' || clean == 'santhosh narayanan') return 'Santhosh Narayanan';
+    if (clean == 'harris' || clean == 'harris jayaraj') return 'Harris Jayaraj';
+    if (clean == 'shilpa' || clean == 'shilpa rao') return 'Shilpa Rao';
+    if (clean == 'jonita' || clean == 'jonita gandhi') return 'Jonita Gandhi';
+    if (clean == 'ilayaraja' || clean == 'ilaiyaraaja') return 'Ilaiyaraaja';
 
-    final count = (_artistPlayCounts[artist] ?? 0) + 1;
-    _artistPlayCounts[artist] = count;
-    await _prefs.setString('artistPlayCountsJson', json.encode(_artistPlayCounts));
+    final words = raw.trim().split(RegExp(r'\s+'));
+    return words.map((w) {
+      if (w.isEmpty) return '';
+      return '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}';
+    }).join(' ');
+  }
 
-    // Recalculate top artist
-    String topArtist = _mostPlayedArtist;
+  /// Resolves genuine artist names from song metadata, stripping channel/record label noise
+  static List<String> _resolveCanonicalArtists(String rawAuthor, String rawTitle) {
+    final artists = PlaylistArtistFilter.extractArtistsFromSong({
+      'author': rawAuthor,
+      'title': rawTitle,
+    });
+    if (artists.isNotEmpty) {
+      return artists.map((a) => _canonicalizeArtistName(a)).toSet().toList();
+    }
+    final cleaned = CanonicalSongDedup.cleanArtist(rawAuthor);
+    if (cleaned.isNotEmpty) {
+      return [_canonicalizeArtistName(cleaned)];
+    }
+    if (rawAuthor.trim().isNotEmpty) {
+      return [_canonicalizeArtistName(rawAuthor.trim())];
+    }
+    return [];
+  }
+
+  void _rebuildRealPlaybackCountsFromHistory() {
+    for (final track in _listeningHistory) {
+      final author = track['author'] ?? '';
+      final title = track['title'] ?? '';
+      final artists = _resolveCanonicalArtists(author, title);
+      for (int i = 0; i < artists.length; i++) {
+        final a = artists[i];
+        final inc = (i == 0) ? 2 : 1;
+        _realPlaybackCounts[a] = (_realPlaybackCounts[a] ?? 0) + inc;
+      }
+    }
+  }
+
+  void _recalculateTopArtist() {
+    String topArtist = '';
     int maxCount = 0;
-    _artistPlayCounts.forEach((key, val) {
-      if (val > maxCount) {
-        maxCount = val;
-        topArtist = key;
+
+    // 1. Primary: Real playback streams on this device
+    _realPlaybackCounts.forEach((artist, count) {
+      if (count > maxCount) {
+        maxCount = count;
+        topArtist = artist;
       }
     });
 
-    if (topArtist != _mostPlayedArtist) {
-      _mostPlayedArtist = topArtist;
+    // 2. Fallback: Taste matrix (if no on-device plays yet)
+    if (maxCount == 0) {
+      _artistPlayCounts.forEach((artist, count) {
+        final norm = PlaylistArtistFilter.normalize(artist);
+        if (norm == 'aditya music' || norm == 'tseries' || norm == 't-series' || norm == 'sony music' || norm == 'zee music') return;
+        if (count > maxCount) {
+          maxCount = count;
+          topArtist = _canonicalizeArtistName(artist);
+        }
+      });
+    }
+
+    _topArtistPlayCount = maxCount;
+    _mostPlayedArtist = topArtist;
+  }
+
+  /// Returns user's top played artists sorted descending by stream count
+  List<MapEntry<String, int>> getTopPlayedArtists({int limit = 5}) {
+    if (_realPlaybackCounts.isNotEmpty) {
+      final sorted = _realPlaybackCounts.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      return sorted.take(limit).toList();
+    }
+    final sorted = _artistPlayCounts.entries
+        .where((e) {
+          final norm = PlaylistArtistFilter.normalize(e.key);
+          return norm != 'aditya music' && norm != 'tseries' && norm != 't-series' && norm != 'sony music';
+        })
+        .map((e) => MapEntry(_canonicalizeArtistName(e.key), e.value))
+        .toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return sorted.take(limit).toList();
+  }
+
+  Future<void> recordSongPlay(String rawAuthor, String rawTitle) async {
+    if (!_isInitialized) return;
+    if (rawAuthor.trim().isEmpty && rawTitle.trim().isEmpty) return;
+
+    final artists = _resolveCanonicalArtists(rawAuthor, rawTitle);
+    if (artists.isEmpty) return;
+
+    for (int i = 0; i < artists.length; i++) {
+      final a = artists[i];
+      final increment = (i == 0) ? 2 : 1;
+      _realPlaybackCounts[a] = (_realPlaybackCounts[a] ?? 0) + increment;
+      _artistPlayCounts[a] = (_artistPlayCounts[a] ?? 0) + increment;
+    }
+
+    _recalculateTopArtist();
+
+    await _prefs.setString('realPlaybackCountsJson', json.encode(_realPlaybackCounts));
+    await _prefs.setString('artistPlayCountsJson', json.encode(_artistPlayCounts));
+    if (_mostPlayedArtist.isNotEmpty) {
       await _prefs.setString('mostPlayedArtist', _mostPlayedArtist);
     }
     notifyListeners();
@@ -622,6 +805,77 @@ class PreferencesService extends ChangeNotifier {
       _listeningHistory = _listeningHistory.sublist(0, 50);
     }
     await _prefs.setString('listeningHistoryJson', json.encode(_listeningHistory));
+
+    // Record in real-time Most Played tracks
+    _recordSongInMostPlayed(song);
+    await _prefs.setString('mostPlayedSongsJson', json.encode(_mostPlayedSongs));
+
+    notifyListeners();
+  }
+
+  void _recordSongInMostPlayed(Map<String, String> song) {
+    final id = song['id'] ?? '';
+    if (id.isEmpty) return;
+    final title = song['title'] ?? 'Unknown Track';
+    final author = song['author'] ?? 'Unknown Artist';
+    final thumbnail = song['thumbnail'] ?? '';
+
+    // Check if key already exists by ID
+    String targetKey = id;
+    if (!_mostPlayedSongs.containsKey(id)) {
+      final normTitle = CanonicalSongDedup.cleanTitle(title);
+      final normAuthor = CanonicalSongDedup.cleanArtist(author);
+      if (normTitle.isNotEmpty) {
+        for (final entry in _mostPlayedSongs.entries) {
+          final existingTitle = CanonicalSongDedup.cleanTitle((entry.value['title'] as String?) ?? '');
+          final existingAuthor = CanonicalSongDedup.cleanArtist((entry.value['author'] as String?) ?? '');
+          if (normTitle == existingTitle) {
+            if (normAuthor.isEmpty ||
+                existingAuthor.isEmpty ||
+                normAuthor == existingAuthor ||
+                normAuthor.contains(existingAuthor) ||
+                existingAuthor.contains(normAuthor)) {
+              targetKey = entry.key;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    final existing = _mostPlayedSongs[targetKey];
+    if (existing != null) {
+      final currentCount = (existing['playCount'] as num?)?.toInt() ?? 0;
+      existing['playCount'] = currentCount + 1;
+      existing['lastPlayedAt'] = DateTime.now().toIso8601String();
+      if (((existing['thumbnail'] as String?)?.isEmpty ?? true) && thumbnail.isNotEmpty) {
+        existing['thumbnail'] = thumbnail;
+      }
+    } else {
+      _mostPlayedSongs[targetKey] = {
+        'id': id,
+        'title': title,
+        'author': author,
+        'thumbnail': thumbnail,
+        'playCount': 1,
+        'lastPlayedAt': DateTime.now().toIso8601String(),
+      };
+    }
+  }
+
+  /// Manually record a song playback stream into Most Played
+  Future<void> recordSongPlayback(Map<String, String> song) async {
+    if (!_isInitialized) return;
+    _recordSongInMostPlayed(song);
+    await _prefs.setString('mostPlayedSongsJson', json.encode(_mostPlayedSongs));
+    notifyListeners();
+  }
+
+  /// Clears the real-time most played songs collection
+  Future<void> clearMostPlayedSongs() async {
+    if (!_isInitialized) return;
+    _mostPlayedSongs.clear();
+    await _prefs.remove('mostPlayedSongsJson');
     notifyListeners();
   }
 
@@ -658,5 +912,17 @@ class PreferencesService extends ChangeNotifier {
     _scrubberStyle = style;
     await _prefs.setString('scrubberStyle', style.name);
     notifyListeners();
+  }
+
+  @visibleForTesting
+  void resetForTesting() {
+    _realPlaybackCounts.clear();
+    _artistPlayCounts.clear();
+    _artistSkipCounts.clear();
+    _listeningHistory.clear();
+    _searchHistory.clear();
+    _mostPlayedSongs.clear();
+    _mostPlayedArtist = '';
+    _topArtistPlayCount = 0;
   }
 }
