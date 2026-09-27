@@ -670,6 +670,11 @@ class MusicService extends ChangeNotifier {
   void _cancelActiveFade() {
     _fadeSession++;
     _isCrossfading = false;
+    try {
+      _standbyPlayer.stop();
+      _standbyPlayer.setVolume(1.0);
+      _activePlayer.setVolume(1.0);
+    } catch (_) {}
   }
 
   Future<void> _setVolume(double vol) async {
@@ -705,35 +710,96 @@ class MusicService extends ChangeNotifier {
     }
   }
 
-  Future<void> _dualDeckCrossfadeNative({required Duration duration}) async {
+  Future<void> _dualDeckCrossfadeNative({
+    required AudioPlayer outgoingPlayer,
+    required AudioPlayer incomingPlayer,
+    required Duration duration,
+  }) async {
     final session = ++_fadeSession;
+    _isCrossfading = true;
     const int steps = 25;
     final int stepMs = (duration.inMilliseconds / steps).clamp(20, 150).toInt();
     try {
       for (int i = 0; i <= steps; i++) {
-        if (_fadeSession != session) return;
+        if (_fadeSession != session) {
+          debugPrint('[Crossfade] Fade session cancelled ($session != $_fadeSession)');
+          return;
+        }
         final double progress = i / steps;
-        // Equal-power crossfade curve
+        // Equal-power crossfade curve: constant acoustic energy across transition
         final double outVol = cos(progress * 0.5 * pi);
         final double inVol = sin(progress * 0.5 * pi);
-        await _activePlayer.setVolume(outVol.clamp(0.0, 1.0));
-        await _standbyPlayer.setVolume(inVol.clamp(0.0, 1.0));
+        await Future.wait([
+          outgoingPlayer.setVolume(outVol.clamp(0.0, 1.0)),
+          incomingPlayer.setVolume(inVol.clamp(0.0, 1.0)),
+        ]);
         await Future.delayed(Duration(milliseconds: stepMs));
       }
-    } catch (_) {}
-    if (_fadeSession == session) {
-      await _activePlayer.stop();
-      await _activePlayer.setVolume(1.0);
-      await _standbyPlayer.setVolume(1.0);
-      // Swap active and standby decks
-      final oldActive = _activePlayer;
-      _activePlayer = _standbyPlayer;
-      _standbyPlayer = oldActive;
-      if (audioHandler is DilSeAudioHandler) {
-        (audioHandler as DilSeAudioHandler).bindPlayer(_activePlayer);
+    } catch (e) {
+      debugPrint('[Crossfade] Error in native crossfade ramp: $e');
+    } finally {
+      if (_fadeSession == session) {
+        try {
+          await outgoingPlayer.stop();
+          await outgoingPlayer.setVolume(1.0);
+        } catch (_) {}
+        try {
+          await incomingPlayer.setVolume(1.0);
+        } catch (_) {}
+        _isCrossfading = false;
+        debugPrint('[Crossfade] Native crossfade completed successfully.');
       }
-      notifyListeners();
     }
+  }
+
+  Future<void> _startDualDeckCrossfade() async {
+    final outgoingPlayer = _activePlayer;
+    final incomingPlayer = _standbyPlayer;
+
+    try {
+      await incomingPlayer.setVolume(0.0);
+      await incomingPlayer.play();
+    } catch (e) {
+      debugPrint('[Crossfade] Error starting incoming player: $e');
+      _isCrossfading = false;
+      return;
+    }
+
+    // Immediately swap active deck to the incoming player so UI scrubber,
+    // waveform, lyrics, and notification lock screen bind to the new song from 0:00.
+    _activePlayer = incomingPlayer;
+    _standbyPlayer = outgoingPlayer;
+
+    _positionBroadcaster.add(Duration.zero);
+    if (incomingPlayer.duration != null) {
+      _durationBroadcaster.add(incomingPlayer.duration!);
+    }
+
+    if (audioHandler is DilSeAudioHandler) {
+      (audioHandler as DilSeAudioHandler).bindPlayer(_activePlayer);
+    }
+    _isLoading = false;
+    notifyListeners();
+
+    final prefs = PreferencesService();
+    int crossfadeSec = prefs.crossfadeSeconds;
+    if (prefs.smartCrossfadeEnabled) {
+      final profile = prefs.audioProfile;
+      if (profile.avgTempo > 60 && profile.avgTempo < 200) {
+        crossfadeSec = (16 * (60.0 / profile.avgTempo)).clamp(3.0, 9.0).round();
+      }
+    }
+
+    final dur = incomingPlayer.duration;
+    if (dur != null && dur.inSeconds > 0 && dur.inSeconds <= crossfadeSec * 2) {
+      crossfadeSec = (dur.inSeconds ~/ 2).clamp(1, 10);
+    }
+
+    await _dualDeckCrossfadeNative(
+      outgoingPlayer: outgoingPlayer,
+      incomingPlayer: incomingPlayer,
+      duration: Duration(seconds: crossfadeSec),
+    );
   }
 
   Future<void> fadeInCurrentSong({Duration duration = const Duration(milliseconds: 900)}) async {
@@ -796,7 +862,7 @@ class MusicService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('[Crossfade] Transition error: $e');
-      await _setVolume(1.0);
+      _cancelActiveFade();
     } finally {
       _isCrossfading = false;
     }
@@ -1887,8 +1953,7 @@ class MusicService extends ChangeNotifier {
 
   Future<void> nextSong({bool isCrossfade = false}) async {
     if (!isCrossfade && _isCrossfading) {
-      _isCrossfading = false;
-      unawaited(_setVolume(1.0));
+      _cancelActiveFade();
     }
 
     if (_stopAtEndOfTrack) {
@@ -1989,8 +2054,7 @@ class MusicService extends ChangeNotifier {
 
   Future<void> previousSong() async {
     if (_isCrossfading) {
-      _isCrossfading = false;
-      unawaited(_setVolume(1.0));
+      _cancelActiveFade();
     }
 
     // 1. If in shuffle mode and history exists, traverse back through true shuffle history
@@ -2134,8 +2198,8 @@ class MusicService extends ChangeNotifier {
   }
 
   Future<void> playSong(Video song, {bool updateQueue = true, bool isCrossfade = false}) async {
-    _cancelActiveFade();
     if (!isCrossfade) {
+      _cancelActiveFade();
       if (kIsWeb && WebPlayerBridge.isPlaying) {
         WebPlayerBridge.pause();
       } else if (!kIsWeb) {
@@ -2145,6 +2209,8 @@ class MusicService extends ChangeNotifier {
         }
       }
       unawaited(_setVolume(1.0));
+    } else {
+      _isCrossfading = true;
     }
 
     final AudioPlayer targetPlayer = (!kIsWeb && isCrossfade) ? _standbyPlayer : _activePlayer;
@@ -2263,13 +2329,7 @@ class MusicService extends ChangeNotifier {
               AudioSource.uri(Uri.file(localFile.path), tag: mediaItem),
             );
             if (isCrossfade) {
-              await _standbyPlayer.setVolume(0.0);
-              await _standbyPlayer.play();
-              _isLoading = false;
-              notifyListeners();
-              final prefs = PreferencesService();
-              final crossfadeSec = prefs.crossfadeSeconds;
-              await _dualDeckCrossfadeNative(duration: Duration(seconds: crossfadeSec));
+              await _startDualDeckCrossfade();
             } else {
               await _startPlaybackWithFade(
                 isCrossfade: false,
@@ -2356,21 +2416,8 @@ class MusicService extends ChangeNotifier {
             AudioSource.uri(Uri.parse(directStreamUrl), tag: mediaItem),
           );
           if (_currentSong?.id.value != song.id.value) return;
-          _cancelActiveFade();
           if (isCrossfade) {
-            await _standbyPlayer.setVolume(0.0);
-            await _standbyPlayer.play();
-            _isLoading = false;
-            notifyListeners();
-            final prefs = PreferencesService();
-            int crossfadeSec = prefs.crossfadeSeconds;
-            if (prefs.smartCrossfadeEnabled) {
-              final profile = prefs.audioProfile;
-              if (profile.avgTempo > 60 && profile.avgTempo < 200) {
-                crossfadeSec = (16 * (60.0 / profile.avgTempo)).clamp(3.0, 9.0).round();
-              }
-            }
-            await _dualDeckCrossfadeNative(duration: Duration(seconds: crossfadeSec));
+            await _startDualDeckCrossfade();
           } else {
             await _startPlaybackWithFade(
               isCrossfade: false,
@@ -2518,6 +2565,7 @@ class MusicService extends ChangeNotifier {
       if (!playbackSourceSet) {
         debugPrint('[Play] Could not resolve audio source for "${song.title}". Auto-skipping to next track…');
         _isLoading = false;
+        _isCrossfading = false;
         notifyListeners();
         if (_playlist.length > 1 && _currentIndex + 1 < _playlist.length) {
           await Future.delayed(const Duration(milliseconds: 500));
@@ -2529,21 +2577,8 @@ class MusicService extends ChangeNotifier {
       }
 
       debugPrint('[Play] Starting playback…');
-      _cancelActiveFade();
       if (!kIsWeb && isCrossfade) {
-        await _standbyPlayer.setVolume(0.0);
-        await _standbyPlayer.play();
-        _isLoading = false;
-        notifyListeners();
-        final prefs = PreferencesService();
-        int crossfadeSec = prefs.crossfadeSeconds;
-        if (prefs.smartCrossfadeEnabled) {
-          final profile = prefs.audioProfile;
-          if (profile.avgTempo > 60 && profile.avgTempo < 200) {
-            crossfadeSec = (16 * (60.0 / profile.avgTempo)).clamp(3.0, 9.0).round();
-          }
-        }
-        await _dualDeckCrossfadeNative(duration: Duration(seconds: crossfadeSec));
+        await _startDualDeckCrossfade();
       } else {
         await _startPlaybackWithFade(
           isCrossfade: false,
@@ -3468,8 +3503,7 @@ class MusicService extends ChangeNotifier {
 
   Future<void> seek(Duration position) async {
     if (_isCrossfading) {
-      _isCrossfading = false;
-      unawaited(_setVolume(1.0));
+      _cancelActiveFade();
     }
     if (kIsWeb) {
       WebPlayerBridge.seek(position);
@@ -3491,10 +3525,32 @@ class MusicService extends ChangeNotifier {
     }
     if (_audioPlayer.playing) {
       _audioPlayer.pause();
+      if (_isCrossfading) {
+        _standbyPlayer.pause();
+      }
     } else {
-      unawaited(_setVolume(1.0));
+      if (!_isCrossfading) {
+        unawaited(_setVolume(1.0));
+      }
       _audioPlayer.play();
+      if (_isCrossfading) {
+        _standbyPlayer.play();
+      }
     }
     notifyListeners();
+  }
+
+  @visibleForTesting
+  void setPlaylistForTesting(List<Video> list, {int initialIndex = 0}) {
+    _playlist = List.from(list);
+    _currentIndex = initialIndex;
+    if (_playlist.isNotEmpty && initialIndex >= 0 && initialIndex < _playlist.length) {
+      _currentSong = _playlist[initialIndex];
+    }
+  }
+
+  @visibleForTesting
+  void setIsCrossfadingForTesting(bool value) {
+    _isCrossfading = value;
   }
 }
