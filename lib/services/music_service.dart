@@ -1656,12 +1656,12 @@ class MusicService extends ChangeNotifier {
       // Await Tier 2 in parallel
       final ytmResults = await ytmFuture.catchError((_) => <Video>[]);
 
-      // Fallback: If JioSaavn from edge worker returned fewer than 8 genuine tracks, query the Render Jio backend
-      if (jioResults.length < 8) {
+      // Fallback: If JioSaavn from edge worker returned fewer than 8 genuine tracks, query the custom backend if configured
+      if (jioResults.length < 8 && PreferencesService().customServerUrl.isNotEmpty) {
         try {
           final backendJioResp = await http
               .get(ApiConfig.jioBackendSearchUri(query, limit: 20))
-              .timeout(const Duration(seconds: 8))
+              .timeout(const Duration(seconds: 4))
               .catchError((_) => http.Response('[]', 500));
           if (backendJioResp.statusCode == 200) {
             final fallbackList = _parseJioResults(backendJioResp.body, query: query);
@@ -1673,12 +1673,12 @@ class MusicService extends ChangeNotifier {
         } catch (_) {}
       }
 
-      // Tier 3: YouTube Standard backend (safety net only if JioSaavn + YTM return fewer than 8 tracks)
+      // Tier 3: YouTube Standard backend (safety net only if JioSaavn + YTM return fewer than 8 tracks and custom backend is configured)
       final List<Video> backendResults = [];
-      if (jioResults.length + ytmResults.length < 8) {
+      if (jioResults.length + ytmResults.length < 8 && PreferencesService().customServerUrl.isNotEmpty) {
         final backendResponse = await http
             .get(ApiConfig.searchUri(query, page: page, limit: 15))
-            .timeout(const Duration(seconds: 10))
+            .timeout(const Duration(seconds: 5))
             .catchError((_) => http.Response('[]', 500));
 
         if (backendResponse.statusCode == 200) {
@@ -2369,8 +2369,8 @@ class MusicService extends ChangeNotifier {
           // 1. Try Cloudflare Worker edge first (ultra-fast 100ms)
           bool matched = await tryResolveFromUri(ApiConfig.jioSearchUri(q, limit: 5));
 
-          // 2. If edge didn't match, fallback to Render backend
-          if (!matched && _currentSong?.id.value == song.id.value) {
+          // 2. If edge didn't match, fallback to custom backend if configured
+          if (!matched && _currentSong?.id.value == song.id.value && PreferencesService().customServerUrl.isNotEmpty) {
             await tryResolveFromUri(ApiConfig.jioBackendSearchUri(q, limit: 5));
           }
         }
@@ -2589,11 +2589,27 @@ class MusicService extends ChangeNotifier {
         debugPrint('[Play] Direct resolution error ($directError), trying fallbacks…');
       }
 
-      // 4. Fallback 1: Backend /stream_url
+      // 4. Fallback 1: Cloudflare Edge Worker stream
       if (!playbackSourceSet) {
         if (_currentSong?.id.value != song.id.value) return;
         try {
-          debugPrint('[Play] Fallback 1: Requesting /stream_url from backend…');
+          final cfStreamUri = ApiConfig.cloudflareStreamUri(song.id.value);
+          debugPrint('[Play] Fallback 1: Setting audio source to Cloudflare edge stream: $cfStreamUri');
+          await targetPlayer.setAudioSource(
+            AudioSource.uri(cfStreamUri, tag: mediaItem),
+            preload: true,
+          );
+          playbackSourceSet = true;
+        } catch (cfError) {
+          debugPrint('[Play] Cloudflare edge stream error: $cfError');
+        }
+      }
+
+      // 5. Fallback 2: Backend /stream_url (if custom backend configured)
+      if (!playbackSourceSet && PreferencesService().customServerUrl.isNotEmpty) {
+        if (_currentSong?.id.value != song.id.value) return;
+        try {
+          debugPrint('[Play] Fallback 2: Requesting /stream_url from backend…');
           final backendUrl = await _fetchStreamUrl(song.id.value);
           if (_currentSong?.id.value != song.id.value) return;
           if (backendUrl != null) {
@@ -2608,11 +2624,11 @@ class MusicService extends ChangeNotifier {
         }
       }
 
-      // 5. Fallback 2: Backend proxy /stream/{id}.m4a
-      if (!playbackSourceSet) {
+      // 6. Fallback 3: Backend proxy /stream/{id}.m4a (if custom backend configured)
+      if (!playbackSourceSet && PreferencesService().customServerUrl.isNotEmpty) {
         if (_currentSong?.id.value != song.id.value) return;
         final proxyUri = ApiConfig.streamProxyUri(song.id.value);
-        debugPrint('[Play] Fallback 2: Setting audio source to proxy: $proxyUri');
+        debugPrint('[Play] Fallback 3: Setting audio source to proxy: $proxyUri');
         try {
           await targetPlayer.setAudioSource(
             AudioSource.uri(proxyUri, tag: mediaItem),
@@ -3324,8 +3340,19 @@ class MusicService extends ChangeNotifier {
         }
       }
 
-      // 3. Fallback 2: Backend proxy stream
+      // 3. Fallback 2: Cloudflare Edge Worker stream
       if (response == null || response.statusCode != 200) {
+        try {
+          final cfStreamUri = ApiConfig.cloudflareStreamUri(song.id.value);
+          final request = http.Request('GET', cfStreamUri);
+          response = await client.send(request).timeout(const Duration(seconds: 25));
+        } catch (e) {
+          debugPrint('[Download] Cloudflare edge stream error: $e');
+        }
+      }
+
+      // 4. Fallback 3: Backend proxy stream (if custom backend configured)
+      if ((response == null || response.statusCode != 200) && PreferencesService().customServerUrl.isNotEmpty) {
         try {
           final proxyUri = ApiConfig.streamProxyUri(song.id.value);
           final request = http.Request('GET', proxyUri);
@@ -3593,6 +3620,22 @@ class MusicService extends ChangeNotifier {
         _standbyPlayer.pause();
       }
     } else {
+      // If the player has no loaded audio source or is idle/completed, re-trigger playSong to load and start track
+      final pState = _audioPlayer.processingState;
+      if (_currentSong != null &&
+          (pState == ProcessingState.idle ||
+           pState == ProcessingState.completed ||
+           _audioPlayer.audioSource == null)) {
+        playSong(_currentSong!, updateQueue: false);
+        return;
+      }
+      if (_currentSong == null && _playlist.isNotEmpty) {
+        final targetIndex = (_currentIndex >= 0 && _currentIndex < _playlist.length) ? _currentIndex : 0;
+        _currentIndex = targetIndex;
+        playSong(_playlist[targetIndex], updateQueue: false);
+        return;
+      }
+
       if (!_isCrossfading) {
         unawaited(_setVolume(1.0));
       }

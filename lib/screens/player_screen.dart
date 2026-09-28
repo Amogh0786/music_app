@@ -76,11 +76,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_pageController.hasClients && _pageController.position.hasContentDimensions) {
       final currentPage = _pageController.page?.round() ?? _musicService.currentIndex;
       if (currentPage != _musicService.currentIndex && !_isUserDraggingPage) {
-        _pageController.animateToPage(
-          _musicService.currentIndex,
-          duration: const Duration(milliseconds: 380),
-          curve: Curves.easeOutCubic,
-        );
+        if (_showLyrics) {
+          // In lyrics mode, silently sync carousel in the background with zero lag
+          _pageController.jumpToPage(_musicService.currentIndex);
+        } else {
+          _pageController.animateToPage(
+            _musicService.currentIndex,
+            duration: const Duration(milliseconds: 380),
+            curve: Curves.easeOutCubic,
+          );
+        }
       }
     }
     if (!_isUserDraggingPage && _musicService.playlist.isNotEmpty) {
@@ -108,6 +113,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _musicService.fetchLyrics(song);
     } else {
       ScreenWakeService.disableWakeLock('lyrics_screen');
+      // Ensure PageView is locked to the current song index immediately upon dismissal
+      if (_pageController.hasClients && _pageController.page?.round() != _musicService.currentIndex) {
+        _pageController.jumpToPage(_musicService.currentIndex);
+      }
     }
   }
 
@@ -978,168 +987,187 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
                     const SizedBox(height: 8),
 
-                    // Center Content: Dynamic 1:1 Swipe Album Carousel OR Synced Lyrics
-                    if (!_showLyrics)
-                      Expanded(
-                        flex: 10,
-                        child: Center(
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final carouselSize = math.min(constraints.maxWidth * 0.88, constraints.maxHeight * 0.95);
-                              final playlist = _musicService.playlist.isNotEmpty
-                                  ? _musicService.playlist
-                                  : [song];
+                    // Center Content: Parallel Synced Album Carousel & Lyrics Stack
+                    Expanded(
+                      flex: 10,
+                      child: Center(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final carouselSize = math.min(constraints.maxWidth * 0.88, constraints.maxHeight * 0.95);
+                            final playlist = _musicService.playlist.isNotEmpty
+                                ? _musicService.playlist
+                                : [song];
 
-                              return NotificationListener<ScrollNotification>(
-                                onNotification: (notification) {
-                                  if (notification is ScrollStartNotification) {
-                                    _isUserDraggingPage = true;
-                                  } else if (notification is ScrollEndNotification) {
-                                    _isUserDraggingPage = false;
-                                  }
-                                  return false;
-                                },
-                                child: PageView.builder(
-                                  controller: _pageController,
-                                  itemCount: playlist.length,
-                                  onPageChanged: (index) {
-                                    if (_activePageIndex != index) {
-                                      setState(() {
-                                        _activePageIndex = index;
-                                      });
-                                    }
-                                    if (_isUserDraggingPage && index != _musicService.currentIndex) {
-                                      HapticFeedback.selectionClick();
-                                      _musicService.skipToQueueIndex(index);
-                                    }
-                                  },
-                                  physics: const BouncingScrollPhysics(),
-                                  itemBuilder: (context, index) {
-                                    final track = playlist[index];
-                                    final isCurrent = index == _musicService.currentIndex;
-                                    final trackHdThumbnail = MusicService.getHdThumbnail(track.id.value);
-
-                                    return AnimatedBuilder(
-                                      animation: _pageController,
-                                      builder: (context, child) {
-                                        double page = _musicService.currentIndex.toDouble();
-                                        if (_pageController.hasClients && _pageController.position.hasContentDimensions) {
-                                          page = _pageController.page ?? _musicService.currentIndex.toDouble();
+                            return Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                // Layer 1: Swipe Album Carousel (Always kept alive & synced to music)
+                                IgnorePointer(
+                                  ignoring: _showLyrics,
+                                  child: AnimatedOpacity(
+                                    duration: const Duration(milliseconds: 250),
+                                    opacity: _showLyrics ? 0.0 : 1.0,
+                                    child: NotificationListener<ScrollNotification>(
+                                      onNotification: (notification) {
+                                        if (notification is ScrollStartNotification) {
+                                          _isUserDraggingPage = true;
+                                        } else if (notification is ScrollEndNotification) {
+                                          _isUserDraggingPage = false;
                                         }
-                                        final double diff = (page - index).abs();
-                                        final double scale = (1.0 - (diff * 0.12)).clamp(0.85, 1.0);
-                                        final double opacity = (1.0 - (diff * 0.45)).clamp(0.40, 1.0);
-
-                                        return Transform.scale(
-                                          scale: scale,
-                                          child: Opacity(
-                                            opacity: opacity,
-                                            child: child,
-                                          ),
-                                        );
+                                        return false;
                                       },
-                                      child: Center(
-                                        child: artworkStyle == ArtworkStyle.vinyl
-                                            ? VinylRecordPlayer(
-                                                key: ValueKey('vinyl_${track.id.value}'),
-                                                imageUrl: trackHdThumbnail,
-                                                isPlaying: isCurrent && isPlaying,
-                                                dominantColor: isCurrent ? dominantColor : const Color(0xFF1E1E2C),
-                                                vibrantColor: isCurrent ? vibrantColor : const Color(0xFFFA2D48),
-                                                size: carouselSize * 0.94,
-                                              )
-                                            : Container(
-                                                width: carouselSize,
-                                                height: carouselSize,
-                                                decoration: BoxDecoration(
-                                                  borderRadius: BorderRadius.circular(26),
-                                                  boxShadow: [
-                                                    BoxShadow(
-                                                      color: (isCurrent ? dominantColor : Colors.black).withValues(alpha: 0.60),
-                                                      blurRadius: 36,
-                                                      spreadRadius: 6,
-                                                      offset: const Offset(0, 16),
-                                                    ),
-                                                    BoxShadow(
-                                                      color: (isCurrent ? vibrantColor : Colors.black).withValues(alpha: 0.35),
-                                                      blurRadius: 48,
-                                                      spreadRadius: 8,
-                                                      offset: const Offset(0, 8),
-                                                    ),
-                                                  ],
+                                      child: PageView.builder(
+                                        controller: _pageController,
+                                        itemCount: playlist.length,
+                                        onPageChanged: (index) {
+                                          if (_activePageIndex != index) {
+                                            setState(() {
+                                              _activePageIndex = index;
+                                            });
+                                          }
+                                          if (_isUserDraggingPage && index != _musicService.currentIndex) {
+                                            HapticFeedback.selectionClick();
+                                            _musicService.skipToQueueIndex(index);
+                                          }
+                                        },
+                                        physics: const BouncingScrollPhysics(),
+                                        itemBuilder: (context, index) {
+                                          final track = playlist[index];
+                                          final isCurrent = index == _musicService.currentIndex;
+                                          final trackHdThumbnail = MusicService.getHdThumbnail(track.id.value);
+
+                                          return AnimatedBuilder(
+                                            animation: _pageController,
+                                            builder: (context, child) {
+                                              double page = _musicService.currentIndex.toDouble();
+                                              if (_pageController.hasClients && _pageController.position.hasContentDimensions) {
+                                                page = _pageController.page ?? _musicService.currentIndex.toDouble();
+                                              }
+                                              final double diff = (page - index).abs();
+                                              final double scale = (1.0 - (diff * 0.12)).clamp(0.85, 1.0);
+                                              final double opacity = (1.0 - (diff * 0.45)).clamp(0.40, 1.0);
+
+                                              return Transform.scale(
+                                                scale: scale,
+                                                child: Opacity(
+                                                  opacity: opacity,
+                                                  child: child,
                                                 ),
-                                                child: isCurrent
-                                                    ? Hero(
-                                                        tag: 'player_artwork_${track.id.value}',
-                                                        child: ClipRRect(
-                                                          borderRadius: BorderRadius.circular(26),
-                                                          child: Image.network(
-                                                            trackHdThumbnail,
-                                                            fit: BoxFit.cover,
-                                                            errorBuilder: (_, _, _) => Image.network(
-                                                              track.thumbnails.highResUrl,
-                                                              fit: BoxFit.cover,
-                                                              errorBuilder: (_, _, _) => Container(
-                                                                color: const Color(0xFF222230),
-                                                                child: const Icon(Icons.music_note, color: Colors.white54, size: 64),
+                                              );
+                                            },
+                                            child: Center(
+                                              child: artworkStyle == ArtworkStyle.vinyl
+                                                  ? VinylRecordPlayer(
+                                                      key: ValueKey('vinyl_${track.id.value}'),
+                                                      imageUrl: trackHdThumbnail,
+                                                      isPlaying: isCurrent && isPlaying,
+                                                      dominantColor: isCurrent ? dominantColor : const Color(0xFF1E1E2C),
+                                                      vibrantColor: isCurrent ? vibrantColor : const Color(0xFFFA2D48),
+                                                      size: carouselSize * 0.94,
+                                                    )
+                                                  : Container(
+                                                      width: carouselSize,
+                                                      height: carouselSize,
+                                                      decoration: BoxDecoration(
+                                                        borderRadius: BorderRadius.circular(26),
+                                                        boxShadow: [
+                                                          BoxShadow(
+                                                            color: (isCurrent ? dominantColor : Colors.black).withValues(alpha: 0.60),
+                                                            blurRadius: 36,
+                                                            spreadRadius: 6,
+                                                            offset: const Offset(0, 16),
+                                                          ),
+                                                          BoxShadow(
+                                                            color: (isCurrent ? vibrantColor : Colors.black).withValues(alpha: 0.35),
+                                                            blurRadius: 48,
+                                                            spreadRadius: 8,
+                                                            offset: const Offset(0, 8),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      child: isCurrent
+                                                          ? Hero(
+                                                              tag: 'player_artwork_${track.id.value}',
+                                                              child: ClipRRect(
+                                                                borderRadius: BorderRadius.circular(26),
+                                                                child: Image.network(
+                                                                  trackHdThumbnail,
+                                                                  fit: BoxFit.cover,
+                                                                  errorBuilder: (_, _, _) => Image.network(
+                                                                    track.thumbnails.highResUrl,
+                                                                    fit: BoxFit.cover,
+                                                                    errorBuilder: (_, _, _) => Container(
+                                                                      color: const Color(0xFF222230),
+                                                                      child: const Icon(Icons.music_note, color: Colors.white54, size: 64),
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            )
+                                                          : ClipRRect(
+                                                              borderRadius: BorderRadius.circular(26),
+                                                              child: Image.network(
+                                                                trackHdThumbnail,
+                                                                fit: BoxFit.cover,
+                                                                errorBuilder: (_, _, _) => Image.network(
+                                                                  track.thumbnails.highResUrl,
+                                                                  fit: BoxFit.cover,
+                                                                  errorBuilder: (_, _, _) => Container(
+                                                                    color: const Color(0xFF222230),
+                                                                    child: const Icon(Icons.music_note, color: Colors.white54, size: 64),
+                                                                  ),
+                                                                ),
                                                               ),
                                                             ),
-                                                          ),
-                                                        ),
-                                                      )
-                                                    : ClipRRect(
-                                                        borderRadius: BorderRadius.circular(26),
-                                                        child: Image.network(
-                                                          trackHdThumbnail,
-                                                          fit: BoxFit.cover,
-                                                          errorBuilder: (_, _, _) => Image.network(
-                                                            track.thumbnails.highResUrl,
-                                                            fit: BoxFit.cover,
-                                                            errorBuilder: (_, _, _) => Container(
-                                                              color: const Color(0xFF222230),
-                                                              child: const Icon(Icons.music_note, color: Colors.white54, size: 64),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                              ),
+                                                    ),
+                                            ),
+                                          );
+                                        },
                                       ),
-                                    );
-                                  },
+                                    ),
+                                  ),
                                 ),
-                              );
-                            },
-                          ),
-                        ),
-                      )
-                    else
-                      Expanded(
-                        flex: 10,
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.35),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: Colors.white10),
-                          ),
-                          child: _musicService.isFetchingLyrics
-                              ? Center(
-                                  child: CircularProgressIndicator(color: Theme.of(context).primaryColor),
-                                )
-                              : AnimatedLyrics(
-                                  rawLyrics: _musicService.cachedLyrics ?? '',
-                                  pronunciationLyrics: _musicService.cachedPronunciationLyrics,
-                                  songLanguage: _musicService.currentSongLanguage,
-                                  songTitle: song.title,
-                                  songArtist: song.author,
-                                  positionStream: _musicService.positionStream,
-                                  onSeek: (targetPosition) {
-                                    _musicService.seek(targetPosition);
-                                  },
+
+                                // Layer 2: Synced / Animated Lyrics Overlay (Parallel Layer)
+                                IgnorePointer(
+                                  ignoring: !_showLyrics,
+                                  child: AnimatedOpacity(
+                                    duration: const Duration(milliseconds: 250),
+                                    opacity: _showLyrics ? 1.0 : 0.0,
+                                    child: Container(
+                                      width: double.infinity,
+                                      height: constraints.maxHeight,
+                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.35),
+                                        borderRadius: BorderRadius.circular(24),
+                                        border: Border.all(color: Colors.white10),
+                                      ),
+                                      child: _musicService.isFetchingLyrics
+                                          ? Center(
+                                              child: CircularProgressIndicator(color: Theme.of(context).primaryColor),
+                                            )
+                                          : AnimatedLyrics(
+                                              key: ValueKey('lyrics_${song.id.value}'),
+                                              rawLyrics: _musicService.cachedLyrics ?? '',
+                                              pronunciationLyrics: _musicService.cachedPronunciationLyrics,
+                                              songLanguage: _musicService.currentSongLanguage,
+                                              songTitle: song.title,
+                                              songArtist: song.author,
+                                              positionStream: _musicService.positionStream,
+                                              onSeek: (targetPosition) {
+                                                _musicService.seek(targetPosition);
+                                              },
+                                            ),
+                                    ),
+                                  ),
                                 ),
+                              ],
+                            );
+                          },
                         ),
                       ),
+                    ),
 
                     const SizedBox(height: 12),
 
