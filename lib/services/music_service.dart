@@ -3653,6 +3653,8 @@ class MusicService extends ChangeNotifier {
     _currentIndex = initialIndex;
     if (_playlist.isNotEmpty && initialIndex >= 0 && initialIndex < _playlist.length) {
       _currentSong = _playlist[initialIndex];
+    } else {
+      _currentSong = null;
     }
   }
 

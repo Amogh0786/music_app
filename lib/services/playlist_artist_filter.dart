@@ -147,21 +147,11 @@ class PlaylistArtistFilter {
 
     // 2. Author field
     if (rawAuthor.isNotEmpty) {
-      final normAuthor = normalize(rawAuthor);
-      bool isLabel = false;
-      for (final label in _labelNoise) {
-        if (normAuthor == label || normAuthor.startsWith('$label ') || normAuthor.endsWith(' $label')) {
-          isLabel = true;
-          break;
-        }
-      }
-      if (!isLabel) {
-        final parts = rawAuthor.split(
-          RegExp(r'[,;&/]|(?:\s+feat\.?\s+)|\s+ft\.?\s+|\s+with\s+|\s+and\s+', caseSensitive: false),
-        );
-        for (final p in parts) {
-          addCandidate(p);
-        }
+      final parts = rawAuthor.split(
+        RegExp(r'[,;&/]|(?:\s+feat\.?\s+)|\s+ft\.?\s+|\s+with\s+|\s+and\s+', caseSensitive: false),
+      );
+      for (final p in parts) {
+        addCandidate(p);
       }
     }
 
