@@ -276,11 +276,152 @@ class ProfileScreen extends StatelessWidget {
                       value: prefs.mostPlayedArtist.isNotEmpty
                           ? prefs.mostPlayedArtist
                           : 'Discovering',
-                      subtitle: 'Most streamed',
+                      subtitle: prefs.topArtistPlayCount > 0
+                          ? '${prefs.topArtistPlayCount} plays'
+                          : 'Most streamed',
                       isTextValue: true,
                     ),
                   ],
                 ),
+
+                // Top Streamed Artists Section (Ranked #1, #2, #3)
+                if (prefs.getTopPlayedArtists().isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      children: [
+                        const Text(
+                          'TOP STREAMED ARTISTS',
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: themeColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: themeColor.withValues(alpha: 0.35)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: themeColor,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                'Live Sync',
+                                style: TextStyle(
+                                  color: themeColor,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF161622),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Row(
+                      children: prefs.getTopPlayedArtists(limit: 3).asMap().entries.map((entry) {
+                        final rank = entry.key + 1;
+                        final artistEntry = entry.value;
+                        final isFirst = rank == 1;
+
+                        return Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Stack(
+                                alignment: Alignment.bottomRight,
+                                children: [
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: LinearGradient(
+                                        colors: isFirst
+                                            ? [themeColor, const Color(0xFFFF6584)]
+                                            : [const Color(0xFF282838), const Color(0xFF1E1E2C)],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                    ),
+                                    child: Center(
+                                      child: Icon(
+                                        Icons.mic_external_on_rounded,
+                                        color: isFirst ? Colors.white : Colors.white60,
+                                        size: 22,
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: isFirst ? themeColor : const Color(0xFF282838),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: const Color(0xFF161622), width: 1.5),
+                                    ),
+                                    child: Text(
+                                      '#$rank',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                artistEntry.key,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: isFirst ? Colors.white : Colors.white.withValues(alpha: 0.85),
+                                  fontWeight: isFirst ? FontWeight.bold : FontWeight.w600,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${artistEntry.value} ${artistEntry.value == 1 ? "stream" : "streams"}',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: 24),
 
