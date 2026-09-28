@@ -17,6 +17,8 @@ import '../widgets/bug_report_bottom_sheet.dart';
 import '../services/screen_wake_service.dart';
 
 
+enum LandscapeActiveTab { none, lyrics, queue, more }
+
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key});
 
@@ -32,6 +34,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   int _activePageIndex = 0;
   bool _isUserDraggingPage = false;
   bool _showLyrics = false;
+  LandscapeActiveTab _landscapeTab = LandscapeActiveTab.none;
 
   @override
   void initState() {
@@ -117,6 +120,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (_pageController.hasClients && _pageController.page?.round() != _musicService.currentIndex) {
         _pageController.jumpToPage(_musicService.currentIndex);
       }
+    }
+  }
+
+  void _setLandscapeTab(LandscapeActiveTab tab) {
+    HapticFeedback.lightImpact();
+    setState(() {
+      if (_landscapeTab == tab) {
+        _landscapeTab = LandscapeActiveTab.none;
+      } else {
+        _landscapeTab = tab;
+      }
+      if (_landscapeTab == LandscapeActiveTab.lyrics) {
+        _showLyrics = true;
+      } else if (tab == LandscapeActiveTab.lyrics && _landscapeTab == LandscapeActiveTab.none) {
+        _showLyrics = false;
+      }
+    });
+
+    final song = _musicService.currentSong;
+    if (_landscapeTab == LandscapeActiveTab.lyrics) {
+      ScreenWakeService.enableWakeLock('lyrics_screen');
+      if (song != null) {
+        _musicService.fetchLyrics(song);
+      }
+    } else if (!_showLyrics) {
+      ScreenWakeService.disableWakeLock('lyrics_screen');
     }
   }
 
@@ -811,6 +840,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final dominantColor = palette.dominant;
     final vibrantColor = palette.vibrant;
     final darkVibrantColor = palette.darkVibrant;
+
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    if (isLandscape) {
+      return _buildLandscapeLayout(
+        context: context,
+        song: shownSong,
+        isPlaying: isPlaying,
+        isLoading: isLoading,
+        isLiked: isLiked,
+        dominantColor: dominantColor,
+        vibrantColor: vibrantColor,
+        darkVibrantColor: darkVibrantColor,
+        artworkStyle: artworkStyle,
+      );
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFF0B0B0F),
@@ -1564,6 +1608,1247 @@ class _PlayerScreenState extends State<PlayerScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // =========================================================================
+  // HORIZONTAL / LANDSCAPE MODE REDESIGN (WIDGET-INSPIRED COMPACT AUDIO DECK)
+  // =========================================================================
+
+  Widget _buildLandscapeLayout({
+    required BuildContext context,
+    required Video song,
+    required bool isPlaying,
+    required bool isLoading,
+    required bool isLiked,
+    required Color dominantColor,
+    required Color vibrantColor,
+    required Color darkVibrantColor,
+    required ArtworkStyle artworkStyle,
+  }) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B0B0F),
+      body: Stack(
+        children: [
+          // 1. Dynamic Living Ambient Aura Mesh
+          Positioned.fill(
+            child: _LivingAmbientAuraMesh(
+              dominantColor: dominantColor,
+              vibrantColor: vibrantColor,
+              darkVibrantColor: darkVibrantColor,
+            ),
+          ),
+
+          // 2. Main Horizontal Player Body
+          SafeArea(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 280),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: _landscapeTab == LandscapeActiveTab.none
+                  ? _buildLandscapeNormalView(
+                      key: const ValueKey('landscape_normal'),
+                      context: context,
+                      song: song,
+                      isPlaying: isPlaying,
+                      isLoading: isLoading,
+                      isLiked: isLiked,
+                      dominantColor: dominantColor,
+                      vibrantColor: vibrantColor,
+                      artworkStyle: artworkStyle,
+                    )
+                  : _buildLandscapeExpandedView(
+                      key: ValueKey('landscape_expanded_${_landscapeTab.name}'),
+                      context: context,
+                      song: song,
+                      isPlaying: isPlaying,
+                      isLoading: isLoading,
+                      dominantColor: dominantColor,
+                      vibrantColor: vibrantColor,
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLandscapeNormalView({
+    Key? key,
+    required BuildContext context,
+    required Video song,
+    required bool isPlaying,
+    required bool isLoading,
+    required bool isLiked,
+    required Color dominantColor,
+    required Color vibrantColor,
+    required ArtworkStyle artworkStyle,
+  }) {
+    return Column(
+      key: key,
+      children: [
+        // Slim Top Header Row
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 28),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.pop(context);
+                },
+              ),
+              Text(
+                'NOW PLAYING',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 2.0,
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                  color: isLiked ? const Color(0xFFFA2D48) : Colors.white70,
+                  size: 24,
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  _musicService.toggleLike(song);
+                  setState(() {});
+                },
+              ),
+            ],
+          ),
+        ),
+
+        // Main Horizontal Area: Album Cover on left, Title/Controls/Scrubber on right
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                // Left: Album Cover with vinyl & swipe gesture support
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final double coverSize = (constraints.maxHeight - 16).clamp(130.0, 240.0);
+                    final hdThumbnail = MusicService.getHdThumbnail(song.id.value);
+
+                    return GestureDetector(
+                      onHorizontalDragEnd: (details) {
+                        if (details.primaryVelocity == null) return;
+                        if (details.primaryVelocity! < -250) {
+                          HapticFeedback.mediumImpact();
+                          _musicService.nextSong();
+                        } else if (details.primaryVelocity! > 250) {
+                          HapticFeedback.mediumImpact();
+                          _musicService.previousSong();
+                        }
+                      },
+                      child: artworkStyle == ArtworkStyle.vinyl
+                          ? VinylRecordPlayer(
+                              key: ValueKey('vinyl_landscape_${song.id.value}'),
+                              imageUrl: hdThumbnail,
+                              isPlaying: isPlaying,
+                              dominantColor: dominantColor,
+                              vibrantColor: vibrantColor,
+                              size: coverSize * 0.94,
+                            )
+                          : Container(
+                              width: coverSize,
+                              height: coverSize,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(22),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.18),
+                                  width: 1.0,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: dominantColor.withValues(alpha: 0.55),
+                                    blurRadius: 32,
+                                    spreadRadius: 3,
+                                    offset: const Offset(0, 10),
+                                  ),
+                                  BoxShadow(
+                                    color: vibrantColor.withValues(alpha: 0.35),
+                                    blurRadius: 40,
+                                    spreadRadius: 4,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(21),
+                                child: Image.network(
+                                  hdThumbnail,
+                                  fit: BoxFit.cover,
+                                  cacheWidth: 600,
+                                  cacheHeight: 600,
+                                  errorBuilder: (_, _, _) => Image.network(
+                                    song.thumbnails.highResUrl,
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 600,
+                                    cacheHeight: 600,
+                                    errorBuilder: (_, _, _) => Container(
+                                      color: const Color(0xFF222230),
+                                      child: const Icon(Icons.music_note, color: Colors.white54, size: 50),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                    );
+                  },
+                ),
+
+                const SizedBox(width: 24),
+
+                // Right: Song Title, Artist, Play Controls (1..5), Scrubber
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Centered Song Title
+                      Text(
+                        song.title,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      // Centered Artist Name
+                      Text(
+                        song.author,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.65),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Play Controls in exact widget order: 1. Shuffle 2. Prev 3. Play/Pause 4. Next 5. Repeat
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildLandscapeShuffleButton(vibrantColor),
+                          const SizedBox(width: 10),
+                          _buildLandscapeCircleButton(
+                            icon: Icons.skip_previous_rounded,
+                            size: 42,
+                            iconSize: 26,
+                            onTap: () {
+                              HapticFeedback.mediumImpact();
+                              _musicService.previousSong();
+                            },
+                          ),
+                          const SizedBox(width: 14),
+                          _buildLandscapePlayPauseButton(
+                            isPlaying: isPlaying,
+                            isLoading: isLoading,
+                            vibrantColor: vibrantColor,
+                            size: 56,
+                            iconSize: 34,
+                          ),
+                          const SizedBox(width: 14),
+                          _buildLandscapeCircleButton(
+                            icon: Icons.skip_next_rounded,
+                            size: 42,
+                            iconSize: 26,
+                            onTap: () {
+                              HapticFeedback.mediumImpact();
+                              _musicService.nextSong();
+                            },
+                          ),
+                          const SizedBox(width: 10),
+                          _buildLandscapeRepeatButton(vibrantColor),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      // Responsive Scrubber on the right side of album cover
+                      _buildLandscapeScrubber(context, song, vibrantColor),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Bottom Center Dock: Lyrics, Queue, More
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildBarPillButton(
+                context: context,
+                icon: Icons.lyrics_rounded,
+                label: 'Lyrics',
+                isActive: false,
+                activeColor: vibrantColor,
+                onTap: () => _setLandscapeTab(LandscapeActiveTab.lyrics),
+              ),
+              const SizedBox(width: 14),
+              _buildBarPillButton(
+                context: context,
+                icon: Icons.queue_music_rounded,
+                label: 'Queue',
+                badgeCount: _musicService.playlist.length,
+                isActive: false,
+                activeColor: vibrantColor,
+                onTap: () => _setLandscapeTab(LandscapeActiveTab.queue),
+              ),
+              const SizedBox(width: 14),
+              _buildBarPillButton(
+                context: context,
+                icon: Icons.segment_rounded,
+                label: 'More',
+                isActive: false,
+                activeColor: vibrantColor,
+                onTap: () => _setLandscapeTab(LandscapeActiveTab.more),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLandscapeExpandedView({
+    Key? key,
+    required BuildContext context,
+    required Video song,
+    required bool isPlaying,
+    required bool isLoading,
+    required Color dominantColor,
+    required Color vibrantColor,
+  }) {
+    return Column(
+      key: key,
+      children: [
+        // Upper Main Panel Row
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Row(
+              children: [
+                // Left Column: Compact / Shrunk Album Cover & Mini Info
+                SizedBox(
+                  width: 110,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Shrunk Album Cover
+                      Container(
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.16),
+                            width: 1.0,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: dominantColor.withValues(alpha: 0.45),
+                              blurRadius: 18,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(15),
+                          child: Image.network(
+                            MusicService.getHdThumbnail(song.id.value),
+                            fit: BoxFit.cover,
+                            cacheWidth: 200,
+                            cacheHeight: 200,
+                            errorBuilder: (_, _, _) => Container(
+                              color: const Color(0xFF222230),
+                              child: const Icon(Icons.music_note, color: Colors.white54, size: 28),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        song.title,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        song.author,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.6),
+                          fontSize: 10,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      // Active Panel Indicator Chip
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: vibrantColor.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: vibrantColor.withValues(alpha: 0.45),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          _landscapeTab == LandscapeActiveTab.lyrics
+                              ? 'LYRICS'
+                              : (_landscapeTab == LandscapeActiveTab.queue ? 'UP NEXT' : 'MORE'),
+                          style: TextStyle(
+                            color: vibrantColor,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Right Expanded Panel Container
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF13131D).withValues(alpha: 0.88),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        width: 1.0,
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: _buildLandscapeExpandedTabContent(context, song, vibrantColor),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Bottom Compact Fixed Bar with slim scrubber and play controls
+        _buildLandscapeCompactBottomBar(context, song, isPlaying, isLoading, vibrantColor),
+      ],
+    );
+  }
+
+  Widget _buildLandscapeExpandedTabContent(BuildContext context, Video song, Color vibrantColor) {
+    if (_landscapeTab == LandscapeActiveTab.lyrics) {
+      if (_musicService.isFetchingLyrics) {
+        return Center(child: CircularProgressIndicator(color: vibrantColor));
+      }
+      final lyricsText = (_musicService.cachedLyrics ?? '').trim();
+      if (lyricsText.isEmpty) {
+        return const Center(
+          child: Text(
+            'No lyrics available for this track',
+            style: TextStyle(color: Colors.white54, fontSize: 13),
+          ),
+        );
+      }
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: AnimatedLyrics(
+          key: ValueKey('lyrics_landscape_${song.id.value}'),
+          rawLyrics: lyricsText,
+          pronunciationLyrics: _musicService.cachedPronunciationLyrics,
+          songLanguage: _musicService.currentSongLanguage,
+          songTitle: song.title,
+          songArtist: song.author,
+          positionStream: _musicService.positionStream,
+          onSeek: (pos) => _musicService.seek(pos),
+        ),
+      );
+    }
+
+    if (_landscapeTab == LandscapeActiveTab.queue) {
+      final playlist = _musicService.playlist;
+      final currentIndex = _musicService.currentIndex;
+
+      if (playlist.isEmpty) {
+        return const Center(
+          child: Text('Queue is empty', style: TextStyle(color: Colors.white54)),
+        );
+      }
+
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Up Next',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.white12,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${playlist.length} Tracks',
+                    style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(color: Colors.white12, height: 1),
+          Expanded(
+            child: ReorderableListView.builder(
+              buildDefaultDragHandles: false,
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
+              itemCount: playlist.length,
+              // ignore: deprecated_member_use
+              onReorder: (oldIndex, newIndex) {
+                HapticFeedback.selectionClick();
+                _musicService.reorderQueue(oldIndex, newIndex);
+                setState(() {});
+              },
+              itemBuilder: (context, index) {
+                final track = playlist[index];
+                final isCurrent = index == currentIndex;
+                final hdThumbnail = MusicService.getHdThumbnail(track.id.value);
+
+                return Container(
+                  key: ValueKey('landscape_queue_${track.id.value}_$index'),
+                  margin: const EdgeInsets.symmetric(vertical: 3),
+                  decoration: BoxDecoration(
+                    color: isCurrent
+                        ? vibrantColor.withValues(alpha: 0.16)
+                        : const Color(0xFF1B1B26),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isCurrent
+                          ? vibrantColor.withValues(alpha: 0.5)
+                          : Colors.white.withValues(alpha: 0.07),
+                      width: 1,
+                    ),
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        _musicService.playPlaylist(playlist, index);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        child: Row(
+                          children: [
+                            ReorderableDragStartListener(
+                              index: index,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                child: const Icon(
+                                  Icons.drag_handle_rounded,
+                                  color: Colors.white30,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: Image.network(
+                                hdThumbnail,
+                                width: 36,
+                                height: 36,
+                                fit: BoxFit.cover,
+                                cacheWidth: 100,
+                                cacheHeight: 100,
+                                errorBuilder: (_, _, _) => Container(
+                                  width: 36,
+                                  height: 36,
+                                  color: const Color(0xFF222230),
+                                  child: const Icon(Icons.music_note, color: Colors.white38, size: 18),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    track.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: isCurrent ? Colors.white : Colors.white.withValues(alpha: 0.9),
+                                      fontSize: 12.5,
+                                      fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    track.author,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: isCurrent ? vibrantColor : Colors.white54,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isCurrent)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: Icon(Icons.equalizer_rounded, color: vibrantColor, size: 18),
+                              ),
+                            IconButton(
+                              icon: const Icon(Icons.close_rounded, color: Colors.white38, size: 16),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                _musicService.removeFromQueue(index);
+                                setState(() {});
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (_landscapeTab == LandscapeActiveTab.more) {
+      return _buildLandscapeMoreOptions(context, song, vibrantColor);
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildLandscapeMoreOptions(BuildContext context, Video song, Color vibrantColor) {
+    final isLiked = _musicService.likedSongs.any((s) => s['id'] == song.id.value);
+    final isDownloaded = _musicService.downloadedSongs.any((s) => s['id'] == song.id.value);
+
+    return Padding(
+      padding: const EdgeInsets.all(10),
+      child: GridView.count(
+        crossAxisCount: 2,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: 2.8,
+        children: [
+          _buildLandscapeMoreCard(
+            icon: Icons.equalizer_rounded,
+            title: 'Equalizer',
+            subtitle: 'Presets & Custom EQ',
+            iconColor: vibrantColor,
+            onTap: () => EqualizerBottomSheet.show(context),
+          ),
+          _buildLandscapeMoreCard(
+            icon: Icons.bedtime_rounded,
+            title: 'Sleep Timer',
+            subtitle: _musicService.isSleepTimerActive ? _musicService.sleepTimerLabel : 'Set auto-stop timer',
+            iconColor: _musicService.isSleepTimerActive ? const Color(0xFF1DB954) : Colors.white70,
+            onTap: () => _showSleepTimerSheet(context),
+          ),
+          _buildLandscapeMoreCard(
+            icon: isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            title: isLiked ? 'Liked' : 'Like Song',
+            subtitle: isLiked ? 'In Favorites ❤️' : 'Save to Favorites',
+            iconColor: isLiked ? const Color(0xFFFA2D48) : Colors.white70,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              _musicService.toggleLike(song);
+              setState(() {});
+            },
+          ),
+          _buildLandscapeMoreCard(
+            icon: isDownloaded ? Icons.download_done_rounded : Icons.download_rounded,
+            title: isDownloaded ? 'Downloaded' : 'Download',
+            subtitle: isDownloaded ? 'Available offline' : 'Save offline',
+            iconColor: isDownloaded ? const Color(0xFF1DB954) : Colors.white70,
+            onTap: () async {
+              if (isDownloaded) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Song is already downloaded offline')),
+                );
+                return;
+              }
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Starting download...')),
+              );
+              final success = await _musicService.downloadSong(song);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(success ? 'Saved to Offline Library!' : 'Download failed.')),
+                );
+              }
+              setState(() {});
+            },
+          ),
+          _buildLandscapeMoreCard(
+            icon: Icons.playlist_add_rounded,
+            title: 'Add to Playlist',
+            subtitle: 'Save to custom playlist',
+            iconColor: Colors.amberAccent,
+            onTap: () => showAddToPlaylistSheet(context, song),
+          ),
+          _buildLandscapeMoreCard(
+            icon: Icons.bug_report_rounded,
+            title: 'Report a Bug',
+            subtitle: 'Help improve Dilse',
+            iconColor: Colors.deepOrangeAccent,
+            onTap: () => BugReportBottomSheet.show(context, song: song),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLandscapeCompactBottomBar(
+    BuildContext context,
+    Video song,
+    bool isPlaying,
+    bool isLoading,
+    Color vibrantColor,
+  ) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xE6101018),
+        border: Border(
+          top: BorderSide(
+            color: Colors.white.withValues(alpha: 0.08),
+            width: 1.0,
+          ),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildLandscapeMiniScrubber(vibrantColor),
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                icon: Icon(
+                  Icons.shuffle_rounded,
+                  color: _musicService.isShuffle ? const Color(0xFF1DB954) : Colors.white54,
+                  size: 18,
+                ),
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  _musicService.toggleShuffle();
+                  setState(() {});
+                },
+              ),
+              const SizedBox(width: 4),
+              _buildLandscapeCircleButton(
+                icon: Icons.skip_previous_rounded,
+                size: 32,
+                iconSize: 18,
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  _musicService.previousSong();
+                },
+              ),
+              const SizedBox(width: 8),
+              _buildLandscapePlayPauseButton(
+                isPlaying: isPlaying,
+                isLoading: isLoading,
+                vibrantColor: vibrantColor,
+                size: 40,
+                iconSize: 22,
+              ),
+              const SizedBox(width: 8),
+              _buildLandscapeCircleButton(
+                icon: Icons.skip_next_rounded,
+                size: 32,
+                iconSize: 18,
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  _musicService.nextSong();
+                },
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                icon: Icon(
+                  _musicService.loopMode == LoopMode.one
+                      ? Icons.repeat_one_rounded
+                      : Icons.repeat_rounded,
+                  color: _musicService.loopMode != LoopMode.off
+                      ? const Color(0xFF1DB954)
+                      : Colors.white54,
+                  size: 18,
+                ),
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  _musicService.toggleRepeat();
+                  setState(() {});
+                },
+              ),
+              const Spacer(),
+              _buildMiniPillButton(
+                icon: Icons.lyrics_rounded,
+                label: 'Lyrics',
+                isActive: _landscapeTab == LandscapeActiveTab.lyrics,
+                activeColor: vibrantColor,
+                onTap: () => _setLandscapeTab(LandscapeActiveTab.lyrics),
+              ),
+              const SizedBox(width: 6),
+              _buildMiniPillButton(
+                icon: Icons.queue_music_rounded,
+                label: 'Queue',
+                isActive: _landscapeTab == LandscapeActiveTab.queue,
+                activeColor: vibrantColor,
+                onTap: () => _setLandscapeTab(LandscapeActiveTab.queue),
+              ),
+              const SizedBox(width: 6),
+              _buildMiniPillButton(
+                icon: Icons.segment_rounded,
+                label: 'More',
+                isActive: _landscapeTab == LandscapeActiveTab.more,
+                activeColor: vibrantColor,
+                onTap: () => _setLandscapeTab(LandscapeActiveTab.more),
+              ),
+              const SizedBox(width: 6),
+              IconButton(
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 26),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                tooltip: 'Collapse',
+                onPressed: () => _setLandscapeTab(LandscapeActiveTab.none),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLandscapeScrubber(
+    BuildContext context,
+    Video song,
+    Color accentColor,
+  ) {
+    return StreamBuilder<Duration>(
+      stream: _musicService.positionStream,
+      builder: (context, snapshot) {
+        final position = snapshot.data ?? Duration.zero;
+        final duration = _musicService.duration ?? (song.duration ?? Duration.zero);
+        final maxMs = duration.inMilliseconds > 0 ? duration.inMilliseconds.toDouble() : 1.0;
+        final curMs = position.inMilliseconds.clamp(0, maxMs.toInt()).toDouble();
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(
+            children: [
+              Text(
+                _formatDuration(position),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.65),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 3.5,
+                    activeTrackColor: accentColor,
+                    inactiveTrackColor: Colors.white24,
+                    thumbColor: Colors.white,
+                    overlayColor: accentColor.withValues(alpha: 0.2),
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6, elevation: 3),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                  ),
+                  child: Slider(
+                    value: curMs,
+                    min: 0,
+                    max: maxMs,
+                    onChanged: (val) {
+                      HapticFeedback.selectionClick();
+                      _musicService.seek(Duration(milliseconds: val.toInt()));
+                    },
+                  ),
+                ),
+              ),
+              Text(
+                _formatDuration(duration),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.65),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLandscapeMiniScrubber(Color accentColor) {
+    final song = _musicService.currentSong;
+    return StreamBuilder<Duration>(
+      stream: _musicService.positionStream,
+      builder: (context, snapshot) {
+        final position = snapshot.data ?? Duration.zero;
+        final duration = _musicService.duration ?? (song?.duration ?? Duration.zero);
+        final maxMs = duration.inMilliseconds > 0 ? duration.inMilliseconds.toDouble() : 1.0;
+        final curMs = position.inMilliseconds.clamp(0, maxMs.toInt()).toDouble();
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(
+            children: [
+              Text(
+                _formatDuration(position),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 2.2,
+                    activeTrackColor: accentColor,
+                    inactiveTrackColor: Colors.white24,
+                    thumbColor: Colors.white,
+                    overlayColor: accentColor.withValues(alpha: 0.2),
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4, elevation: 2),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                  ),
+                  child: Slider(
+                    value: curMs,
+                    min: 0,
+                    max: maxMs,
+                    onChanged: (val) {
+                      HapticFeedback.selectionClick();
+                      _musicService.seek(Duration(milliseconds: val.toInt()));
+                    },
+                  ),
+                ),
+              ),
+              Text(
+                _formatDuration(duration),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLandscapeCircleButton({
+    required IconData icon,
+    required double size,
+    required double iconSize,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withValues(alpha: 0.10),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.16),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Icon(
+              icon,
+              color: Colors.white,
+              size: iconSize,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLandscapePlayPauseButton({
+    required bool isPlaying,
+    required bool isLoading,
+    required Color vibrantColor,
+    required double size,
+    required double iconSize,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: () {
+          HapticFeedback.mediumImpact();
+          _musicService.togglePlayPause();
+        },
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFFFFFFFF), Color(0xFFEFF2F6)],
+            ),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.90),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: vibrantColor.withValues(alpha: 0.50),
+                blurRadius: 18,
+                spreadRadius: 2,
+                offset: const Offset(0, 3),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: isLoading
+              ? Center(
+                  child: SizedBox(
+                    width: size * 0.44,
+                    height: size * 0.44,
+                    child: const CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0F141C)),
+                      strokeWidth: 2.5,
+                    ),
+                  ),
+                )
+              : Center(
+                  child: Icon(
+                    isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    color: const Color(0xFF0F141C),
+                    size: iconSize,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLandscapeShuffleButton(Color vibrantColor) {
+    return IconButton(
+      icon: Icon(
+        Icons.shuffle_rounded,
+        color: _musicService.isShuffle ? const Color(0xFF1DB954) : Colors.white54,
+        size: 22,
+      ),
+      onPressed: () {
+        HapticFeedback.selectionClick();
+        _musicService.toggleShuffle();
+        setState(() {});
+      },
+    );
+  }
+
+  Widget _buildLandscapeRepeatButton(Color vibrantColor) {
+    return IconButton(
+      icon: Icon(
+        _musicService.loopMode == LoopMode.one
+            ? Icons.repeat_one_rounded
+            : Icons.repeat_rounded,
+        color: _musicService.loopMode != LoopMode.off
+            ? const Color(0xFF1DB954)
+            : Colors.white54,
+        size: 22,
+      ),
+      onPressed: () {
+        HapticFeedback.selectionClick();
+        _musicService.toggleRepeat();
+        setState(() {});
+      },
+    );
+  }
+
+  Widget _buildMiniPillButton({
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required Color activeColor,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: isActive ? activeColor.withValues(alpha: 0.28) : Colors.white.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isActive ? activeColor.withValues(alpha: 0.6) : Colors.white.withValues(alpha: 0.12),
+              width: 1.0,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: isActive ? activeColor : Colors.white70),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isActive ? Colors.white : Colors.white70,
+                  fontSize: 11,
+                  fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLandscapeMoreCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color iconColor,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: iconColor, size: 19),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 9.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
