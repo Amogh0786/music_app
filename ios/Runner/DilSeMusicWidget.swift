@@ -10,6 +10,8 @@ struct MusicWidgetEntry: TimelineEntry {
     let isShuffle: Bool
     let repeatMode: String
     let progressPercent: Int
+    let currentTime: String
+    let totalDuration: String
     let dominantColorHex: String
     let playlists: [WidgetPlaylistItem]
 }
@@ -31,6 +33,8 @@ struct MusicWidgetTimelineProvider: TimelineProvider {
             isShuffle: false,
             repeatMode: "off",
             progressPercent: 30,
+            currentTime: "0:45",
+            totalDuration: "3:30",
             dominantColorHex: "#14141E",
             playlists: defaultPlaylists()
         )
@@ -55,6 +59,8 @@ struct MusicWidgetTimelineProvider: TimelineProvider {
         let isShuffle = defaults.bool(forKey: "is_shuffle")
         let repeatMode = defaults.string(forKey: "repeat_mode") ?? "off"
         let progressPercent = defaults.integer(forKey: "progress_percent")
+        let currentTime = defaults.string(forKey: "current_time") ?? "0:00"
+        let totalDuration = defaults.string(forKey: "total_duration") ?? "0:00"
         let dominantColorHex = defaults.string(forKey: "dominant_color_hex") ?? "#14141E"
 
         var playlists: [WidgetPlaylistItem] = []
@@ -74,6 +80,8 @@ struct MusicWidgetTimelineProvider: TimelineProvider {
             isShuffle: isShuffle,
             repeatMode: repeatMode,
             progressPercent: progressPercent,
+            currentTime: currentTime,
+            totalDuration: totalDuration,
             dominantColorHex: dominantColorHex,
             playlists: playlists
         )
@@ -189,6 +197,18 @@ struct DilSeMusicWidgetEntryView: View {
                         ProgressView(value: Double(min(max(entry.progressPercent, 0), 100)), total: 100.0)
                             .accentColor(Color(hex: "#FF4B8B"))
                             .scaleEffect(x: 1, y: 0.7, anchor: .center)
+
+                        // Current elapsed time and total song duration
+                        HStack {
+                            Text(entry.currentTime)
+                                .font(.system(size: 8.5, weight: .regular))
+                                .foregroundColor(.white.opacity(0.65))
+                            Spacer()
+                            Text(entry.totalDuration)
+                                .font(.system(size: 8.5, weight: .regular))
+                                .foregroundColor(.white.opacity(0.65))
+                        }
+                        .padding(.top, 1)
                     }
                     .frame(maxWidth: .infinity)
                 }

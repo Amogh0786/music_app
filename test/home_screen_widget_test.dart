@@ -72,5 +72,13 @@ void main() {
       expect(getNextRepeat('one'), 'off');
       expect(getNextRepeat('unknown'), 'off');
     });
+
+    test('formatDuration formats Duration instances into clean m:ss strings', () {
+      expect(WidgetService.formatDuration(Duration.zero), '0:00');
+      expect(WidgetService.formatDuration(const Duration(seconds: 45)), '0:45');
+      expect(WidgetService.formatDuration(const Duration(seconds: 74)), '1:14');
+      expect(WidgetService.formatDuration(const Duration(minutes: 3, seconds: 35)), '3:35');
+      expect(WidgetService.formatDuration(const Duration(minutes: 12, seconds: 5)), '12:05');
+    });
   });
 }

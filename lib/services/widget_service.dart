@@ -93,6 +93,12 @@ class WidgetService {
     syncWidgetData();
   }
 
+  static String formatDuration(Duration d) {
+    final minutes = d.inMinutes;
+    final seconds = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
   void _throttleScrubberSync(Duration position) {
     final total = _musicService.duration?.inMilliseconds ?? 0;
     if (total <= 0) return;
@@ -105,7 +111,11 @@ class WidgetService {
         now.difference(_lastProgressSyncTime).inSeconds >= 4) {
       _lastProgressSynced = percent;
       _lastProgressSyncTime = now;
+      final currentTimeStr = formatDuration(position);
+      final totalDurationStr = formatDuration(_musicService.duration ?? Duration.zero);
       HomeWidget.saveWidgetData<int>('progress_percent', percent);
+      HomeWidget.saveWidgetData<String>('current_time', currentTimeStr);
+      HomeWidget.saveWidgetData<String>('total_duration', totalDurationStr);
       HomeWidget.updateWidget(
         name: 'DilSeMusicWidgetProvider',
         iOSName: 'DilSeMusicWidget',
@@ -129,6 +139,8 @@ class WidgetService {
       final posMs = _musicService.position.inMilliseconds;
       final durMs = _musicService.duration?.inMilliseconds ?? 0;
       final progressPercent = durMs > 0 ? ((posMs / durMs) * 100).round().clamp(0, 100) : 0;
+      final currentTimeStr = formatDuration(_musicService.position);
+      final totalDurationStr = formatDuration(_musicService.duration ?? Duration.zero);
 
       // Extract dominant color and format hex string
       final dominantColor = _musicService.dominantColor;
@@ -143,6 +155,8 @@ class WidgetService {
       await HomeWidget.saveWidgetData<bool>('is_shuffle', isShuffle);
       await HomeWidget.saveWidgetData<String>('repeat_mode', repeatModeStr);
       await HomeWidget.saveWidgetData<int>('progress_percent', progressPercent);
+      await HomeWidget.saveWidgetData<String>('current_time', currentTimeStr);
+      await HomeWidget.saveWidgetData<String>('total_duration', totalDurationStr);
       await HomeWidget.saveWidgetData<int>('dominant_color', dominantArgb);
       await HomeWidget.saveWidgetData<String>('dominant_color_hex', dominantHex);
 
