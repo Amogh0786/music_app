@@ -63,10 +63,7 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
 
   void _onSearchQueryChanged(String query) {
     final trimmed = query.trim();
-    final playlist = _musicService.customPlaylists.firstWhere(
-      (p) => p['id'] == widget.playlistId,
-      orElse: () => <String, dynamic>{},
-    );
+    final playlist = _getPlaylistData();
     final songs = List<Map<String, dynamic>>.from(playlist['songs'] ?? []);
     final searchResult = PlaylistArtistFilter.searchPlaylist(songs: songs, query: trimmed);
 
@@ -103,12 +100,23 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
     return '$minutes:$seconds';
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final playlist = _musicService.customPlaylists.firstWhere(
+  Map<String, dynamic> _getPlaylistData() {
+    if (widget.playlistId == 'liked') {
+      return {
+        'id': 'liked',
+        'name': 'Liked Songs',
+        'songs': _musicService.likedSongs,
+      };
+    }
+    return _musicService.customPlaylists.firstWhere(
       (p) => p['id'] == widget.playlistId,
       orElse: () => <String, dynamic>{},
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final playlist = _getPlaylistData();
 
     if (playlist.isEmpty) {
       return Scaffold(

@@ -75,5 +75,19 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.example.musicApp</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>dilse</string>
+				<string>dilsemusic</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -13,6 +13,7 @@ import '../services/preferences_service.dart';
 import '../services/notification_permission_service.dart';
 import '../services/update_service.dart';
 import '../services/spotify_import_service.dart';
+import '../services/widget_service.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -41,6 +42,7 @@ class _MainScreenState extends State<MainScreen> {
         _checkFirstTimeNamePrompt();
         NotificationPermissionService.promptIfNeeded(context);
         _checkAutoAppUpdate();
+        WidgetService().consumePendingLaunchUri();
       }
     });
   }

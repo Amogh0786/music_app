@@ -34,7 +34,8 @@ class _CategoryCardState extends State<CategoryCard> {
     final scale = _isPressed ? 0.96 : (_isHovered ? 1.025 : 1.0);
     final primaryColor = widget.colors.first;
 
-    return MouseRegion(
+    return RepaintBoundary(
+      child: MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
@@ -221,6 +222,7 @@ class _CategoryCardState extends State<CategoryCard> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

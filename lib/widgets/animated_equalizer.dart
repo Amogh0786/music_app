@@ -50,29 +50,44 @@ class _AnimatedEqualizerState extends State<AnimatedEqualizer> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: List.generate(4, (index) {
-            final double value = widget.isPlaying
-                ? (sin((_controller.value * 2 * pi) + (index * 1.2)).abs() * 12) + 4
-                : 4.0;
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: List.generate(4, (index) {
+              final double value = widget.isPlaying
+                  ? (sin((_controller.value * 2 * pi) + (index * 1.2)).abs() * 12) + 4
+                  : 4.0;
 
-            return Container(
-              margin: const EdgeInsets.symmetric(horizontal: 1.5),
-              width: 3,
-              height: value,
-              decoration: BoxDecoration(
-                color: widget.color,
-                borderRadius: BorderRadius.circular(1.5),
-              ),
-            );
-          }),
-        );
-      },
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                width: 3,
+                height: value,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      widget.color,
+                      Color.alphaBlend(Colors.white.withValues(alpha: 0.3), widget.color),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: widget.color.withValues(alpha: 0.45),
+                      blurRadius: 3,
+                    ),
+                  ],
+                ),
+              );
+            }),
+          );
+        },
+      ),
     );
   }
 }

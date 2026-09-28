@@ -1,5 +1,3 @@
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -10,6 +8,7 @@ import '../services/update_service.dart';
 import '../services/notification_permission_service.dart';
 import '../widgets/interactive_update_dialog.dart';
 import '../widgets/equalizer_bottom_sheet.dart';
+import '../widgets/bug_report_bottom_sheet.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -190,9 +189,9 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       animation: Listenable.merge([_prefs, _musicService]),
       builder: (context, _) {
         return Scaffold(
-          backgroundColor: const Color(0xFF121212),
+          backgroundColor: const Color(0xFF07070A),
           appBar: AppBar(
-            backgroundColor: const Color(0xFF121212),
+            backgroundColor: const Color(0xFF07070A),
             title: const Text('Settings', style: TextStyle(fontWeight: FontWeight.bold)),
             elevation: 0,
             centerTitle: true,
@@ -569,7 +568,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                     child: const Icon(Icons.bug_report_rounded, color: Colors.redAccent, size: 20),
                   ),
                   title: const Text('Report a Bug', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-                  subtitle: Text('Found an issue? Let us know via Email', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                  subtitle: Text('Found an issue? Let us know via Email or GitHub', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
                   trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white30),
                   onTap: _reportBug,
                 ),
@@ -667,45 +666,11 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
   }
 
   Future<void> _reportBug() async {
-    final osInfo = kIsWeb
-        ? 'Web Browser'
-        : '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
-
-    final String subject = Uri.encodeComponent('Bug Report: DilSe Music App (v$_appVersion)');
-    final String body = Uri.encodeComponent(
-      'Please describe the bug you encountered:\n\n\n\n'
-      '--- App Info ---\n'
-      'Version: $_appVersion\n'
-      'Build: $_buildNumber\n'
-      'OS: $osInfo',
+    BugReportBottomSheet.show(
+      context,
+      appVersion: _appVersion.isNotEmpty ? _appVersion : '3.4.0',
+      buildNumber: _buildNumber,
     );
-    final Uri emailLaunchUri = Uri.parse(
-      'mailto:charanteja.kondakalla030206@gmail.com,balaamoghraj@gmail.com?subject=$subject&body=$body',
-    );
-
-    try {
-      if (await canLaunchUrl(emailLaunchUri)) {
-        await launchUrl(emailLaunchUri);
-      } else {
-        await Clipboard.setData(const ClipboardData(
-          text: 'charanteja.kondakalla030206@gmail.com, balaamoghraj@gmail.com',
-        ));
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Support emails copied to clipboard (charanteja & balaamoghraj)'),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
-        );
-      }
-    }
   }
 
   Future<void> _handleCheckForUpdates() async {
@@ -788,16 +753,26 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     for (int i = 0; i < children.length; i++) {
       separatedChildren.add(children[i]);
       if (i < children.length - 1) {
-        separatedChildren.add(const Divider(color: Colors.white10, height: 1, indent: 56));
+        separatedChildren.add(Divider(color: Colors.white.withValues(alpha: 0.05), height: 1, indent: 56));
       }
     }
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E24),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white12),
+        color: const Color(0xFF14141E),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.12),
+          width: 0.9,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: separatedChildren,
@@ -811,56 +786,71 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       margin: const EdgeInsets.symmetric(vertical: 8),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 16.0),
         itemCount: _availableColors.length,
         itemBuilder: (context, index) {
           final color = _availableColors[index];
           final isSelected = _prefs.themeColor.toARGB32() == color.toARGB32();
-          return GestureDetector(
-            onTap: () => _prefs.setThemeColor(color),
-            child: Container(
-              width: 100,
-              margin: const EdgeInsets.only(right: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E24),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isSelected ? color : Colors.white10,
-                  width: isSelected ? 2 : 1,
+          return RepaintBoundary(
+            key: ValueKey('theme_color_${color.toARGB32()}'),
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                _prefs.setThemeColor(color);
+              },
+              child: Container(
+                width: 100,
+                margin: const EdgeInsets.only(right: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF14141E),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: isSelected ? color : Colors.white.withValues(alpha: 0.1),
+                    width: isSelected ? 2 : 1,
+                  ),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: color.withValues(alpha: 0.35),
+                            blurRadius: 14,
+                            offset: const Offset(0, 4),
+                          )
+                        ]
+                      : null,
                 ),
-                boxShadow: isSelected ? [BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 8)] : null,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
+                      child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 18) : null,
                     ),
-                    child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 18) : null,
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    width: 60,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(2),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: 60,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(2),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );

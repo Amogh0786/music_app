@@ -6,6 +6,7 @@ import '../services/music_service.dart';
 import '../services/preferences_service.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/category_card.dart';
+import '../widgets/animated_equalizer.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -119,6 +120,7 @@ class _SearchScreenState extends State<SearchScreen>
   void initState() {
     super.initState();
     _prefs.addListener(_onPrefsChanged);
+    _musicService.addListener(_onPrefsChanged);
     _searchController.addListener(_onSearchChanged);
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
@@ -159,6 +161,7 @@ class _SearchScreenState extends State<SearchScreen>
   void dispose() {
     _debounceTimer?.cancel();
     _prefs.removeListener(_onPrefsChanged);
+    _musicService.removeListener(_onPrefsChanged);
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _scrollController.dispose();
@@ -243,18 +246,18 @@ class _SearchScreenState extends State<SearchScreen>
           children: [
             // Modern Frosted Search Field
             Container(
-              height: 48,
+              height: 50,
               decoration: BoxDecoration(
-                color: const Color(0xFF161622),
+                color: const Color(0xFF14141E),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  width: 1,
+                  color: Colors.white.withValues(alpha: 0.16),
+                  width: 1.0,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.25),
-                    blurRadius: 10,
+                    color: Colors.black.withValues(alpha: 0.35),
+                    blurRadius: 14,
                     offset: const Offset(0, 4),
                   ),
                 ],
@@ -266,14 +269,14 @@ class _SearchScreenState extends State<SearchScreen>
                   _performSearch(val);
                 },
                 textInputAction: TextInputAction.search,
-                style: const TextStyle(color: Colors.white, fontSize: 15),
+                style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500),
                 decoration: InputDecoration(
                   hintText: 'Artists, Songs, Lyrics, and More',
                   hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.38), fontSize: 14),
-                  prefixIcon: const Icon(Icons.search_rounded, color: Colors.white60, size: 22),
+                  prefixIcon: const Icon(Icons.search_rounded, color: Colors.white70, size: 22),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear_rounded, color: Colors.white60, size: 18),
+                          icon: const Icon(Icons.clear_rounded, color: Colors.white70, size: 18),
                           onPressed: () {
                             HapticFeedback.lightImpact();
                             _searchController.clear();
@@ -286,7 +289,7 @@ class _SearchScreenState extends State<SearchScreen>
                         )
                       : null,
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 13),
                 ),
               ),
             ),
@@ -304,32 +307,42 @@ class _SearchScreenState extends State<SearchScreen>
                           itemCount: _suggestions.length,
                           itemBuilder: (context, index) {
                             final suggestion = _suggestions[index];
-                            return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                              leading: _buildSuggestionLeading(suggestion.type),
-                              title: Text(
-                                suggestion.text,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
+                            return RepaintBoundary(
+                              key: ValueKey('sugg_${suggestion.type}_${suggestion.text}'),
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(vertical: 2),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: ListTile(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  leading: _buildSuggestionLeading(suggestion.type),
+                                  title: Text(
+                                    suggestion.text,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                  subtitle: suggestion.subtitle.isNotEmpty
+                                      ? Text(
+                                          suggestion.subtitle,
+                                          style: TextStyle(
+                                            color: Colors.white.withValues(alpha: 0.45),
+                                            fontSize: 12,
+                                          ),
+                                        )
+                                      : null,
+                                  trailing: const Icon(Icons.north_west_rounded, color: Colors.white38, size: 18),
+                                  onTap: () {
+                                    HapticFeedback.lightImpact();
+                                    _searchController.text = suggestion.text;
+                                    _performSearch(suggestion.text);
+                                  },
                                 ),
                               ),
-                              subtitle: suggestion.subtitle.isNotEmpty
-                                  ? Text(
-                                      suggestion.subtitle,
-                                      style: TextStyle(
-                                        color: Colors.white.withValues(alpha: 0.45),
-                                        fontSize: 12,
-                                      ),
-                                    )
-                                  : null,
-                              trailing: const Icon(Icons.north_west_rounded, color: Colors.white38, size: 18),
-                              onTap: () {
-                                HapticFeedback.lightImpact();
-                                _searchController.text = suggestion.text;
-                                _performSearch(suggestion.text);
-                              },
                             );
                           },
                         )
@@ -349,44 +362,86 @@ class _SearchScreenState extends State<SearchScreen>
                             }
 
                             final video = _searchResults[index];
+                            final currentId = _musicService.currentSong?.id.value;
+                            final isCurrent = currentId == video.id.value;
+                            final isPlayingThis = isCurrent && _musicService.isPlaying;
                             final hdThumbnail = MusicService.getHdThumbnail(video.id.value);
 
-                            return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(vertical: 4),
-                              leading: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(
-                                  hdThumbnail,
-                                  width: 52,
-                                  height: 52,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => Image.network(
-                                    video.thumbnails.lowResUrl,
-                                    width: 52,
-                                    height: 52,
-                                    fit: BoxFit.cover,
+                            return RepaintBoundary(
+                              key: ValueKey('search_result_${video.id.value}'),
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(vertical: 3.5),
+                                decoration: BoxDecoration(
+                                  color: isCurrent ? const Color(0xFF1C1929) : const Color(0xFF14141E),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: isCurrent
+                                        ? Theme.of(context).primaryColor.withValues(alpha: 0.45)
+                                        : Colors.white.withValues(alpha: 0.07),
+                                    width: isCurrent ? 1.2 : 0.8,
                                   ),
                                 ),
+                                child: ListTile(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                                  leading: ClipRRect(
+                                    borderRadius: BorderRadius.circular(9),
+                                    child: Image.network(
+                                      hdThumbnail,
+                                      width: 50,
+                                      height: 50,
+                                      cacheWidth: 150,
+                                      cacheHeight: 150,
+                                      filterQuality: FilterQuality.medium,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) => Image.network(
+                                        video.thumbnails.lowResUrl,
+                                        width: 50,
+                                        height: 50,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    video.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: isCurrent ? Theme.of(context).primaryColor : Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    video.author,
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.5),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (isCurrent) ...[
+                                        AnimatedEqualizer(
+                                          isPlaying: isPlayingThis,
+                                          color: Theme.of(context).primaryColor,
+                                        ),
+                                        const SizedBox(width: 4),
+                                      ],
+                                      IconButton(
+                                        icon: const Icon(Icons.more_horiz_rounded, color: Colors.white54, size: 20),
+                                        onPressed: () => showSongOptionsBottomSheet(context, video),
+                                      ),
+                                    ],
+                                  ),
+                                  onTap: () {
+                                    HapticFeedback.lightImpact();
+                                    _musicService.playSong(video);
+                                  },
+                                ),
                               ),
-                              title: Text(
-                                video.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                              ),
-                              subtitle: Text(
-                                video.author,
-                                maxLines: 1,
-                                style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.more_horiz, color: Colors.white54),
-                                onPressed: () => showSongOptionsBottomSheet(context, video),
-                              ),
-
-                              onTap: () {
-                                _musicService.playSong(video);
-                              },
                             );
                           },
                         )

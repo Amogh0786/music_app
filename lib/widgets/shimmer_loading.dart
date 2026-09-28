@@ -38,31 +38,33 @@ class _ShimmerLoadingState extends State<ShimmerLoading>
   Widget build(BuildContext context) {
     if (!widget.isLoading) return widget.child;
 
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return ShaderMask(
-          blendMode: BlendMode.srcATop,
-          shaderCallback: (bounds) {
-            final double value = _controller.value;
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          return ShaderMask(
+            blendMode: BlendMode.srcATop,
+            shaderCallback: (bounds) {
+              final double value = _controller.value;
 
-            return LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: const [
-                Color(0xFF1E1E28),
-                Color(0xFF2E2E3E),
-                Color(0xFF38384E),
-                Color(0xFF2E2E3E),
-                Color(0xFF1E1E28),
-              ],
-              stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
-              transform: _SlidingGradientTransform(slidePercent: value),
-            ).createShader(bounds);
-          },
-          child: widget.child,
-        );
-      },
+              return LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: const [
+                  Color(0xFF0F0F16),
+                  Color(0xFF1A1A24),
+                  Color(0xFF28283A),
+                  Color(0xFF1A1A24),
+                  Color(0xFF0F0F16),
+                ],
+                stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
+                transform: _SlidingGradientTransform(slidePercent: value),
+              ).createShader(bounds);
+            },
+            child: widget.child,
+          );
+        },
+      ),
     );
   }
 }

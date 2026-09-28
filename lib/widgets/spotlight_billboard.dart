@@ -41,55 +41,71 @@ class _SpotlightBillboardState extends State<SpotlightBillboard> {
     final primaryColor = Theme.of(context).primaryColor;
     final displayItems = widget.items.take(6).toList();
 
-    return Column(
-      children: [
-        SizedBox(
-          height: 220,
-          child: PageView.builder(
-            controller: _pageController,
-            itemCount: displayItems.length,
-            onPageChanged: (index) {
-              setState(() => _currentPage = index);
-            },
-            itemBuilder: (context, index) {
-              final song = displayItems[index];
-              final hdThumbnail = MusicService.getHdThumbnail(song.id.value);
+    return RepaintBoundary(
+      child: Column(
+        children: [
+          SizedBox(
+            height: 220,
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: displayItems.length,
+              onPageChanged: (index) {
+                setState(() => _currentPage = index);
+              },
+              itemBuilder: (context, index) {
+                final song = displayItems[index];
+                final hdThumbnail = MusicService.getHdThumbnail(song.id.value);
 
-              return AnimatedScale(
-                scale: _currentPage == index ? 1.0 : 0.96,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOutCubic,
-                child: GestureDetector(
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    widget.onPlay(song, index);
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: primaryColor.withValues(alpha: 0.18),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
+                return AnimatedScale(
+                  scale: _currentPage == index ? 1.0 : 0.96,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                  child: GestureDetector(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      widget.onPlay(song, index);
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.14),
+                          width: 1.0,
                         ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          // Background Image
-                          Image.network(
-                            hdThumbnail,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Image.network(
-                              song.thumbnails.highResUrl,
-                              fit: BoxFit.cover,
-                            ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
                           ),
+                          BoxShadow(
+                            color: primaryColor.withValues(alpha: 0.22),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(23),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            // 8K Crisp Background Image
+                            Image.network(
+                              hdThumbnail,
+                              fit: BoxFit.cover,
+                              filterQuality: FilterQuality.medium,
+                              cacheWidth: 900,
+                              cacheHeight: 500,
+                              errorBuilder: (_, _, _) => Image.network(
+                                song.thumbnails.highResUrl,
+                                fit: BoxFit.cover,
+                                filterQuality: FilterQuality.medium,
+                                cacheWidth: 900,
+                                cacheHeight: 500,
+                              ),
+                            ),
 
                           // Dramatic Cinematic Dark Gradient Overlay
                           DecoratedBox(
@@ -232,6 +248,7 @@ class _SpotlightBillboardState extends State<SpotlightBillboard> {
           }),
         ),
       ],
-    );
-  }
+    ),
+  );
+}
 }

@@ -41,7 +41,36 @@
                 <data android:scheme="dilsemusic" android:host="spotify-auth" />
             </intent-filter>
 
+            <!-- Deep linking for Home Screen Widget navigation (playlists, player) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="dilse" />
+            </intent-filter>
+
         </activity>
+
+        <!-- Receiver for DilSe Home Screen Music Widget -->
+        <receiver
+            android:name=".DilSeMusicWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.music_app.WIDGET_PLAY_PAUSE" />
+                <action android:name="com.example.music_app.WIDGET_PREVIOUS" />
+                <action android:name="com.example.music_app.WIDGET_NEXT" />
+                <action android:name="com.example.music_app.WIDGET_SHUFFLE" />
+                <action android:name="com.example.music_app.WIDGET_REPEAT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/dilse_music_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name="es.antonborri.home_widget.HomeWidgetScheduledUpdateReceiver"
+            android:exported="true" />
 
         <service android:name="com.ryanheise.audioservice.AudioService"
             android:foregroundServiceType="mediaPlayback"
@@ -93,6 +122,14 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO"/>
+            <data android:scheme="mailto"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
     </queries>
 </manifest>

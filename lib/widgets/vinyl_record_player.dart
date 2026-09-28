@@ -60,8 +60,9 @@ class _VinylRecordPlayerState extends State<VinylRecordPlayer>
     final discSize = widget.size;
     final labelSize = discSize * 0.42;
 
-    return Center(
-      child: Stack(
+    return RepaintBoundary(
+      child: Center(
+        child: Stack(
         alignment: Alignment.center,
         children: [
           // 1. Dynamic Ambient Aura Glow Behind the Vinyl
@@ -135,6 +136,9 @@ class _VinylRecordPlayerState extends State<VinylRecordPlayer>
                           Image.network(
                             widget.imageUrl,
                             fit: BoxFit.cover,
+                            filterQuality: FilterQuality.medium,
+                            cacheWidth: 400,
+                            cacheHeight: 400,
                             width: labelSize,
                             height: labelSize,
                             errorBuilder: (_, _, _) => Container(
@@ -185,8 +189,9 @@ class _VinylRecordPlayerState extends State<VinylRecordPlayer>
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 /// Custom painter rendering realistic micro-grooves and dual optical sheen across the vinyl

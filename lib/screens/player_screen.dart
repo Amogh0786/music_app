@@ -1,9 +1,8 @@
-import 'dart:io' show Platform;
+import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
@@ -14,6 +13,7 @@ import '../widgets/waveform_scrubber.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/equalizer_bottom_sheet.dart';
 import '../widgets/animated_lyrics.dart';
+import '../widgets/bug_report_bottom_sheet.dart';
 import '../services/screen_wake_service.dart';
 
 
@@ -667,54 +667,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _reportBug(BuildContext context, {Video? song}) async {
-    final osInfo = kIsWeb
-        ? 'Web Browser'
-        : '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
-
-    final songDetails = song != null
-        ? '\n\n--- Current Playing Song ---\n'
-          'Title: ${song.title}\n'
-          'Artist: ${song.author}\n'
-          'Song ID: ${song.id.value}\n'
-          'URL: ${song.url}'
-        : '';
-
-    final subject = Uri.encodeComponent('Bug Report: DilSe Music App');
-    final body = Uri.encodeComponent(
-      'Please describe the bug or issue you encountered:\n\n\n\n'
-      '--- Diagnostic Info ---\n'
-      'App: DilSe Music v3.4.0\n'
-      'Platform: $osInfo'
-      '$songDetails',
-    );
-
-    final emailLaunchUri = Uri.parse(
-      'mailto:charanteja.kondakalla030206@gmail.com,balaamoghraj@gmail.com?subject=$subject&body=$body',
-    );
-
-    try {
-      if (await canLaunchUrl(emailLaunchUri)) {
-        await launchUrl(emailLaunchUri);
-      } else {
-        await Clipboard.setData(const ClipboardData(
-          text: 'charanteja.kondakalla030206@gmail.com, balaamoghraj@gmail.com',
-        ));
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Support emails copied to clipboard (charanteja & balaamoghraj)'),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error opening email: $e'), backgroundColor: Colors.redAccent),
-        );
-      }
-    }
+    BugReportBottomSheet.show(context, song: song);
   }
 
   Widget _buildBarPillButton({
@@ -875,67 +828,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
         },
         child: Stack(
           children: [
-            // 1. Dynamic Adaptive Ambient Background (Static glass styling, GPU-accelerated gradient with zero blur passes)
+            // 1. Dynamic Living Ambient Aura Mesh (GPU-accelerated 60+ FPS organic breathing aura)
             Positioned.fill(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeOutCubic,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color.alphaBlend(vibrantColor.withValues(alpha: 0.32), const Color(0xFF0C0C12)),
-                      Color.alphaBlend(dominantColor.withValues(alpha: 0.18), const Color(0xFF08080C)),
-                      Color.alphaBlend(darkVibrantColor.withValues(alpha: 0.20), const Color(0xFF07070A)),
-                    ],
-                    stops: const [0.0, 0.52, 1.0],
-                  ),
-                ),
-              ),
-            ),
-
-            // Soft Central Ambient Aura directly behind the album artwork
-            Positioned(
-              top: 80,
-              left: 0,
-              right: 0,
-              height: 480,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeOutCubic,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      vibrantColor.withValues(alpha: 0.28),
-                      dominantColor.withValues(alpha: 0.12),
-                      Colors.transparent,
-                    ],
-                    stops: const [0.0, 0.55, 1.0],
-                  ),
-                ),
-              ),
-            ),
-
-            // Top subtle corner ambient highlight
-            Positioned(
-              top: -60,
-              right: -60,
-              width: 240,
-              height: 240,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeOutCubic,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      dominantColor.withValues(alpha: 0.22),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
+              child: _LivingAmbientAuraMesh(
+                dominantColor: dominantColor,
+                vibrantColor: vibrantColor,
+                darkVibrantColor: darkVibrantColor,
               ),
             ),
 
@@ -1069,60 +967,73 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                       width: carouselSize,
                                                       height: carouselSize,
                                                       decoration: BoxDecoration(
-                                                        borderRadius: BorderRadius.circular(26),
+                                                        borderRadius: BorderRadius.circular(28),
+                                                        border: Border.all(
+                                                          color: Colors.white.withValues(alpha: 0.18),
+                                                          width: 1.0,
+                                                        ),
                                                         boxShadow: [
                                                           BoxShadow(
-                                                            color: (isCurrent ? dominantColor : Colors.black).withValues(alpha: 0.60),
-                                                            blurRadius: 36,
+                                                            color: (isCurrent ? dominantColor : Colors.black).withValues(alpha: 0.65),
+                                                            blurRadius: 40,
                                                             spreadRadius: 6,
-                                                            offset: const Offset(0, 16),
+                                                            offset: const Offset(0, 18),
                                                           ),
                                                           BoxShadow(
-                                                            color: (isCurrent ? vibrantColor : Colors.black).withValues(alpha: 0.35),
-                                                            blurRadius: 48,
+                                                            color: (isCurrent ? vibrantColor : Colors.black).withValues(alpha: 0.40),
+                                                            blurRadius: 54,
                                                             spreadRadius: 8,
-                                                            offset: const Offset(0, 8),
+                                                            offset: const Offset(0, 10),
                                                           ),
                                                         ],
                                                       ),
-                                                      child: isCurrent
-                                                          ? Hero(
-                                                              tag: 'player_artwork_${track.id.value}',
-                                                              child: ClipRRect(
-                                                                borderRadius: BorderRadius.circular(26),
+                                                      child: ClipRRect(
+                                                        borderRadius: BorderRadius.circular(27),
+                                                        child: isCurrent
+                                                            ? Hero(
+                                                                tag: 'player_artwork_${track.id.value}',
                                                                 child: Image.network(
                                                                   trackHdThumbnail,
                                                                   fit: BoxFit.cover,
+                                                                  filterQuality: FilterQuality.medium,
+                                                                  cacheWidth: 800,
+                                                                  cacheHeight: 800,
                                                                   errorBuilder: (_, _, _) => Image.network(
                                                                     track.thumbnails.highResUrl,
                                                                     fit: BoxFit.cover,
+                                                                    filterQuality: FilterQuality.medium,
+                                                                    cacheWidth: 800,
+                                                                    cacheHeight: 800,
                                                                     errorBuilder: (_, _, _) => Container(
                                                                       color: const Color(0xFF222230),
                                                                       child: const Icon(Icons.music_note, color: Colors.white54, size: 64),
                                                                     ),
                                                                   ),
                                                                 ),
-                                                              ),
-                                                            )
-                                                          : ClipRRect(
-                                                              borderRadius: BorderRadius.circular(26),
-                                                              child: Image.network(
+                                                              )
+                                                            : Image.network(
                                                                 trackHdThumbnail,
                                                                 fit: BoxFit.cover,
+                                                                filterQuality: FilterQuality.medium,
+                                                                cacheWidth: 800,
+                                                                cacheHeight: 800,
                                                                 errorBuilder: (_, _, _) => Image.network(
                                                                   track.thumbnails.highResUrl,
                                                                   fit: BoxFit.cover,
+                                                                  filterQuality: FilterQuality.medium,
+                                                                  cacheWidth: 800,
+                                                                  cacheHeight: 800,
                                                                   errorBuilder: (_, _, _) => Container(
                                                                     color: const Color(0xFF222230),
                                                                     child: const Icon(Icons.music_note, color: Colors.white54, size: 64),
                                                                   ),
                                                                 ),
                                                               ),
-                                                            ),
+                                                      ),
                                                     ),
-                                            ),
-                                          );
-                                        },
+                                              ),
+                                            );
+                                          },
                                       ),
                                     ),
                                   ),
@@ -1513,62 +1424,72 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
                     const SizedBox(height: 8),
 
-                    // Bottom Screen Options: 3 Main Static Glass Pill Buttons (Low-end static glass)
-                    Container(
-                      margin: const EdgeInsets.only(top: 4, bottom: 2),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF14141E).withValues(alpha: 0.90),
-                        borderRadius: BorderRadius.circular(30),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.08),
-                          width: 1.0,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.35),
-                            blurRadius: 16,
-                            offset: const Offset(0, 4),
+                    // Bottom Screen Options: Hardware-Grade Frosted Glass Pill Dock
+                    RepaintBoundary(
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 4, bottom: 2),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(32),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: const Color(0xB8101018),
+                                borderRadius: BorderRadius.circular(32),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.12),
+                                  width: 0.9,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.40),
+                                    blurRadius: 18,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.center,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    // 1. Lyrics
+                                    _buildBarPillButton(
+                                      context: context,
+                                      icon: _showLyrics ? Icons.lyrics_rounded : Icons.lyrics_outlined,
+                                      label: 'Lyrics',
+                                      isActive: _showLyrics,
+                                      activeColor: vibrantColor,
+                                      onTap: () => _toggleLyrics(song),
+                                    ),
+
+                                    // 2. Queue (Up Next)
+                                    _buildBarPillButton(
+                                      context: context,
+                                      icon: Icons.queue_music_rounded,
+                                      label: 'Queue',
+                                      badgeCount: _musicService.playlist.length,
+                                      isActive: false,
+                                      activeColor: vibrantColor,
+                                      onTap: () => _showQueueSheet(context),
+                                    ),
+
+                                    // 3. Three Lines (More Options Layer)
+                                    _buildBarPillButton(
+                                      context: context,
+                                      icon: Icons.segment_rounded,
+                                      label: 'More',
+                                      isActive: false,
+                                      activeColor: vibrantColor,
+                                      onTap: () => _showCurrentSongActionsSheet(context, song),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
-                        ],
-                      ),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.center,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            // 1. Lyrics
-                            _buildBarPillButton(
-                              context: context,
-                              icon: _showLyrics ? Icons.lyrics_rounded : Icons.lyrics_outlined,
-                              label: 'Lyrics',
-                              isActive: _showLyrics,
-                              activeColor: vibrantColor,
-                              onTap: () => _toggleLyrics(song),
-                            ),
-
-                            // 2. Queue (Up Next)
-                            _buildBarPillButton(
-                              context: context,
-                              icon: Icons.queue_music_rounded,
-                              label: 'Queue',
-                              badgeCount: _musicService.playlist.length,
-                              isActive: false,
-                              activeColor: vibrantColor,
-                              onTap: () => _showQueueSheet(context),
-                            ),
-
-                            // 3. Three Lines (More Options Layer)
-                            _buildBarPillButton(
-                              context: context,
-                              icon: Icons.segment_rounded,
-                              label: 'More',
-                              isActive: false,
-                              activeColor: vibrantColor,
-                              onTap: () => _showCurrentSongActionsSheet(context, song),
-                            ),
-                          ],
                         ),
                       ),
                     ),
@@ -1647,3 +1568,165 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 }
+
+/// GPU-Accelerated 60+ FPS Organic Living Ambient Aura Mesh
+class _LivingAmbientAuraMesh extends StatefulWidget {
+  final Color dominantColor;
+  final Color vibrantColor;
+  final Color darkVibrantColor;
+
+  const _LivingAmbientAuraMesh({
+    required this.dominantColor,
+    required this.vibrantColor,
+    required this.darkVibrantColor,
+  });
+
+  @override
+  State<_LivingAmbientAuraMesh> createState() => _LivingAmbientAuraMeshState();
+}
+
+class _LivingAmbientAuraMeshState extends State<_LivingAmbientAuraMesh>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _meshController;
+
+  @override
+  void initState() {
+    super.initState();
+    _meshController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 16),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _meshController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _meshController,
+        builder: (context, _) {
+          final t = _meshController.value * 2 * math.pi;
+          // Organic breathing orbit calculations
+          final dx1 = math.sin(t) * 36;
+          final dy1 = math.cos(t) * 26;
+          final scale1 = 1.0 + math.sin(t * 1.5) * 0.12;
+
+          final dx2 = math.cos(t * 0.8) * 44;
+          final dy2 = math.sin(t * 0.8) * 34;
+          final scale2 = 1.0 + math.cos(t * 1.2) * 0.14;
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              // Deep Dark Obsidian Background
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xFF0D0D16),
+                      Color(0xFF07070A),
+                      Color(0xFF050508),
+                    ],
+                    stops: [0.0, 0.55, 1.0],
+                  ),
+                ),
+              ),
+
+              // Radiant Orb 1: Vibrant Hero Mesh Blob
+              Positioned(
+                top: 40 + dy1,
+                left: -40 + dx1,
+                width: 380 * scale1,
+                height: 380 * scale1,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        widget.vibrantColor.withValues(alpha: 0.38),
+                        widget.vibrantColor.withValues(alpha: 0.14),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.45, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Radiant Orb 2: Dominant Center-Right Mesh Blob
+              Positioned(
+                top: 130 + dy2,
+                right: -60 + dx2,
+                width: 420 * scale2,
+                height: 420 * scale2,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        widget.dominantColor.withValues(alpha: 0.32),
+                        widget.dominantColor.withValues(alpha: 0.12),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.50, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Radiant Orb 3: Deep Underglow anchoring the artwork
+              Positioned(
+                top: 250,
+                left: 20,
+                right: 20,
+                height: 320,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        widget.darkVibrantColor.withValues(alpha: 0.28),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.85],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Soft Dark Vignette at bottom for absolute control button legibility
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: 320,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Color(0xB3050508),
+                        Color(0xF5050508),
+                      ],
+                      stops: [0.0, 0.55, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+

@@ -93,82 +93,84 @@ class _WaveformScrubberState extends State<WaveformScrubber> {
         ? widget.duration - displayPosition
         : Duration.zero;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Waveform Visualizer & Seek Track
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final trackWidth = constraints.maxWidth;
+    return RepaintBoundary(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Waveform Visualizer & Seek Track
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final trackWidth = constraints.maxWidth;
 
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onHorizontalDragStart: (details) {
-                _isDragging = true;
-                _handleSeek(details.localPosition.dx, trackWidth);
-                HapticFeedback.lightImpact();
-              },
-              onHorizontalDragUpdate: (details) {
-                _handleSeek(details.localPosition.dx, trackWidth);
-              },
-              onHorizontalDragEnd: (_) => _commitSeek(),
-              onHorizontalDragCancel: () {
-                setState(() {
-                  _isDragging = false;
-                  _dragProgress = null;
-                });
-              },
-              onTapDown: (details) {
-                _handleSeek(details.localPosition.dx, trackWidth);
-                _commitSeek();
-              },
-              child: Container(
-                height: 44,
-                alignment: Alignment.center,
-                child: CustomPaint(
-                  size: Size(trackWidth, 40),
-                  painter: _WaveformPainter(
-                    waveform: _waveformHeights,
-                    progress: activeProgress,
-                    isDragging: _isDragging,
-                    accentColor: widget.accentColor,
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragStart: (details) {
+                  _isDragging = true;
+                  _handleSeek(details.localPosition.dx, trackWidth);
+                  HapticFeedback.lightImpact();
+                },
+                onHorizontalDragUpdate: (details) {
+                  _handleSeek(details.localPosition.dx, trackWidth);
+                },
+                onHorizontalDragEnd: (_) => _commitSeek(),
+                onHorizontalDragCancel: () {
+                  setState(() {
+                    _isDragging = false;
+                    _dragProgress = null;
+                  });
+                },
+                onTapDown: (details) {
+                  _handleSeek(details.localPosition.dx, trackWidth);
+                  _commitSeek();
+                },
+                child: Container(
+                  height: 44,
+                  alignment: Alignment.center,
+                  child: CustomPaint(
+                    size: Size(trackWidth, 40),
+                    painter: _WaveformPainter(
+                      waveform: _waveformHeights,
+                      progress: activeProgress,
+                      isDragging: _isDragging,
+                      accentColor: widget.accentColor,
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
-        ),
-
-        const SizedBox(height: 4),
-
-        // Timestamps with Tabular Numbers (prevents jitter)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                _formatDuration(displayPosition),
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.65),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-              Text(
-                '-${_formatDuration(remaining)}',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.65),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
+              );
+            },
           ),
-        ),
-      ],
+
+          const SizedBox(height: 4),
+
+          // Timestamps with Tabular Numbers (prevents jitter)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _formatDuration(displayPosition),
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.65),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                Text(
+                  '-${_formatDuration(remaining)}',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.65),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

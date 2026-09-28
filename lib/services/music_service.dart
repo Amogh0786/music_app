@@ -1310,7 +1310,16 @@ class MusicService extends ChangeNotifier {
 
 
   Future<void> playCustomPlaylist(String playlistId, int startIndex) async {
-    final playlist = _customPlaylists.firstWhere((p) => p['id'] == playlistId, orElse: () => <String, dynamic>{});
+    final Map<String, dynamic> playlist;
+    if (playlistId == 'liked') {
+      playlist = {
+        'id': 'liked',
+        'name': 'Liked Songs',
+        'songs': _likedSongs,
+      };
+    } else {
+      playlist = _customPlaylists.firstWhere((p) => p['id'] == playlistId, orElse: () => <String, dynamic>{});
+    }
     if (playlist.isEmpty) return;
 
     final songs = List<Map<String, dynamic>>.from(playlist['songs'] ?? []);

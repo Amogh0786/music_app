@@ -154,16 +154,16 @@ class _LibraryScreenState extends State<LibraryScreen>
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF161622),
+                      color: const Color(0xFF14141E),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.12),
+                        color: Colors.white.withValues(alpha: 0.16),
                         width: 1,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.3),
-                          blurRadius: 12,
+                          color: Colors.black.withValues(alpha: 0.35),
+                          blurRadius: 14,
                           offset: const Offset(0, 4),
                         ),
                       ],
@@ -323,25 +323,28 @@ class _LibraryScreenState extends State<LibraryScreen>
                       final sizeBytes = _songFileSizes[songId] ?? 0;
                       final sizeFormatted = _formatBytes(sizeBytes);
 
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: SizedBox(
-                            width: 52,
-                            height: 52,
-                            child: Image.network(
-                              song['thumbnail'] ?? '',
-                              cacheWidth: 120,
-                              cacheHeight: 120,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => Container(
-                                color: const Color(0xFF1E1E28),
-                                child: const Icon(Icons.music_note, color: Colors.white54),
+                      return RepaintBoundary(
+                        key: ValueKey('down_$songId'),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: SizedBox(
+                              width: 52,
+                              height: 52,
+                              child: Image.network(
+                                song['thumbnail'] ?? '',
+                                cacheWidth: 150,
+                                cacheHeight: 150,
+                                filterQuality: FilterQuality.medium,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => Container(
+                                  color: const Color(0xFF1E1E28),
+                                  child: const Icon(Icons.music_note, color: Colors.white54),
+                                ),
                               ),
                             ),
                           ),
-                        ),
                         title: Text(
                           song['title'] ?? 'Unknown',
                           maxLines: 1,
@@ -421,7 +424,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                           HapticFeedback.lightImpact();
                           _musicService.playDownloadedSong(song);
                         },
-                      );
+                      ),
+                    );
                     },
                   ),
 
@@ -452,25 +456,28 @@ class _LibraryScreenState extends State<LibraryScreen>
                       }
 
                       final song = liked[index - 1];
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: SizedBox(
-                            width: 52,
-                            height: 52,
-                            child: Image.network(
-                              song['thumbnail'] ?? '',
-                              fit: BoxFit.cover,
-                              cacheWidth: 120,
-                              cacheHeight: 120,
-                              errorBuilder: (_, _, _) => Container(
-                                color: const Color(0xFF1E1E28),
-                                child: const Icon(Icons.music_note, color: Colors.white54),
+                      return RepaintBoundary(
+                        key: ValueKey('liked_${song['id']}'),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: SizedBox(
+                              width: 52,
+                              height: 52,
+                              child: Image.network(
+                                song['thumbnail'] ?? '',
+                                fit: BoxFit.cover,
+                                cacheWidth: 150,
+                                cacheHeight: 150,
+                                filterQuality: FilterQuality.medium,
+                                errorBuilder: (_, _, _) => Container(
+                                  color: const Color(0xFF1E1E28),
+                                  child: const Icon(Icons.music_note, color: Colors.white54),
+                                ),
                               ),
                             ),
                           ),
-                        ),
                         title: Text(
                           song['title'] ?? '',
                           maxLines: 1,
@@ -501,7 +508,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                           HapticFeedback.lightImpact();
                           _musicService.playLikedSong(song);
                         },
-                      );
+                      ),
+                    );
                     },
                   ),
 
@@ -591,43 +599,46 @@ class _LibraryScreenState extends State<LibraryScreen>
                       final isCurrent = _musicService.currentSong?.id.value == songId;
                       final isLiked = _musicService.isLiked(songId);
 
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        leading: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 26,
-                              child: Center(
-                                child: Text(
-                                  '$rank',
-                                  style: TextStyle(
-                                    color: isTop3 ? primaryColor : Colors.white54,
-                                    fontWeight: isTop3 ? FontWeight.w900 : FontWeight.w600,
-                                    fontSize: rank > 99 ? 12 : 14,
+                      return RepaintBoundary(
+                        key: ValueKey('most_$songId'),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          leading: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 26,
+                                child: Center(
+                                  child: Text(
+                                    '$rank',
+                                    style: TextStyle(
+                                      color: isTop3 ? primaryColor : Colors.white54,
+                                      fontWeight: isTop3 ? FontWeight.w900 : FontWeight.w600,
+                                      fontSize: rank > 99 ? 12 : 14,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: SizedBox(
-                                width: 52,
-                                height: 52,
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    Image.network(
-                                      song['thumbnail'] ?? '',
-                                      fit: BoxFit.cover,
-                                      cacheWidth: 120,
-                                      cacheHeight: 120,
-                                      errorBuilder: (_, _, _) => Container(
-                                        color: const Color(0xFF1E1E28),
-                                        child: const Icon(Icons.music_note, color: Colors.white54),
+                              const SizedBox(width: 8),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: SizedBox(
+                                  width: 52,
+                                  height: 52,
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      Image.network(
+                                        song['thumbnail'] ?? '',
+                                        fit: BoxFit.cover,
+                                        cacheWidth: 150,
+                                        cacheHeight: 150,
+                                        filterQuality: FilterQuality.medium,
+                                        errorBuilder: (_, _, _) => Container(
+                                          color: const Color(0xFF1E1E28),
+                                          child: const Icon(Icons.music_note, color: Colors.white54),
+                                        ),
                                       ),
-                                    ),
                                     if (isCurrent)
                                       Container(
                                         color: Colors.black54,
@@ -722,7 +733,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                           HapticFeedback.lightImpact();
                           _musicService.playMostPlayedSong(song, allSongs: mostPlayed, startIndex: index - 1);
                         },
-                      );
+                      ),
+                    );
                     },
                   ),
 
@@ -816,20 +828,23 @@ class _LibraryScreenState extends State<LibraryScreen>
                       final id = (playlist['id'] as String?) ?? '';
                       final firstThumbnail = songs.isNotEmpty ? songs.first['thumbnail'] as String? : null;
 
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Container(
-                            width: 52,
-                            height: 52,
-                            color: const Color(0xFF1E1E28),
-                            child: firstThumbnail != null && firstThumbnail.isNotEmpty
-                                ? Image.network(
-                                    firstThumbnail,
-                                    fit: BoxFit.cover,
-                                    cacheWidth: 120,
-                                    cacheHeight: 120,
+                      return RepaintBoundary(
+                        key: ValueKey('plist_$id'),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              width: 52,
+                              height: 52,
+                              color: const Color(0xFF1E1E28),
+                              child: firstThumbnail != null && firstThumbnail.isNotEmpty
+                                  ? Image.network(
+                                      firstThumbnail,
+                                      fit: BoxFit.cover,
+                                      cacheWidth: 150,
+                                      cacheHeight: 150,
+                                      filterQuality: FilterQuality.medium,
                                     errorBuilder: (_, _, _) => const Icon(
                                       Icons.featured_play_list_rounded,
                                       color: Color(0xFF1DB954),
@@ -902,7 +917,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                             ),
                           );
                         },
-                      );
+                      ),
+                    );
                     },
                   ),
 
@@ -947,18 +963,21 @@ class _LibraryScreenState extends State<LibraryScreen>
                       }
 
                       final song = history[index - 1];
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: SizedBox(
-                            width: 52,
-                            height: 52,
-                            child: Image.network(
-                              song['thumbnail'] ?? '',
-                              fit: BoxFit.cover,
-                              cacheWidth: 120,
-                              cacheHeight: 120,
+                      return RepaintBoundary(
+                        key: ValueKey('hist_${song['id']}'),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: SizedBox(
+                              width: 52,
+                              height: 52,
+                              child: Image.network(
+                                song['thumbnail'] ?? '',
+                                fit: BoxFit.cover,
+                                cacheWidth: 150,
+                                cacheHeight: 150,
+                                filterQuality: FilterQuality.medium,
                               errorBuilder: (_, _, _) => Container(
                                 color: const Color(0xFF1E1E28),
                                 child: const Icon(Icons.music_note, color: Colors.white54),
@@ -990,7 +1009,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                           HapticFeedback.lightImpact();
                           _musicService.playHistorySong(song);
                         },
-                      );
+                      ),
+                    );
                     },
                   ),
           ],
