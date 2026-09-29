@@ -16,9 +16,9 @@ Classification: Operational & Technical Specification
 - Upstream Remote URL: https://github.com/charanteja-k/music_app.git
 
 1.2 Application Versioning
-- Semantic Version: 3.5.0
-- Build Number: 18
-- Canonical Version String (pubspec.yaml): 3.5.0+18
+- Semantic Version: 3.6.0
+- Build Number: 19
+- Canonical Version String (pubspec.yaml): 3.6.0+19
 - Flutter SDK Constraint: ^3.12.2
 - Target Operating Environments: Android (API 24 to 34+), iOS (14.0+), Web PWA (Modern Chromium, Safari WebKit, Firefox Gecko)
 
