@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'services/audio_handler.dart';
 import 'screens/intro_splash_screen.dart';
 import 'services/preferences_service.dart';
+import 'services/bug_report_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +15,7 @@ void main() async {
     }
   }
   await PreferencesService().init();
+  await BugReportService.instance.init();
   runApp(const MusicApp());
 }
 
@@ -44,6 +46,13 @@ class MusicApp extends StatelessWidget {
             ),
             useMaterial3: true,
           ),
+          navigatorKey: BugReportService.instance.rootNavKey,
+          builder: (context, child) {
+            return RepaintBoundary(
+              key: BugReportService.instance.repaintBoundaryKey,
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
           home: const IntroSplashScreen(),
         );
       },

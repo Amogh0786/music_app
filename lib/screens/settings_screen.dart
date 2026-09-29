@@ -1,6 +1,4 @@
 import 'dart:async' show unawaited;
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -9,6 +7,7 @@ import '../services/preferences_service.dart';
 import '../services/music_service.dart';
 import '../services/update_service.dart';
 import '../services/notification_permission_service.dart';
+import '../services/bug_report_service.dart';
 import '../widgets/interactive_update_dialog.dart';
 import '../widgets/equalizer_bottom_sheet.dart';
 
@@ -237,7 +236,9 @@ class _SettingsScreenState extends State<SettingsScreen>
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               decoration: BoxDecoration(
                 color: const Color(0xFF14141E).withValues(alpha: 0.98),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
               child: SafeArea(
@@ -375,11 +376,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                                                   const EdgeInsets.symmetric(
                                                     horizontal: 6,
                                                     vertical: 2,
-                                              ),
+                                                  ),
                                               decoration: BoxDecoration(
                                                 color: isSelected
                                                     ? _prefs.themeColor
-                                                        .withValues(alpha: 0.3)
+                                                          .withValues(
+                                                            alpha: 0.3,
+                                                          )
                                                     : Colors.white10,
                                                 borderRadius:
                                                     BorderRadius.circular(4),
@@ -442,7 +445,9 @@ class _SettingsScreenState extends State<SettingsScreen>
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               decoration: BoxDecoration(
                 color: const Color(0xFF14141E).withValues(alpha: 0.98),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
               child: SafeArea(
@@ -535,12 +540,16 @@ class _SettingsScreenState extends State<SettingsScreen>
                               padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
                                 color: isSelected
-                                    ? const Color(0xFF00E5FF).withValues(alpha: 0.14)
+                                    ? const Color(
+                                        0xFF00E5FF,
+                                      ).withValues(alpha: 0.14)
                                     : Colors.white.withValues(alpha: 0.04),
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
                                   color: isSelected
-                                      ? const Color(0xFF00E5FF).withValues(alpha: 0.6)
+                                      ? const Color(
+                                          0xFF00E5FF,
+                                        ).withValues(alpha: 0.6)
                                       : Colors.white.withValues(alpha: 0.06),
                                   width: isSelected ? 1.5 : 1.0,
                                 ),
@@ -580,11 +589,12 @@ class _SettingsScreenState extends State<SettingsScreen>
                                                   const EdgeInsets.symmetric(
                                                     horizontal: 6,
                                                     vertical: 2,
-                                              ),
+                                                  ),
                                               decoration: BoxDecoration(
                                                 color: isSelected
-                                                    ? const Color(0xFF00E5FF)
-                                                        .withValues(alpha: 0.3)
+                                                    ? const Color(
+                                                        0xFF00E5FF,
+                                                      ).withValues(alpha: 0.3)
                                                     : Colors.white10,
                                                 borderRadius:
                                                     BorderRadius.circular(4),
@@ -1175,10 +1185,11 @@ class _SettingsScreenState extends State<SettingsScreen>
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: (_musicService.currentSong != null
-                              ? Colors.greenAccent
-                              : Colors.blueGrey)
-                          .withValues(alpha: 0.15),
+                      color:
+                          (_musicService.currentSong != null
+                                  ? Colors.greenAccent
+                                  : Colors.blueGrey)
+                              .withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
@@ -1441,6 +1452,38 @@ class _SettingsScreenState extends State<SettingsScreen>
                         ),
                   onTap: _isCheckingUpdate ? null : _handleCheckForUpdates,
                 ),
+                SwitchListTile(
+                  title: const Text(
+                    'Shake to Report Bug',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Shake phone 3 times anytime to capture diagnostics and submit a bug',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                  ),
+                  activeThumbColor: Colors.white,
+                  activeTrackColor: _prefs.themeColor,
+                  value: BugReportService.instance.isShakeEnabled,
+                  secondary: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFA2D48).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.vibration_rounded,
+                      color: Color(0xFFFA2D48),
+                      size: 20,
+                    ),
+                  ),
+                  onChanged: (val) async {
+                    await BugReportService.instance.setShakeEnabled(val);
+                    setState(() {});
+                  },
+                ),
                 ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
@@ -1462,14 +1505,16 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                   ),
                   subtitle: Text(
-                    'Found an issue? Let us know via Email',
+                    'Submit issue with snapshot & diagnostics',
                     style: TextStyle(color: Colors.grey[400], fontSize: 13),
                   ),
                   trailing: const Icon(
                     Icons.chevron_right_rounded,
                     color: Colors.white30,
                   ),
-                  onTap: _reportBug,
+                  onTap: () {
+                    BugReportService.instance.triggerReportModal(context);
+                  },
                 ),
                 ListTile(
                   leading: Container(
@@ -1601,58 +1646,6 @@ class _SettingsScreenState extends State<SettingsScreen>
         ],
       ),
     );
-  }
-
-  Future<void> _reportBug() async {
-    final osInfo = kIsWeb
-        ? 'Web Browser'
-        : '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
-
-    final String subject = Uri.encodeComponent(
-      'Bug Report: DilSe Music App (v$_appVersion)',
-    );
-    final String body = Uri.encodeComponent(
-      'Please describe the bug you encountered:\n\n\n\n'
-      '--- App Info ---\n'
-      'Version: $_appVersion\n'
-      'Build: $_buildNumber\n'
-      'OS: $osInfo',
-    );
-    final Uri emailLaunchUri = Uri.parse(
-      'mailto:charanteja.kondakalla030206@gmail.com,balaamoghraj@gmail.com?subject=$subject&body=$body',
-    );
-
-    try {
-      if (await canLaunchUrl(emailLaunchUri)) {
-        await launchUrl(emailLaunchUri);
-      } else {
-        await Clipboard.setData(
-          const ClipboardData(
-            text:
-                'charanteja.kondakalla030206@gmail.com, balaamoghraj@gmail.com',
-          ),
-        );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Support emails copied to clipboard (charanteja & balaamoghraj)',
-              ),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    }
   }
 
   Future<void> _handleCheckForUpdates() async {

@@ -74,6 +74,7 @@
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
-	</dict>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>DilSe requires access to your photo library to attach screenshots to your bug report</string>
 </dict>
 </plist>

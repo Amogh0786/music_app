@@ -8,6 +8,7 @@ import '../services/canonical_song_dedup.dart';
 import '../widgets/shimmer_loading.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/animated_equalizer.dart';
+import '../widgets/bug_report_button.dart';
 import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -411,41 +412,48 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                       ],
                     ),
-                    GestureDetector(
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ProfileScreen(),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(2.5),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.18),
-                            width: 1.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.35),
-                              blurRadius: 10,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const BugReportButton(),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const ProfileScreen(),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(2.5),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.18),
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.35),
+                                  blurRadius: 10,
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        child: const CircleAvatar(
-                          backgroundColor: Color(0xFF1E1E28),
-                          radius: 20,
-                          child: Icon(
-                            Icons.person_rounded,
-                            color: Colors.white,
-                            size: 22,
+                            child: const CircleAvatar(
+                              backgroundColor: Color(0xFF1E1E28),
+                              radius: 20,
+                              child: Icon(
+                                Icons.person_rounded,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),

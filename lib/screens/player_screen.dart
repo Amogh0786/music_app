@@ -14,6 +14,7 @@ import '../widgets/waveform_scrubber.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/equalizer_bottom_sheet.dart';
 import '../widgets/animated_lyrics.dart';
+import '../widgets/bug_report_button.dart';
 import '../services/screen_wake_service.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -1211,17 +1212,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             ),
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.tune_rounded,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                          tooltip: 'Audio Equalizer',
-                          onPressed: () {
-                            HapticFeedback.lightImpact();
-                            EqualizerBottomSheet.show(context);
-                          },
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const BugReportButton(size: 34),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.tune_rounded,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                              tooltip: 'Audio Equalizer',
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                EqualizerBottomSheet.show(context);
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),

@@ -53,8 +53,10 @@ class StreamCandidate {
 
 class ActiveStreamInfo {
   final String format; // 'AAC (.mp4)', 'Opus (.webm)', 'MP3', 'Local File'
-  final String qualityLabel; // '320 kbps (Studio Master)', '160 kbps (High Fidelity)', '128 kbps (Balanced)', '64 kbps (Data Saver)'
-  final String source; // 'JioSaavn Studio CDN', 'YouTube Direct Audio', 'Offline Storage', 'Cloudflare Edge'
+  final String
+  qualityLabel; // '320 kbps (Studio Master)', '160 kbps (High Fidelity)', '128 kbps (Balanced)', '64 kbps (Data Saver)'
+  final String
+  source; // 'JioSaavn Studio CDN', 'YouTube Direct Audio', 'Offline Storage', 'Cloudflare Edge'
   final int? tag;
   final bool isHd;
 
@@ -177,6 +179,29 @@ class MusicService extends ChangeNotifier {
   bool get isCrossfading => _isCrossfading;
   ActiveStreamInfo _activeStreamInfo = ActiveStreamInfo.standard;
   ActiveStreamInfo get activeStreamInfo => _activeStreamInfo;
+
+  String get currentStreamType {
+    if (_activeStreamInfo.format.isNotEmpty) {
+      return '${_activeStreamInfo.format} (${_activeStreamInfo.qualityLabel})';
+    }
+    return 'None';
+  }
+
+  String get activeDeckName =>
+      (_activePlayer == _playerA) ? '_playerA' : '_playerB';
+  String get playbackStateString {
+    if (_isLoading) {
+      return 'buffering';
+    }
+    if (isPlaying) {
+      return 'playing';
+    }
+    return 'paused';
+  }
+
+  static final List<Map<String, dynamic>> _clientLogRingBuffer = [];
+  static List<Map<String, dynamic>> get clientLogRingBuffer =>
+      List.unmodifiable(_clientLogRingBuffer);
 
   bool get isPlaying =>
       kIsWeb ? WebPlayerBridge.isPlaying : _activePlayer.playing;
@@ -1648,7 +1673,8 @@ class MusicService extends ChangeNotifier {
 
   Future<void> _prewarmSingleTrack(Video track) async {
     final trackId = track.id.value;
-    if (_webStreamUrls[trackId] != null && _webStreamUrls[trackId]!.isNotEmpty) {
+    if (_webStreamUrls[trackId] != null &&
+        _webStreamUrls[trackId]!.isNotEmpty) {
       return;
     }
     try {
@@ -2712,6 +2738,10 @@ class MusicService extends ChangeNotifier {
         'timestamp': DateTime.now().toIso8601String(),
         ...data,
       };
+      if (_clientLogRingBuffer.length >= 25) {
+        _clientLogRingBuffer.removeAt(0);
+      }
+      _clientLogRingBuffer.add(payload);
       http
           .post(
             ApiConfig.clientLogUri(),
@@ -2781,21 +2811,25 @@ class MusicService extends ChangeNotifier {
         .toList();
 
     // Opus audio-only streams (itag 251 @ 160kbps, 250 @ 70kbps, 249 @ 50kbps)
-    final opusStreams = manifest.audioOnly.where(
-      (s) =>
-          s.container.name.toLowerCase() == 'webm' ||
-          s.codec.mimeType.contains('webm') ||
-          s.codec.mimeType.contains('opus'),
-    ).toList();
+    final opusStreams = manifest.audioOnly
+        .where(
+          (s) =>
+              s.container.name.toLowerCase() == 'webm' ||
+              s.codec.mimeType.contains('webm') ||
+              s.codec.mimeType.contains('opus'),
+        )
+        .toList();
 
     // AAC audio-only streams (itag 140 @ 128kbps, 139 @ 48kbps)
-    final aacStreams = manifest.audioOnly.where(
-      (s) =>
-          s.container.name.toLowerCase() == 'mp4' ||
-          s.codec.mimeType.contains('mp4') ||
-          s.codec.mimeType.contains('aac') ||
-          s.codec.mimeType.contains('mp4a'),
-    ).toList();
+    final aacStreams = manifest.audioOnly
+        .where(
+          (s) =>
+              s.container.name.toLowerCase() == 'mp4' ||
+              s.codec.mimeType.contains('mp4') ||
+              s.codec.mimeType.contains('aac') ||
+              s.codec.mimeType.contains('mp4a'),
+        )
+        .toList();
 
     // Sort streams according to quality preset (bitrate orientation)
     // For data saver: sort ascending (lowest bitrate first)
@@ -2933,7 +2967,8 @@ class MusicService extends ChangeNotifier {
       }
     } else {
       // Auto (Smart Engine) / MP3
-      final bool isApplePlatform = !kIsWeb &&
+      final bool isApplePlatform =
+          !kIsWeb &&
           (defaultTargetPlatform == TargetPlatform.iOS ||
               defaultTargetPlatform == TargetPlatform.macOS);
 
@@ -3335,7 +3370,8 @@ class MusicService extends ChangeNotifier {
           format: directStreamUrl.isNotEmpty ? 'AAC (.mp4)' : 'Web Stream',
           qualityLabel: q.label,
           source: directStreamUrl.isNotEmpty ? 'Cloudflare CDN' : 'Web Engine',
-          isHd: q == AudioQualityPreset.studioMaster ||
+          isHd:
+              q == AudioQualityPreset.studioMaster ||
               q == AudioQualityPreset.high,
         );
         _isLoading = false;
@@ -3350,7 +3386,8 @@ class MusicService extends ChangeNotifier {
       // 3. Mobile Native Mode (Android / iOS app):
       // Check for direct JioSaavn CDN stream first (if user format allows)!
       final directStreamUrl = _webStreamUrls[song.id.value] ?? '';
-      final canUseDirectCdn = activeFormatPref != AudioFormatPreference.opus &&
+      final canUseDirectCdn =
+          activeFormatPref != AudioFormatPreference.opus &&
           directStreamUrl.isNotEmpty;
       if (canUseDirectCdn) {
         final adaptedStreamUrl = adaptJioSaavnBitrate(
@@ -3382,7 +3419,8 @@ class MusicService extends ChangeNotifier {
             format: 'AAC (.mp4)',
             qualityLabel: activeQualityPreset.label,
             source: 'JioSaavn CDN (${activeQualityPreset.shortLabel})',
-            isHd: activeQualityPreset == AudioQualityPreset.studioMaster ||
+            isHd:
+                activeQualityPreset == AudioQualityPreset.studioMaster ||
                 activeQualityPreset == AudioQualityPreset.high,
           );
           _isLoading = false;
@@ -4024,7 +4062,10 @@ class MusicService extends ChangeNotifier {
         for (final track in tracks) {
           if (!CanonicalSongDedup.isGenuineSong(track)) continue;
           if (targetLang != null &&
-              !CanonicalSongDedup.isLanguageCompatible(targetLang, track.title)) {
+              !CanonicalSongDedup.isLanguageCompatible(
+                targetLang,
+                track.title,
+              )) {
             continue;
           }
 
