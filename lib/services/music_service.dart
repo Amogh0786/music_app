@@ -39,7 +39,64 @@ class StreamCandidate {
   final String url;
   final int tag;
   final String type;
-  StreamCandidate(this.url, this.tag, this.type);
+  final int bitrateKbps;
+  final String codec;
+
+  StreamCandidate(
+    this.url,
+    this.tag,
+    this.type, {
+    this.bitrateKbps = 128,
+    this.codec = 'aac',
+  });
+}
+
+class ActiveStreamInfo {
+  final String format; // 'AAC (.mp4)', 'Opus (.webm)', 'MP3', 'Local File'
+  final String qualityLabel; // '320 kbps (Studio Master)', '160 kbps (High Fidelity)', '128 kbps (Balanced)', '64 kbps (Data Saver)'
+  final String source; // 'JioSaavn Studio CDN', 'YouTube Direct Audio', 'Offline Storage', 'Cloudflare Edge'
+  final int? tag;
+  final bool isHd;
+
+  const ActiveStreamInfo({
+    required this.format,
+    required this.qualityLabel,
+    required this.source,
+    this.tag,
+    this.isHd = false,
+  });
+
+  String get displayTag {
+    if (source.contains('Offline') || source.contains('Local')) {
+      return 'OFFLINE';
+    }
+    if (source.contains('JioSaavn')) {
+      if (qualityLabel.contains('320')) return '320 KBPS';
+      if (qualityLabel.contains('160')) return '160 KBPS';
+      if (qualityLabel.contains('96')) return '96 KBPS';
+      return '48 KBPS';
+    }
+    if (format.contains('Opus')) {
+      if (tag == 251) return 'OPUS 160K';
+      if (tag == 250) return 'OPUS 70K';
+      if (tag == 249) return 'OPUS 50K';
+      return 'OPUS';
+    }
+    if (format.contains('AAC')) {
+      if (tag == 22) return 'AAC HD';
+      if (tag == 140) return 'AAC 128K';
+      if (tag == 139) return 'AAC 48K';
+      return 'AAC';
+    }
+    return isHd ? 'HD AUDIO' : 'HQ AUDIO';
+  }
+
+  static const ActiveStreamInfo standard = ActiveStreamInfo(
+    format: 'AAC (.mp4)',
+    qualityLabel: '128 kbps (Balanced)',
+    source: 'Standard Adaptive Stream',
+    isHd: false,
+  );
 }
 
 class MusicService extends ChangeNotifier {
@@ -118,6 +175,8 @@ class MusicService extends ChangeNotifier {
   AudioPlayer get audioPlayer => _activePlayer;
   AudioPlayer get _audioPlayer => _activePlayer;
   bool get isCrossfading => _isCrossfading;
+  ActiveStreamInfo _activeStreamInfo = ActiveStreamInfo.standard;
+  ActiveStreamInfo get activeStreamInfo => _activeStreamInfo;
 
   bool get isPlaying =>
       kIsWeb ? WebPlayerBridge.isPlaying : _activePlayer.playing;
@@ -2664,8 +2723,34 @@ class MusicService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// Resolves ordered stream candidates natively on the user's device.
-  /// Prioritizes Format 18 (Progressive MP4 AAC) to eliminate ExoPlayer DASH fragmentation errors.
+  /// Dynamically alters JioSaavn CDN audio bitrate based on active AudioQualityPreset.
+  static String adaptJioSaavnBitrate(String url, AudioQualityPreset quality) {
+    if (!url.contains('saavncdn.com') && !url.contains('saavn')) return url;
+
+    String targetSuffix;
+    switch (quality) {
+      case AudioQualityPreset.studioMaster:
+        targetSuffix = '_320';
+        break;
+      case AudioQualityPreset.high:
+        targetSuffix = '_160';
+        break;
+      case AudioQualityPreset.balanced:
+        targetSuffix = '_160';
+        break;
+      case AudioQualityPreset.dataSaver:
+        targetSuffix = '_48';
+        break;
+    }
+
+    return url.replaceAllMapped(
+      RegExp(r'_(320|160|96|48|12)\.(mp4|m4a|mp3)'),
+      (match) => '$targetSuffix.${match.group(2)}',
+    );
+  }
+
+  /// Resolves ordered stream candidates natively on the user's device,
+  /// strictly adhering to the user's AudioQualityPreset and AudioFormatPreference.
   Future<List<StreamCandidate>> _resolveStreamCandidates(String videoId) async {
     StreamManifest? manifest;
 
@@ -2683,61 +2768,294 @@ class MusicService extends ChangeNotifier {
 
     if (manifest == null) return [];
 
+    final quality = PreferencesService().audioQuality;
+    final formatPref = PreferencesService().audioFormat;
+
     final List<StreamCandidate> candidates = [];
 
-    // Candidate 1: Progressive Format 18 (MP4 with AAC stereo audio).
-    // This is the golden standard for ExoPlayer on Android and AVPlayer on iOS
-    // because it contains a progressive moov atom, avoiding DASH single-segment parser errors.
-    final muxed18 = manifest.muxed.where((s) => s.tag == 18);
-    if (muxed18.isNotEmpty) {
-      candidates.add(
-        StreamCandidate(
-          muxed18.first.url.toString(),
-          18,
-          'mp4_progressive_360p_aac',
-        ),
-      );
-    }
+    // Separate available stream categories
+    final muxed18List = manifest.muxed.where((s) => s.tag == 18).toList();
+    final muxed22List = manifest.muxed.where((s) => s.tag == 22).toList();
+    final otherMuxedList = manifest.muxed
+        .where((s) => s.tag != 18 && s.tag != 22)
+        .toList();
 
-    // Candidate 2: Progressive WebM Opus (e.g. itag 251, 160kbps high-quality Opus)
-    // ExoPlayer has native Matroska/WebM demuxing and plays this seamlessly on Android.
-    final webmOpus = manifest.audioOnly.where(
+    // Opus audio-only streams (itag 251 @ 160kbps, 250 @ 70kbps, 249 @ 50kbps)
+    final opusStreams = manifest.audioOnly.where(
       (s) =>
           s.container.name.toLowerCase() == 'webm' ||
           s.codec.mimeType.contains('webm') ||
           s.codec.mimeType.contains('opus'),
-    );
-    if (webmOpus.isNotEmpty) {
-      final best = webmOpus.withHighestBitrate();
-      candidates.add(
-        StreamCandidate(best.url.toString(), best.tag, 'audio_webm_opus'),
-      );
-    }
+    ).toList();
 
-    // Candidate 3: AudioOnly MP4 (itag 140, 128k AAC)
-    final mp4Audio = manifest.audioOnly.where(
+    // AAC audio-only streams (itag 140 @ 128kbps, 139 @ 48kbps)
+    final aacStreams = manifest.audioOnly.where(
       (s) =>
           s.container.name.toLowerCase() == 'mp4' ||
-          s.codec.mimeType.contains('mp4'),
-    );
-    if (mp4Audio.isNotEmpty) {
-      candidates.add(
-        StreamCandidate(
-          mp4Audio.withHighestBitrate().url.toString(),
-          140,
-          'mp4_audio_dash',
-        ),
+          s.codec.mimeType.contains('mp4') ||
+          s.codec.mimeType.contains('aac') ||
+          s.codec.mimeType.contains('mp4a'),
+    ).toList();
+
+    // Sort streams according to quality preset (bitrate orientation)
+    // For data saver: sort ascending (lowest bitrate first)
+    // For high / studio master: sort descending (highest bitrate first)
+    if (quality == AudioQualityPreset.dataSaver) {
+      opusStreams.sort(
+        (a, b) => a.bitrate.bitsPerSecond.compareTo(b.bitrate.bitsPerSecond),
+      );
+      aacStreams.sort(
+        (a, b) => a.bitrate.bitsPerSecond.compareTo(b.bitrate.bitsPerSecond),
+      );
+    } else {
+      opusStreams.sort(
+        (a, b) => b.bitrate.bitsPerSecond.compareTo(a.bitrate.bitsPerSecond),
+      );
+      aacStreams.sort(
+        (a, b) => b.bitrate.bitsPerSecond.compareTo(a.bitrate.bitsPerSecond),
       );
     }
 
-    // Candidate 4: Any other muxed stream (e.g. itag 22 720p MP4)
-    for (final m in manifest.muxed) {
-      if (m.tag != 18) {
+    void addCandidate(
+      dynamic s,
+      String type, {
+      int? defaultBitrate,
+      String? codec,
+    }) {
+      final tag = s.tag as int;
+      final url = s.url.toString();
+      final kbps = defaultBitrate ?? (s.bitrate.kbitPerSec as num).round();
+      final detectedCodec = codec ?? (type.contains('opus') ? 'opus' : 'aac');
+      if (!candidates.any((c) => c.url == url)) {
         candidates.add(
-          StreamCandidate(m.url.toString(), m.tag, 'muxed_${m.container.name}'),
+          StreamCandidate(
+            url,
+            tag,
+            type,
+            bitrateKbps: kbps,
+            codec: detectedCodec,
+          ),
         );
-        break;
       }
+    }
+
+    if (formatPref == AudioFormatPreference.opus) {
+      // 1. Opus streams strictly prioritized
+      for (final s in opusStreams) {
+        addCandidate(s, 'audio_webm_opus', codec: 'opus');
+      }
+      // 2. AAC / progressive fallbacks
+      if (quality == AudioQualityPreset.dataSaver) {
+        for (final s in aacStreams) {
+          addCandidate(s, 'mp4_audio_dash', codec: 'aac');
+        }
+        for (final m in muxed18List) {
+          addCandidate(
+            m,
+            'mp4_progressive_360p_aac',
+            defaultBitrate: 128,
+            codec: 'aac',
+          );
+        }
+      } else {
+        for (final m in muxed18List) {
+          addCandidate(
+            m,
+            'mp4_progressive_360p_aac',
+            defaultBitrate: 128,
+            codec: 'aac',
+          );
+        }
+        for (final s in aacStreams) {
+          addCandidate(s, 'mp4_audio_dash', codec: 'aac');
+        }
+        for (final m in muxed22List) {
+          addCandidate(
+            m,
+            'mp4_progressive_720p_aac',
+            defaultBitrate: 192,
+            codec: 'aac',
+          );
+        }
+      }
+    } else if (formatPref == AudioFormatPreference.aac) {
+      // 1. AAC streams strictly prioritized
+      if (quality == AudioQualityPreset.dataSaver) {
+        for (final s in aacStreams) {
+          addCandidate(s, 'mp4_audio_dash', codec: 'aac');
+        }
+        for (final m in muxed18List) {
+          addCandidate(
+            m,
+            'mp4_progressive_360p_aac',
+            defaultBitrate: 128,
+            codec: 'aac',
+          );
+        }
+      } else if (quality == AudioQualityPreset.studioMaster ||
+          quality == AudioQualityPreset.high) {
+        for (final m in muxed22List) {
+          addCandidate(
+            m,
+            'mp4_progressive_720p_aac',
+            defaultBitrate: 192,
+            codec: 'aac',
+          );
+        }
+        for (final s in aacStreams) {
+          addCandidate(s, 'mp4_audio_dash', codec: 'aac');
+        }
+        for (final m in muxed18List) {
+          addCandidate(
+            m,
+            'mp4_progressive_360p_aac',
+            defaultBitrate: 128,
+            codec: 'aac',
+          );
+        }
+      } else {
+        // Balanced (128 kbps)
+        for (final m in muxed18List) {
+          addCandidate(
+            m,
+            'mp4_progressive_360p_aac',
+            defaultBitrate: 128,
+            codec: 'aac',
+          );
+        }
+        for (final s in aacStreams) {
+          addCandidate(s, 'mp4_audio_dash', codec: 'aac');
+        }
+      }
+      // 2. Opus fallbacks
+      for (final s in opusStreams) {
+        addCandidate(s, 'audio_webm_opus', codec: 'opus');
+      }
+    } else {
+      // Auto (Smart Engine) / MP3
+      final bool isApplePlatform = !kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.iOS ||
+              defaultTargetPlatform == TargetPlatform.macOS);
+
+      if (isApplePlatform) {
+        // iOS/macOS AVPlayer natively excels with Apple Core Audio AAC (.m4a/.mp4)
+        if (quality == AudioQualityPreset.studioMaster ||
+            quality == AudioQualityPreset.high) {
+          for (final m in muxed22List) {
+            addCandidate(
+              m,
+              'mp4_progressive_720p_aac',
+              defaultBitrate: 192,
+              codec: 'aac',
+            );
+          }
+          for (final s in aacStreams) {
+            addCandidate(s, 'mp4_audio_dash', codec: 'aac');
+          }
+          for (final m in muxed18List) {
+            addCandidate(
+              m,
+              'mp4_progressive_360p_aac',
+              defaultBitrate: 128,
+              codec: 'aac',
+            );
+          }
+        } else if (quality == AudioQualityPreset.dataSaver) {
+          for (final s in aacStreams) {
+            addCandidate(s, 'mp4_audio_dash', codec: 'aac');
+          }
+          for (final m in muxed18List) {
+            addCandidate(
+              m,
+              'mp4_progressive_360p_aac',
+              defaultBitrate: 128,
+              codec: 'aac',
+            );
+          }
+        } else {
+          // Balanced (128 kbps)
+          for (final m in muxed18List) {
+            addCandidate(
+              m,
+              'mp4_progressive_360p_aac',
+              defaultBitrate: 128,
+              codec: 'aac',
+            );
+          }
+          for (final s in aacStreams) {
+            addCandidate(s, 'mp4_audio_dash', codec: 'aac');
+          }
+        }
+        // Fallback to Opus if AAC candidates fail
+        for (final s in opusStreams) {
+          addCandidate(s, 'audio_webm_opus', codec: 'opus');
+        }
+      } else {
+        // Android (ExoPlayer) / Web / Desktop: Opus offers maximum compression & transparency
+        if (quality == AudioQualityPreset.dataSaver) {
+          // Lowest data usage first
+          for (final s in opusStreams) {
+            addCandidate(s, 'audio_webm_opus', codec: 'opus');
+          }
+          for (final s in aacStreams) {
+            addCandidate(s, 'mp4_audio_dash', codec: 'aac');
+          }
+          for (final m in muxed18List) {
+            addCandidate(
+              m,
+              'mp4_progressive_360p_aac',
+              defaultBitrate: 128,
+              codec: 'aac',
+            );
+          }
+        } else if (quality == AudioQualityPreset.studioMaster ||
+            quality == AudioQualityPreset.high) {
+          // Highest acoustic fidelity first: itag 251 (160k Opus), muxed22 (192k AAC), muxed18
+          for (final s in opusStreams) {
+            addCandidate(s, 'audio_webm_opus', codec: 'opus');
+          }
+          for (final m in muxed22List) {
+            addCandidate(
+              m,
+              'mp4_progressive_720p_aac',
+              defaultBitrate: 192,
+              codec: 'aac',
+            );
+          }
+          for (final m in muxed18List) {
+            addCandidate(
+              m,
+              'mp4_progressive_360p_aac',
+              defaultBitrate: 128,
+              codec: 'aac',
+            );
+          }
+          for (final s in aacStreams) {
+            addCandidate(s, 'mp4_audio_dash', codec: 'aac');
+          }
+        } else {
+          // Balanced (128 kbps)
+          for (final m in muxed18List) {
+            addCandidate(
+              m,
+              'mp4_progressive_360p_aac',
+              defaultBitrate: 128,
+              codec: 'aac',
+            );
+          }
+          for (final s in opusStreams) {
+            addCandidate(s, 'audio_webm_opus', codec: 'opus');
+          }
+          for (final s in aacStreams) {
+            addCandidate(s, 'mp4_audio_dash', codec: 'aac');
+          }
+        }
+      }
+    }
+
+    // Safety fallback: any other muxed streams
+    for (final m in otherMuxedList) {
+      addCandidate(m, 'muxed_${m.container.name}');
     }
 
     return candidates;
@@ -2823,9 +3141,14 @@ class MusicService extends ChangeNotifier {
       'playedAt': DateTime.now().toIso8601String(),
     });
 
-    // Proactively check JioSaavn to upgrade any track to 320kbps studio master!
-    if (_webStreamUrls[song.id.value] == null ||
-        _webStreamUrls[song.id.value]!.isEmpty) {
+    final activeFormatPref = PreferencesService().audioFormat;
+    final activeQualityPreset = PreferencesService().audioQuality;
+
+    // Proactively check JioSaavn to upgrade track to pristine studio CDN stream
+    // (Bypassed if the user explicitly prefers Opus audio format)
+    if (activeFormatPref != AudioFormatPreference.opus &&
+        (_webStreamUrls[song.id.value] == null ||
+            _webStreamUrls[song.id.value]!.isEmpty)) {
       try {
         final cleanT = CanonicalSongDedup.cleanTitle(song.title);
         final cleanA = CanonicalSongDedup.cleanArtist(song.author);
@@ -2854,10 +3177,14 @@ class MusicService extends ChangeNotifier {
                 );
 
                 if (isMatch) {
-                  debugPrint(
-                    '[Play] Resolved "${song.title}" to JioSaavn 320k studio stream!',
+                  final adaptedStream = adaptJioSaavnBitrate(
+                    itemStream,
+                    activeQualityPreset,
                   );
-                  _webStreamUrls[song.id.value] = itemStream;
+                  debugPrint(
+                    '[Play] Resolved "${song.title}" to JioSaavn stream at ${activeQualityPreset.shortLabel}!',
+                  );
+                  _webStreamUrls[song.id.value] = adaptedStream;
                   if (itemThumb.isNotEmpty &&
                       !_artworkMap.containsKey(song.id.value)) {
                     _artworkMap[song.id.value] = itemThumb;
@@ -2909,6 +3236,12 @@ class MusicService extends ChangeNotifier {
                 playAction: () async => await targetPlayer.play(),
               );
             }
+            _activeStreamInfo = const ActiveStreamInfo(
+              format: 'Offline Audio',
+              qualityLabel: 'Original Quality',
+              source: 'Local Storage',
+              isHd: true,
+            );
             _isLoading = false;
             notifyListeners();
             _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
@@ -2997,6 +3330,14 @@ class MusicService extends ChangeNotifier {
             streamUrl: directStreamUrl,
           );
         }
+        final q = PreferencesService().audioQuality;
+        _activeStreamInfo = ActiveStreamInfo(
+          format: directStreamUrl.isNotEmpty ? 'AAC (.mp4)' : 'Web Stream',
+          qualityLabel: q.label,
+          source: directStreamUrl.isNotEmpty ? 'Cloudflare CDN' : 'Web Engine',
+          isHd: q == AudioQualityPreset.studioMaster ||
+              q == AudioQualityPreset.high,
+        );
         _isLoading = false;
         notifyListeners();
         _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
@@ -3007,20 +3348,26 @@ class MusicService extends ChangeNotifier {
       bool playbackSourceSet = false;
 
       // 3. Mobile Native Mode (Android / iOS app):
-      // Check for direct JioSaavn 320kbps CDN stream first!
+      // Check for direct JioSaavn CDN stream first (if user format allows)!
       final directStreamUrl = _webStreamUrls[song.id.value] ?? '';
-      if (directStreamUrl.isNotEmpty) {
+      final canUseDirectCdn = activeFormatPref != AudioFormatPreference.opus &&
+          directStreamUrl.isNotEmpty;
+      if (canUseDirectCdn) {
+        final adaptedStreamUrl = adaptJioSaavnBitrate(
+          directStreamUrl,
+          activeQualityPreset,
+        );
         debugPrint(
-          '[Play] Playing via Direct JioSaavn 320k Stream on Mobile: ${song.id.value}',
+          '[Play] Playing via Direct JioSaavn ${activeQualityPreset.shortLabel} Stream on Mobile: ${song.id.value}',
         );
         _reportClientLog('direct_stream_start', {
           'videoId': song.id.value,
-          'engine': 'jiosaavn_320k',
+          'engine': 'jiosaavn_${activeQualityPreset.shortLabel}',
         });
         try {
           if (_currentSong?.id.value != song.id.value) return;
           await targetPlayer.setAudioSource(
-            AudioSource.uri(Uri.parse(directStreamUrl), tag: mediaItem),
+            AudioSource.uri(Uri.parse(adaptedStreamUrl), tag: mediaItem),
           );
           if (_currentSong?.id.value != song.id.value) return;
           if (isCrossfade) {
@@ -3031,6 +3378,13 @@ class MusicService extends ChangeNotifier {
               playAction: () async => await targetPlayer.play(),
             );
           }
+          _activeStreamInfo = ActiveStreamInfo(
+            format: 'AAC (.mp4)',
+            qualityLabel: activeQualityPreset.label,
+            source: 'JioSaavn CDN (${activeQualityPreset.shortLabel})',
+            isHd: activeQualityPreset == AudioQualityPreset.studioMaster ||
+                activeQualityPreset == AudioQualityPreset.high,
+          );
           _isLoading = false;
           notifyListeners();
           _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
@@ -3123,6 +3477,40 @@ class MusicService extends ChangeNotifier {
               'type': candidate.type,
             });
 
+            void recordActiveCandidate(StreamCandidate c) {
+              String codecName = 'AAC (.mp4)';
+              if (c.type.contains('opus') ||
+                  c.type.contains('webm') ||
+                  c.codec == 'opus') {
+                codecName = 'Opus (.webm)';
+              } else if (c.type.contains('m4a') || c.tag == 140) {
+                codecName = 'AAC (.m4a)';
+              }
+
+              String qLabel = '${c.bitrateKbps} kbps';
+              if (c.tag == 251) {
+                qLabel = '160 kbps (High Fidelity)';
+              } else if (c.tag == 22) {
+                qLabel = '192 kbps (HD)';
+              } else if (c.tag == 249) {
+                qLabel = '50 kbps (Data Saver)';
+              } else if (c.tag == 250) {
+                qLabel = '70 kbps (Eco)';
+              } else if (c.tag == 139) {
+                qLabel = '48 kbps (Data Saver)';
+              } else if (c.tag == 18) {
+                qLabel = '128 kbps (Balanced)';
+              }
+
+              _activeStreamInfo = ActiveStreamInfo(
+                format: codecName,
+                qualityLabel: qLabel,
+                source: 'YouTube Direct Audio (itag ${c.tag})',
+                tag: c.tag,
+                isHd: c.tag == 251 || c.tag == 22,
+              );
+            }
+
             // 1. First attempt: Direct native AudioSource.uri (fastest, progressive hardware decoding)
             try {
               await targetPlayer.setAudioSource(
@@ -3130,6 +3518,7 @@ class MusicService extends ChangeNotifier {
                 preload: true,
               );
               playbackSourceSet = true;
+              recordActiveCandidate(candidate);
               _reportClientLog('playback_started_uri', {
                 'videoId': effectiveYtId,
                 'tag': candidate.tag,
@@ -3157,6 +3546,7 @@ class MusicService extends ChangeNotifier {
                   preload: true,
                 );
                 playbackSourceSet = true;
+                recordActiveCandidate(candidate);
                 _reportClientLog('playback_started_lockcache', {
                   'videoId': effectiveYtId,
                   'tag': candidate.tag,
@@ -4399,6 +4789,30 @@ class MusicService extends ChangeNotifier {
       }
     }
     notifyListeners();
+  }
+
+  /// Reloads the currently playing track with the user's updated audio quality or format,
+  /// smoothly resuming from the exact playback position.
+  Future<void> reloadCurrentSongWithNewEngineSettings() async {
+    if (_currentSong == null) return;
+    final song = _currentSong!;
+    final pos = position;
+    final wasPlaying = isPlaying;
+
+    // Clear cached web stream for this song to ensure fresh quality/codec is resolved
+    _webStreamUrls.remove(song.id.value);
+
+    await playSong(song, updateQueue: false);
+    if (pos > Duration.zero) {
+      await seek(pos);
+    }
+    if (!wasPlaying) {
+      if (kIsWeb) {
+        WebPlayerBridge.pause();
+      } else {
+        _audioPlayer.pause();
+      }
+    }
   }
 
   @visibleForTesting

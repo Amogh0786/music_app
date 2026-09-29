@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -218,6 +219,416 @@ class _SettingsScreenState extends State<SettingsScreen>
               const SizedBox(height: 12),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  void _showAudioQualityModal() {
+    HapticFeedback.lightImpact();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF14141E).withValues(alpha: 0.98),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white38,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _prefs.themeColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.high_quality_rounded,
+                            color: _prefs.themeColor,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Streaming Audio Quality',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Select audio bitrate and dynamic range',
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    ...AudioQualityPreset.values.map((preset) {
+                      final isSelected = _prefs.audioQuality == preset;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () async {
+                              HapticFeedback.selectionClick();
+                              await _prefs.setAudioQuality(preset);
+                              setModalState(() {});
+                              setState(() {});
+                              if (_musicService.currentSong != null) {
+                                unawaited(
+                                  _musicService
+                                      .reloadCurrentSongWithNewEngineSettings(),
+                                );
+                              }
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Audio Quality set to ${preset.label}',
+                                    ),
+                                    duration: const Duration(seconds: 2),
+                                    backgroundColor: const Color(0xFF1E1E28),
+                                  ),
+                                );
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? _prefs.themeColor.withValues(alpha: 0.14)
+                                    : Colors.white.withValues(alpha: 0.04),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? _prefs.themeColor.withValues(alpha: 0.5)
+                                      : Colors.white.withValues(alpha: 0.06),
+                                  width: isSelected ? 1.5 : 1.0,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    isSelected
+                                        ? Icons.radio_button_checked_rounded
+                                        : Icons.radio_button_off_rounded,
+                                    color: isSelected
+                                        ? _prefs.themeColor
+                                        : Colors.white38,
+                                    size: 22,
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text(
+                                              preset.label,
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 15,
+                                                fontWeight: isSelected
+                                                    ? FontWeight.bold
+                                                    : FontWeight.w500,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 2,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: isSelected
+                                                    ? _prefs.themeColor
+                                                        .withValues(alpha: 0.3)
+                                                    : Colors.white10,
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                preset.badge,
+                                                style: TextStyle(
+                                                  color: isSelected
+                                                      ? Colors.white
+                                                      : Colors.white70,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          preset.description,
+                                          style: TextStyle(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.6,
+                                            ),
+                                            fontSize: 12,
+                                            height: 1.3,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showAudioFormatModal() {
+    HapticFeedback.lightImpact();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF14141E).withValues(alpha: 0.98),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white38,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF00E5FF),
+                            borderRadius: BorderRadius.all(Radius.circular(10)),
+                          ),
+                          child: const Icon(
+                            Icons.album_rounded,
+                            color: Colors.black87,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Audio Format & Codec',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Select compression container and decoding engine',
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    ...AudioFormatPreference.values.map((format) {
+                      final isSelected = _prefs.audioFormat == format;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () async {
+                              HapticFeedback.selectionClick();
+                              await _prefs.setAudioFormat(format);
+                              setModalState(() {});
+                              setState(() {});
+                              if (_musicService.currentSong != null) {
+                                unawaited(
+                                  _musicService
+                                      .reloadCurrentSongWithNewEngineSettings(),
+                                );
+                              }
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Audio Format set to ${format.label}',
+                                    ),
+                                    duration: const Duration(seconds: 2),
+                                    backgroundColor: const Color(0xFF1E1E28),
+                                  ),
+                                );
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? const Color(0xFF00E5FF).withValues(alpha: 0.14)
+                                    : Colors.white.withValues(alpha: 0.04),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFF00E5FF).withValues(alpha: 0.6)
+                                      : Colors.white.withValues(alpha: 0.06),
+                                  width: isSelected ? 1.5 : 1.0,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    isSelected
+                                        ? Icons.radio_button_checked_rounded
+                                        : Icons.radio_button_off_rounded,
+                                    color: isSelected
+                                        ? const Color(0xFF00E5FF)
+                                        : Colors.white38,
+                                    size: 22,
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text(
+                                              format.label,
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 15,
+                                                fontWeight: isSelected
+                                                    ? FontWeight.bold
+                                                    : FontWeight.w500,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 2,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: isSelected
+                                                    ? const Color(0xFF00E5FF)
+                                                        .withValues(alpha: 0.3)
+                                                    : Colors.white10,
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                format.badge,
+                                                style: TextStyle(
+                                                  color: isSelected
+                                                      ? Colors.white
+                                                      : Colors.white70,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          format.description,
+                                          style: TextStyle(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.6,
+                                            ),
+                                            fontSize: 12,
+                                            height: 1.3,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -637,39 +1048,213 @@ class _SettingsScreenState extends State<SettingsScreen>
               _buildThemeStudio(),
               const SizedBox(height: 16),
 
-              _buildSectionTitle('AUDIO QUALITY'),
+              _buildSectionTitle('AUDIO ENGINE & FORMATS'),
               _buildSettingsGroup([
+                // 1. Streaming Audio Quality (Studio Master 320k, High 160k, Balanced 128k, Data Saver 64k)
                 ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: _prefs.themeColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.high_quality_rounded,
+                      color: _prefs.themeColor,
+                      size: 20,
+                    ),
+                  ),
                   title: const Text(
-                    'Streaming Quality',
+                    'Streaming Audio Quality',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   subtitle: Text(
-                    'Normal (128 kbps)',
+                    '${_prefs.audioQuality.label} • ${_prefs.audioQuality.approxBitrate}',
                     style: TextStyle(color: Colors.grey[400], fontSize: 13),
                   ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _prefs.themeColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: _prefs.themeColor.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Text(
+                          _prefs.audioQuality.badge,
+                          style: TextStyle(
+                            color: _prefs.themeColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: Colors.white30,
+                      ),
+                    ],
+                  ),
+                  onTap: _showAudioQualityModal,
+                ),
+
+                // 2. Audio Format & Codec (Auto, Opus WebM, AAC MP4, MP3 Universal)
+                ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.blueAccent.withValues(alpha: 0.15),
+                      color: Colors.purpleAccent.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(
-                      Icons.high_quality_rounded,
-                      color: Colors.blueAccent,
+                      Icons.graphic_eq_rounded,
+                      color: Colors.purpleAccent,
                       size: 20,
                     ),
                   ),
-                  trailing: const Icon(
-                    Icons.chevron_right_rounded,
-                    color: Colors.white30,
+                  title: const Text(
+                    'Audio Format & Codec',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                  onTap: () {
-                    // Placeholder for future implementation
-                  },
+                  subtitle: Text(
+                    '${_prefs.audioFormat.label} (${_prefs.audioFormat.shortLabel})',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.purpleAccent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: Colors.purpleAccent.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Text(
+                          _prefs.audioFormat.badge,
+                          style: const TextStyle(
+                            color: Colors.purpleAccent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: Colors.white30,
+                      ),
+                    ],
+                  ),
+                  onTap: _showAudioFormatModal,
+                ),
+
+                // 3. Active Stream Engine Status / Hot-Reload
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: (_musicService.currentSong != null
+                              ? Colors.greenAccent
+                              : Colors.blueGrey)
+                          .withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      _musicService.currentSong != null
+                          ? Icons.bolt_rounded
+                          : Icons.tune_rounded,
+                      color: _musicService.currentSong != null
+                          ? Colors.greenAccent
+                          : Colors.blueGrey,
+                      size: 20,
+                    ),
+                  ),
+                  title: Text(
+                    _musicService.currentSong != null
+                        ? 'Active Stream Engine'
+                        : 'Audio Engine Pipeline',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  subtitle: Text(
+                    _musicService.currentSong != null
+                        ? '${_musicService.activeStreamInfo.format} • ${_musicService.activeStreamInfo.qualityLabel} (${_musicService.activeStreamInfo.source})'
+                        : 'Adaptive pipeline • JioSaavn 320k + YouTube Opus/AAC',
+                    style: TextStyle(
+                      color: _musicService.currentSong != null
+                          ? Colors.greenAccent.shade200
+                          : Colors.grey[400],
+                      fontSize: 12,
+                      fontWeight: _musicService.currentSong != null
+                          ? FontWeight.w500
+                          : FontWeight.normal,
+                    ),
+                  ),
+                  trailing: _musicService.currentSong != null
+                      ? IconButton(
+                          tooltip: 'Hot-swap stream to current settings',
+                          icon: const Icon(
+                            Icons.sync_rounded,
+                            color: Colors.white70,
+                            size: 20,
+                          ),
+                          onPressed: () async {
+                            HapticFeedback.lightImpact();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Reloading stream with active engine settings...',
+                                ),
+                                duration: Duration(milliseconds: 1200),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                            await _musicService
+                                .reloadCurrentSongWithNewEngineSettings();
+                          },
+                        )
+                      : Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white10,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'ONLINE',
+                            style: TextStyle(
+                              color: Colors.white60,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
                 ),
               ]),
               const SizedBox(height: 16),
