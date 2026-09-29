@@ -5,9 +5,12 @@ import 'services/audio_handler.dart';
 import 'services/widget_service.dart';
 import 'screens/intro_splash_screen.dart';
 import 'services/preferences_service.dart';
+import 'services/music_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await PreferencesService().init();
+  MusicService().restoreLastPlaybackSession();
   if (!kIsWeb) {
     try {
       await initAudioService();
@@ -20,7 +23,6 @@ void main() async {
       debugPrint('WidgetService init warning: $e');
     }
   }
-  await PreferencesService().init();
   runApp(const MusicApp());
 }
 

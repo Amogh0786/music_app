@@ -345,8 +345,8 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
                       child: StreamBuilder<Duration>(
                         stream: _musicService.positionStream,
                         builder: (context, snapshot) {
-                          final position = snapshot.data ?? Duration.zero;
-                          final duration = _musicService.duration ?? Duration.zero;
+                          final position = snapshot.data ?? _musicService.position;
+                          final duration = _musicService.duration ?? (_musicService.currentSong?.duration ?? Duration.zero);
                           double progress = 0.0;
                           if (duration.inMilliseconds > 0) {
                             progress = (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);

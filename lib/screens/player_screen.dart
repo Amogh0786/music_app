@@ -1187,7 +1187,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       child: StreamBuilder<Duration>(
                         stream: _musicService.positionStream,
                         builder: (context, snapshot) {
-                          final position = snapshot.data ?? Duration.zero;
+                          final position = snapshot.data ?? _musicService.position;
                           final duration = _musicService.duration ??
                               (song.duration ?? Duration.zero);
 
@@ -2484,7 +2484,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return StreamBuilder<Duration>(
       stream: _musicService.positionStream,
       builder: (context, snapshot) {
-        final position = snapshot.data ?? Duration.zero;
+        final position = snapshot.data ?? _musicService.position;
         final duration = _musicService.duration ?? (song.duration ?? Duration.zero);
         final maxMs = duration.inMilliseconds > 0 ? duration.inMilliseconds.toDouble() : 1.0;
         final curMs = position.inMilliseconds.clamp(0, maxMs.toInt()).toDouble();
@@ -2543,7 +2543,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return StreamBuilder<Duration>(
       stream: _musicService.positionStream,
       builder: (context, snapshot) {
-        final position = snapshot.data ?? Duration.zero;
+        final position = snapshot.data ?? _musicService.position;
         final duration = _musicService.duration ?? (song?.duration ?? Duration.zero);
         final maxMs = duration.inMilliseconds > 0 ? duration.inMilliseconds.toDouble() : 1.0;
         final curMs = position.inMilliseconds.clamp(0, maxMs.toInt()).toDouble();

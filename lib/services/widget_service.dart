@@ -125,7 +125,7 @@ class WidgetService {
 
   /// Synchronizes complete playback, dominant color, and playlist state into HomeWidget storage.
   Future<void> syncWidgetData() async {
-    if (kIsWeb) return;
+    if (kIsWeb || !_isInitialized) return;
 
     try {
       final song = _musicService.currentSong;
