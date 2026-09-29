@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
@@ -26,19 +27,23 @@ class PlayerScreen extends StatefulWidget {
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends State<PlayerScreen> {
+class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver {
   final MusicService _musicService = MusicService();
   final PreferencesService _prefs = PreferencesService();
 
   late PageController _pageController;
   int _activePageIndex = 0;
   bool _isUserDraggingPage = false;
+  bool _isProgrammaticScroll = false;
+  bool _isAppInForeground = true;
+  String? _lastLyricsSongId;
   bool _showLyrics = false;
   LandscapeActiveTab _landscapeTab = LandscapeActiveTab.none;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _musicService.addListener(_onStateChanged);
     _prefs.addListener(_onStateChanged);
 
@@ -55,6 +60,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     ScreenWakeService.disableWakeLock('lyrics_screen');
     _pageController.removeListener(_onPageScrolled);
     _pageController.dispose();
@@ -63,8 +69,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _isAppInForeground = true;
+      _isUserDraggingPage = false;
+      _isProgrammaticScroll = false;
+      // When screen turns back on or app is resumed, immediately sync to current song
+      _syncToCurrentSong(jumpImmediately: true);
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
+      _isAppInForeground = false;
+      _isUserDraggingPage = false;
+      _isProgrammaticScroll = false;
+    }
+  }
+
   void _onPageScrolled() {
-    if (_pageController.hasClients && _pageController.position.hasContentDimensions) {
+    // Only update _activePageIndex from scroll offsets if the user is physically dragging with their finger
+    if (_isUserDraggingPage && _pageController.hasClients && _pageController.position.hasContentDimensions) {
       final page = (_pageController.page ?? _musicService.currentIndex.toDouble()).round();
       if (page != _activePageIndex && page >= 0) {
         setState(() {
@@ -74,25 +98,46 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
-  void _onStateChanged() {
-    if (!mounted) return;
-    if (_pageController.hasClients && _pageController.position.hasContentDimensions) {
-      final currentPage = _pageController.page?.round() ?? _musicService.currentIndex;
-      if (currentPage != _musicService.currentIndex && !_isUserDraggingPage) {
-        if (_showLyrics) {
-          // In lyrics mode, silently sync carousel in the background with zero lag
-          _pageController.jumpToPage(_musicService.currentIndex);
+  void _syncToCurrentSong({bool jumpImmediately = false}) {
+    if (!mounted || _musicService.playlist.isEmpty) return;
+    final targetIndex = _musicService.currentIndex.clamp(0, _musicService.playlist.length - 1);
+    _activePageIndex = targetIndex;
+
+    if (_pageController.hasClients) {
+      final currentPage = _pageController.page?.round() ?? _activePageIndex;
+      if (currentPage != targetIndex) {
+        _isProgrammaticScroll = true;
+        // If screen is off, lyrics are open, jump is requested, or gap > 1: jump immediately with 0 animations
+        if (jumpImmediately || !_isAppInForeground || _showLyrics || (currentPage - targetIndex).abs() > 1) {
+          _pageController.jumpToPage(targetIndex);
+          _isProgrammaticScroll = false;
         } else {
           _pageController.animateToPage(
-            _musicService.currentIndex,
+            targetIndex,
             duration: const Duration(milliseconds: 380),
             curve: Curves.easeOutCubic,
-          );
+          ).then((_) {
+            _isProgrammaticScroll = false;
+          }).catchError((_) {
+            _isProgrammaticScroll = false;
+          });
         }
       }
     }
-    if (!_isUserDraggingPage && _musicService.playlist.isNotEmpty) {
-      _activePageIndex = _musicService.currentIndex.clamp(0, _musicService.playlist.length - 1);
+
+    if (_showLyrics) {
+      final currentSong = _musicService.currentSong;
+      if (currentSong != null && currentSong.id.value != _lastLyricsSongId) {
+        _lastLyricsSongId = currentSong.id.value;
+        _musicService.fetchLyrics(currentSong);
+      }
+    }
+  }
+
+  void _onStateChanged() {
+    if (!mounted) return;
+    if (!_isUserDraggingPage) {
+      _syncToCurrentSong(jumpImmediately: !_isAppInForeground);
     }
     setState(() {});
   }
@@ -827,7 +872,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final playlist = _musicService.playlist.isNotEmpty
         ? _musicService.playlist
         : [song];
-    final activeIndex = _activePageIndex.clamp(0, playlist.length - 1);
+    final activeIndex = (_isUserDraggingPage
+            ? _activePageIndex
+            : _musicService.currentIndex)
+        .clamp(0, playlist.length - 1);
     final shownSong = playlist[activeIndex];
     final isCurrentSong = shownSong.id.value == song.id.value;
 
@@ -952,9 +1000,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     child: NotificationListener<ScrollNotification>(
                                       onNotification: (notification) {
                                         if (notification is ScrollStartNotification) {
-                                          _isUserDraggingPage = true;
+                                          // Only set dragging to true if started by user pointer interaction
+                                          if (notification.dragDetails != null) {
+                                            _isUserDraggingPage = true;
+                                          }
                                         } else if (notification is ScrollEndNotification) {
                                           _isUserDraggingPage = false;
+                                          _isProgrammaticScroll = false;
+                                        } else if (notification is UserScrollNotification) {
+                                          if (notification.direction == ScrollDirection.idle) {
+                                            _isUserDraggingPage = false;
+                                          }
                                         }
                                         return false;
                                       },
@@ -967,7 +1023,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                               _activePageIndex = index;
                                             });
                                           }
-                                          if (_isUserDraggingPage && index != _musicService.currentIndex) {
+                                          // CRITICAL: NEVER skip song unless change was explicitly driven by user finger drag
+                                          if (!_isProgrammaticScroll && _isUserDraggingPage && index != _musicService.currentIndex) {
                                             HapticFeedback.selectionClick();
                                             _musicService.skipToQueueIndex(index);
                                           }

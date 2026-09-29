@@ -6,7 +6,9 @@ import '../services/music_service.dart';
 import '../services/preferences_service.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/category_card.dart';
+import '../widgets/artist_card.dart';
 import '../widgets/animated_equalizer.dart';
+import '../services/dynamic_artist_service.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -19,11 +21,14 @@ class _SearchScreenState extends State<SearchScreen>
     with AutomaticKeepAliveClientMixin {
   final MusicService _musicService = MusicService();
   final PreferencesService _prefs = PreferencesService();
+  final DynamicArtistService _artistService = DynamicArtistService();
 
   @override
   bool get wantKeepAlive => true;
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  late final PageController _browsePageController;
+  int _browseTabIndex = 0;
   List<Video> _searchResults = [];
   List<SearchSuggestion> _suggestions = [];
   Timer? _debounceTimer;
@@ -119,6 +124,7 @@ class _SearchScreenState extends State<SearchScreen>
   @override
   void initState() {
     super.initState();
+    _browsePageController = PageController(initialPage: _browseTabIndex);
     _prefs.addListener(_onPrefsChanged);
     _musicService.addListener(_onPrefsChanged);
     _searchController.addListener(_onSearchChanged);
@@ -160,6 +166,7 @@ class _SearchScreenState extends State<SearchScreen>
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _browsePageController.dispose();
     _prefs.removeListener(_onPrefsChanged);
     _musicService.removeListener(_onPrefsChanged);
     _searchController.removeListener(_onSearchChanged);
@@ -446,8 +453,8 @@ class _SearchScreenState extends State<SearchScreen>
                           },
                         )
 
-                      : ListView(
-                          padding: const EdgeInsets.only(bottom: 160),
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             if (history.isNotEmpty) ...[
                               Row(
@@ -576,87 +583,24 @@ class _SearchScreenState extends State<SearchScreen>
                                   );
                                 }).toList(),
                               ),
-                              const SizedBox(height: 26),
+                              const SizedBox(height: 14),
                             ],
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).primaryColor.withValues(alpha: 0.16),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: Theme.of(context).primaryColor.withValues(alpha: 0.35),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Icon(
-                                    Icons.explore_rounded,
-                                    size: 18,
-                                    color: Theme.of(context).primaryColor,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                const Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Browse Categories',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: -0.3,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Explore curated moods, genres & charts',
-                                      style: TextStyle(
-                                        color: Colors.white54,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            LayoutBuilder(
-                              builder: (context, constraints) {
-                                final width = constraints.maxWidth;
-                                final crossAxisCount = width > 900
-                                    ? 4
-                                    : (width > 600 ? 3 : 2);
-                                final aspectRatio = width > 600 ? 1.75 : 1.55;
-
-                                return GridView.builder(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: crossAxisCount,
-                                    childAspectRatio: aspectRatio,
-                                    crossAxisSpacing: 12,
-                                    mainAxisSpacing: 12,
-                                  ),
-                                  itemCount: _categories.length,
-                                  itemBuilder: (context, index) {
-                                    final cat = _categories[index];
-                                    return CategoryCard(
-                                      title: cat['title'] as String,
-                                      subtitle: cat['subtitle'] as String,
-                                      query: cat['query'] as String,
-                                      colors: cat['colors'] as List<Color>,
-                                      icon: cat['icon'] as IconData,
-                                      badgeText: cat['badge'] as String?,
-                                      onTap: () {
-                                        _searchController.text = cat['title'] as String;
-                                        _performSearch(cat['query'] as String);
-                                      },
-                                    );
-                                  },
-                                );
-                              },
+                            // Two Boxes Switcher: Categories and Artists
+                            _buildBrowseTabsHeader(context),
+                            const SizedBox(height: 14),
+                            // Swappable Grid with PageView matching MainScreen switching animation
+                            Expanded(
+                              child: PageView(
+                                controller: _browsePageController,
+                                physics: const ClampingScrollPhysics(),
+                                onPageChanged: (index) {
+                                  setState(() => _browseTabIndex = index);
+                                },
+                                children: [
+                                  _buildCategoriesGrid(),
+                                  _buildArtistsGrid(),
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -664,6 +608,311 @@ class _SearchScreenState extends State<SearchScreen>
           ],
         ),
       ),
+    );
+  }
+
+  /// Two Boxes Switcher: 'Categories' and 'Artists' with Apple-style smooth sliding indicator
+  Widget _buildBrowseTabsHeader(BuildContext context) {
+    final primaryColor = Theme.of(context).primaryColor;
+
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: const Color(0xFF14141E),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.10),
+          width: 1,
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final boxWidth = constraints.maxWidth / 2;
+          return Stack(
+            children: [
+              // Fluid sliding highlight indicator pill with matching 320ms easeOutCubic curve
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+                left: _browseTabIndex * boxWidth,
+                top: 0,
+                bottom: 0,
+                width: boxWidth,
+                child: Container(
+                  margin: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        primaryColor.withValues(alpha: 0.32),
+                        primaryColor.withValues(alpha: 0.18),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: primaryColor.withValues(alpha: 0.65),
+                      width: 1.1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryColor.withValues(alpha: 0.30),
+                        blurRadius: 12,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // The Two Interactive Selector Boxes
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildSwitcherBox(
+                      index: 0,
+                      title: 'Categories',
+                      icon: Icons.grid_view_rounded,
+                      isActive: _browseTabIndex == 0,
+                    ),
+                  ),
+                  Expanded(
+                    child: _buildSwitcherBox(
+                      index: 1,
+                      title: 'Artists',
+                      icon: Icons.mic_external_on_rounded,
+                      isActive: _browseTabIndex == 1,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSwitcherBox({
+    required int index,
+    required String title,
+    required IconData icon,
+    required bool isActive,
+  }) {
+    final primaryColor = Theme.of(context).primaryColor;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          if (_browseTabIndex != index) {
+            HapticFeedback.selectionClick();
+            setState(() => _browseTabIndex = index);
+            _browsePageController.animateToPage(
+              index,
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
+            );
+          }
+        },
+        child: Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: isActive ? primaryColor : Colors.white60,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  color: isActive ? Colors.white : Colors.white60,
+                  fontSize: 14,
+                  fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoriesGrid() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final crossAxisCount = width > 900 ? 4 : (width > 600 ? 3 : 2);
+        final aspectRatio = width > 600 ? 1.75 : 1.55;
+
+        return ListView(
+          key: const PageStorageKey('categories_grid_view'),
+          padding: const EdgeInsets.only(top: 4, bottom: 160),
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: Theme.of(context).primaryColor.withValues(alpha: 0.35),
+                      width: 1,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.explore_rounded,
+                    size: 16,
+                    color: Theme.of(context).primaryColor,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Browse Categories',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    Text(
+                      'Explore curated moods, genres & charts',
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                childAspectRatio: aspectRatio,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemCount: _categories.length,
+              itemBuilder: (context, index) {
+                final cat = _categories[index];
+                return CategoryCard(
+                  title: cat['title'] as String,
+                  subtitle: cat['subtitle'] as String,
+                  query: cat['query'] as String,
+                  colors: cat['colors'] as List<Color>,
+                  icon: cat['icon'] as IconData,
+                  badgeText: cat['badge'] as String?,
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    _searchController.text = cat['title'] as String;
+                    _performSearch(cat['query'] as String);
+                  },
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildArtistsGrid() {
+    final artists = _artistService.getDynamicArtists();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final crossAxisCount = width > 900 ? 4 : (width > 600 ? 3 : 2);
+        final aspectRatio = width > 600 ? 1.75 : 1.55;
+
+        return ListView(
+          key: const PageStorageKey('artists_grid_view'),
+          padding: const EdgeInsets.only(top: 4, bottom: 160),
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: Theme.of(context).primaryColor.withValues(alpha: 0.35),
+                      width: 1,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.mic_external_on_rounded,
+                    size: 16,
+                    color: Theme.of(context).primaryColor,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Featured Artists',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    Text(
+                      'Curated from your listening taste & trending hits',
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                childAspectRatio: aspectRatio,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemCount: artists.length,
+              itemBuilder: (context, index) {
+                final artist = artists[index];
+                return ArtistCard(
+                  artist: artist,
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    _searchController.text = artist.name;
+                    _performSearch(artist.name);
+                  },
+                );
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
