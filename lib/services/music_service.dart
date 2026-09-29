@@ -61,8 +61,10 @@ class MusicService extends ChangeNotifier {
   AndroidEqualizer? _equalizerA;
   AndroidEqualizer? _equalizerB;
 
-  final StreamController<Duration> _positionBroadcaster = StreamController<Duration>.broadcast();
-  final StreamController<Duration?> _durationBroadcaster = StreamController<Duration?>.broadcast();
+  final StreamController<Duration> _positionBroadcaster =
+      StreamController<Duration>.broadcast();
+  final StreamController<Duration?> _durationBroadcaster =
+      StreamController<Duration?>.broadcast();
 
   final YoutubeExplode _ytExplode = YoutubeExplode();
 
@@ -117,9 +119,12 @@ class MusicService extends ChangeNotifier {
   AudioPlayer get _audioPlayer => _activePlayer;
   bool get isCrossfading => _isCrossfading;
 
-  bool get isPlaying => kIsWeb ? WebPlayerBridge.isPlaying : _activePlayer.playing;
-  Duration get position => kIsWeb ? WebPlayerBridge.currentPosition : _activePlayer.position;
-  Duration? get duration => kIsWeb ? WebPlayerBridge.currentDuration : _activePlayer.duration;
+  bool get isPlaying =>
+      kIsWeb ? WebPlayerBridge.isPlaying : _activePlayer.playing;
+  Duration get position =>
+      kIsWeb ? WebPlayerBridge.currentPosition : _activePlayer.position;
+  Duration? get duration =>
+      kIsWeb ? WebPlayerBridge.currentDuration : _activePlayer.duration;
   Stream<Duration> get positionStream => _positionBroadcaster.stream;
   Stream<Duration?> get durationStream => _durationBroadcaster.stream;
 
@@ -139,7 +144,8 @@ class MusicService extends ChangeNotifier {
   Color get darkVibrantColor => _darkVibrantColor;
 
   bool get isSleepTimerActive =>
-      (_sleepEndTime != null && _sleepEndTime!.isAfter(DateTime.now())) || _stopAtEndOfTrack;
+      (_sleepEndTime != null && _sleepEndTime!.isAfter(DateTime.now())) ||
+      _stopAtEndOfTrack;
 
   Duration? get sleepRemaining {
     if (_sleepEndTime == null) return null;
@@ -171,10 +177,13 @@ class MusicService extends ChangeNotifier {
     }
 
     // 3. Remove common YouTube noise words (case-insensitive)
-    s = s.replaceAll(RegExp(
-      r'\b(full\s+video\s+song|video\s+song|lyric\s+video|official\s+video|official\s+music\s+video|official\s+song|full\s+song|full\s+audio|audio\s+song|lyrics|lyrical|hd|4k|8k|song|track|remix|mashup)\b',
-      caseSensitive: false,
-    ), ' ');
+    s = s.replaceAll(
+      RegExp(
+        r'\b(full\s+video\s+song|video\s+song|lyric\s+video|official\s+video|official\s+music\s+video|official\s+song|full\s+song|full\s+audio|audio\s+song|lyrics|lyrical|hd|4k|8k|song|track|remix|mashup)\b',
+        caseSensitive: false,
+      ),
+      ' ',
+    );
 
     // 4. Clean extra whitespace
     return s.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -184,9 +193,21 @@ class MusicService extends ChangeNotifier {
     var s = raw.replaceAll(' - Topic', '').trim();
     final lower = s.toLowerCase();
     const labels = [
-      't-series', 'aditya music', 'sony music', 'zee music', 'lahari music',
-      'speed audio', 'tips official', 'saregama', 'yrf', 'think music',
-      'tseries', 'vevo', 'records', 'entertainment', 'music'
+      't-series',
+      'aditya music',
+      'sony music',
+      'zee music',
+      'lahari music',
+      'speed audio',
+      'tips official',
+      'saregama',
+      'yrf',
+      'think music',
+      'tseries',
+      'vevo',
+      'records',
+      'entertainment',
+      'music',
     ];
     for (final label in labels) {
       if (lower.contains(label)) return '';
@@ -204,14 +225,18 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final songCtx = CanonicalSongDedup.extractSongContext(song.title, song.author);
+      final songCtx = CanonicalSongDedup.extractSongContext(
+        song.title,
+        song.author,
+      );
       final cleanTitle = (songCtx['title'] as String?)?.isNotEmpty == true
           ? songCtx['title'] as String
           : _cleanSongTitle(song.title);
       final cleanArtist = (songCtx['artist'] as String?)?.isNotEmpty == true
           ? songCtx['artist'] as String
           : _cleanArtistName(song.author);
-      final contextKeywords = (songCtx['contextKeywords'] as List<String>?) ?? [];
+      final contextKeywords =
+          (songCtx['contextKeywords'] as List<String>?) ?? [];
       final durationSec = song.duration?.inSeconds;
 
       // High-precision language detection:
@@ -222,8 +247,10 @@ class MusicService extends ChangeNotifier {
       // 3. Check author / channel
       targetLang ??= CanonicalSongDedup.detectLanguage(song.author);
       // 4. Check user's preferred primary language if available and not generic English
-      if (targetLang == null && PreferencesService().preferredLanguages.isNotEmpty) {
-        final pref = PreferencesService().preferredLanguages.first.toLowerCase();
+      if (targetLang == null &&
+          PreferencesService().preferredLanguages.isNotEmpty) {
+        final pref = PreferencesService().preferredLanguages.first
+            .toLowerCase();
         if (pref != 'english') {
           targetLang = pref;
         }
@@ -245,10 +272,14 @@ class MusicService extends ChangeNotifier {
               lang: targetLang,
               duration: durationSec,
             );
-            final res = await http.get(edgeUri, headers: safeHeaders).timeout(const Duration(seconds: 4));
+            final res = await http
+                .get(edgeUri, headers: safeHeaders)
+                .timeout(const Duration(seconds: 4));
             if (res.statusCode == 200) {
               final data = json.decode(res.body);
-              if (data is Map && data['status'] == 'ok' && data['data'] != null) {
+              if (data is Map &&
+                  data['status'] == 'ok' &&
+                  data['data'] != null) {
                 candidatePool.add(data['data']);
               }
             }
@@ -264,10 +295,14 @@ class MusicService extends ChangeNotifier {
               lang: targetLang,
               duration: durationSec,
             );
-            final res = await http.get(backendUri, headers: safeHeaders).timeout(const Duration(seconds: 4));
+            final res = await http
+                .get(backendUri, headers: safeHeaders)
+                .timeout(const Duration(seconds: 4));
             if (res.statusCode == 200) {
               final data = json.decode(res.body);
-              if (data is Map && data['status'] == 'ok' && data['data'] != null) {
+              if (data is Map &&
+                  data['status'] == 'ok' &&
+                  data['data'] != null) {
                 candidatePool.add(data['data']);
               }
             }
@@ -278,11 +313,17 @@ class MusicService extends ChangeNotifier {
         if (cleanArtist.isNotEmpty) {
           queries.add(() async {
             try {
-              final getUri = Uri.parse('https://lrclib.net/api/get?track_name=${Uri.encodeComponent(cleanTitle)}&artist_name=${Uri.encodeComponent(cleanArtist)}');
-              final res = await http.get(getUri, headers: safeHeaders).timeout(const Duration(seconds: 4));
+              final getUri = Uri.parse(
+                'https://lrclib.net/api/get?track_name=${Uri.encodeComponent(cleanTitle)}&artist_name=${Uri.encodeComponent(cleanArtist)}',
+              );
+              final res = await http
+                  .get(getUri, headers: safeHeaders)
+                  .timeout(const Duration(seconds: 4));
               if (res.statusCode == 200) {
                 final data = json.decode(res.body);
-                if (data is Map && (data['syncedLyrics'] != null || data['plainLyrics'] != null)) {
+                if (data is Map &&
+                    (data['syncedLyrics'] != null ||
+                        data['plainLyrics'] != null)) {
                   candidatePool.add(data);
                 }
               }
@@ -294,8 +335,12 @@ class MusicService extends ChangeNotifier {
         if (cleanArtist.isNotEmpty) {
           queries.add(() async {
             try {
-              final urlSearch = Uri.parse('https://lrclib.net/api/search?q=${Uri.encodeComponent("$cleanTitle $cleanArtist")}');
-              final res = await http.get(urlSearch, headers: safeHeaders).timeout(const Duration(seconds: 4));
+              final urlSearch = Uri.parse(
+                'https://lrclib.net/api/search?q=${Uri.encodeComponent("$cleanTitle $cleanArtist")}',
+              );
+              final res = await http
+                  .get(urlSearch, headers: safeHeaders)
+                  .timeout(const Duration(seconds: 4));
               if (res.statusCode == 200) {
                 final list = json.decode(res.body);
                 if (list is List) candidatePool.addAll(list);
@@ -308,8 +353,12 @@ class MusicService extends ChangeNotifier {
         if (contextKeywords.isNotEmpty) {
           queries.add(() async {
             try {
-              final urlCtx = Uri.parse('https://lrclib.net/api/search?q=${Uri.encodeComponent("$cleanTitle ${contextKeywords.first}")}');
-              final res = await http.get(urlCtx, headers: safeHeaders).timeout(const Duration(seconds: 4));
+              final urlCtx = Uri.parse(
+                'https://lrclib.net/api/search?q=${Uri.encodeComponent("$cleanTitle ${contextKeywords.first}")}',
+              );
+              final res = await http
+                  .get(urlCtx, headers: safeHeaders)
+                  .timeout(const Duration(seconds: 4));
               if (res.statusCode == 200) {
                 final list = json.decode(res.body);
                 if (list is List) candidatePool.addAll(list);
@@ -321,8 +370,12 @@ class MusicService extends ChangeNotifier {
         // 6. Direct LRCLIB track_name only search
         queries.add(() async {
           try {
-            final urlTrack = Uri.parse('https://lrclib.net/api/search?track_name=${Uri.encodeComponent(cleanTitle)}');
-            final res = await http.get(urlTrack, headers: safeHeaders).timeout(const Duration(seconds: 4));
+            final urlTrack = Uri.parse(
+              'https://lrclib.net/api/search?track_name=${Uri.encodeComponent(cleanTitle)}',
+            );
+            final res = await http
+                .get(urlTrack, headers: safeHeaders)
+                .timeout(const Duration(seconds: 4));
             if (res.statusCode == 200) {
               final list = json.decode(res.body);
               if (list is List) candidatePool.addAll(list);
@@ -368,7 +421,8 @@ class MusicService extends ChangeNotifier {
 
         final synced = (map['syncedLyrics'] as String?)?.trim();
         final plain = (map['plainLyrics'] as String?)?.trim();
-        final text = (synced?.isNotEmpty == true ? synced! : (plain ?? '')).trim();
+        final text = (synced?.isNotEmpty == true ? synced! : (plain ?? ''))
+            .trim();
 
         if (synced != null && synced.isNotEmpty && score > bestSyncedScore) {
           bestSyncedScore = score;
@@ -391,15 +445,22 @@ class MusicService extends ChangeNotifier {
       final chosenCandidate = bestSyncedCandidate ?? bestCandidate;
 
       if (bestNativeCandidate != null && bestRomanizedCandidate != null) {
-        final nativeSynced = (bestNativeCandidate['syncedLyrics'] as String?)?.trim();
-        final nativePlain = (bestNativeCandidate['plainLyrics'] as String?)?.trim();
-        final romanSynced = (bestRomanizedCandidate['syncedLyrics'] as String?)?.trim();
-        final romanPlain = (bestRomanizedCandidate['plainLyrics'] as String?)?.trim();
+        final nativeSynced = (bestNativeCandidate['syncedLyrics'] as String?)
+            ?.trim();
+        final nativePlain = (bestNativeCandidate['plainLyrics'] as String?)
+            ?.trim();
+        final romanSynced = (bestRomanizedCandidate['syncedLyrics'] as String?)
+            ?.trim();
+        final romanPlain = (bestRomanizedCandidate['plainLyrics'] as String?)
+            ?.trim();
 
         _cachedLyrics = (nativeSynced != null && nativeSynced.isNotEmpty)
             ? nativeSynced
-            : (nativePlain != null && nativePlain.isNotEmpty ? nativePlain : null);
-        _cachedPronunciationLyrics = (romanSynced != null && romanSynced.isNotEmpty)
+            : (nativePlain != null && nativePlain.isNotEmpty
+                  ? nativePlain
+                  : null);
+        _cachedPronunciationLyrics =
+            (romanSynced != null && romanSynced.isNotEmpty)
             ? romanSynced
             : (romanPlain != null && romanPlain.isNotEmpty ? romanPlain : null);
       } else if (chosenCandidate != null) {
@@ -411,7 +472,8 @@ class MusicService extends ChangeNotifier {
         _cachedLyrics = text;
         if (text != null &&
             !LyricsTransliterationService.hasIndicScript(text) &&
-            (targetLang == 'telugu' || LyricsTransliterationService.isRomanizedTelugu(text))) {
+            (targetLang == 'telugu' ||
+                LyricsTransliterationService.isRomanizedTelugu(text))) {
           _cachedPronunciationLyrics = text;
         }
       }
@@ -434,9 +496,11 @@ class MusicService extends ChangeNotifier {
     if (videoId.isEmpty || streamUrl.isEmpty) return;
     _webStreamUrls[videoId] = streamUrl;
     if (kIsWeb) {
-      SharedPreferences.getInstance().then((prefs) {
-        prefs.setString('web_stream_$videoId', streamUrl);
-      }).catchError((_) {});
+      SharedPreferences.getInstance()
+          .then((prefs) {
+            prefs.setString('web_stream_$videoId', streamUrl);
+          })
+          .catchError((_) {});
     }
   }
 
@@ -445,11 +509,41 @@ class MusicService extends ChangeNotifier {
   }
 
   static String getHdThumbnail(String videoId) {
-    if (_artworkMap.containsKey(videoId)) {
+    if (_artworkMap.containsKey(videoId) && _artworkMap[videoId]!.isNotEmpty) {
       return _artworkMap[videoId]!;
+    }
+    // Check downloaded songs
+    for (final s in _instance._downloadedSongs) {
+      if (s['id'] == videoId && (s['thumbnail']?.isNotEmpty ?? false)) {
+        _artworkMap[videoId] = s['thumbnail']!;
+        return s['thumbnail']!;
+      }
+    }
+    // Check listening history
+    for (final s in PreferencesService().listeningHistory) {
+      if (s['id'] == videoId && (s['thumbnail']?.isNotEmpty ?? false)) {
+        _artworkMap[videoId] = s['thumbnail']!;
+        return s['thumbnail']!;
+      }
+    }
+    // Check custom playlists
+    for (final p in _instance._customPlaylists) {
+      final pSongs = p['songs'] as List<dynamic>? ?? [];
+      for (final s in pSongs) {
+        if (s is Map &&
+            s['id'] == videoId &&
+            (s['thumbnail']?.toString().isNotEmpty ?? false)) {
+          final t = s['thumbnail'].toString();
+          _artworkMap[videoId] = t;
+          return t;
+        }
+      }
     }
     return 'https://i.ytimg.com/vi/$videoId/maxresdefault.jpg';
   }
+
+  final List<Video> _sessionPlayedHistory = [];
+  bool _isNavigatingHistory = false;
 
   bool _isTransitioning = false;
   bool _isFetchingNextQueue = false;
@@ -466,7 +560,9 @@ class MusicService extends ChangeNotifier {
     if (_hasPreloadedHome) return;
     try {
       final prefs = PreferencesService();
-      final primaryLang = prefs.preferredLanguages.isNotEmpty ? prefs.preferredLanguages.first : 'Telugu';
+      final primaryLang = prefs.preferredLanguages.isNotEmpty
+          ? prefs.preferredLanguages.first
+          : 'Telugu';
       final results = await Future.wait([
         searchSongs('$primaryLang Top Hits'),
         searchSongs('$primaryLang Trending'),
@@ -524,10 +620,14 @@ class MusicService extends ChangeNotifier {
       _equalizerB = AndroidEqualizer();
     }
     _playerA = AudioPlayer(
-      audioPipeline: _equalizerA != null ? AudioPipeline(androidAudioEffects: [_equalizerA!]) : null,
+      audioPipeline: _equalizerA != null
+          ? AudioPipeline(androidAudioEffects: [_equalizerA!])
+          : null,
     );
     _playerB = AudioPlayer(
-      audioPipeline: _equalizerB != null ? AudioPipeline(androidAudioEffects: [_equalizerB!]) : null,
+      audioPipeline: _equalizerB != null
+          ? AudioPipeline(androidAudioEffects: [_equalizerB!])
+          : null,
     );
     _activePlayer = _playerA;
     _standbyPlayer = _playerB;
@@ -547,11 +647,15 @@ class MusicService extends ChangeNotifier {
           if (_loopMode == LoopMode.one && _currentSong != null) {
             if (!_hasRepeatedOnce) {
               _hasRepeatedOnce = true;
-              debugPrint('[WebPlayer] LoopMode.one active: repeating track once…');
+              debugPrint(
+                '[WebPlayer] LoopMode.one active: repeating track once…',
+              );
               WebPlayerBridge.seek(Duration.zero);
               WebPlayerBridge.resume();
             } else {
-              debugPrint('[WebPlayer] Single repeat complete. Resetting repeat mode and advancing…');
+              debugPrint(
+                '[WebPlayer] Single repeat complete. Resetting repeat mode and advancing…',
+              );
               _hasRepeatedOnce = false;
               _loopMode = LoopMode.off;
               notifyListeners();
@@ -579,9 +683,10 @@ class MusicService extends ChangeNotifier {
         }
       });
 
-      PreferencesService.onEqualizerChanged = (bool enabled, Map<int, double> bands) {
-        WebPlayerBridge.setEqualizer(enabled, bands);
-      };
+      PreferencesService.onEqualizerChanged =
+          (bool enabled, Map<int, double> bands) {
+            WebPlayerBridge.setEqualizer(enabled, bands);
+          };
     } else {
       for (final player in [_playerA, _playerB]) {
         player.positionStream.listen((pos) {
@@ -599,7 +704,11 @@ class MusicService extends ChangeNotifier {
             notifyListeners();
           }
           if (state.processingState == ProcessingState.completed) {
-            if (_isTransitioning || _isCrossfading || !identical(player, _activePlayer)) return;
+            if (_isTransitioning ||
+                _isCrossfading ||
+                !identical(player, _activePlayer)) {
+              return;
+            }
             _isTransitioning = true;
             try {
               if (!kIsWeb && audioHandler != null) {
@@ -608,18 +717,24 @@ class MusicService extends ChangeNotifier {
               if (_loopMode == LoopMode.one) {
                 if (!_hasRepeatedOnce) {
                   _hasRepeatedOnce = true;
-                  debugPrint('[AudioPlayer] LoopMode.one active: repeating current track once…');
+                  debugPrint(
+                    '[AudioPlayer] LoopMode.one active: repeating current track once…',
+                  );
                   await player.seek(Duration.zero);
                   await player.play();
                 } else {
-                  debugPrint('[AudioPlayer] Track completed its single repeat. Resetting repeat and advancing…');
+                  debugPrint(
+                    '[AudioPlayer] Track completed its single repeat. Resetting repeat and advancing…',
+                  );
                   _hasRepeatedOnce = false;
                   _loopMode = LoopMode.off;
                   notifyListeners();
                   await nextSong();
                 }
               } else {
-                debugPrint('[AudioPlayer] Track completed. Advancing to next song…');
+                debugPrint(
+                  '[AudioPlayer] Track completed. Advancing to next song…',
+                );
                 await nextSong();
               }
             } catch (e) {
@@ -631,12 +746,16 @@ class MusicService extends ChangeNotifier {
         });
       }
 
-      PreferencesService.onEqualizerChanged = (bool enabled, Map<int, double> bands) {
-        applyEqualizerNative(enabled: enabled, bands: bands);
-      };
+      PreferencesService.onEqualizerChanged =
+          (bool enabled, Map<int, double> bands) {
+            applyEqualizerNative(enabled: enabled, bands: bands);
+          };
       if (Platform.isAndroid) {
         final prefs = PreferencesService();
-        applyEqualizerNative(enabled: prefs.equalizerEnabled, bands: prefs.equalizerBands);
+        applyEqualizerNative(
+          enabled: prefs.equalizerEnabled,
+          bands: prefs.equalizerBands,
+        );
       }
     }
 
@@ -650,17 +769,25 @@ class MusicService extends ChangeNotifier {
     loadCustomPlaylists();
   }
 
-  Future<void> applyEqualizerNative({required bool enabled, required Map<int, double> bands}) async {
+  Future<void> applyEqualizerNative({
+    required bool enabled,
+    required Map<int, double> bands,
+  }) async {
     if (kIsWeb || !Platform.isAndroid) return;
     for (final eq in [_equalizerA, _equalizerB]) {
       if (eq == null) continue;
       try {
         await eq.setEnabled(enabled);
         if (enabled) {
-          final params = await eq.parameters.timeout(const Duration(seconds: 2));
+          final params = await eq.parameters.timeout(
+            const Duration(seconds: 2),
+          );
           for (int i = 0; i < params.bands.length; i++) {
             final gain = bands[i] ?? 0.0;
-            final clampedGain = gain.clamp(params.minDecibels, params.maxDecibels);
+            final clampedGain = gain.clamp(
+              params.minDecibels,
+              params.maxDecibels,
+            );
             await params.bands[i].setGain(clampedGain);
           }
         }
@@ -727,7 +854,9 @@ class MusicService extends ChangeNotifier {
     try {
       for (int i = 0; i <= steps; i++) {
         if (_fadeSession != session) {
-          debugPrint('[Crossfade] Fade session cancelled ($session != $_fadeSession)');
+          debugPrint(
+            '[Crossfade] Fade session cancelled ($session != $_fadeSession)',
+          );
           return;
         }
         final double progress = i / steps;
@@ -807,19 +936,28 @@ class MusicService extends ChangeNotifier {
     );
   }
 
-  Future<void> fadeInCurrentSong({Duration duration = const Duration(milliseconds: 900)}) async {
+  Future<void> fadeInCurrentSong({
+    Duration duration = const Duration(milliseconds: 900),
+  }) async {
     await _fadeVolume(from: 0.0, to: 1.0, duration: duration);
   }
 
   void _checkContinuousPlaybackPrewarm(Duration pos) {
-    if (_isCrossfading || _isTransitioning || _isLoading || _playlist.isEmpty || _currentSong == null) return;
+    if (_isCrossfading ||
+        _isTransitioning ||
+        _isLoading ||
+        _playlist.isEmpty ||
+        _currentSong == null) {
+      return;
+    }
     if (_loopMode == LoopMode.one) return;
     final dur = duration;
     if (dur == null || dur.inSeconds <= 20) return;
 
     final remaining = dur - pos;
     // Prewarm next track 10 to 15 seconds before song ends regardless of crossfade setting
-    if (remaining <= const Duration(seconds: 15) && remaining > const Duration(seconds: 5)) {
+    if (remaining <= const Duration(seconds: 15) &&
+        remaining > const Duration(seconds: 5)) {
       Video? nextTrack;
       if (_isShuffle && _playlist.length > 1) {
         if (_shuffleHistoryPointer + 1 < _shuffleHistory.length) {
@@ -836,7 +974,8 @@ class MusicService extends ChangeNotifier {
 
       if (nextTrack != null) {
         final trackId = nextTrack.id.value;
-        if (_webStreamUrls[trackId] == null || _webStreamUrls[trackId]!.isEmpty) {
+        if (_webStreamUrls[trackId] == null ||
+            _webStreamUrls[trackId]!.isEmpty) {
           _prewarmSingleTrack(nextTrack);
         }
       }
@@ -844,7 +983,12 @@ class MusicService extends ChangeNotifier {
   }
 
   void _checkCrossfadeTrigger(Duration pos) {
-    if (_isCrossfading || _isTransitioning || _isLoading || _currentSong == null) return;
+    if (_isCrossfading ||
+        _isTransitioning ||
+        _isLoading ||
+        _currentSong == null) {
+      return;
+    }
     if (_loopMode == LoopMode.one) return;
     final prefs = PreferencesService();
     if (!prefs.crossfadeEnabled) return;
@@ -878,7 +1022,8 @@ class MusicService extends ChangeNotifier {
 
     final remaining = dur - pos;
     // Proactively pre-resolve upcoming track 5 seconds before crossfade initiates so network delay is eliminated
-    if (remaining <= Duration(seconds: crossfadeSec + 5) && remaining > Duration(seconds: crossfadeSec)) {
+    if (remaining <= Duration(seconds: crossfadeSec + 5) &&
+        remaining > Duration(seconds: crossfadeSec)) {
       if (_isShuffle && _shuffleHistoryPointer + 1 < _shuffleHistory.length) {
         final nextIdx = _shuffleHistory[_shuffleHistoryPointer + 1];
         if (nextIdx >= 0 && nextIdx < _playlist.length) {
@@ -891,7 +1036,8 @@ class MusicService extends ChangeNotifier {
       }
     }
 
-    if (remaining <= Duration(seconds: crossfadeSec) && remaining > const Duration(milliseconds: 600)) {
+    if (remaining <= Duration(seconds: crossfadeSec) &&
+        remaining > const Duration(milliseconds: 600)) {
       _triggerCrossfade(Duration(seconds: crossfadeSec));
     }
   }
@@ -899,7 +1045,9 @@ class MusicService extends ChangeNotifier {
   Future<void> _triggerCrossfade(Duration crossfadeDuration) async {
     if (_isCrossfading || _isTransitioning) return;
     _isCrossfading = true;
-    debugPrint('[Crossfade] Starting ${crossfadeDuration.inSeconds}s crossfade merge…');
+    debugPrint(
+      '[Crossfade] Starting ${crossfadeDuration.inSeconds}s crossfade merge…',
+    );
     try {
       if (kIsWeb) {
         await nextSong(isCrossfade: true);
@@ -937,9 +1085,12 @@ class MusicService extends ChangeNotifier {
         await _fadeVolume(
           from: 0.3,
           to: 1.0,
-          duration: isCrossfade ? const Duration(milliseconds: 1000) : const Duration(milliseconds: 600),
+          duration: isCrossfade
+              ? const Duration(milliseconds: 1000)
+              : const Duration(milliseconds: 600),
         );
-      } catch (_) {} finally {
+      } catch (_) {
+      } finally {
         await _setVolume(1.0);
       }
     }());
@@ -952,7 +1103,9 @@ class MusicService extends ChangeNotifier {
         final raw = prefs.getString('liked_songs_web');
         if (raw != null && raw.isNotEmpty) {
           final List<dynamic> jsonList = json.decode(raw);
-          _likedSongs = jsonList.map((e) => Map<String, String>.from(e)).toList();
+          _likedSongs = jsonList
+              .map((e) => Map<String, String>.from(e))
+              .toList();
           _restoreLikedSongsMemoryCaches();
           notifyListeners();
         }
@@ -978,8 +1131,12 @@ class MusicService extends ChangeNotifier {
       final thumb = item['thumbnail'] ?? '';
       final stream = item['streamUrl'] ?? '';
       if (id.isNotEmpty) {
-        if (thumb.isNotEmpty && !_artworkMap.containsKey(id)) _artworkMap[id] = thumb;
-        if (stream.isNotEmpty && !_webStreamUrls.containsKey(id)) _webStreamUrls[id] = stream;
+        if (thumb.isNotEmpty && !_artworkMap.containsKey(id)) {
+          _artworkMap[id] = thumb;
+        }
+        if (stream.isNotEmpty && !_webStreamUrls.containsKey(id)) {
+          _webStreamUrls[id] = stream;
+        }
       }
     }
   }
@@ -1086,7 +1243,10 @@ class MusicService extends ChangeNotifier {
     try {
       if (kIsWeb) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('custom_playlists_web', json.encode(_customPlaylists));
+        await prefs.setString(
+          'custom_playlists_web',
+          json.encode(_customPlaylists),
+        );
         return;
       }
       final dir = await getApplicationDocumentsDirectory();
@@ -1098,21 +1258,20 @@ class MusicService extends ChangeNotifier {
   }
 
   String createPlaylist(String name) {
-    final playlistId = '${DateTime.now().millisecondsSinceEpoch}_${_customPlaylists.length}';
+    final playlistId =
+        '${DateTime.now().millisecondsSinceEpoch}_${_customPlaylists.length}';
     return createPlaylistWithId(playlistId, name);
   }
 
   String createPlaylistWithId(String playlistId, String name) {
     // If playlist with this ID already exists, return existing
-    final existingIndex = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
+    final existingIndex = _customPlaylists.indexWhere(
+      (p) => p['id'] == playlistId,
+    );
     if (existingIndex != -1) {
       return playlistId;
     }
-    _customPlaylists.add({
-      'id': playlistId,
-      'name': name,
-      'songs': [],
-    });
+    _customPlaylists.add({'id': playlistId, 'name': name, 'songs': []});
     saveCustomPlaylists();
     notifyListeners();
     return playlistId;
@@ -1123,11 +1282,19 @@ class MusicService extends ChangeNotifier {
   }
 
   /// High-performance batch addition of songs to avoid repeated disk serialization
-  void addSongsToPlaylist(String playlistId, List<Video> songs, {bool commit = true}) {
+  void addSongsToPlaylist(
+    String playlistId,
+    List<Video> songs, {
+    bool commit = true,
+  }) {
     if (songs.isEmpty) return;
-    final playlistIndex = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
+    final playlistIndex = _customPlaylists.indexWhere(
+      (p) => p['id'] == playlistId,
+    );
     if (playlistIndex != -1) {
-      final existingSongs = List<Map<String, dynamic>>.from(_customPlaylists[playlistIndex]['songs'] ?? []);
+      final existingSongs = List<Map<String, dynamic>>.from(
+        _customPlaylists[playlistIndex]['songs'] ?? [],
+      );
       final existingIds = existingSongs.map((s) => s['id'] as String).toSet();
       bool modified = false;
 
@@ -1156,16 +1323,26 @@ class MusicService extends ChangeNotifier {
   }
 
   /// Sets or updates all songs in a playlist, preserving exact order and updating storage
-  void setPlaylistSongs(String playlistId, List<Video> songs, {bool commit = true}) {
-    final playlistIndex = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
+  void setPlaylistSongs(
+    String playlistId,
+    List<Video> songs, {
+    bool commit = true,
+  }) {
+    final playlistIndex = _customPlaylists.indexWhere(
+      (p) => p['id'] == playlistId,
+    );
     if (playlistIndex != -1) {
-      final songMaps = songs.map((song) => {
-        'id': song.id.value,
-        'title': song.title,
-        'author': song.author,
-        'thumbnail': getHdThumbnail(song.id.value),
-        'streamUrl': _webStreamUrls[song.id.value] ?? '',
-      }).toList();
+      final songMaps = songs
+          .map(
+            (song) => {
+              'id': song.id.value,
+              'title': song.title,
+              'author': song.author,
+              'thumbnail': getHdThumbnail(song.id.value),
+              'streamUrl': _webStreamUrls[song.id.value] ?? '',
+            },
+          )
+          .toList();
 
       _customPlaylists[playlistIndex]['songs'] = songMaps;
       if (commit) {
@@ -1175,15 +1352,28 @@ class MusicService extends ChangeNotifier {
     }
   }
 
-  Future<void> reorderPlaylistSongs(String playlistId, int oldIndex, int newIndex) async {
-    final playlistIndex = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
+  Future<void> reorderPlaylistSongs(
+    String playlistId,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final playlistIndex = _customPlaylists.indexWhere(
+      (p) => p['id'] == playlistId,
+    );
     if (playlistIndex == -1) return;
 
-    final songs = List<Map<String, dynamic>>.from(_customPlaylists[playlistIndex]['songs'] ?? []);
+    final songs = List<Map<String, dynamic>>.from(
+      _customPlaylists[playlistIndex]['songs'] ?? [],
+    );
     if (oldIndex < newIndex) {
       newIndex -= 1;
     }
-    if (oldIndex < 0 || oldIndex >= songs.length || newIndex < 0 || newIndex >= songs.length) return;
+    if (oldIndex < 0 ||
+        oldIndex >= songs.length ||
+        newIndex < 0 ||
+        newIndex >= songs.length) {
+      return;
+    }
 
     final item = songs.removeAt(oldIndex);
     songs.insert(newIndex, item);
@@ -1194,10 +1384,14 @@ class MusicService extends ChangeNotifier {
   }
 
   Future<void> removeSongFromPlaylist(String playlistId, String songId) async {
-    final playlistIndex = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
+    final playlistIndex = _customPlaylists.indexWhere(
+      (p) => p['id'] == playlistId,
+    );
     if (playlistIndex == -1) return;
 
-    final songs = List<Map<String, dynamic>>.from(_customPlaylists[playlistIndex]['songs'] ?? []);
+    final songs = List<Map<String, dynamic>>.from(
+      _customPlaylists[playlistIndex]['songs'] ?? [],
+    );
     songs.removeWhere((s) => s['id'] == songId);
 
     _customPlaylists[playlistIndex]['songs'] = songs;
@@ -1243,16 +1437,20 @@ class MusicService extends ChangeNotifier {
       return;
     }
     // Check if duplicate already exists anywhere in queue
-    final isDup = _playlist.any((item) =>
-        item.id.value == song.id.value ||
-        CanonicalSongDedup.areDuplicateSongs(
-          titleA: item.title,
-          artistA: item.author,
-          titleB: song.title,
-          artistB: song.author,
-        ));
+    final isDup = _playlist.any(
+      (item) =>
+          item.id.value == song.id.value ||
+          CanonicalSongDedup.areDuplicateSongs(
+            titleA: item.title,
+            artistA: item.author,
+            titleB: song.title,
+            artistB: song.author,
+          ),
+    );
     if (isDup) {
-      debugPrint('[Queue] Song "${song.title}" already exists in queue. Skipping duplicate.');
+      debugPrint(
+        '[Queue] Song "${song.title}" already exists in queue. Skipping duplicate.',
+      );
       return;
     }
     _playlist.add(song);
@@ -1263,7 +1461,12 @@ class MusicService extends ChangeNotifier {
     if (oldIndex < newIndex) {
       newIndex -= 1;
     }
-    if (oldIndex < 0 || oldIndex >= _playlist.length || newIndex < 0 || newIndex >= _playlist.length) return;
+    if (oldIndex < 0 ||
+        oldIndex >= _playlist.length ||
+        newIndex < 0 ||
+        newIndex >= _playlist.length) {
+      return;
+    }
     final currentSong = _currentSong;
     final song = _playlist.removeAt(oldIndex);
     _playlist.insert(newIndex, song);
@@ -1293,7 +1496,9 @@ class MusicService extends ChangeNotifier {
   Future<void> renamePlaylist(String playlistId, String newName) async {
     final cleanName = newName.trim();
     if (cleanName.isEmpty) return;
-    final playlistIndex = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
+    final playlistIndex = _customPlaylists.indexWhere(
+      (p) => p['id'] == playlistId,
+    );
     if (playlistIndex != -1) {
       _customPlaylists[playlistIndex]['name'] = cleanName;
       await saveCustomPlaylists();
@@ -1307,10 +1512,11 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
   }
 
-
-
   Future<void> playCustomPlaylist(String playlistId, int startIndex) async {
-    final playlist = _customPlaylists.firstWhere((p) => p['id'] == playlistId, orElse: () => <String, dynamic>{});
+    final playlist = _customPlaylists.firstWhere(
+      (p) => p['id'] == playlistId,
+      orElse: () => <String, dynamic>{},
+    );
     if (playlist.isEmpty) return;
 
     final songs = List<Map<String, dynamic>>.from(playlist['songs'] ?? []);
@@ -1326,25 +1532,31 @@ class MusicService extends ChangeNotifier {
       }
     }
 
-    _playlist = songs.map((item) => Video(
-      VideoId((item['id'] as String?) ?? ''),
-      (item['title'] as String?) ?? 'Unknown Title',
-      (item['author'] as String?) ?? 'Unknown Artist',
-      ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
-      DateTime.now(),
-      '',
-      null,
-      '',
-      null,
-      ThumbnailSet((item['id'] as String?) ?? ''),
-      null,
-      Engagement(0, null, null),
-      false,
-    )).toList();
+    _playlist = songs
+        .map(
+          (item) => Video(
+            VideoId((item['id'] as String?) ?? ''),
+            (item['title'] as String?) ?? 'Unknown Title',
+            (item['author'] as String?) ?? 'Unknown Artist',
+            ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+            DateTime.now(),
+            '',
+            null,
+            '',
+            null,
+            ThumbnailSet((item['id'] as String?) ?? ''),
+            null,
+            Engagement(0, null, null),
+            false,
+          ),
+        )
+        .toList();
 
     _currentIndex = startIndex;
-    if (_currentIndex < 0 || _currentIndex >= _playlist.length) _currentIndex = 0;
-    
+    if (_currentIndex < 0 || _currentIndex >= _playlist.length) {
+      _currentIndex = 0;
+    }
+
     _seedPlaylistArtists = _extractArtistsFromSongs(_playlist);
     _playlistArtistRecommendationOffset = 0;
 
@@ -1367,7 +1579,8 @@ class MusicService extends ChangeNotifier {
       }
       final track = _playlist[idx];
       final trackId = track.id.value;
-      if (_webStreamUrls[trackId] != null && _webStreamUrls[trackId]!.isNotEmpty) {
+      if (_webStreamUrls[trackId] != null &&
+          _webStreamUrls[trackId]!.isNotEmpty) {
         continue;
       }
       _prewarmSingleTrack(track);
@@ -1376,7 +1589,9 @@ class MusicService extends ChangeNotifier {
 
   Future<void> _prewarmSingleTrack(Video track) async {
     final trackId = track.id.value;
-    if (_webStreamUrls[trackId] != null && _webStreamUrls[trackId]!.isNotEmpty) return;
+    if (_webStreamUrls[trackId] != null && _webStreamUrls[trackId]!.isNotEmpty) {
+      return;
+    }
     try {
       final cleanT = CanonicalSongDedup.cleanTitle(track.title);
       final cleanA = CanonicalSongDedup.cleanArtist(track.author);
@@ -1413,7 +1628,9 @@ class MusicService extends ChangeNotifier {
       }
 
       // Proactively pre-resolve native YouTube stream candidate if JioSaavn wasn't matched
-      if (!kIsWeb && (_webStreamUrls[trackId] == null || _webStreamUrls[trackId]!.isEmpty)) {
+      if (!kIsWeb &&
+          (_webStreamUrls[trackId] == null ||
+              _webStreamUrls[trackId]!.isEmpty)) {
         final candidates = await _resolveStreamCandidates(trackId);
         if (candidates.isNotEmpty) {
           _webStreamUrls[trackId] = candidates.first.url;
@@ -1433,23 +1650,29 @@ class MusicService extends ChangeNotifier {
       }
     }
 
-    _playlist = _likedSongs.map((item) => Video(
-      VideoId(item['id'] ?? ''),
-      item['title'] ?? 'Unknown Title',
-      item['author'] ?? 'Unknown Artist',
-      ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
-      DateTime.now(),
-      '',
-      null,
-      '',
-      null,
-      ThumbnailSet(item['id'] ?? ''),
-      null,
-      Engagement(0, null, null),
-      false,
-    )).toList();
+    _playlist = _likedSongs
+        .map(
+          (item) => Video(
+            VideoId(item['id'] ?? ''),
+            item['title'] ?? 'Unknown Title',
+            item['author'] ?? 'Unknown Artist',
+            ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+            DateTime.now(),
+            '',
+            null,
+            '',
+            null,
+            ThumbnailSet(item['id'] ?? ''),
+            null,
+            Engagement(0, null, null),
+            false,
+          ),
+        )
+        .toList();
 
-    _currentIndex = _likedSongs.indexWhere((item) => item['id'] == songData['id']);
+    _currentIndex = _likedSongs.indexWhere(
+      (item) => item['id'] == songData['id'],
+    );
     if (_currentIndex == -1) _currentIndex = 0;
     if (_playlist.isNotEmpty) {
       _seedPlaylistArtists = _extractArtistsFromSongs(_playlist);
@@ -1498,7 +1721,11 @@ class MusicService extends ChangeNotifier {
     notifyListeners();
   }
 
-  static bool _isCoverOrKaraokeTrack(String title, String author, {String? query}) {
+  static bool _isCoverOrKaraokeTrack(
+    String title,
+    String author, {
+    String? query,
+  }) {
     final lowerTitle = title.toLowerCase();
     final lowerAuthor = author.toLowerCase();
     final q = (query ?? '').toLowerCase();
@@ -1550,7 +1777,7 @@ class MusicService extends ChangeNotifier {
   /// Tier 3: YouTube Standard (Safety net fallback)
   /// Guaranteed Zero Cross-Source Duplicates via CanonicalSongDedup.
   static final RegExp _compilationAlbumRegex = RegExp(
-    r'(?:best of|greatest hits|top \d+|collection|compilation|party mix|mashup|jukebox|hits of|evergreen|all time hits|vol\.?\s*\d+|volume\s*\d+|chartbusters|blockbusters)',
+    r'(?:best of|greatest hits|top \d+|collection|compilation|party mix|mashup|jukebox|hits of|evergreen|all time hits|vol\.?\s*\d+|volume\s*\d+|chartbusters|blockbusters|divine melodies|melodies of|love hits|romantic hits|soulful melodies|top romantic|sweet melodies|popular hits|tribute to|melody hits|playlist|non[\s-]*stop|instrumental version)',
     caseSensitive: false,
   );
   static final Set<String> _compilationArtworks = {};
@@ -1562,11 +1789,16 @@ class MusicService extends ChangeNotifier {
       for (var item in jsonList) {
         final songId = item['id'] as String? ?? '';
         if (songId.isEmpty) continue;
-        final title = item['title'] as String? ?? 'Unknown Title';
+        final rawTitle = item['title'] as String? ?? 'Unknown Title';
+        final title = CanonicalSongDedup.deduplicateRepeatedTokens(rawTitle);
         final author = item['author'] as String? ?? 'DilSe Music';
         final album = item['album'] as String? ?? '';
-        final durationSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
-        final duration = durationSec != null ? Duration(seconds: durationSec) : null;
+        final durationSec = item['duration'] != null
+            ? int.tryParse(item['duration'].toString())
+            : null;
+        final duration = durationSec != null
+            ? Duration(seconds: durationSec)
+            : null;
         final artwork = item['thumbnail'] as String? ?? '';
         final streamUrl = item['streamUrl'] as String? ?? '';
 
@@ -1574,15 +1806,21 @@ class MusicService extends ChangeNotifier {
           continue;
         }
 
-        final isCompilation = _compilationAlbumRegex.hasMatch(album) || _compilationAlbumRegex.hasMatch(title);
-        final vidString = songId.length >= 11 ? songId.substring(0, 11) : songId.padRight(11, '0');
+        final isCompilation =
+            _compilationAlbumRegex.hasMatch(album) ||
+            _compilationAlbumRegex.hasMatch(title);
+        final vidString = songId.length >= 11
+            ? songId.substring(0, 11)
+            : songId.padRight(11, '0');
 
         if (artwork.isNotEmpty) {
           if (isCompilation) {
             _compilationArtworks.add(artwork);
             // Only set compilation thumbnail if we don't already have one
             if (!_artworkMap.containsKey(songId)) _artworkMap[songId] = artwork;
-            if (!_artworkMap.containsKey(vidString)) _artworkMap[vidString] = artwork;
+            if (!_artworkMap.containsKey(vidString)) {
+              _artworkMap[vidString] = artwork;
+            }
           } else {
             // Genuine soundtrack artwork: always overwrite or set!
             _artworkMap[songId] = artwork;
@@ -1638,35 +1876,56 @@ class MusicService extends ChangeNotifier {
   /// Tier 2: YouTube Music (Official studio releases via InnerTube)
   /// Tier 3: YouTube Standard (Safety net fallback only if Jio + YTM have < 8 results)
   /// Guaranteed Zero Cross-Source Duplicates & 100% Genuine Audio via CanonicalSongDedup.
-  Future<List<Video>> searchSongs(String query, {int page = 1}) async {
+  Future<List<Video>> searchSongs(
+    String query, {
+    int page = 1,
+    int limit = 25,
+  }) async {
     if (query.trim().isEmpty) return [];
 
     try {
+      final int jioLimit = limit.clamp(10, 60);
+      final int ytmLimit = (limit * 0.7).round().clamp(10, 50);
+
       // 1. Tier 1: JioSaavn search (highest priority for 320k studio quality)
       final jioFuture = http
-          .get(ApiConfig.jioSearchUri(query, limit: 25))
+          .get(ApiConfig.jioSearchUri(query, limit: jioLimit))
           .timeout(const Duration(seconds: 8));
 
       // 2. Tier 2: YouTube Music Search (official releases)
-      final ytmFuture = YouTubeMusicClient().searchSongs(query, limit: 15);
+      final ytmFuture = YouTubeMusicClient().searchSongs(
+        query,
+        limit: ytmLimit,
+      );
 
-      final jioResponse = await jioFuture.catchError((_) => http.Response('[]', 500));
-      List<Video> jioResults = jioResponse.statusCode == 200 ? _parseJioResults(jioResponse.body, query: query) : [];
+      final jioResponse = await jioFuture.catchError(
+        (_) => http.Response('[]', 500),
+      );
+      List<Video> jioResults = jioResponse.statusCode == 200
+          ? _parseJioResults(jioResponse.body, query: query)
+          : [];
 
       // Await Tier 2 in parallel
       final ytmResults = await ytmFuture.catchError((_) => <Video>[]);
 
       // Fallback: If JioSaavn from edge worker returned fewer than 8 genuine tracks, query the custom backend if configured
-      if (jioResults.length < 8 && PreferencesService().customServerUrl.isNotEmpty) {
+      if (jioResults.length < 8 &&
+          PreferencesService().customServerUrl.isNotEmpty) {
         try {
           final backendJioResp = await http
               .get(ApiConfig.jioBackendSearchUri(query, limit: 20))
               .timeout(const Duration(seconds: 4))
               .catchError((_) => http.Response('[]', 500));
           if (backendJioResp.statusCode == 200) {
-            final fallbackList = _parseJioResults(backendJioResp.body, query: query);
+            final fallbackList = _parseJioResults(
+              backendJioResp.body,
+              query: query,
+            );
             if (fallbackList.isNotEmpty) {
-              final dedupedFallback = CanonicalSongDedup.deduplicateList(jioResults, fallbackList);
+              final dedupedFallback = CanonicalSongDedup.deduplicateList(
+                jioResults,
+                fallbackList,
+              );
               jioResults = [...jioResults, ...dedupedFallback];
             }
           }
@@ -1675,7 +1934,8 @@ class MusicService extends ChangeNotifier {
 
       // Tier 3: YouTube Standard backend (safety net only if JioSaavn + YTM return fewer than 8 tracks and custom backend is configured)
       final List<Video> backendResults = [];
-      if (jioResults.length + ytmResults.length < 8 && PreferencesService().customServerUrl.isNotEmpty) {
+      if (jioResults.length + ytmResults.length < 8 &&
+          PreferencesService().customServerUrl.isNotEmpty) {
         final backendResponse = await http
             .get(ApiConfig.searchUri(query, page: page, limit: 15))
             .timeout(const Duration(seconds: 5))
@@ -1688,8 +1948,12 @@ class MusicService extends ChangeNotifier {
               final videoId = item['id'] as String;
               final title = item['title'] as String? ?? 'Unknown Title';
               final author = item['author'] as String? ?? 'Unknown Artist';
-              final durationSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
-              final duration = durationSec != null ? Duration(seconds: durationSec) : null;
+              final durationSec = item['duration'] != null
+                  ? int.tryParse(item['duration'].toString())
+                  : null;
+              final duration = durationSec != null
+                  ? Duration(seconds: durationSec)
+                  : null;
 
               final video = Video(
                 VideoId(videoId),
@@ -1717,15 +1981,24 @@ class MusicService extends ChangeNotifier {
       }
 
       // Deduplicate Tier 2 against Tier 1
-      final dedupedYtm = CanonicalSongDedup.deduplicateList(jioResults, ytmResults);
+      final dedupedYtm = CanonicalSongDedup.deduplicateList(
+        jioResults,
+        ytmResults,
+      );
 
       // Deduplicate Tier 3 against JioSaavn + YTM
       final known = <Video>[...jioResults, ...dedupedYtm];
-      final dedupedYt = CanonicalSongDedup.deduplicateList(known, backendResults);
+      final dedupedYt = CanonicalSongDedup.deduplicateList(
+        known,
+        backendResults,
+      );
 
       final combined = <Video>[...jioResults, ...dedupedYtm, ...dedupedYt];
-      debugPrint('[Studio Search] Returned ${combined.length} songs (${jioResults.length} Jio + ${dedupedYtm.length} YTM + ${dedupedYt.length} YT)');
-      return combined;
+      final ranked = _rankSearchResults(combined, query);
+      debugPrint(
+        '[Studio Search] Returned ${ranked.length} songs (${jioResults.length} Jio + ${dedupedYtm.length} YTM + ${dedupedYt.length} YT)',
+      );
+      return ranked;
     } catch (e) {
       debugPrint('[Studio Search] Error: $e');
     }
@@ -1733,8 +2006,103 @@ class MusicService extends ChangeNotifier {
     return [];
   }
 
+  /// Exposes search ranking for test suites
+  @visibleForTesting
+  List<Video> rankSearchResults(List<Video> songs, String rawQuery) =>
+      _rankSearchResults(songs, rawQuery);
+
+  /// Spotify-grade Search Relevance & Quality Re-ranking
+  List<Video> _rankSearchResults(List<Video> songs, String rawQuery) {
+    if (songs.isEmpty || rawQuery.trim().isEmpty) return songs;
+
+    final q = rawQuery.trim().toLowerCase();
+    final cleanQ = CanonicalSongDedup.cleanTitle(rawQuery);
+    final queryTokens = q
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty)
+        .toList();
+
+    final scored = <MapEntry<Video, double>>[];
+    final seenDeduplicationKeys = <String, Video>{};
+
+    for (int i = 0; i < songs.length; i++) {
+      final song = songs[i];
+      final title = song.title.toLowerCase();
+      final cleanT = CanonicalSongDedup.cleanTitle(song.title);
+      final author = song.author.toLowerCase();
+      final cleanA = CanonicalSongDedup.cleanArtist(song.author);
+
+      // Deduplicate near-identical tracks from the same movie/soundtrack (e.g. Mr. Perfect and Mr. Perfect (DSP Mix))
+      final dedupKey = '$cleanT|$cleanA';
+      if (seenDeduplicationKeys.containsKey(dedupKey)) {
+        final existing = seenDeduplicationKeys[dedupKey]!;
+        if (song.title.length < existing.title.length) {
+          seenDeduplicationKeys[dedupKey] = song;
+        }
+        continue;
+      }
+      seenDeduplicationKeys[dedupKey] = song;
+
+      double score = 0.0;
+
+      // 1. Exact Title Match (e.g. "Perfect" == "perfect")
+      if (cleanT == cleanQ || title == q) {
+        score += 1000.0;
+      } else if (cleanT.startsWith(cleanQ)) {
+        score += 500.0;
+      } else if (cleanT.contains(cleanQ)) {
+        score += 250.0;
+      }
+
+      // 2. Token overlap score
+      for (final token in queryTokens) {
+        if (cleanT.contains(token) || title.contains(token)) {
+          score += 100.0;
+        }
+      }
+
+      // 3. Artist Match (user searched artist name e.g. "Ed Sheeran", "SPB")
+      if (cleanA == cleanQ || author == q) {
+        score += 600.0;
+      } else if (cleanA.contains(cleanQ) || author.contains(q)) {
+        score += 300.0;
+      }
+
+      // 4. Standalone Song vs Movie Tag penalty:
+      // If user searched a simple standalone title like "perfect", penalize noisy tags like (From "...")
+      if (cleanQ.split(' ').length <= 2) {
+        if (title.contains('from "') ||
+            title.contains("from '") ||
+            title.contains('soundtrack')) {
+          score -= 150.0;
+        }
+        if (title.contains('remix') ||
+            title.contains('dj mix') ||
+            title.contains('dsp mix')) {
+          score -= 100.0;
+        }
+      }
+
+      // 5. Prefer shorter, cleaner titles when query matches
+      final lengthPenalty = (cleanT.length - cleanQ.length).clamp(0, 50) * 2.0;
+      score -= lengthPenalty;
+
+      // 6. Preservation of source priority (JioSaavn 320k gets small base tie-breaker)
+      final sourceBonus = (songs.length - i) * 1.0;
+      score += sourceBonus;
+
+      scored.add(MapEntry(song, score));
+    }
+
+    scored.sort((a, b) => b.value.compareTo(a.value));
+    return scored.map((e) => e.key).toList();
+  }
+
   /// Structured Spotify-grade suggestions (Artist 👤, Song 🎵, History 🕒, Query 🔍)
-  Future<List<SearchSuggestion>> fetchEntitySuggestions(String query, {int limit = 8}) async {
+  Future<List<SearchSuggestion>> fetchEntitySuggestions(
+    String query, {
+    int limit = 8,
+  }) async {
     if (query.trim().isEmpty) return [];
 
     final suggestions = <SearchSuggestion>[];
@@ -1744,11 +2112,13 @@ class MusicService extends ChangeNotifier {
     final history = PreferencesService().searchHistory;
     for (final item in history) {
       if (item.toLowerCase().contains(qLower)) {
-        suggestions.add(SearchSuggestion(
-          text: item,
-          subtitle: 'Recent Search',
-          type: SearchSuggestionType.history,
-        ));
+        suggestions.add(
+          SearchSuggestion(
+            text: item,
+            subtitle: 'Recent Search',
+            type: SearchSuggestionType.history,
+          ),
+        );
         if (suggestions.length >= 2) break;
       }
     }
@@ -1757,11 +2127,13 @@ class MusicService extends ChangeNotifier {
     final topArtists = PreferencesService().getTopArtists(limit: 10);
     for (final artist in topArtists) {
       if (artist.toLowerCase().contains(qLower)) {
-        suggestions.add(SearchSuggestion(
-          text: artist,
-          subtitle: 'Artist',
-          type: SearchSuggestionType.artist,
-        ));
+        suggestions.add(
+          SearchSuggestion(
+            text: artist,
+            subtitle: 'Artist',
+            type: SearchSuggestionType.artist,
+          ),
+        );
         if (suggestions.length >= 4) break;
       }
     }
@@ -1775,16 +2147,25 @@ class MusicService extends ChangeNotifier {
         final List<dynamic> jsonList = json.decode(response.body);
         for (var item in jsonList) {
           final text = item.toString().trim();
-          if (text.isEmpty || suggestions.any((s) => s.text.toLowerCase() == text.toLowerCase())) {
+          if (text.isEmpty ||
+              suggestions.any(
+                (s) => s.text.toLowerCase() == text.toLowerCase(),
+              )) {
             continue;
           }
 
-          final isArtist = topArtists.any((a) => a.toLowerCase() == text.toLowerCase());
-          suggestions.add(SearchSuggestion(
-            text: text,
-            subtitle: isArtist ? 'Artist' : 'Song',
-            type: isArtist ? SearchSuggestionType.artist : SearchSuggestionType.song,
-          ));
+          final isArtist = topArtists.any(
+            (a) => a.toLowerCase() == text.toLowerCase(),
+          );
+          suggestions.add(
+            SearchSuggestion(
+              text: text,
+              subtitle: isArtist ? 'Artist' : 'Song',
+              type: isArtist
+                  ? SearchSuggestionType.artist
+                  : SearchSuggestionType.song,
+            ),
+          );
           if (suggestions.length >= limit) break;
         }
       }
@@ -1793,14 +2174,21 @@ class MusicService extends ChangeNotifier {
     // 4. Fill with YouTube suggestions if still sparse
     if (suggestions.length < limit) {
       try {
-        final rawStrings = await fetchSuggestions(query, limit: limit - suggestions.length);
+        final rawStrings = await fetchSuggestions(
+          query,
+          limit: limit - suggestions.length,
+        );
         for (final str in rawStrings) {
-          if (!suggestions.any((s) => s.text.toLowerCase() == str.toLowerCase())) {
-            suggestions.add(SearchSuggestion(
-              text: str,
-              subtitle: 'Search',
-              type: SearchSuggestionType.query,
-            ));
+          if (!suggestions.any(
+            (s) => s.text.toLowerCase() == str.toLowerCase(),
+          )) {
+            suggestions.add(
+              SearchSuggestion(
+                text: str,
+                subtitle: 'Search',
+                type: SearchSuggestionType.query,
+              ),
+            );
             if (suggestions.length >= limit) break;
           }
         }
@@ -1846,12 +2234,16 @@ class MusicService extends ChangeNotifier {
   /// Reports track completion for collaborative filtering co-occurrence
   Future<void> reportTrackFinished(String currentId, String nextId) async {
     try {
-      await http.post(
-        ApiConfig.trackFinishedUri(),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'current_id': currentId, 'next_id': nextId}),
-      ).timeout(const Duration(seconds: 5));
-      debugPrint('[Collaborative] Reported track transition: $currentId -> $nextId');
+      await http
+          .post(
+            ApiConfig.trackFinishedUri(),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({'current_id': currentId, 'next_id': nextId}),
+          )
+          .timeout(const Duration(seconds: 5));
+      debugPrint(
+        '[Collaborative] Reported track transition: $currentId -> $nextId',
+      );
     } catch (e) {
       debugPrint('reportTrackFinished error: $e');
     }
@@ -1866,7 +2258,14 @@ class MusicService extends ChangeNotifier {
   }) async {
     try {
       final response = await http
-          .get(ApiConfig.nextCandidatesUri(videoId, limit: limit, title: title, artist: artist))
+          .get(
+            ApiConfig.nextCandidatesUri(
+              videoId,
+              limit: limit,
+              title: title,
+              artist: artist,
+            ),
+          )
           .timeout(const Duration(seconds: 12));
       if (response.statusCode == 200) {
         final List<dynamic> jsonList = json.decode(response.body);
@@ -1875,7 +2274,9 @@ class MusicService extends ChangeNotifier {
           final vid = item['id'] as String;
           final title = item['title'] as String? ?? 'Unknown Title';
           final author = item['author'] as String? ?? 'Unknown Artist';
-          final durationSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
+          final durationSec = item['duration'] != null
+              ? int.tryParse(item['duration'].toString())
+              : null;
           results.add(
             Video(
               VideoId(vid),
@@ -1905,7 +2306,9 @@ class MusicService extends ChangeNotifier {
   Future<void> _extractPalette(String videoId) async {
     try {
       final thumbUrl = getHdThumbnail(videoId);
-      final imageUrl = thumbUrl.isNotEmpty ? thumbUrl : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+      final imageUrl = thumbUrl.isNotEmpty
+          ? thumbUrl
+          : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
       final palette = await PaletteGenerator.fromImageProvider(
         NetworkImage(imageUrl),
         size: const Size(100, 100),
@@ -1915,14 +2318,28 @@ class MusicService extends ChangeNotifier {
       // Guard against race condition: discard if song changed while extracting
       if (_currentSong?.id.value != videoId) return;
 
-      final dominant = palette.dominantColor?.color ?? palette.vibrantColor?.color ?? const Color(0xFF1E1E2C);
-      final vibrant = palette.vibrantColor?.color ?? palette.lightVibrantColor?.color ?? dominant;
-      final darkVibrant = palette.darkVibrantColor?.color ?? palette.darkMutedColor?.color ?? dominant;
+      final dominant =
+          palette.dominantColor?.color ??
+          palette.vibrantColor?.color ??
+          const Color(0xFF1E1E2C);
+      final vibrant =
+          palette.vibrantColor?.color ??
+          palette.lightVibrantColor?.color ??
+          dominant;
+      final darkVibrant =
+          palette.darkVibrantColor?.color ??
+          palette.darkMutedColor?.color ??
+          dominant;
 
       _dominantColor = dominant;
       _vibrantColor = vibrant;
       _darkVibrantColor = darkVibrant;
-      AlbumColorDeriver.registerExtractedPalette(videoId, dominant, vibrant, darkVibrant);
+      AlbumColorDeriver.registerExtractedPalette(
+        videoId,
+        dominant,
+        vibrant,
+        darkVibrant,
+      );
       notifyListeners();
     } catch (e) {
       debugPrint('[Palette] Extraction error: $e');
@@ -2020,7 +2437,9 @@ class MusicService extends ChangeNotifier {
     }
 
     if (_stopAtEndOfTrack) {
-      debugPrint('[SleepTimer] Reached end of current track. Stopping playback.');
+      debugPrint(
+        '[SleepTimer] Reached end of current track. Stopping playback.',
+      );
       _stopPlayback();
       return;
     }
@@ -2038,7 +2457,9 @@ class MusicService extends ChangeNotifier {
         } else {
           // Select next song avoiding consecutive artist repetition
           final random = Random();
-          final currentArtist = _currentSong != null ? CanonicalSongDedup.cleanArtist(_currentSong!.author) : '';
+          final currentArtist = _currentSong != null
+              ? CanonicalSongDedup.cleanArtist(_currentSong!.author)
+              : '';
 
           final candidateIndices = <int>[];
           for (int i = 0; i < _playlist.length; i++) {
@@ -2053,7 +2474,9 @@ class MusicService extends ChangeNotifier {
           if (candidateIndices.isNotEmpty) {
             nextIdx = candidateIndices[random.nextInt(candidateIndices.length)];
           } else {
-            nextIdx = (random.nextInt(_playlist.length - 1) + _currentIndex + 1) % _playlist.length;
+            nextIdx =
+                (random.nextInt(_playlist.length - 1) + _currentIndex + 1) %
+                _playlist.length;
           }
 
           _currentIndex = nextIdx;
@@ -2094,7 +2517,9 @@ class MusicService extends ChangeNotifier {
     }
 
     if (_currentSong != null) {
-      debugPrint('[Queue] End of queue reached. Fetching next recommendations…');
+      debugPrint(
+        '[Queue] End of queue reached. Fetching next recommendations…',
+      );
       _isLoading = true;
       notifyListeners();
       await _fetchNextRecommendations(_currentSong!);
@@ -2120,6 +2545,17 @@ class MusicService extends ChangeNotifier {
       _cancelActiveFade();
     }
 
+    // If played for more than 3 seconds, replay current song from beginning
+    if (position.inSeconds > 3) {
+      if (kIsWeb) {
+        WebPlayerBridge.seek(Duration.zero);
+        notifyListeners();
+      } else {
+        await _audioPlayer.seek(Duration.zero);
+      }
+      return;
+    }
+
     // 1. If in shuffle mode and history exists, traverse back through true shuffle history
     if (_isShuffle && _shuffleHistoryPointer > 0) {
       _shuffleHistoryPointer--;
@@ -2129,19 +2565,34 @@ class MusicService extends ChangeNotifier {
       return;
     }
 
-    // 2. Normal sequential playback previous
+    // 2. Cross-playlist global navigation history:
+    // If user played songs from different playlists, seamlessly go back to the previous song!
+    if (_sessionPlayedHistory.isNotEmpty) {
+      final prevSong = _sessionPlayedHistory.removeLast();
+      _isNavigatingHistory = true;
+      try {
+        final existingIdx = _playlist.indexWhere(
+          (s) => s.id.value == prevSong.id.value,
+        );
+        if (existingIdx != -1) {
+          _currentIndex = existingIdx;
+          await playSong(_playlist[_currentIndex], updateQueue: false);
+        } else {
+          // Song was from another playlist/album: insert into current queue right before current song
+          _playlist.insert(_currentIndex, prevSong);
+          await playSong(prevSong, updateQueue: false);
+        }
+      } finally {
+        _isNavigatingHistory = false;
+      }
+      return;
+    }
+
+    // 3. Normal sequential playback previous
     if (_playlist.isNotEmpty && _currentIndex - 1 >= 0) {
       _currentIndex--;
       await playSong(_playlist[_currentIndex], updateQueue: false);
       _prewarmUpcomingTracks(_currentIndex + 1, count: 2);
-    } else if (_playlist.isNotEmpty && position.inSeconds > 3) {
-      // Replay current track from start
-      if (kIsWeb) {
-        WebPlayerBridge.seek(Duration.zero);
-        notifyListeners();
-      } else {
-        await _audioPlayer.seek(Duration.zero);
-      }
     }
   }
 
@@ -2159,7 +2610,8 @@ class MusicService extends ChangeNotifier {
 
   // Full browser headers to avoid CDN 403s and throttling
   static const Map<String, String> _ytHeaders = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+    'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
         'AppleWebKit/537.36 (KHTML, like Gecko) '
         'Chrome/125.0.0.0 Safari/537.36',
     'Accept': '*/*',
@@ -2170,11 +2622,15 @@ class MusicService extends ChangeNotifier {
 
   /// Fetches the stream URL from the backend.
   /// [bustCache] forces the backend to re-extract the URL (used on retry).
-  Future<String?> _fetchStreamUrl(String videoId, {bool bustCache = false}) async {
+  Future<String?> _fetchStreamUrl(
+    String videoId, {
+    bool bustCache = false,
+  }) async {
     try {
       if (bustCache) {
         // Tell backend to discard its cached URL for this video
-        await http.delete(ApiConfig.cacheInvalidateUri(videoId))
+        await http
+            .delete(ApiConfig.cacheInvalidateUri(videoId))
             .timeout(const Duration(seconds: 3));
       }
       final response = await http
@@ -2197,11 +2653,14 @@ class MusicService extends ChangeNotifier {
         'timestamp': DateTime.now().toIso8601String(),
         ...data,
       };
-      http.post(
-        ApiConfig.clientLogUri(),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(payload),
-      ).timeout(const Duration(seconds: 4)).catchError((_) => http.Response('', 500));
+      http
+          .post(
+            ApiConfig.clientLogUri(),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode(payload),
+          )
+          .timeout(const Duration(seconds: 4))
+          .catchError((_) => http.Response('', 500));
     } catch (_) {}
   }
 
@@ -2216,7 +2675,10 @@ class MusicService extends ChangeNotifier {
           .timeout(const Duration(seconds: 7));
     } catch (e) {
       debugPrint('[StreamResolver] StreamClient error for $videoId: $e');
-      _reportClientLog('resolve_error', {'videoId': videoId, 'error': e.toString()});
+      _reportClientLog('resolve_error', {
+        'videoId': videoId,
+        'error': e.toString(),
+      });
     }
 
     if (manifest == null) return [];
@@ -2228,31 +2690,52 @@ class MusicService extends ChangeNotifier {
     // because it contains a progressive moov atom, avoiding DASH single-segment parser errors.
     final muxed18 = manifest.muxed.where((s) => s.tag == 18);
     if (muxed18.isNotEmpty) {
-      candidates.add(StreamCandidate(muxed18.first.url.toString(), 18, 'mp4_progressive_360p_aac'));
+      candidates.add(
+        StreamCandidate(
+          muxed18.first.url.toString(),
+          18,
+          'mp4_progressive_360p_aac',
+        ),
+      );
     }
 
     // Candidate 2: Progressive WebM Opus (e.g. itag 251, 160kbps high-quality Opus)
     // ExoPlayer has native Matroska/WebM demuxing and plays this seamlessly on Android.
     final webmOpus = manifest.audioOnly.where(
-      (s) => s.container.name.toLowerCase() == 'webm' || s.codec.mimeType.contains('webm') || s.codec.mimeType.contains('opus'),
+      (s) =>
+          s.container.name.toLowerCase() == 'webm' ||
+          s.codec.mimeType.contains('webm') ||
+          s.codec.mimeType.contains('opus'),
     );
     if (webmOpus.isNotEmpty) {
       final best = webmOpus.withHighestBitrate();
-      candidates.add(StreamCandidate(best.url.toString(), best.tag, 'audio_webm_opus'));
+      candidates.add(
+        StreamCandidate(best.url.toString(), best.tag, 'audio_webm_opus'),
+      );
     }
 
     // Candidate 3: AudioOnly MP4 (itag 140, 128k AAC)
     final mp4Audio = manifest.audioOnly.where(
-      (s) => s.container.name.toLowerCase() == 'mp4' || s.codec.mimeType.contains('mp4'),
+      (s) =>
+          s.container.name.toLowerCase() == 'mp4' ||
+          s.codec.mimeType.contains('mp4'),
     );
     if (mp4Audio.isNotEmpty) {
-      candidates.add(StreamCandidate(mp4Audio.withHighestBitrate().url.toString(), 140, 'mp4_audio_dash'));
+      candidates.add(
+        StreamCandidate(
+          mp4Audio.withHighestBitrate().url.toString(),
+          140,
+          'mp4_audio_dash',
+        ),
+      );
     }
 
     // Candidate 4: Any other muxed stream (e.g. itag 22 720p MP4)
     for (final m in manifest.muxed) {
       if (m.tag != 18) {
-        candidates.add(StreamCandidate(m.url.toString(), m.tag, 'muxed_${m.container.name}'));
+        candidates.add(
+          StreamCandidate(m.url.toString(), m.tag, 'muxed_${m.container.name}'),
+        );
         break;
       }
     }
@@ -2260,7 +2743,11 @@ class MusicService extends ChangeNotifier {
     return candidates;
   }
 
-  Future<void> playSong(Video song, {bool updateQueue = true, bool isCrossfade = false}) async {
+  Future<void> playSong(
+    Video song, {
+    bool updateQueue = true,
+    bool isCrossfade = false,
+  }) async {
     if (!isCrossfade) {
       _cancelActiveFade();
       if (kIsWeb && WebPlayerBridge.isPlaying) {
@@ -2276,9 +2763,19 @@ class MusicService extends ChangeNotifier {
       _isCrossfading = true;
     }
 
-    final AudioPlayer targetPlayer = (!kIsWeb && isCrossfade) ? _standbyPlayer : _activePlayer;
+    final AudioPlayer targetPlayer = (!kIsWeb && isCrossfade)
+        ? _standbyPlayer
+        : _activePlayer;
 
     _isLoading = true;
+    if (!_isNavigatingHistory &&
+        _currentSong != null &&
+        _currentSong!.id.value != song.id.value) {
+      _sessionPlayedHistory.add(_currentSong!);
+      if (_sessionPlayedHistory.length > 50) {
+        _sessionPlayedHistory.removeAt(0);
+      }
+    }
     _currentSong = song;
     _hasRepeatedOnce = false;
 
@@ -2327,14 +2824,17 @@ class MusicService extends ChangeNotifier {
     });
 
     // Proactively check JioSaavn to upgrade any track to 320kbps studio master!
-    if (_webStreamUrls[song.id.value] == null || _webStreamUrls[song.id.value]!.isEmpty) {
+    if (_webStreamUrls[song.id.value] == null ||
+        _webStreamUrls[song.id.value]!.isEmpty) {
       try {
         final cleanT = CanonicalSongDedup.cleanTitle(song.title);
         final cleanA = CanonicalSongDedup.cleanArtist(song.author);
         final q = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
         if (cleanT.isNotEmpty) {
           Future<bool> tryResolveFromUri(Uri uri) async {
-            final jioResp = await http.get(uri).timeout(const Duration(seconds: 4));
+            final jioResp = await http
+                .get(uri)
+                .timeout(const Duration(seconds: 4));
             if (_currentSong?.id.value != song.id.value) return false;
             if (jioResp.statusCode == 200) {
               final List<dynamic> list = json.decode(jioResp.body);
@@ -2354,9 +2854,12 @@ class MusicService extends ChangeNotifier {
                 );
 
                 if (isMatch) {
-                  debugPrint('[Play] Resolved "${song.title}" to JioSaavn 320k studio stream!');
+                  debugPrint(
+                    '[Play] Resolved "${song.title}" to JioSaavn 320k studio stream!',
+                  );
                   _webStreamUrls[song.id.value] = itemStream;
-                  if (itemThumb.isNotEmpty && !_artworkMap.containsKey(song.id.value)) {
+                  if (itemThumb.isNotEmpty &&
+                      !_artworkMap.containsKey(song.id.value)) {
                     _artworkMap[song.id.value] = itemThumb;
                   }
                   return true;
@@ -2367,10 +2870,14 @@ class MusicService extends ChangeNotifier {
           }
 
           // 1. Try Cloudflare Worker edge first (ultra-fast 100ms)
-          bool matched = await tryResolveFromUri(ApiConfig.jioSearchUri(q, limit: 5));
+          bool matched = await tryResolveFromUri(
+            ApiConfig.jioSearchUri(q, limit: 5),
+          );
 
           // 2. If edge didn't match, fallback to custom backend if configured
-          if (!matched && _currentSong?.id.value == song.id.value && PreferencesService().customServerUrl.isNotEmpty) {
+          if (!matched &&
+              _currentSong?.id.value == song.id.value &&
+              PreferencesService().customServerUrl.isNotEmpty) {
             await tryResolveFromUri(ApiConfig.jioBackendSearchUri(q, limit: 5));
           }
         }
@@ -2388,7 +2895,9 @@ class MusicService extends ChangeNotifier {
         if (downloadedItem.isNotEmpty && downloadedItem['localPath'] != null) {
           final localFile = File(downloadedItem['localPath']!);
           if (await localFile.exists()) {
-            debugPrint('[Play] Playing locally downloaded file: ${localFile.path}');
+            debugPrint(
+              '[Play] Playing locally downloaded file: ${localFile.path}',
+            );
             await targetPlayer.setAudioSource(
               AudioSource.uri(Uri.file(localFile.path), tag: mediaItem),
             );
@@ -2414,21 +2923,46 @@ class MusicService extends ChangeNotifier {
       if (kIsWeb) {
         final directStreamUrl = _webStreamUrls[song.id.value] ?? '';
         String webVideoId = song.id.value;
+        final isSyntheticId = !CanonicalSongDedup.isLikelyYouTubeId(webVideoId);
+
         // If direct stream URL is empty, resolve genuine YouTube ID for web fallback
         if (directStreamUrl.isEmpty) {
           try {
             final cleanT = CanonicalSongDedup.cleanTitle(song.title);
             final cleanA = CanonicalSongDedup.cleanArtist(song.author);
             final ytmQuery = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
-            final ytmResults = await YouTubeMusicClient().searchSongs(ytmQuery, limit: 1).timeout(const Duration(seconds: 4));
+            final ytmResults = await YouTubeMusicClient()
+                .searchSongs(ytmQuery, limit: 1)
+                .timeout(const Duration(seconds: 4));
             if (ytmResults.isNotEmpty) {
               webVideoId = ytmResults.first.id.value;
             }
           } catch (_) {}
+        } else if (isSyntheticId) {
+          // If direct stream URL is present, begin playback immediately, but asynchronously
+          // resolve genuine YouTube ID in background so triggerFallback() never stalls on synthetic JioSaavn IDs.
+          final cleanT = CanonicalSongDedup.cleanTitle(song.title);
+          final cleanA = CanonicalSongDedup.cleanArtist(song.author);
+          final ytmQuery = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
+          YouTubeMusicClient()
+              .searchSongs(ytmQuery, limit: 1)
+              .timeout(const Duration(seconds: 4))
+              .then((results) {
+                if (results.isNotEmpty &&
+                    _currentSong?.id.value == song.id.value) {
+                  WebPlayerBridge.setFallbackVideoId(results.first.id.value);
+                }
+              })
+              .catchError((_) {});
         }
         if (_currentSong?.id.value != song.id.value) return;
-        debugPrint('[Play][Web] Playing via Web Dual Engine: $webVideoId (directStream: $directStreamUrl, isCrossfade: $isCrossfade)');
-        _reportClientLog('web_stream_start', {'videoId': webVideoId, 'engine': 'dual'});
+        debugPrint(
+          '[Play][Web] Playing via Web Dual Engine: $webVideoId (directStream: $directStreamUrl, isCrossfade: $isCrossfade)',
+        );
+        _reportClientLog('web_stream_start', {
+          'videoId': webVideoId,
+          'engine': 'dual',
+        });
 
         if (isCrossfade) {
           final prefs = PreferencesService();
@@ -2436,10 +2970,14 @@ class MusicService extends ChangeNotifier {
           if (prefs.smartCrossfadeEnabled) {
             final profile = prefs.audioProfile;
             if (profile.avgTempo > 60 && profile.avgTempo < 200) {
-              crossfadeSec = (16 * (60.0 / profile.avgTempo)).clamp(3.0, 9.0).round();
+              crossfadeSec = (16 * (60.0 / profile.avgTempo))
+                  .clamp(3.0, 9.0)
+                  .round();
             }
           }
-          debugPrint('[Play][Web] Triggering Web Dual-Deck Crossfade (${crossfadeSec}s) to: $webVideoId');
+          debugPrint(
+            '[Play][Web] Triggering Web Dual-Deck Crossfade (${crossfadeSec}s) to: $webVideoId',
+          );
           WebPlayerBridge.crossfade(
             videoId: webVideoId,
             title: song.title,
@@ -2472,8 +3010,13 @@ class MusicService extends ChangeNotifier {
       // Check for direct JioSaavn 320kbps CDN stream first!
       final directStreamUrl = _webStreamUrls[song.id.value] ?? '';
       if (directStreamUrl.isNotEmpty) {
-        debugPrint('[Play] Playing via Direct JioSaavn 320k Stream on Mobile: ${song.id.value}');
-        _reportClientLog('direct_stream_start', {'videoId': song.id.value, 'engine': 'jiosaavn_320k'});
+        debugPrint(
+          '[Play] Playing via Direct JioSaavn 320k Stream on Mobile: ${song.id.value}',
+        );
+        _reportClientLog('direct_stream_start', {
+          'videoId': song.id.value,
+          'engine': 'jiosaavn_320k',
+        });
         try {
           if (_currentSong?.id.value != song.id.value) return;
           await targetPlayer.setAudioSource(
@@ -2494,13 +3037,17 @@ class MusicService extends ChangeNotifier {
           _checkAndPreloadNextQueue();
           return;
         } catch (e) {
-          debugPrint('[Play] Direct stream error on mobile ($e), falling back to YouTube resolver…');
+          debugPrint(
+            '[Play] Direct stream error on mobile ($e), falling back to YouTube resolver…',
+          );
         }
       }
 
       // Direct On-Device Multi-Candidate Resolution (Format 18 progressive AAC / itag 251)
       try {
-        debugPrint('[Play] Resolving direct audio candidates on mobile device for ${song.id.value}…');
+        debugPrint(
+          '[Play] Resolving direct audio candidates on mobile device for ${song.id.value}…',
+        );
         String effectiveYtId = song.id.value;
         List<StreamCandidate> candidates = [];
         try {
@@ -2509,19 +3056,53 @@ class MusicService extends ChangeNotifier {
 
         if (candidates.isEmpty && _currentSong?.id.value == song.id.value) {
           try {
-            debugPrint('[Play] Searching YouTube Music for real video ID of "${song.title}"…');
+            debugPrint(
+              '[Play] Searching YouTube Music for real video ID of "${song.title}"…',
+            );
             final cleanT = CanonicalSongDedup.cleanTitle(song.title);
             final cleanA = CanonicalSongDedup.cleanArtist(song.author);
             final ytmQuery = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
-            final ytmResults = await YouTubeMusicClient().searchSongs(ytmQuery, limit: 3).timeout(const Duration(seconds: 5));
+            final ytmResults = await YouTubeMusicClient()
+                .searchSongs(ytmQuery, limit: 3)
+                .timeout(const Duration(seconds: 5));
             if (_currentSong?.id.value != song.id.value) return;
             if (ytmResults.isNotEmpty) {
               effectiveYtId = ytmResults.first.id.value;
-              debugPrint('[Play] Found real YouTube track: $effectiveYtId ("${ytmResults.first.title}")');
+              debugPrint(
+                '[Play] Found real YouTube track: $effectiveYtId ("${ytmResults.first.title}")',
+              );
               candidates = await _resolveStreamCandidates(effectiveYtId);
             }
           } catch (ytmErr) {
             debugPrint('[Play] YouTube Music search fallback error: $ytmErr');
+          }
+        }
+
+        // Secondary YouTubeExplode standard search fallback if InnerTube / YTM failed
+        if (candidates.isEmpty && _currentSong?.id.value == song.id.value) {
+          try {
+            debugPrint(
+              '[Play] Searching YouTube standard via YouTubeExplode for real video ID of "${song.title}"…',
+            );
+            final cleanT = CanonicalSongDedup.cleanTitle(song.title);
+            final cleanA = CanonicalSongDedup.cleanArtist(song.author);
+            final ytQuery = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
+            final ytResults = await _ytExplode.search
+                .search(ytQuery)
+                .timeout(const Duration(seconds: 6));
+            if (_currentSong?.id.value != song.id.value) return;
+            for (final v in ytResults) {
+              if (CanonicalSongDedup.isGenuineSong(v)) {
+                effectiveYtId = v.id.value;
+                debugPrint(
+                  '[Play] Found real YouTube track via standard search: $effectiveYtId ("${v.title}")',
+                );
+                candidates = await _resolveStreamCandidates(effectiveYtId);
+                if (candidates.isNotEmpty) break;
+              }
+            }
+          } catch (ytErr) {
+            debugPrint('[Play] YouTube standard search fallback error: $ytErr');
           }
         }
 
@@ -2533,7 +3114,9 @@ class MusicService extends ChangeNotifier {
           for (final candidate in candidates) {
             if (_currentSong?.id.value != song.id.value) return;
 
-            debugPrint('[Play] Trying stream candidate (tag: ${candidate.tag}, type: ${candidate.type})…');
+            debugPrint(
+              '[Play] Trying stream candidate (tag: ${candidate.tag}, type: ${candidate.type})…',
+            );
             _reportClientLog('trying_stream_candidate', {
               'videoId': effectiveYtId,
               'tag': candidate.tag,
@@ -2553,10 +3136,14 @@ class MusicService extends ChangeNotifier {
               });
               break;
             } catch (uriError) {
-              debugPrint('[Play] AudioSource.uri failed ($uriError), trying LockCachingAudioSource…');
+              debugPrint(
+                '[Play] AudioSource.uri failed ($uriError), trying LockCachingAudioSource…',
+              );
               // 2. Second attempt: LockCachingAudioSource fallback
               try {
-                final cacheFile = File('${tempDir.path}/track_${effectiveYtId}_${candidate.tag}.m4a');
+                final cacheFile = File(
+                  '${tempDir.path}/track_${effectiveYtId}_${candidate.tag}.m4a',
+                );
                 if (await cacheFile.exists() && await cacheFile.length() == 0) {
                   await cacheFile.delete();
                 }
@@ -2576,7 +3163,9 @@ class MusicService extends ChangeNotifier {
                 });
                 break;
               } catch (lockError) {
-                debugPrint('[Play] Candidate tag ${candidate.tag} failed: $lockError');
+                debugPrint(
+                  '[Play] Candidate tag ${candidate.tag} failed: $lockError',
+                );
               }
             }
           }
@@ -2586,7 +3175,9 @@ class MusicService extends ChangeNotifier {
           debugPrint('[Play] Load interrupted by newer request');
           return;
         }
-        debugPrint('[Play] Direct resolution error ($directError), trying fallbacks…');
+        debugPrint(
+          '[Play] Direct resolution error ($directError), trying fallbacks…',
+        );
       }
 
       // 4. Fallback 1: Cloudflare Edge Worker stream
@@ -2594,7 +3185,9 @@ class MusicService extends ChangeNotifier {
         if (_currentSong?.id.value != song.id.value) return;
         try {
           final cfStreamUri = ApiConfig.cloudflareStreamUri(song.id.value);
-          debugPrint('[Play] Fallback 1: Setting audio source to Cloudflare edge stream: $cfStreamUri');
+          debugPrint(
+            '[Play] Fallback 1: Setting audio source to Cloudflare edge stream: $cfStreamUri',
+          );
           await targetPlayer.setAudioSource(
             AudioSource.uri(cfStreamUri, tag: mediaItem),
             preload: true,
@@ -2606,7 +3199,8 @@ class MusicService extends ChangeNotifier {
       }
 
       // 5. Fallback 2: Backend /stream_url (if custom backend configured)
-      if (!playbackSourceSet && PreferencesService().customServerUrl.isNotEmpty) {
+      if (!playbackSourceSet &&
+          PreferencesService().customServerUrl.isNotEmpty) {
         if (_currentSong?.id.value != song.id.value) return;
         try {
           debugPrint('[Play] Fallback 2: Requesting /stream_url from backend…');
@@ -2614,7 +3208,11 @@ class MusicService extends ChangeNotifier {
           if (_currentSong?.id.value != song.id.value) return;
           if (backendUrl != null) {
             await targetPlayer.setAudioSource(
-              AudioSource.uri(Uri.parse(backendUrl), headers: _ytHeaders, tag: mediaItem),
+              AudioSource.uri(
+                Uri.parse(backendUrl),
+                headers: _ytHeaders,
+                tag: mediaItem,
+              ),
               preload: true,
             );
             playbackSourceSet = true;
@@ -2625,10 +3223,13 @@ class MusicService extends ChangeNotifier {
       }
 
       // 6. Fallback 3: Backend proxy /stream/{id}.m4a (if custom backend configured)
-      if (!playbackSourceSet && PreferencesService().customServerUrl.isNotEmpty) {
+      if (!playbackSourceSet &&
+          PreferencesService().customServerUrl.isNotEmpty) {
         if (_currentSong?.id.value != song.id.value) return;
         final proxyUri = ApiConfig.streamProxyUri(song.id.value);
-        debugPrint('[Play] Fallback 3: Setting audio source to proxy: $proxyUri');
+        debugPrint(
+          '[Play] Fallback 3: Setting audio source to proxy: $proxyUri',
+        );
         try {
           await targetPlayer.setAudioSource(
             AudioSource.uri(proxyUri, tag: mediaItem),
@@ -2643,16 +3244,12 @@ class MusicService extends ChangeNotifier {
       if (_currentSong?.id.value != song.id.value) return;
 
       if (!playbackSourceSet) {
-        debugPrint('[Play] Could not resolve audio source for "${song.title}". Auto-skipping to next track…');
+        debugPrint(
+          '[Play] Could not resolve audio source for "${song.title}".',
+        );
         _isLoading = false;
         _isCrossfading = false;
         notifyListeners();
-        if (_playlist.length > 1 && _currentIndex + 1 < _playlist.length) {
-          await Future.delayed(const Duration(milliseconds: 500));
-          if (_currentSong?.id.value == song.id.value) {
-            await nextSong();
-          }
-        }
         return;
       }
 
@@ -2699,13 +3296,18 @@ class MusicService extends ChangeNotifier {
     if (_playlist.isEmpty) return;
     final nextTracks = _playlist.skip(_currentIndex + 1).take(2);
     for (final track in nextTracks) {
-      http.get(ApiConfig.preloadUri(track.id.value)).catchError((_) => http.Response('', 500));
+      http
+          .get(ApiConfig.preloadUri(track.id.value))
+          .catchError((_) => http.Response('', 500));
     }
   }
 
   List<Video> _getLibraryRecommendationsForSeed(Video seed) {
     final libraryTracks = <Video>[];
-    final seen = <String>{seed.id.value, CanonicalSongDedup.cleanTitle(seed.title)};
+    final seen = <String>{
+      seed.id.value,
+      CanonicalSongDedup.cleanTitle(seed.title),
+    };
     final cleanSeedArtist = CanonicalSongDedup.cleanArtist(seed.author);
     final topAffinities = PreferencesService()
         .getTasteMatrix()
@@ -2752,6 +3354,7 @@ class MusicService extends ChangeNotifier {
         false,
       );
     }
+
     final seedLang = CanonicalSongDedup.detectLanguage(seed.title);
 
     // Step A: Exact / Collaborating Artist matches from user library
@@ -2763,11 +3366,16 @@ class MusicService extends ChangeNotifier {
       final cleanT = CanonicalSongDedup.cleanTitle(title);
       if (seen.contains(id) || seen.contains(cleanT)) continue;
 
-      if (seedLang != null && !CanonicalSongDedup.isLanguageCompatible(seedLang, title)) continue;
+      if (seedLang != null &&
+          !CanonicalSongDedup.isLanguageCompatible(seedLang, title)) {
+        continue;
+      }
 
       final cleanA = CanonicalSongDedup.cleanArtist(author);
       if (cleanSeedArtist.isNotEmpty && cleanA.isNotEmpty) {
-        if (cleanA == cleanSeedArtist || cleanA.contains(cleanSeedArtist) || cleanSeedArtist.contains(cleanA)) {
+        if (cleanA == cleanSeedArtist ||
+            cleanA.contains(cleanSeedArtist) ||
+            cleanSeedArtist.contains(cleanA)) {
           seen.add(id);
           seen.add(cleanT);
           artistMatches.add(toVideo(item));
@@ -2786,7 +3394,10 @@ class MusicService extends ChangeNotifier {
         final cleanT = CanonicalSongDedup.cleanTitle(title);
         if (seen.contains(id) || seen.contains(cleanT)) continue;
 
-        if (seedLang != null && !CanonicalSongDedup.isLanguageCompatible(seedLang, title)) continue;
+        if (seedLang != null &&
+            !CanonicalSongDedup.isLanguageCompatible(seedLang, title)) {
+          continue;
+        }
 
         final cleanA = CanonicalSongDedup.cleanArtist(author);
         if (topAffinities.contains(cleanA)) {
@@ -2797,7 +3408,9 @@ class MusicService extends ChangeNotifier {
       }
     }
 
-    // Step C: Other library tracks from the same playlist that contains the seed song
+    // Step C: Other library tracks from the same playlist that contains the seed song.
+    // Guard: Prevent collaborative or mixed compilation playlists from dumping discordant tracks
+    // into the queue by verifying artist or user taste compatibility.
     final playlistContextMatches = <Video>[];
     for (final pl in _customPlaylists) {
       final songs = (pl['songs'] as List<dynamic>?) ?? [];
@@ -2806,7 +3419,20 @@ class MusicService extends ChangeNotifier {
         for (final s in songs) {
           if (s is! Map<String, dynamic>) continue;
           final vid = toVideo(s);
-          if (seedLang != null && !CanonicalSongDedup.isLanguageCompatible(seedLang, vid.title)) {
+          if (seedLang != null &&
+              !CanonicalSongDedup.isLanguageCompatible(seedLang, vid.title)) {
+            continue;
+          }
+          final cleanA = CanonicalSongDedup.cleanArtist(vid.author);
+          final isArtistMatch =
+              cleanSeedArtist.isNotEmpty &&
+              cleanA.isNotEmpty &&
+              (cleanA == cleanSeedArtist ||
+                  cleanA.contains(cleanSeedArtist) ||
+                  cleanSeedArtist.contains(cleanA));
+          final isTasteMatch =
+              cleanA.isNotEmpty && topAffinities.contains(cleanA);
+          if (!isArtistMatch && !isTasteMatch) {
             continue;
           }
           final cleanT = CanonicalSongDedup.cleanTitle(vid.title);
@@ -2820,20 +3446,25 @@ class MusicService extends ChangeNotifier {
       }
     }
 
-    // Step D: Same-language tracks from user's imported library
+    // Step D: Same-language tracks from user's imported library (filtered by taste affinities)
     final languageMatches = <Video>[];
-    if (seedLang != null) {
+    if (seedLang != null && seedLang != 'english') {
       for (final item in allLibrarySongs) {
         final id = (item['id'] as String?) ?? '';
         final title = (item['title'] as String?) ?? '';
+        final author = (item['author'] as String?) ?? '';
         final cleanT = CanonicalSongDedup.cleanTitle(title);
         if (seen.contains(id) || seen.contains(cleanT)) continue;
 
         if (CanonicalSongDedup.detectLanguage(title) == seedLang ||
             CanonicalSongDedup.isLanguageCompatible(seedLang, title)) {
-          seen.add(id);
-          seen.add(cleanT);
-          languageMatches.add(toVideo(item));
+          final cleanA = CanonicalSongDedup.cleanArtist(author);
+          if (topAffinities.contains(cleanA) ||
+              (cleanSeedArtist.isNotEmpty && cleanA == cleanSeedArtist)) {
+            seen.add(id);
+            seen.add(cleanT);
+            languageMatches.add(toVideo(item));
+          }
         }
       }
     }
@@ -2853,7 +3484,10 @@ class MusicService extends ChangeNotifier {
     return libraryTracks;
   }
 
-  List<Video> _getLibraryRecommendationsForArtists(List<String> artists, {String? targetLang}) {
+  List<Video> _getLibraryRecommendationsForArtists(
+    List<String> artists, {
+    String? targetLang,
+  }) {
     if (artists.isEmpty) return [];
     final libraryTracks = <Video>[];
     final seen = <String>{};
@@ -2902,7 +3536,8 @@ class MusicService extends ChangeNotifier {
     }
 
     final random = Random();
-    final shuffledLibrary = List<Map<String, dynamic>>.from(allLibrarySongs)..shuffle(random);
+    final shuffledLibrary = List<Map<String, dynamic>>.from(allLibrarySongs)
+      ..shuffle(random);
 
     for (final item in shuffledLibrary) {
       final id = (item['id'] as String?) ?? '';
@@ -2911,13 +3546,16 @@ class MusicService extends ChangeNotifier {
       final cleanT = CanonicalSongDedup.cleanTitle(title);
       if (seen.contains(id) || seen.contains(cleanT)) continue;
 
-      if (targetLang != null && !CanonicalSongDedup.isLanguageCompatible(targetLang, title)) {
+      if (targetLang != null &&
+          !CanonicalSongDedup.isLanguageCompatible(targetLang, title)) {
         continue;
       }
 
       final cleanA = CanonicalSongDedup.cleanArtist(author);
       for (final targetArtist in artists) {
-        if (cleanA == targetArtist || cleanA.contains(targetArtist) || targetArtist.contains(cleanA)) {
+        if (cleanA == targetArtist ||
+            cleanA.contains(targetArtist) ||
+            targetArtist.contains(cleanA)) {
           seen.add(id);
           seen.add(cleanT);
           artistBuckets[targetArtist]?.add(toVideo(item));
@@ -2946,7 +3584,9 @@ class MusicService extends ChangeNotifier {
   List<String> _extractArtistsFromSongs(List<Video> songs) {
     final Map<String, int> frequency = {};
     for (final song in songs) {
-      final parts = song.author.split(RegExp(r'[,;&/]|(?:\b(?:feat\.?|ft\.?)\b)', caseSensitive: false));
+      final parts = song.author.split(
+        RegExp(r'[,;&/]|(?:\b(?:feat\.?|ft\.?)\b)', caseSensitive: false),
+      );
       for (final rawPart in parts) {
         final cleaned = CanonicalSongDedup.cleanArtist(rawPart);
         if (cleaned.isNotEmpty && cleaned.length >= 2) {
@@ -2971,7 +3611,9 @@ class MusicService extends ChangeNotifier {
     _isGeneratingQueue = true;
 
     try {
-      debugPrint('[Queue50] Generating 50-song progressive chained queue for: "${seed.title}"…');
+      debugPrint(
+        '[Queue50] Generating 50-song progressive chained queue for: "${seed.title}"…',
+      );
       final progressiveQueue = <Video>[seed];
       final seenKeys = <String>{CanonicalSongDedup.cleanTitle(seed.title)};
 
@@ -2980,7 +3622,10 @@ class MusicService extends ChangeNotifier {
 
       // Extract movie/soundtrack name if present e.g. (From "Nagabandham") or (From 'Movie')
       String? movieName;
-      final movieMatch = RegExp(r'''from\s+["']([^"']+)["']''', caseSensitive: false).firstMatch(seed.title);
+      final movieMatch = RegExp(
+        r'''from\s+["']([^"']+)["']''',
+        caseSensitive: false,
+      ).firstMatch(seed.title);
       if (movieMatch != null) {
         movieName = movieMatch.group(1)?.trim();
       }
@@ -2988,7 +3633,10 @@ class MusicService extends ChangeNotifier {
       void addTracks(List<Video> tracks, {String? targetLang}) {
         for (final track in tracks) {
           if (!CanonicalSongDedup.isGenuineSong(track)) continue;
-          if (targetLang != null && !CanonicalSongDedup.isLanguageCompatible(targetLang, track.title)) continue;
+          if (targetLang != null &&
+              !CanonicalSongDedup.isLanguageCompatible(targetLang, track.title)) {
+            continue;
+          }
 
           bool isDup = false;
           for (final existing in progressiveQueue) {
@@ -3049,7 +3697,9 @@ class MusicService extends ChangeNotifier {
       } else {
         // --- REGIONAL / INDIC MUSIC PIPELINE ---
         // 2. Stage 2 (Primary): JioSaavn Movie / Album Affinity (if from a movie soundtrack)
-        if (progressiveQueue.length < 51 && movieName != null && movieName.isNotEmpty) {
+        if (progressiveQueue.length < 51 &&
+            movieName != null &&
+            movieName.isNotEmpty) {
           final movieResults = await http
               .get(ApiConfig.jioSearchUri('$movieName songs', limit: 20))
               .timeout(const Duration(seconds: 4))
@@ -3078,7 +3728,9 @@ class MusicService extends ChangeNotifier {
             if (progressiveQueue.length >= 51) break;
             final cleanFav = CanonicalSongDedup.cleanArtist(fav);
             if (cleanFav.isEmpty) continue;
-            final favQuery = seedLanguage != null ? '$cleanFav $seedLanguage hits' : '$cleanFav hits';
+            final favQuery = seedLanguage != null
+                ? '$cleanFav $seedLanguage hits'
+                : '$cleanFav hits';
             final favResults = await http
                 .get(ApiConfig.jioSearchUri(favQuery, limit: 12))
                 .timeout(const Duration(seconds: 4))
@@ -3092,7 +3744,9 @@ class MusicService extends ChangeNotifier {
         if (progressiveQueue.length < 25) {
           final fallbackQuery = seedLanguage != null
               ? '$seedLanguage top hit songs'
-              : (cleanSeedArtist.isNotEmpty ? '$cleanSeedArtist hits' : 'Top Hits 2026');
+              : (cleanSeedArtist.isNotEmpty
+                    ? '$cleanSeedArtist hits'
+                    : 'Top Hits 2026');
           final jioFallback = await http
               .get(ApiConfig.jioSearchUri(fallbackQuery, limit: 15))
               .timeout(const Duration(seconds: 4))
@@ -3101,7 +3755,10 @@ class MusicService extends ChangeNotifier {
           addTracks(jioFallback, targetLang: seedLanguage);
 
           if (progressiveQueue.length < 20) {
-            final ytmTracks = await YouTubeMusicClient().searchSongs(fallbackQuery, limit: 15);
+            final ytmTracks = await YouTubeMusicClient().searchSongs(
+              fallbackQuery,
+              limit: 15,
+            );
             addTracks(ytmTracks, targetLang: seedLanguage);
           }
         }
@@ -3112,13 +3769,17 @@ class MusicService extends ChangeNotifier {
       // Balance artist distribution while preserving rank
       if (progressiveQueue.length > 2) {
         final upcoming = progressiveQueue.sublist(1);
-        final balancedUpcoming = CanonicalSongDedup.balanceArtistDistribution(upcoming);
+        final balancedUpcoming = CanonicalSongDedup.balanceArtistDistribution(
+          upcoming,
+        );
         _playlist = [seed, ...balancedUpcoming];
       } else {
         _playlist = progressiveQueue;
       }
 
-      debugPrint('[Queue50] Successfully generated progressive queue: ${_playlist.length} songs');
+      debugPrint(
+        '[Queue50] Successfully generated progressive queue: ${_playlist.length} songs',
+      );
       notifyListeners();
     } catch (e) {
       debugPrint('[Queue50] Queue generation error: $e');
@@ -3131,7 +3792,9 @@ class MusicService extends ChangeNotifier {
     if (_isFetchingNextQueue) return;
     _isFetchingNextQueue = true;
     try {
-      debugPrint('[Queue] Fetching chained recommendations across playlist artists…');
+      debugPrint(
+        '[Queue] Fetching chained recommendations across playlist artists…',
+      );
 
       // 1. Detect dominant language across the active playlist (fallback to seed song)
       final langCounts = <String, int>{};
@@ -3149,7 +3812,9 @@ class MusicService extends ChangeNotifier {
 
       if (dominantLang == 'english') {
         // English track playback: query YouTube Music radio & artist hits, avoid Indian JioSaavn queries
-        debugPrint('[Queue] Fetching English recommendations for: "${song.title}"');
+        debugPrint(
+          '[Queue] Fetching English recommendations for: "${song.title}"',
+        );
         if (song.id.value.length == 11) {
           final radioTracks = await YouTubeMusicClient()
               .fetchRadioTracks(song.id.value, limit: 20)
@@ -3175,20 +3840,31 @@ class MusicService extends ChangeNotifier {
         final int batchSize = min(6, allPlaylistArtists.length);
         final selectedArtists = <String>[];
         for (int i = 0; i < batchSize; i++) {
-          final idx = (_playlistArtistRecommendationOffset + i) % allPlaylistArtists.length;
+          final idx =
+              (_playlistArtistRecommendationOffset + i) %
+              allPlaylistArtists.length;
           selectedArtists.add(allPlaylistArtists[idx]);
         }
-        _playlistArtistRecommendationOffset = (_playlistArtistRecommendationOffset + batchSize) % allPlaylistArtists.length;
+        _playlistArtistRecommendationOffset =
+            (_playlistArtistRecommendationOffset + batchSize) %
+            allPlaylistArtists.length;
 
-        debugPrint('[Queue] Blending popular recommendations from artists: ${selectedArtists.join(', ')} (Language: $dominantLang)');
+        debugPrint(
+          '[Queue] Blending popular recommendations from artists: ${selectedArtists.join(', ')} (Language: $dominantLang)',
+        );
 
         // Step A: Pull matching tracks directly from user's 12k imported library for all selected artists
-        final libraryMatches = _getLibraryRecommendationsForArtists(selectedArtists, targetLang: dominantLang);
+        final libraryMatches = _getLibraryRecommendationsForArtists(
+          selectedArtists,
+          targetLang: dominantLang,
+        );
         candidates.addAll(libraryMatches);
 
         // Step B: Query JioSaavn concurrently for popular studio hits for each selected artist
         final artistQueries = selectedArtists.map((artist) {
-          final query = dominantLang != null ? '$artist $dominantLang hits' : '$artist hits';
+          final query = dominantLang != null
+              ? '$artist $dominantLang hits'
+              : '$artist hits';
           return http
               .get(ApiConfig.jioSearchUri(query, limit: 8))
               .timeout(const Duration(seconds: 4))
@@ -3223,8 +3899,12 @@ class MusicService extends ChangeNotifier {
         // 2. Secondary: JioSaavn Studio catalog query if library yielded < 10
         if (candidates.length < 10) {
           final query = cleanArtist.isNotEmpty
-              ? (dominantLang != null ? '$cleanArtist $dominantLang hits' : '$cleanArtist hits')
-              : (dominantLang != null ? '$dominantLang top songs' : 'Top Hits 2026');
+              ? (dominantLang != null
+                    ? '$cleanArtist $dominantLang hits'
+                    : '$cleanArtist hits')
+              : (dominantLang != null
+                    ? '$dominantLang top songs'
+                    : 'Top Hits 2026');
           final jioResults = await http
               .get(ApiConfig.jioSearchUri(query, limit: 15))
               .timeout(const Duration(seconds: 4))
@@ -3236,25 +3916,42 @@ class MusicService extends ChangeNotifier {
 
       // 3. Fallback: YouTube Music Radio automix only if still empty
       if (candidates.isEmpty && song.id.value.length == 11) {
-        candidates = await YouTubeMusicClient().fetchRadioTracks(song.id.value, limit: 15);
+        candidates = await YouTubeMusicClient().fetchRadioTracks(
+          song.id.value,
+          limit: 15,
+        );
       }
       if (candidates.isEmpty) {
-        final fallbackQuery = dominantLang != null ? '$dominantLang top hit songs' : 'Top Hits 2026';
-        candidates = await YouTubeMusicClient().searchSongs(fallbackQuery, limit: 15);
+        final fallbackQuery = dominantLang != null
+            ? '$dominantLang top hit songs'
+            : 'Top Hits 2026';
+        candidates = await YouTubeMusicClient().searchSongs(
+          fallbackQuery,
+          limit: 15,
+        );
       }
 
       // Filter for genuine songs and language compatibility
-      final valid = candidates.where((c) =>
-          CanonicalSongDedup.isGenuineSong(c) &&
-          (dominantLang == null || CanonicalSongDedup.isLanguageCompatible(dominantLang, c.title))
-      ).toList();
+      final valid = candidates
+          .where(
+            (c) =>
+                CanonicalSongDedup.isGenuineSong(c) &&
+                (dominantLang == null ||
+                    CanonicalSongDedup.isLanguageCompatible(
+                      dominantLang,
+                      c.title,
+                    )),
+          )
+          .toList();
 
       final fresh = CanonicalSongDedup.deduplicateList(_playlist, valid);
       if (fresh.isNotEmpty) {
         final balanced = CanonicalSongDedup.balanceArtistDistribution(fresh);
         final tracksToAdd = balanced.take(15).toList();
         _playlist.addAll(tracksToAdd);
-        debugPrint('[Queue] Appended ${tracksToAdd.length} multi-artist recommended tracks. Total in queue: ${_playlist.length}');
+        debugPrint(
+          '[Queue] Appended ${tracksToAdd.length} multi-artist recommended tracks. Total in queue: ${_playlist.length}',
+        );
         notifyListeners();
       }
     } catch (e) {
@@ -3277,7 +3974,9 @@ class MusicService extends ChangeNotifier {
       if (await file.exists()) {
         final content = await file.readAsString();
         final List<dynamic> jsonList = json.decode(content);
-        _downloadedSongs = jsonList.map((e) => Map<String, String>.from(e)).toList();
+        _downloadedSongs = jsonList
+            .map((e) => Map<String, String>.from(e))
+            .toList();
         notifyListeners();
       }
     } catch (e) {
@@ -3298,7 +3997,9 @@ class MusicService extends ChangeNotifier {
       if (directCdnUrl != null && directCdnUrl.isNotEmpty) {
         try {
           final request = http.Request('GET', Uri.parse(directCdnUrl));
-          final res = await client.send(request).timeout(const Duration(seconds: 30));
+          final res = await client
+              .send(request)
+              .timeout(const Duration(seconds: 30));
           if (res.statusCode == 200) {
             response = res;
           }
@@ -3314,7 +4015,9 @@ class MusicService extends ChangeNotifier {
           for (final candidate in candidates) {
             try {
               final request = http.Request('GET', Uri.parse(candidate.url));
-              final res = await client.send(request).timeout(const Duration(seconds: 25));
+              final res = await client
+                  .send(request)
+                  .timeout(const Duration(seconds: 25));
               if (res.statusCode == 200) {
                 response = res;
                 break;
@@ -3333,7 +4036,9 @@ class MusicService extends ChangeNotifier {
           if (streamUrl != null) {
             final request = http.Request('GET', Uri.parse(streamUrl));
             request.headers.addAll(_ytHeaders);
-            response = await client.send(request).timeout(const Duration(seconds: 25));
+            response = await client
+                .send(request)
+                .timeout(const Duration(seconds: 25));
           }
         } catch (e) {
           debugPrint('[Download] Backend streamUrl error: $e');
@@ -3345,18 +4050,23 @@ class MusicService extends ChangeNotifier {
         try {
           final cfStreamUri = ApiConfig.cloudflareStreamUri(song.id.value);
           final request = http.Request('GET', cfStreamUri);
-          response = await client.send(request).timeout(const Duration(seconds: 25));
+          response = await client
+              .send(request)
+              .timeout(const Duration(seconds: 25));
         } catch (e) {
           debugPrint('[Download] Cloudflare edge stream error: $e');
         }
       }
 
       // 4. Fallback 3: Backend proxy stream (if custom backend configured)
-      if ((response == null || response.statusCode != 200) && PreferencesService().customServerUrl.isNotEmpty) {
+      if ((response == null || response.statusCode != 200) &&
+          PreferencesService().customServerUrl.isNotEmpty) {
         try {
           final proxyUri = ApiConfig.streamProxyUri(song.id.value);
           final request = http.Request('GET', proxyUri);
-          response = await client.send(request).timeout(const Duration(seconds: 25));
+          response = await client
+              .send(request)
+              .timeout(const Duration(seconds: 25));
         } catch (e) {
           debugPrint('[Download] Proxy error: $e');
         }
@@ -3399,7 +4109,10 @@ class MusicService extends ChangeNotifier {
 
   Future<void> deleteDownloadedSong(String videoId) async {
     try {
-      final item = _downloadedSongs.firstWhere((s) => s['id'] == videoId, orElse: () => {});
+      final item = _downloadedSongs.firstWhere(
+        (s) => s['id'] == videoId,
+        orElse: () => {},
+      );
       if (item.isNotEmpty && item['localPath'] != null) {
         final file = File(item['localPath']!);
         if (await file.exists()) {
@@ -3419,24 +4132,38 @@ class MusicService extends ChangeNotifier {
   Future<void> playDownloadedSong(Map<String, String> songData) async {
     _isLoading = true;
 
-    // Load ALL downloaded songs into queue so Next and Prev work seamlessly!
-    _playlist = _downloadedSongs.map((item) => Video(
-      VideoId(item['id']!),
-      item['title'] ?? 'Unknown Title',
-      item['author'] ?? 'Unknown Artist',
-      ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
-      DateTime.now(),
-      '',
-      null,
-      '',
-      null,
-      ThumbnailSet(item['id']!),
-      null,
-      Engagement(0, null, null),
-      false,
-    )).toList();
+    for (final item in _downloadedSongs) {
+      final id = item['id'];
+      final thumb = item['thumbnail'];
+      if (id != null && id.isNotEmpty && thumb != null && thumb.isNotEmpty) {
+        _artworkMap[id] = thumb;
+      }
+    }
 
-    _currentIndex = _downloadedSongs.indexWhere((item) => item['id'] == songData['id']);
+    // Load ALL downloaded songs into queue so Next and Prev work seamlessly!
+    _playlist = _downloadedSongs
+        .map(
+          (item) => Video(
+            VideoId(item['id']!),
+            item['title'] ?? 'Unknown Title',
+            item['author'] ?? 'Unknown Artist',
+            ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+            DateTime.now(),
+            '',
+            null,
+            '',
+            null,
+            ThumbnailSet(item['id']!),
+            null,
+            Engagement(0, null, null),
+            false,
+          ),
+        )
+        .toList();
+
+    _currentIndex = _downloadedSongs.indexWhere(
+      (item) => item['id'] == songData['id'],
+    );
     if (_currentIndex == -1) _currentIndex = 0;
     if (_playlist.isNotEmpty) {
       await playSong(_playlist[_currentIndex], updateQueue: false);
@@ -3445,21 +4172,33 @@ class MusicService extends ChangeNotifier {
 
   Future<void> playHistorySong(Map<String, String> songData) async {
     final history = PreferencesService().listeningHistory;
-    _playlist = history.map((item) => Video(
-      VideoId(item['id'] ?? ''),
-      item['title'] ?? 'Unknown Title',
-      item['author'] ?? 'Unknown Artist',
-      ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
-      DateTime.now(),
-      '',
-      null,
-      '',
-      null,
-      ThumbnailSet(item['id'] ?? ''),
-      null,
-      Engagement(0, null, null),
-      false,
-    )).toList();
+    for (final item in history) {
+      final id = item['id'];
+      final thumb = item['thumbnail'];
+      if (id != null && id.isNotEmpty && thumb != null && thumb.isNotEmpty) {
+        _artworkMap[id] = thumb;
+      }
+    }
+
+    _playlist = history
+        .map(
+          (item) => Video(
+            VideoId(item['id'] ?? ''),
+            item['title'] ?? 'Unknown Title',
+            item['author'] ?? 'Unknown Artist',
+            ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+            DateTime.now(),
+            '',
+            null,
+            '',
+            null,
+            ThumbnailSet(item['id'] ?? ''),
+            null,
+            Engagement(0, null, null),
+            false,
+          ),
+        )
+        .toList();
 
     _currentIndex = history.indexWhere((item) => item['id'] == songData['id']);
     if (_currentIndex == -1) _currentIndex = 0;
@@ -3499,23 +4238,29 @@ class MusicService extends ChangeNotifier {
       }
     }
 
-    _playlist = list.map((item) => Video(
-      safeVideoId((item['id'] as String?) ?? ''),
-      (item['title'] as String?) ?? 'Unknown Title',
-      (item['author'] as String?) ?? 'Unknown Artist',
-      ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
-      DateTime.now(),
-      '',
-      null,
-      '',
-      null,
-      ThumbnailSet((item['id'] as String?) ?? ''),
-      null,
-      Engagement(0, null, null),
-      false,
-    )).toList();
+    _playlist = list
+        .map(
+          (item) => Video(
+            safeVideoId((item['id'] as String?) ?? ''),
+            (item['title'] as String?) ?? 'Unknown Title',
+            (item['author'] as String?) ?? 'Unknown Artist',
+            ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+            DateTime.now(),
+            '',
+            null,
+            '',
+            null,
+            ThumbnailSet((item['id'] as String?) ?? ''),
+            null,
+            Engagement(0, null, null),
+            false,
+          ),
+        )
+        .toList();
 
-    if (startIndex != null && startIndex >= 0 && startIndex < _playlist.length) {
+    if (startIndex != null &&
+        startIndex >= 0 &&
+        startIndex < _playlist.length) {
       _currentIndex = startIndex;
     } else {
       _currentIndex = list.indexWhere((item) => item['id'] == songData['id']);
@@ -3547,21 +4292,24 @@ class MusicService extends ChangeNotifier {
         }
       }
     }
-    toggleLike(Video(
-      safeVideoId(id),
-      title,
-      author,
-      ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
-      DateTime.now(),
-      '',
-      null,
-      '',
-      null,
-      ThumbnailSet(id),
-      null,
-      Engagement(0, null, null),
-      false,
-    ));
+
+    toggleLike(
+      Video(
+        safeVideoId(id),
+        title,
+        author,
+        ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+        DateTime.now(),
+        '',
+        null,
+        '',
+        null,
+        ThumbnailSet(id),
+        null,
+        Engagement(0, null, null),
+        false,
+      ),
+    );
   }
 
   Future<int> getTotalDownloadedBytes() async {
@@ -3580,7 +4328,10 @@ class MusicService extends ChangeNotifier {
   }
 
   Future<int> getDownloadedSongSize(String videoId) async {
-    final s = _downloadedSongs.firstWhere((item) => item['id'] == videoId, orElse: () => {});
+    final s = _downloadedSongs.firstWhere(
+      (item) => item['id'] == videoId,
+      orElse: () => {},
+    );
     if (s.isNotEmpty && s['localPath'] != null) {
       try {
         final f = File(s['localPath']!);
@@ -3624,13 +4375,16 @@ class MusicService extends ChangeNotifier {
       final pState = _audioPlayer.processingState;
       if (_currentSong != null &&
           (pState == ProcessingState.idle ||
-           pState == ProcessingState.completed ||
-           _audioPlayer.audioSource == null)) {
+              pState == ProcessingState.completed ||
+              _audioPlayer.audioSource == null)) {
         playSong(_currentSong!, updateQueue: false);
         return;
       }
       if (_currentSong == null && _playlist.isNotEmpty) {
-        final targetIndex = (_currentIndex >= 0 && _currentIndex < _playlist.length) ? _currentIndex : 0;
+        final targetIndex =
+            (_currentIndex >= 0 && _currentIndex < _playlist.length)
+            ? _currentIndex
+            : 0;
         _currentIndex = targetIndex;
         playSong(_playlist[targetIndex], updateQueue: false);
         return;
@@ -3651,7 +4405,9 @@ class MusicService extends ChangeNotifier {
   void setPlaylistForTesting(List<Video> list, {int initialIndex = 0}) {
     _playlist = List.from(list);
     _currentIndex = initialIndex;
-    if (_playlist.isNotEmpty && initialIndex >= 0 && initialIndex < _playlist.length) {
+    if (_playlist.isNotEmpty &&
+        initialIndex >= 0 &&
+        initialIndex < _playlist.length) {
       _currentSong = _playlist[initialIndex];
     } else {
       _currentSong = null;

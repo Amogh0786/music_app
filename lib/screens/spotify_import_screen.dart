@@ -25,7 +25,7 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
   final _playlistNameController = TextEditingController();
 
   int _selectedTabIndex = 0; // 0 = Exportify CSV / ZIP, 1 = Spotify URL
-  
+
   String? _accessToken;
   bool _isLoading = false;
   String _statusMessage = '';
@@ -99,7 +99,10 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
         _pickedFileName = null;
         _parsedExportifyPlaylists = [];
       });
-      _handleCsvContent(data.text!.trim(), defaultName: 'Imported Spotify Liked');
+      _handleCsvContent(
+        data.text!.trim(),
+        defaultName: 'Imported Spotify Liked',
+      );
       HapticFeedback.selectionClick();
     }
   }
@@ -130,7 +133,9 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('No CSV playlists found inside the .zip archive.'),
+                content: Text(
+                  'No CSV playlists found inside the .zip archive.',
+                ),
                 backgroundColor: Colors.redAccent,
               ),
             );
@@ -145,7 +150,10 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
           HapticFeedback.selectionClick();
         } else {
           final content = utf8.decode(bytes, allowMalformed: true);
-          final cleanName = name.replaceAll(RegExp(r'\.csv$', caseSensitive: false), '');
+          final cleanName = name.replaceAll(
+            RegExp(r'\.csv$', caseSensitive: false),
+            '',
+          );
           setState(() {
             _pickedFileName = name;
             _parsedExportifyPlaylists = [];
@@ -213,29 +221,43 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
     }
 
     final playlistId = _extractPlaylistId(rawText);
-    await _startImport(playlistId: playlistId, playlistName: 'Spotify Playlist', isPublic: true);
+    await _startImport(
+      playlistId: playlistId,
+      playlistName: 'Spotify Playlist',
+      isPublic: true,
+    );
   }
 
-  Future<Map<String, dynamic>?> _tryDirectPublicImport(String playlistId) async {
+  Future<Map<String, dynamic>?> _tryDirectPublicImport(
+    String playlistId,
+  ) async {
     if (kIsWeb) return null;
 
     try {
-      final embedUrl = Uri.parse('https://open.spotify.com/embed/playlist/$playlistId');
-      final res = await http.get(
-        embedUrl,
-        headers: {
-          'User-Agent':
-              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-      ).timeout(const Duration(seconds: 10));
+      final embedUrl = Uri.parse(
+        'https://open.spotify.com/embed/playlist/$playlistId',
+      );
+      final res = await http
+          .get(
+            embedUrl,
+            headers: {
+              'User-Agent':
+                  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept':
+                  'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            },
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (res.statusCode == 200) {
         final html = res.body;
-        final match = RegExp(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>').firstMatch(html);
+        final match = RegExp(
+          r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
+        ).firstMatch(html);
         if (match != null && match.groupCount >= 1) {
           final data = json.decode(match.group(1)!);
-          final entity = data['props']?['pageProps']?['state']?['data']?['entity'];
+          final entity =
+              data['props']?['pageProps']?['state']?['data']?['entity'];
           if (entity != null) {
             final name = entity['name'] as String? ?? 'Spotify Playlist';
             final rawList = List<dynamic>.from(entity['trackList'] ?? []);
@@ -243,18 +265,16 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
             for (final item in rawList) {
               if (item is Map) {
                 final title = (item['title'] as String? ?? '').trim();
-                final subtitle = (item['subtitle'] as String? ?? '').replaceAll('\u00a0', ' ').trim();
+                final subtitle = (item['subtitle'] as String? ?? '')
+                    .replaceAll('\u00a0', ' ')
+                    .trim();
                 if (title.isNotEmpty) {
                   tracks.add('$title $subtitle'.trim());
                 }
               }
             }
             if (tracks.isNotEmpty) {
-              return {
-                'name': name,
-                'tracks': tracks,
-                'total': tracks.length,
-              };
+              return {'name': name, 'tracks': tracks, 'total': tracks.length};
             }
           }
         }
@@ -286,15 +306,17 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
 
       // 2. Fetch from backend API
       if (data == null) {
-        final res = await http.post(
-          Uri.parse('${ApiConfig.baseUrl}/spotify/import'),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode({
-            'access_token': _accessToken,
-            'playlist_id': playlistId,
-            'is_public': isPublic,
-          }),
-        ).timeout(const Duration(seconds: 30));
+        final res = await http
+            .post(
+              Uri.parse('${ApiConfig.baseUrl}/spotify/import'),
+              headers: {'Content-Type': 'application/json'},
+              body: json.encode({
+                'access_token': _accessToken,
+                'playlist_id': playlistId,
+                'is_public': isPublic,
+              }),
+            )
+            .timeout(const Duration(seconds: 30));
 
         if (res.statusCode == 200) {
           data = json.decode(res.body);
@@ -320,7 +342,8 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
 
       if (tracks.isEmpty) {
         setState(() {
-          _statusMessage = 'No tracks found. Please make sure the playlist is Public.';
+          _statusMessage =
+              'No tracks found. Please make sure the playlist is Public.';
         });
         return;
       }
@@ -346,7 +369,9 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
     if (_parsedExportifyTracks.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No tracks found to import. Please upload or paste a valid CSV.'),
+          content: Text(
+            'No tracks found to import. Please upload or paste a valid CSV.',
+          ),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -367,7 +392,9 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
   }
 
   Future<void> _startMultiPlaylistImport() async {
-    final selected = _parsedExportifyPlaylists.where((p) => p.isSelected && p.tracks.isNotEmpty).toList();
+    final selected = _parsedExportifyPlaylists
+        .where((p) => p.isSelected && p.tracks.isNotEmpty)
+        .toList();
     if (selected.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -395,7 +422,9 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
     });
 
     try {
-      final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/spotify/login'));
+      final res = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/spotify/login'),
+      );
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         final url = Uri.parse(data['url']);
@@ -405,7 +434,10 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
           setState(() => _statusMessage = 'Could not launch browser.');
         }
       } else {
-        setState(() => _statusMessage = 'Server requires Spotify developer keys for login.');
+        setState(
+          () => _statusMessage =
+              'Server requires Spotify developer keys for login.',
+        );
       }
     } catch (e) {
       setState(() => _statusMessage = 'Error: $e');
@@ -419,12 +451,17 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/spotify/playlists?access_token=$_accessToken'));
+      final res = await http.get(
+        Uri.parse(
+          '${ApiConfig.baseUrl}/spotify/playlists?access_token=$_accessToken',
+        ),
+      );
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         setState(() {
           _userPlaylists = data['playlists'] ?? [];
-          _statusMessage = 'Found ${_userPlaylists.length} playlists in your account.';
+          _statusMessage =
+              'Found ${_userPlaylists.length} playlists in your account.';
         });
       } else {
         setState(() => _statusMessage = 'Failed to fetch playlists.');
@@ -448,7 +485,9 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
         if (didPop && isBackgroundActive) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Import continuing in background. Feel free to browse or play music!'),
+              content: Text(
+                'Import continuing in background. Feel free to browse or play music!',
+              ),
               backgroundColor: spotifyGreen,
               duration: Duration(seconds: 3),
             ),
@@ -462,7 +501,11 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
           elevation: 0,
           title: const Text(
             'Import & Calibrate Taste',
-            style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white, fontSize: 18),
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              fontSize: 18,
+            ),
           ),
           iconTheme: const IconThemeData(color: Colors.white),
         ),
@@ -494,78 +537,107 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
               ],
               const SizedBox(height: 24),
 
-            // Optional Advanced OAuth Accordion
-            Theme(
-              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-              child: ExpansionTile(
-                initiallyExpanded: _showAdvancedOAuth,
-                onExpansionChanged: (val) => setState(() => _showAdvancedOAuth = val),
-                title: Text(
-                  'Developer Options (Spotify Account Login)',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.5),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                children: [
-                  Padding(
-                     padding: const EdgeInsets.only(bottom: 12.0),
-                    child: Text(
-                      'Requires Spotify Developer Client credentials configured on your backend server.',
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 12),
+              // Optional Advanced OAuth Accordion
+              Theme(
+                data: Theme.of(
+                  context,
+                ).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  initiallyExpanded: _showAdvancedOAuth,
+                  onExpansionChanged: (val) =>
+                      setState(() => _showAdvancedOAuth = val),
+                  title: Text(
+                    'Developer Options (Spotify Account Login)',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  if (_accessToken == null)
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.login_rounded, size: 18),
-                      label: const Text('Log In With Spotify Account'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: spotifyGreen,
-                        side: BorderSide(color: spotifyGreen.withValues(alpha: 0.4)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12.0),
+                      child: Text(
+                        'Requires Spotify Developer Client credentials configured on your backend server.',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.4),
+                          fontSize: 12,
+                        ),
                       ),
-                      onPressed: _isLoading ? null : _loginWithSpotify,
-                    )
-                  else ...[
-                    Text(
-                      'Your Spotify Playlists (${_userPlaylists.length})',
-                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                     ),
-                    const SizedBox(height: 8),
-                    ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _userPlaylists.length,
-                      itemBuilder: (context, index) {
-                        final pl = _userPlaylists[index];
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(pl['name'] ?? 'Unknown', style: const TextStyle(color: Colors.white, fontSize: 14)),
-                          subtitle: Text('${pl['total_tracks']} tracks', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.download_rounded, color: spotifyGreen),
-                            onPressed: _isLoading
-                                ? null
-                                : () => _startImport(
+                    if (_accessToken == null)
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.login_rounded, size: 18),
+                        label: const Text('Log In With Spotify Account'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: spotifyGreen,
+                          side: BorderSide(
+                            color: spotifyGreen.withValues(alpha: 0.4),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: _isLoading ? null : _loginWithSpotify,
+                      )
+                    else ...[
+                      Text(
+                        'Your Spotify Playlists (${_userPlaylists.length})',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _userPlaylists.length,
+                        itemBuilder: (context, index) {
+                          final pl = _userPlaylists[index];
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              pl['name'] ?? 'Unknown',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${pl['total_tracks']} tracks',
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 12,
+                              ),
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(
+                                Icons.download_rounded,
+                                color: spotifyGreen,
+                              ),
+                              onPressed: _isLoading
+                                  ? null
+                                  : () => _startImport(
                                       playlistId: pl['id'] ?? '',
                                       playlistName: pl['name'] ?? 'Playlist',
                                       isPublic: false,
                                     ),
-                          ),
-                        );
-                      },
-                    ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildModeSelector() {
     return Container(
@@ -579,11 +651,15 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
         children: [
           Expanded(
             child: GestureDetector(
-              onTap: _isLoading ? null : () => setState(() => _selectedTabIndex = 0),
+              onTap: _isLoading
+                  ? null
+                  : () => setState(() => _selectedTabIndex = 0),
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: _selectedTabIndex == 0 ? spotifyGreen : Colors.transparent,
+                  color: _selectedTabIndex == 0
+                      ? spotifyGreen
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -592,13 +668,17 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                     Icon(
                       Icons.file_present_rounded,
                       size: 18,
-                      color: _selectedTabIndex == 0 ? Colors.black : Colors.white70,
+                      color: _selectedTabIndex == 0
+                          ? Colors.black
+                          : Colors.white70,
                     ),
                     const SizedBox(width: 6),
                     Text(
                       'Exportify CSV',
                       style: TextStyle(
-                        color: _selectedTabIndex == 0 ? Colors.black : Colors.white70,
+                        color: _selectedTabIndex == 0
+                            ? Colors.black
+                            : Colors.white70,
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
                       ),
@@ -610,11 +690,15 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
           ),
           Expanded(
             child: GestureDetector(
-              onTap: _isLoading ? null : () => setState(() => _selectedTabIndex = 1),
+              onTap: _isLoading
+                  ? null
+                  : () => setState(() => _selectedTabIndex = 1),
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: _selectedTabIndex == 1 ? spotifyGreen : Colors.transparent,
+                  color: _selectedTabIndex == 1
+                      ? spotifyGreen
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -623,13 +707,17 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                     Icon(
                       Icons.link_rounded,
                       size: 18,
-                      color: _selectedTabIndex == 1 ? Colors.black : Colors.white70,
+                      color: _selectedTabIndex == 1
+                          ? Colors.black
+                          : Colors.white70,
                     ),
                     const SizedBox(width: 6),
                     Text(
                       'Spotify URL',
                       style: TextStyle(
-                        color: _selectedTabIndex == 1 ? Colors.black : Colors.white70,
+                        color: _selectedTabIndex == 1
+                            ? Colors.black
+                            : Colors.white70,
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
                       ),
@@ -668,11 +756,16 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: spotifyGreen.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: spotifyGreen.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: spotifyGreen.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -688,7 +781,11 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                     const SizedBox(width: 6),
                     const Text(
                       'IMPORTING IN BACKGROUND',
-                      style: TextStyle(color: spotifyGreen, fontWeight: FontWeight.w800, fontSize: 11),
+                      style: TextStyle(
+                        color: spotifyGreen,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 ),
@@ -696,7 +793,11 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
               const Spacer(),
               Text(
                 '$pct%',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 20,
+                ),
               ),
             ],
           ),
@@ -704,7 +805,9 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: LinearProgressIndicator(
-              value: service.overallProgress > 0 ? service.overallProgress : null,
+              value: service.overallProgress > 0
+                  ? service.overallProgress
+                  : null,
               backgroundColor: Colors.white10,
               color: spotifyGreen,
               minHeight: 8,
@@ -713,7 +816,12 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
           const SizedBox(height: 16),
           Text(
             service.statusMessage,
-            style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              height: 1.4,
+              fontWeight: FontWeight.w600,
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
@@ -729,9 +837,18 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Playlists Progress', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                      Text('${service.completedPlaylists} of ${service.totalPlaylists} playlists',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                      const Text(
+                        'Playlists Progress',
+                        style: TextStyle(color: Colors.white60, fontSize: 12),
+                      ),
+                      Text(
+                        '${service.completedPlaylists} of ${service.totalPlaylists} playlists',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -739,9 +856,18 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Studio Tracks Resolved', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                    Text('${service.resolvedTracks} of ${service.totalTracks} songs',
-                        style: const TextStyle(color: spotifyGreen, fontWeight: FontWeight.bold, fontSize: 12)),
+                    const Text(
+                      'Studio Tracks Resolved',
+                      style: TextStyle(color: Colors.white60, fontSize: 12),
+                    ),
+                    Text(
+                      '${service.resolvedTracks} of ${service.totalTracks} songs',
+                      style: const TextStyle(
+                        color: spotifyGreen,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
                 if (service.cacheHitCount > 0) ...[
@@ -749,9 +875,18 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('⚡ Cross-Playlist Deduplication', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                      Text('${service.cacheHitCount} cached (0ms)',
-                          style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                      const Text(
+                        '⚡ Cross-Playlist Deduplication',
+                        style: TextStyle(color: Colors.white60, fontSize: 12),
+                      ),
+                      Text(
+                        '${service.cacheHitCount} cached (0ms)',
+                        style: const TextStyle(
+                          color: Colors.cyanAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -761,18 +896,25 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
           const SizedBox(height: 20),
           ElevatedButton.icon(
             icon: const Icon(Icons.arrow_back_rounded, size: 18),
-            label: const Text('Run in Background & Browse Music', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            label: const Text(
+              'Run in Background & Browse Music',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1E1E2C),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
             ),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Import continuing in background. Feel free to browse or play music!'),
+                  content: Text(
+                    'Import continuing in background. Feel free to browse or play music!',
+                  ),
                   backgroundColor: spotifyGreen,
                   duration: Duration(seconds: 3),
                 ),
@@ -782,8 +924,15 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
           ),
           const SizedBox(height: 10),
           TextButton.icon(
-            icon: const Icon(Icons.cancel_outlined, size: 16, color: Colors.redAccent),
-            label: const Text('Cancel Import', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
+            icon: const Icon(
+              Icons.cancel_outlined,
+              size: 16,
+              color: Colors.redAccent,
+            ),
+            label: const Text(
+              'Cancel Import',
+              style: TextStyle(color: Colors.redAccent, fontSize: 13),
+            ),
             onPressed: () {
               service.cancelImport();
             },
@@ -814,7 +963,9 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              wasCancelled ? Icons.pause_circle_outline_rounded : Icons.check_rounded,
+              wasCancelled
+                  ? Icons.pause_circle_outline_rounded
+                  : Icons.check_rounded,
               color: accentColor,
               size: 32,
             ),
@@ -822,13 +973,21 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
           const SizedBox(height: 16),
           Text(
             wasCancelled ? 'Import Stopped' : 'Import Completed!',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             service.statusMessage,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
+              height: 1.4,
+            ),
           ),
           const SizedBox(height: 20),
           Row(
@@ -837,8 +996,12 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.white,
-                    side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    side: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.2),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                   onPressed: () {
                     service.resetFinishedState();
@@ -857,7 +1020,9 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                       backgroundColor: spotifyGreen,
                       foregroundColor: Colors.black,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                     onPressed: () {
                       final pid = service.lastImportedPlaylistId!;
@@ -873,7 +1038,10 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
           const SizedBox(height: 12),
           TextButton(
             onPressed: () => service.resetFinishedState(),
-            child: const Text('Import Another File or Playlist', style: TextStyle(color: Colors.white54, fontSize: 12)),
+            child: const Text(
+              'Import Another File or Playlist',
+              style: TextStyle(color: Colors.white54, fontSize: 12),
+            ),
           ),
         ],
       ),
@@ -890,7 +1058,11 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
       ),
       child: Text(
         _statusMessage,
-        style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+        style: const TextStyle(
+          color: Colors.white70,
+          fontSize: 13,
+          height: 1.4,
+        ),
         textAlign: TextAlign.center,
       ),
     );
@@ -922,7 +1094,11 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                   color: spotifyGreen.withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.insights_rounded, color: spotifyGreen, size: 26),
+                child: const Icon(
+                  Icons.insights_rounded,
+                  color: spotifyGreen,
+                  size: 26,
+                ),
               ),
               const SizedBox(width: 14),
               const Expanded(
@@ -957,12 +1133,19 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline_rounded, color: Colors.white54, size: 16),
+                const Icon(
+                  Icons.info_outline_rounded,
+                  color: Colors.white54,
+                  size: 16,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Export any playlist or click "Export All" (.zip) on exportify.net, then upload or paste here.',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 11),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 11,
+                    ),
                   ),
                 ),
               ],
@@ -1022,12 +1205,17 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
             Expanded(
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.upload_file_rounded, size: 18),
-                label: const Text('Browse .CSV or .ZIP', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                label: const Text(
+                  'Browse .CSV or .ZIP',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF1E1E2C),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   elevation: 0,
                   side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
                 ),
@@ -1038,12 +1226,17 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
             Expanded(
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.content_paste_rounded, size: 18),
-                label: const Text('Paste CSV Text', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                label: const Text(
+                  'Paste CSV Text',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: spotifyGreen.withValues(alpha: 0.15),
                   foregroundColor: spotifyGreen,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   elevation: 0,
                   side: BorderSide(color: spotifyGreen.withValues(alpha: 0.3)),
                 ),
@@ -1064,7 +1257,11 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.insert_drive_file_rounded, color: spotifyGreen, size: 16),
+                const Icon(
+                  Icons.insert_drive_file_rounded,
+                  color: spotifyGreen,
+                  size: 16,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -1074,7 +1271,11 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 16, color: Colors.white54),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    size: 16,
+                    color: Colors.white54,
+                  ),
                   onPressed: _isLoading ? null : _clearPickedFiles,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -1098,11 +1299,19 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
             controller: _csvController,
             maxLines: null,
             expands: true,
-            style: const TextStyle(color: Colors.white70, fontSize: 12, fontFamily: 'monospace'),
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+              fontFamily: 'monospace',
+            ),
             enabled: !_isLoading,
             decoration: InputDecoration(
-              hintText: 'Paste Exportify CSV content here...\n(Track Name, Artist Name, Energy, Valence...)',
-              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 12),
+              hintText:
+                  'Paste Exportify CSV content here...\n(Track Name, Artist Name, Energy, Valence...)',
+              hintStyle: TextStyle(
+                color: Colors.white.withValues(alpha: 0.3),
+                fontSize: 12,
+              ),
               contentPadding: const EdgeInsets.all(14),
               border: InputBorder.none,
             ),
@@ -1128,16 +1337,29 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                   children: [
                     Text(
                       'Detected: ${_parsedExportifyTracks.length} Tracks',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: spotifyGreen.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: const Text('CALIBRATION READY',
-                          style: TextStyle(color: spotifyGreen, fontWeight: FontWeight.bold, fontSize: 10)),
+                      child: const Text(
+                        'CALIBRATION READY',
+                        style: TextStyle(
+                          color: spotifyGreen,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1147,10 +1369,26 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _buildFeatureChip('⚡ Energy', '${(avgEnergy * 100).toInt()}%', Colors.amber),
-                    _buildFeatureChip('💃 Dance', '${(avgDance * 100).toInt()}%', Colors.cyanAccent),
-                    _buildFeatureChip('💖 Vibe', '${(avgValence * 100).toInt()}%', Colors.pinkAccent),
-                    _buildFeatureChip('⏱️ BPM', '${avgTempo.toInt()}', Colors.greenAccent),
+                    _buildFeatureChip(
+                      '⚡ Energy',
+                      '${(avgEnergy * 100).toInt()}%',
+                      Colors.amber,
+                    ),
+                    _buildFeatureChip(
+                      '💃 Dance',
+                      '${(avgDance * 100).toInt()}%',
+                      Colors.cyanAccent,
+                    ),
+                    _buildFeatureChip(
+                      '💖 Vibe',
+                      '${(avgValence * 100).toInt()}%',
+                      Colors.pinkAccent,
+                    ),
+                    _buildFeatureChip(
+                      '⏱️ BPM',
+                      '${avgTempo.toInt()}',
+                      Colors.greenAccent,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -1158,7 +1396,10 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                 if (topArtists.isNotEmpty) ...[
                   Text(
                     'Top Artists: ${topArtists.take(4).map((e) => e.key).join(", ")}',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 12,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1178,10 +1419,15 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
               labelStyle: const TextStyle(color: Colors.white70, fontSize: 13),
               filled: true,
               fillColor: const Color(0xFF181824),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                borderSide: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.1),
+                ),
               ),
             ),
           ),
@@ -1195,11 +1441,18 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
             activeThumbColor: spotifyGreen,
             title: const Text(
               'Calibrate Taste Matrix & Circadian Engine',
-              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             subtitle: Text(
               'Immediately tunes your Daily Mixes and Circadian vibe with these audio features.',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 11),
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.5),
+                fontSize: 11,
+              ),
             ),
             onChanged: (val) => setState(() => _calibrateTasteMatrix = val),
           ),
@@ -1215,24 +1468,31 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                 ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.black),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: Colors.black,
+                    ),
                   )
                 : const Icon(Icons.offline_bolt_rounded, size: 22),
             label: Text(
               _isLoading
                   ? 'Importing & Resolving Studio Audio...'
                   : (hasTracks
-                      ? 'Import ${_parsedExportifyTracks.length} Tracks to DilSe'
-                      : 'Load CSV to Import'),
+                        ? 'Import ${_parsedExportifyTracks.length} Tracks to DilSe'
+                        : 'Load CSV to Import'),
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: hasTracks ? spotifyGreen : Colors.white12,
               foregroundColor: hasTracks ? Colors.black : Colors.white38,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
-            onPressed: (_isLoading || !hasTracks) ? null : _startExportifyCsvImport,
+            onPressed: (_isLoading || !hasTracks)
+                ? null
+                : _startExportifyCsvImport,
           ),
         ),
       ],
@@ -1240,9 +1500,16 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
   }
 
   Widget _buildMultiPlaylistView() {
-    final selectedPlaylists = _parsedExportifyPlaylists.where((p) => p.isSelected).toList();
-    final allSelectedTracks = selectedPlaylists.expand((p) => p.tracks).toList();
-    final totalTracks = _parsedExportifyPlaylists.fold<int>(0, (sum, p) => sum + p.tracks.length);
+    final selectedPlaylists = _parsedExportifyPlaylists
+        .where((p) => p.isSelected)
+        .toList();
+    final allSelectedTracks = selectedPlaylists
+        .expand((p) => p.tracks)
+        .toList();
+    final totalTracks = _parsedExportifyPlaylists.fold<int>(
+      0,
+      (sum, p) => sum + p.tracks.length,
+    );
 
     // Compute aggregate audio stats across selected
     double avgEnergy = 0;
@@ -1267,7 +1534,8 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
       avgTempo /= featureCount;
     }
 
-    final allSelected = _parsedExportifyPlaylists.isNotEmpty &&
+    final allSelected =
+        _parsedExportifyPlaylists.isNotEmpty &&
         _parsedExportifyPlaylists.every((p) => p.isSelected);
 
     return Column(
@@ -1293,7 +1561,11 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                       color: spotifyGreen.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.folder_zip_rounded, color: spotifyGreen, size: 24),
+                    child: const Icon(
+                      Icons.folder_zip_rounded,
+                      color: spotifyGreen,
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -1302,20 +1574,31 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                       children: [
                         Text(
                           _pickedFileName ?? 'Exportify Archive.zip',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
                         Text(
                           '${_parsedExportifyPlaylists.length} Playlists • $totalTracks Total Songs Found',
-                          style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 12),
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.65),
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 20),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white54,
+                      size: 20,
+                    ),
                     tooltip: 'Remove Archive',
                     onPressed: _isLoading ? null : _clearPickedFiles,
                   ),
@@ -1327,10 +1610,26 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _buildFeatureChip('⚡ Energy', '${(avgEnergy * 100).toInt()}%', Colors.amber),
-                    _buildFeatureChip('💃 Dance', '${(avgDance * 100).toInt()}%', Colors.cyanAccent),
-                    _buildFeatureChip('💖 Vibe', '${(avgValence * 100).toInt()}%', Colors.pinkAccent),
-                    _buildFeatureChip('⏱️ BPM', '${avgTempo.toInt()}', Colors.greenAccent),
+                    _buildFeatureChip(
+                      '⚡ Energy',
+                      '${(avgEnergy * 100).toInt()}%',
+                      Colors.amber,
+                    ),
+                    _buildFeatureChip(
+                      '💃 Dance',
+                      '${(avgDance * 100).toInt()}%',
+                      Colors.cyanAccent,
+                    ),
+                    _buildFeatureChip(
+                      '💖 Vibe',
+                      '${(avgValence * 100).toInt()}%',
+                      Colors.pinkAccent,
+                    ),
+                    _buildFeatureChip(
+                      '⏱️ BPM',
+                      '${avgTempo.toInt()}',
+                      Colors.greenAccent,
+                    ),
                   ],
                 ),
               ],
@@ -1346,17 +1645,27 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
           children: [
             Text(
               '${selectedPlaylists.length} of ${_parsedExportifyPlaylists.length} selected (${allSelectedTracks.length} tracks)',
-              style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             TextButton.icon(
               style: TextButton.styleFrom(
                 foregroundColor: spotifyGreen,
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               ),
-              icon: Icon(allSelected ? Icons.deselect_rounded : Icons.select_all_rounded, size: 16),
+              icon: Icon(
+                allSelected ? Icons.deselect_rounded : Icons.select_all_rounded,
+                size: 16,
+              ),
               label: Text(
                 allSelected ? 'Deselect All' : 'Select All',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               onPressed: _isLoading
                   ? null
@@ -1385,21 +1694,29 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
             final pl = _parsedExportifyPlaylists[index];
             return Container(
               decoration: BoxDecoration(
-                color: pl.isSelected ? const Color(0xFF181824) : const Color(0xFF12121A),
+                color: pl.isSelected
+                    ? const Color(0xFF181824)
+                    : const Color(0xFF12121A),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: pl.isSelected ? spotifyGreen.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.05),
+                  color: pl.isSelected
+                      ? spotifyGreen.withValues(alpha: 0.3)
+                      : Colors.white.withValues(alpha: 0.05),
                 ),
               ),
               child: Theme(
-                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                data: Theme.of(
+                  context,
+                ).copyWith(dividerColor: Colors.transparent),
                 child: ExpansionTile(
                   key: ValueKey('${pl.name}_$index'),
                   leading: Checkbox(
                     value: pl.isSelected,
                     activeColor: spotifyGreen,
                     checkColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                     onChanged: _isLoading
                         ? null
                         : (val) {
@@ -1420,14 +1737,26 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                     children: [
                       Text(
                         '${pl.tracks.length} tracks',
-                        style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 11),
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.5),
+                          fontSize: 11,
+                        ),
                       ),
                       const SizedBox(width: 8),
-                      Text('•', style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 11)),
+                      Text(
+                        '•',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.3),
+                          fontSize: 11,
+                        ),
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         '⚡ ${(pl.avgEnergy * 100).toInt()}% • 💖 ${(pl.avgValence * 100).toInt()}%',
-                        style: TextStyle(color: spotifyGreen.withValues(alpha: 0.8), fontSize: 11),
+                        style: TextStyle(
+                          color: spotifyGreen.withValues(alpha: 0.8),
+                          fontSize: 11,
+                        ),
                       ),
                     ],
                   ),
@@ -1444,26 +1773,42 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                         children: [
                           Text(
                             'Preview tracks:',
-                            style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11),
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.4),
+                              fontSize: 11,
+                            ),
                           ),
                           const SizedBox(height: 4),
-                          ...pl.tracks.take(4).map((t) => Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 2.0),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.music_note_rounded, size: 12, color: spotifyGreen),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        '${t.trackName} - ${t.artistName}',
-                                        style: const TextStyle(color: Colors.white70, fontSize: 12),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                          ...pl.tracks
+                              .take(4)
+                              .map(
+                                (t) => Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 2.0,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.music_note_rounded,
+                                        size: 12,
+                                        color: spotifyGreen,
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          '${t.trackName} - ${t.artistName}',
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 12,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              )),
+                              ),
                           if (pl.tracks.length > 4)
                             Padding(
                               padding: const EdgeInsets.only(top: 4.0),
@@ -1495,11 +1840,18 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
           activeThumbColor: spotifyGreen,
           title: const Text(
             'Calibrate Taste Matrix & Circadian Engine',
-            style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           subtitle: Text(
             'Combines audio features across all selected playlists to hyper-tune your recommendations.',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 11),
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.5),
+              fontSize: 11,
+            ),
           ),
           onChanged: (val) => setState(() => _calibrateTasteMatrix = val),
         ),
@@ -1514,24 +1866,35 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                 ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.black),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: Colors.black,
+                    ),
                   )
                 : const Icon(Icons.library_add_check_rounded, size: 22),
             label: Text(
               _isLoading
                   ? 'Importing ${selectedPlaylists.length} Playlists...'
                   : (selectedPlaylists.isNotEmpty
-                      ? 'Import ${selectedPlaylists.length} Playlists (${allSelectedTracks.length} Tracks)'
-                      : 'Select Playlists to Import'),
+                        ? 'Import ${selectedPlaylists.length} Playlists (${allSelectedTracks.length} Tracks)'
+                        : 'Select Playlists to Import'),
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: selectedPlaylists.isNotEmpty ? spotifyGreen : Colors.white12,
-              foregroundColor: selectedPlaylists.isNotEmpty ? Colors.black : Colors.white38,
+              backgroundColor: selectedPlaylists.isNotEmpty
+                  ? spotifyGreen
+                  : Colors.white12,
+              foregroundColor: selectedPlaylists.isNotEmpty
+                  ? Colors.black
+                  : Colors.white38,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
-            onPressed: (_isLoading || selectedPlaylists.isEmpty) ? null : _startMultiPlaylistImport,
+            onPressed: (_isLoading || selectedPlaylists.isEmpty)
+                ? null
+                : _startMultiPlaylistImport,
           ),
         ),
 
@@ -1539,11 +1902,16 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
 
         OutlinedButton.icon(
           icon: const Icon(Icons.refresh_rounded, size: 16),
-          label: const Text('Pick Another File or Paste CSV', style: TextStyle(fontSize: 12)),
+          label: const Text(
+            'Pick Another File or Paste CSV',
+            style: TextStyle(fontSize: 12),
+          ),
           style: OutlinedButton.styleFrom(
             foregroundColor: Colors.white70,
             side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
           onPressed: _isLoading ? null : _clearPickedFiles,
         ),
@@ -1561,7 +1929,11 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
       ),
       child: Text(
         '$label: $value',
-        style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11),
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.bold,
+          fontSize: 11,
+        ),
       ),
     );
   }
@@ -1590,7 +1962,11 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
               color: spotifyGreen.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.playlist_add_check_rounded, color: spotifyGreen, size: 34),
+            child: const Icon(
+              Icons.playlist_add_check_rounded,
+              color: spotifyGreen,
+              size: 34,
+            ),
           ),
           const SizedBox(height: 14),
           const Text(
@@ -1623,7 +1999,11 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
       children: [
         const Text(
           'Spotify Playlist Link',
-          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 8),
         Container(
@@ -1638,20 +2018,38 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
             enabled: !_isLoading,
             decoration: InputDecoration(
               hintText: 'https://open.spotify.com/playlist/...',
-              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 13),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              hintStyle: TextStyle(
+                color: Colors.white.withValues(alpha: 0.35),
+                fontSize: 13,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 16,
+              ),
               border: InputBorder.none,
-              prefixIcon: const Icon(Icons.link_rounded, color: spotifyGreen, size: 22),
+              prefixIcon: const Icon(
+                Icons.link_rounded,
+                color: spotifyGreen,
+                size: 22,
+              ),
               suffixIcon: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (_urlController.text.isNotEmpty)
                     IconButton(
-                      icon: const Icon(Icons.clear, color: Colors.white54, size: 18),
+                      icon: const Icon(
+                        Icons.clear,
+                        color: Colors.white54,
+                        size: 18,
+                      ),
                       onPressed: () => setState(() => _urlController.clear()),
                     ),
                   IconButton(
-                    icon: const Icon(Icons.content_paste_rounded, color: spotifyGreen, size: 20),
+                    icon: const Icon(
+                      Icons.content_paste_rounded,
+                      color: spotifyGreen,
+                      size: 20,
+                    ),
                     tooltip: 'Paste from clipboard',
                     onPressed: _isLoading ? null : _pasteFromClipboard,
                   ),
@@ -1670,7 +2068,10 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
                 ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.black),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: Colors.black,
+                    ),
                   )
                 : const Icon(Icons.download_rounded, size: 22),
             label: Text(
@@ -1681,7 +2082,9 @@ class _SpotifyImportScreenState extends State<SpotifyImportScreen> {
               backgroundColor: spotifyGreen,
               foregroundColor: Colors.black,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
             onPressed: _isLoading ? null : _importFromInputUrl,
           ),

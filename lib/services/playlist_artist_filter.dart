@@ -35,24 +35,88 @@ class PlaylistArtistFilter {
 
   /// Known Record Labels, media houses, and channels that should not be treated as artists
   static const Set<String> _labelNoise = {
-    't-series', 'tseries', 'aditya music', 'sony music', 'zee music',
-    'lahari music', 'speed audio', 'tips official', 'tips', 'saregama',
-    'yrf', 'think music', 'vevo', 'records', 'entertainment', 'music',
-    'official', 'channel', 'audio', 'soundtracks', 'company',
-    'shreyas media', 'shreyas', 'nik studios', 'abhishek pictures',
-    'sun tv', 'sun pictures', 'geetha arts', 'mythri movie makers',
-    'mango music', 'madhura audio', 'annapurna studios', 'sithara entertainments',
-    'haarikahassine', 'aditya', 'adityamusic', 'aditya dev', 'filmnagar', 'media',
-    't series', 't-series telugu', 'sony music south', 'zee music south',
+    't-series',
+    'tseries',
+    'aditya music',
+    'sony music',
+    'zee music',
+    'lahari music',
+    'speed audio',
+    'tips official',
+    'tips',
+    'saregama',
+    'yrf',
+    'think music',
+    'vevo',
+    'records',
+    'entertainment',
+    'music',
+    'official',
+    'channel',
+    'audio',
+    'soundtracks',
+    'company',
+    'shreyas media',
+    'shreyas',
+    'nik studios',
+    'abhishek pictures',
+    'sun tv',
+    'sun pictures',
+    'geetha arts',
+    'mythri movie makers',
+    'mango music',
+    'madhura audio',
+    'annapurna studios',
+    'sithara entertainments',
+    'haarikahassine',
+    'aditya',
+    'adityamusic',
+    'aditya dev',
+    'filmnagar',
+    'media',
+    't series',
+    't-series telugu',
+    'sony music south',
+    'zee music south',
   };
 
   /// Common artist aliases and variations across Indian and international music
   static final Map<String, List<String>> _artistAliases = {
     'dsp': ['devi sri prasad', 'devi sri', 'rockstar dsp'],
     'devi sri prasad': ['dsp', 'devi sri', 'rockstar dsp'],
-    'spb': ['s p balasubrahmanyam', 's. p. balasubrahmanyam', 'balasubrahmanyam', 's.p.b.', 'sp balasubrahmanyam'],
-    'balasubrahmanyam': ['spb', 's p balasubrahmanyam'],
-    's p balasubrahmanyam': ['spb', 'balasubrahmanyam'],
+    'spb': [
+      's p balasubrahmanyam',
+      's. p. balasubrahmanyam',
+      'balasubrahmanyam',
+      's.p.b.',
+      'sp balasubrahmanyam',
+      's p balasubramaniam',
+      'balasubramaniam',
+    ],
+    'balasubrahmanyam': [
+      'spb',
+      's p balasubrahmanyam',
+      's p balasubramaniam',
+      'balasubramaniam',
+    ],
+    's p balasubrahmanyam': [
+      'spb',
+      'balasubrahmanyam',
+      's p balasubramaniam',
+      'balasubramaniam',
+    ],
+    'balasubramaniam': [
+      'spb',
+      's p balasubrahmanyam',
+      's p balasubramaniam',
+      'balasubrahmanyam',
+    ],
+    's p balasubramaniam': [
+      'spb',
+      'balasubrahmanyam',
+      's p balasubrahmanyam',
+      'balasubramaniam',
+    ],
     'arr': ['a r rahman', 'a. r. rahman', 'ar rahman', 'rahman', 'a.r. rahman'],
     'ar rahman': ['arr', 'a r rahman', 'a.r. rahman', 'rahman'],
     'rahman': ['arr', 'ar rahman', 'a.r. rahman', 'a r rahman'],
@@ -66,7 +130,12 @@ class PlaylistArtistFilter {
     'shreya ghoshal': ['shreya'],
     'thaman': ['s thaman', 'thaman s'],
     'thaman s': ['thaman', 's thaman'],
-    'keeravani': ['m m keeravani', 'm.m. keeravani', 'm m keeravaani', 'keeravaani'],
+    'keeravani': [
+      'm m keeravani',
+      'm.m. keeravani',
+      'm m keeravaani',
+      'keeravaani',
+    ],
     'm m keeravani': ['keeravani', 'keeravaani'],
     'yuvan': ['yuvan shankar raja'],
     'yuvan shankar raja': ['yuvan'],
@@ -102,7 +171,9 @@ class PlaylistArtistFilter {
 
       // Check if record label or channel noise
       for (final label in _labelNoise) {
-        if (norm == label || norm.startsWith('$label ') || norm.endsWith(' $label')) {
+        if (norm == label ||
+            norm.startsWith('$label ') ||
+            norm.endsWith(' $label')) {
           return;
         }
       }
@@ -138,7 +209,10 @@ class PlaylistArtistFilter {
     // 1. Direct 'artist' field from metadata
     if (rawArtist.isNotEmpty) {
       final parts = rawArtist.split(
-        RegExp(r'[,;&/]|(?:\s+feat\.?\s+)|\s+ft\.?\s+|\s+with\s+|\s+and\s+', caseSensitive: false),
+        RegExp(
+          r'[,;&/]|(?:\s+feat\.?\s+)|\s+ft\.?\s+|\s+with\s+|\s+and\s+',
+          caseSensitive: false,
+        ),
       );
       for (final p in parts) {
         addCandidate(p);
@@ -148,7 +222,10 @@ class PlaylistArtistFilter {
     // 2. Author field
     if (rawAuthor.isNotEmpty) {
       final parts = rawAuthor.split(
-        RegExp(r'[,;&/]|(?:\s+feat\.?\s+)|\s+ft\.?\s+|\s+with\s+|\s+and\s+', caseSensitive: false),
+        RegExp(
+          r'[,;&/]|(?:\s+feat\.?\s+)|\s+ft\.?\s+|\s+with\s+|\s+and\s+',
+          caseSensitive: false,
+        ),
       );
       for (final p in parts) {
         addCandidate(p);
@@ -158,7 +235,10 @@ class PlaylistArtistFilter {
     // 3. Extract from title when delimited by standard separators (| or -)
     if (rawTitle.isNotEmpty) {
       // First check for explicit featuring tags e.g. "feat. Shilpa Rao", "ft. Arijit Singh"
-      final featMatches = RegExp(r'(?:feat\.?|ft\.?)\s+([^\)\]\|,]+)', caseSensitive: false).allMatches(rawTitle);
+      final featMatches = RegExp(
+        r'(?:feat\.?|ft\.?)\s+([^\)\]\|,]+)',
+        caseSensitive: false,
+      ).allMatches(rawTitle);
       for (final m in featMatches) {
         final featArtist = m.group(1);
         if (featArtist != null) {
@@ -171,10 +251,15 @@ class PlaylistArtistFilter {
         final segments = rawTitle.split('|').sublist(1);
         for (final segment in segments) {
           var cleanSeg = segment.trim();
-          cleanSeg = cleanSeg.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), ' ').trim();
+          cleanSeg = cleanSeg
+              .replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), ' ')
+              .trim();
           if (cleanSeg.length >= 2) {
             final subparts = cleanSeg.split(
-              RegExp(r'[,;&/]|(?:\s+feat\.?\s+)|\s+ft\.?\s+|\s+with\s+', caseSensitive: false),
+              RegExp(
+                r'[,;&/]|(?:\s+feat\.?\s+)|\s+ft\.?\s+|\s+with\s+',
+                caseSensitive: false,
+              ),
             );
             for (final sp in subparts) {
               addCandidate(sp);
@@ -185,10 +270,15 @@ class PlaylistArtistFilter {
         final parts = rawTitle.split(RegExp(r'\s*[–—/]\s*|\s+-\s+'));
         for (int i = 1; i < parts.length; i++) {
           var segment = parts[i].trim();
-          segment = segment.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), ' ').trim();
+          segment = segment
+              .replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), ' ')
+              .trim();
           if (segment.length >= 2) {
             final subparts = segment.split(
-              RegExp(r'[,;&]|(?:\s+feat\.?\s+)|\s+ft\.?\s+|\s+with\s+', caseSensitive: false),
+              RegExp(
+                r'[,;&]|(?:\s+feat\.?\s+)|\s+ft\.?\s+|\s+with\s+',
+                caseSensitive: false,
+              ),
             );
             for (final sp in subparts) {
               addCandidate(sp);
@@ -245,7 +335,10 @@ class PlaylistArtistFilter {
 
   /// Checks if the query matches an artist present in this playlist.
   /// Returns the matched artist name, or null if no artist in this playlist matches.
-  static String? findMatchingArtistInPlaylist(List<Map<String, dynamic>> songs, String query) {
+  static String? findMatchingArtistInPlaylist(
+    List<Map<String, dynamic>> songs,
+    String query,
+  ) {
     final cleanQ = normalize(query);
     if (cleanQ.length < 2) return null;
 
@@ -261,7 +354,10 @@ class PlaylistArtistFilter {
   }
 
   /// Returns indices of all songs in the playlist that belong to the specified artist
-  static List<int> filterSongIndicesByArtist(List<Map<String, dynamic>> songs, String artistOrQuery) {
+  static List<int> filterSongIndicesByArtist(
+    List<Map<String, dynamic>> songs,
+    String artistOrQuery,
+  ) {
     final matchingIndices = <int>[];
     for (int i = 0; i < songs.length; i++) {
       final song = songs[i];
@@ -281,7 +377,10 @@ class PlaylistArtistFilter {
   }
 
   /// Extracts top distinct artists present in this playlist along with song counts
-  static List<ArtistSongCount> getTopArtistsWithCounts(List<Map<String, dynamic>> songs, {int limit = 10}) {
+  static List<ArtistSongCount> getTopArtistsWithCounts(
+    List<Map<String, dynamic>> songs, {
+    int limit = 10,
+  }) {
     final counts = <String, int>{};
     final displayNames = <String, String>{};
 
@@ -296,7 +395,10 @@ class PlaylistArtistFilter {
     }
 
     final list = counts.entries.map((e) {
-      return ArtistSongCount(name: displayNames[e.key] ?? e.key, count: e.value);
+      return ArtistSongCount(
+        name: displayNames[e.key] ?? e.key,
+        count: e.value,
+      );
     }).toList();
 
     // Sort descending by count
@@ -347,12 +449,15 @@ class PlaylistArtistFilter {
       bool titleMatches = false;
       if (cleanQ.length <= 3) {
         final words = normTitle.split(' ');
-        titleMatches = words.any((w) => w == cleanQ || (cleanQ.length >= 3 && w.startsWith(cleanQ)));
+        titleMatches = words.any(
+          (w) => w == cleanQ || (cleanQ.length >= 3 && w.startsWith(cleanQ)),
+        );
       } else {
         titleMatches = title.contains(queryLower) || normTitle.contains(cleanQ);
       }
 
-      final authorMatches = author.contains(queryLower) || normalize(author).contains(cleanQ);
+      final authorMatches =
+          author.contains(queryLower) || normalize(author).contains(cleanQ);
 
       if (titleMatches || authorMatches) {
         matchedIndices.add(i);

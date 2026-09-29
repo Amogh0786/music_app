@@ -49,7 +49,9 @@ class ScreenWakeService with WidgetsBindingObserver {
     if (!_isScreenKeptOn) {
       _isScreenKeptOn = true;
       await _setScreenOn(true);
-      debugPrint('[ScreenWakeService] WakeLock enabled by: $tag (holders: ${_activeHolders.length})');
+      debugPrint(
+        '[ScreenWakeService] WakeLock enabled by: $tag (holders: ${_activeHolders.length})',
+      );
     }
   }
 
@@ -78,7 +80,8 @@ class ScreenWakeService with WidgetsBindingObserver {
   /// and resume when app returns to foreground if lyrics are still active.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
       if (_isScreenKeptOn) {
         _setScreenOn(false);
         debugPrint('[ScreenWakeService] App backgrounded -> WakeLock paused');
@@ -86,7 +89,9 @@ class ScreenWakeService with WidgetsBindingObserver {
     } else if (state == AppLifecycleState.resumed) {
       if (_activeHolders.isNotEmpty) {
         _setScreenOn(true);
-        debugPrint('[ScreenWakeService] App resumed -> WakeLock restored for: $_activeHolders');
+        debugPrint(
+          '[ScreenWakeService] App resumed -> WakeLock restored for: $_activeHolders',
+        );
       }
     }
   }

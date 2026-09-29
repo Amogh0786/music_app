@@ -4,10 +4,22 @@ import 'package:music_app/services/lyrics_transliteration_service.dart';
 void main() {
   group('LyricsTransliterationService Tests', () {
     test('Detects Indic scripts accurately', () {
-      expect(LyricsTransliterationService.hasIndicScript('Hello World'), isFalse);
-      expect(LyricsTransliterationService.hasIndicScript('సమాజవరగమనా'), isTrue); // Telugu
-      expect(LyricsTransliterationService.hasIndicScript('केसरिया तेरा इश्क़'), isTrue); // Hindi
-      expect(LyricsTransliterationService.hasIndicScript('அரபிக் குத்து'), isTrue); // Tamil
+      expect(
+        LyricsTransliterationService.hasIndicScript('Hello World'),
+        isFalse,
+      );
+      expect(
+        LyricsTransliterationService.hasIndicScript('సమాజవరగమనా'),
+        isTrue,
+      ); // Telugu
+      expect(
+        LyricsTransliterationService.hasIndicScript('केसरिया तेरा इश्क़'),
+        isTrue,
+      ); // Hindi
+      expect(
+        LyricsTransliterationService.hasIndicScript('அரபிக் குத்து'),
+        isTrue,
+      ); // Tamil
     });
 
     test('Transliterates Telugu lyrics to English pronunciation', () {
@@ -81,21 +93,24 @@ void main() {
       expect(telugu.codeUnits.any((c) => c >= 0x0C00 && c <= 0x0C7F), isTrue);
     });
 
-    test('Preserves timestamps during reverse transliteration of LRC lyrics', () {
-      const lrc = '''[00:17.33] Rajamandri raagamajari
+    test(
+      'Preserves timestamps during reverse transliteration of LRC lyrics',
+      () {
+        const lrc = '''[00:17.33] Rajamandri raagamajari
 [00:19.44] Mayamma peru
 [00:20.27] Talavanollu leru mestiri''';
 
-      final teluguLrc = LyricsTransliterationService.toTeluguScriptLrc(lrc);
-      final lines = teluguLrc.split('\n');
+        final teluguLrc = LyricsTransliterationService.toTeluguScriptLrc(lrc);
+        final lines = teluguLrc.split('\n');
 
-      expect(lines.length, equals(3));
-      expect(lines[0].startsWith('[00:17.33]'), isTrue);
-      expect(lines[1].startsWith('[00:19.44]'), isTrue);
-      expect(lines[2].startsWith('[00:20.27]'), isTrue);
-      expect(LyricsTransliterationService.hasIndicScript(lines[0]), isTrue);
-      expect(LyricsTransliterationService.hasIndicScript(lines[1]), isTrue);
-      expect(LyricsTransliterationService.hasIndicScript(lines[2]), isTrue);
-    });
+        expect(lines.length, equals(3));
+        expect(lines[0].startsWith('[00:17.33]'), isTrue);
+        expect(lines[1].startsWith('[00:19.44]'), isTrue);
+        expect(lines[2].startsWith('[00:20.27]'), isTrue);
+        expect(LyricsTransliterationService.hasIndicScript(lines[0]), isTrue);
+        expect(LyricsTransliterationService.hasIndicScript(lines[1]), isTrue);
+        expect(LyricsTransliterationService.hasIndicScript(lines[2]), isTrue);
+      },
+    );
   });
 }

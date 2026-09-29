@@ -17,13 +17,19 @@ void main() {
       'smartCrossfade': false,
     });
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(const MethodChannel('com.ryanheise.just_audio.methods'), (call) async {
-      return {};
-    });
+        .setMockMethodCallHandler(
+          const MethodChannel('com.ryanheise.just_audio.methods'),
+          (call) async {
+            return {};
+          },
+        );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(const MethodChannel('plugins.flutter.io/path_provider'), (call) async {
-      return '.';
-    });
+        .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (call) async {
+            return '.';
+          },
+        );
   });
 
   Video makeVideo(String id, String title, String author) {
@@ -45,17 +51,26 @@ void main() {
   }
 
   group('Continuous Background Playback & LoopMode Tests', () {
-    test('DilSeAudioHandler notifyLoading sets loading processing state and playing: true', () {
-      final handler = DilSeAudioHandler();
+    test(
+      'DilSeAudioHandler notifyLoading sets loading processing state and playing: true',
+      () {
+        final handler = DilSeAudioHandler();
 
-      handler.notifyLoading(isLoading: true);
-      expect(handler.playbackState.value.processingState, AudioProcessingState.loading);
-      expect(handler.playbackState.value.playing, isTrue);
+        handler.notifyLoading(isLoading: true);
+        expect(
+          handler.playbackState.value.processingState,
+          AudioProcessingState.loading,
+        );
+        expect(handler.playbackState.value.playing, isTrue);
 
-      handler.notifyLoading(isLoading: false);
-      expect(handler.playbackState.value.processingState, AudioProcessingState.ready);
-      expect(handler.playbackState.value.playing, isTrue);
-    });
+        handler.notifyLoading(isLoading: false);
+        expect(
+          handler.playbackState.value.processingState,
+          AudioProcessingState.ready,
+        );
+        expect(handler.playbackState.value.playing, isTrue);
+      },
+    );
 
     test('toggleRepeat cycles cleanly through off -> all -> one -> off', () {
       final music = MusicService();
@@ -71,40 +86,48 @@ void main() {
       expect(music.loopMode, LoopMode.off);
     });
 
-    test('Playlist queue state transitions properly on boundary with LoopMode.all', () {
-      final music = MusicService();
-      final song1 = makeVideo('aaaaaaaaaaa', 'First Song', 'Artist A');
-      final song2 = makeVideo('bbbbbbbbbbb', 'Second Song', 'Artist B');
-      final song3 = makeVideo('ccccccccccc', 'Third Song', 'Artist C');
+    test(
+      'Playlist queue state transitions properly on boundary with LoopMode.all',
+      () {
+        final music = MusicService();
+        final song1 = makeVideo('aaaaaaaaaaa', 'First Song', 'Artist A');
+        final song2 = makeVideo('bbbbbbbbbbb', 'Second Song', 'Artist B');
+        final song3 = makeVideo('ccccccccccc', 'Third Song', 'Artist C');
 
-      music.setPlaylistForTesting([song1, song2, song3], initialIndex: 2);
-      expect(music.currentIndex, 2);
-      expect(music.currentSong?.id.value, 'ccccccccccc');
+        music.setPlaylistForTesting([song1, song2, song3], initialIndex: 2);
+        expect(music.currentIndex, 2);
+        expect(music.currentSong?.id.value, 'ccccccccccc');
 
-      music.setLoopModeForTesting(LoopMode.all);
-      expect(music.loopMode, LoopMode.all);
+        music.setLoopModeForTesting(LoopMode.all);
+        expect(music.loopMode, LoopMode.all);
 
-      // Verify playlist wrapping calculation
-      final isLastTrack = music.currentIndex + 1 >= music.playlist.length;
-      expect(isLastTrack, isTrue);
+        // Verify playlist wrapping calculation
+        final isLastTrack = music.currentIndex + 1 >= music.playlist.length;
+        expect(isLastTrack, isTrue);
 
-      final nextIndexOnRepeatAll = (music.currentIndex + 1) % music.playlist.length;
-      expect(nextIndexOnRepeatAll, 0);
-      expect(music.playlist[nextIndexOnRepeatAll].id.value, 'aaaaaaaaaaa');
-    });
+        final nextIndexOnRepeatAll =
+            (music.currentIndex + 1) % music.playlist.length;
+        expect(nextIndexOnRepeatAll, 0);
+        expect(music.playlist[nextIndexOnRepeatAll].id.value, 'aaaaaaaaaaa');
+      },
+    );
 
-    test('AudioServiceConfig is initialized with androidStopForegroundOnPause = false', () {
-      // AudioServiceConfig must NOT stop foreground service on pause or song transitions,
-      // ensuring continuous playback when the phone screen is off or locked.
-      const config = AudioServiceConfig(
-        androidNotificationChannelId: 'com.example.music_app.channel.audio_playback_v3',
-        androidNotificationChannelName: 'DilSe Music Playback',
-        androidNotificationOngoing: false,
-        androidStopForegroundOnPause: false,
-        androidShowNotificationBadge: true,
-        androidNotificationIcon: 'drawable/ic_stat_music',
-      );
-      expect(config.androidStopForegroundOnPause, isFalse);
-    });
+    test(
+      'AudioServiceConfig is initialized with androidStopForegroundOnPause = false',
+      () {
+        // AudioServiceConfig must NOT stop foreground service on pause or song transitions,
+        // ensuring continuous playback when the phone screen is off or locked.
+        const config = AudioServiceConfig(
+          androidNotificationChannelId:
+              'com.example.music_app.channel.audio_playback_v3',
+          androidNotificationChannelName: 'DilSe Music Playback',
+          androidNotificationOngoing: false,
+          androidStopForegroundOnPause: false,
+          androidShowNotificationBadge: true,
+          androidNotificationIcon: 'drawable/ic_stat_music',
+        );
+        expect(config.androidStopForegroundOnPause, isFalse);
+      },
+    );
   });
 }

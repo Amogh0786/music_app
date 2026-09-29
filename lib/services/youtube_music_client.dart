@@ -28,7 +28,7 @@ class YouTubeMusicClient {
       'clientVersion': '1.20240101.01.00',
       'hl': 'en',
       'gl': 'IN',
-    }
+    },
   };
 
   /// Searches YouTube Music specifically for official studio songs (no video sketches or dialogue)
@@ -57,8 +57,8 @@ class YouTubeMusicClient {
       final List<Video> songs = [];
 
       // Navigate through InnerTube sections to extract musicResponsiveListItemRenderer items
-      final contents = data['contents']?['tabbedSearchResultsRenderer']?['tabs']?[0]
-              ?['tabRenderer']?['content']?['sectionListRenderer']?['contents'] ??
+      final contents =
+          data['contents']?['tabbedSearchResultsRenderer']?['tabs']?[0]?['tabRenderer']?['content']?['sectionListRenderer']?['contents'] ??
           [];
 
       for (final section in contents) {
@@ -76,7 +76,9 @@ class YouTubeMusicClient {
         if (songs.length >= limit) break;
       }
 
-      debugPrint('[YTM] Found ${songs.length} clean studio tracks for: "$query"');
+      debugPrint(
+        '[YTM] Found ${songs.length} clean studio tracks for: "$query"',
+      );
       return songs;
     } catch (e) {
       debugPrint('[YTM] Search error: $e');
@@ -101,7 +103,9 @@ class YouTubeMusicClient {
             if (vid == null || vid.isEmpty || vid == videoId) continue;
             final t = item['title'] as String? ?? 'Unknown Title';
             final a = item['author'] as String? ?? 'Unknown Artist';
-            final durSec = item['duration'] != null ? int.tryParse(item['duration'].toString()) : null;
+            final durSec = item['duration'] != null
+                ? int.tryParse(item['duration'].toString())
+                : null;
             final track = Video(
               VideoId(vid),
               t,
@@ -122,7 +126,9 @@ class YouTubeMusicClient {
             }
           }
           if (serverTracks.isNotEmpty) {
-            debugPrint('[YTM] Retrieved ${serverTracks.length} clean radio tracks via backend proxy');
+            debugPrint(
+              '[YTM] Retrieved ${serverTracks.length} clean radio tracks via backend proxy',
+            );
             return serverTracks;
           }
         }
@@ -150,14 +156,14 @@ class YouTubeMusicClient {
       }
 
       final data = json.decode(response.body);
-      final tabs = data['contents']?['singleColumnMusicWatchNextResultsRenderer']
-              ?['tabbedRenderer']?['watchNextTabbedResultsRenderer']?['tabs'] ??
+      final tabs =
+          data['contents']?['singleColumnMusicWatchNextResultsRenderer']?['tabbedRenderer']?['watchNextTabbedResultsRenderer']?['tabs'] ??
           [];
 
       if (tabs.isEmpty) return [];
 
-      final upNextItems = tabs[0]?['tabRenderer']?['content']?['musicQueueRenderer']
-              ?['content']?['playlistPanelRenderer']?['contents'] ??
+      final upNextItems =
+          tabs[0]?['tabRenderer']?['content']?['musicQueueRenderer']?['content']?['playlistPanelRenderer']?['contents'] ??
           [];
 
       final List<Video> radioTracks = [];
@@ -172,12 +178,18 @@ class YouTubeMusicClient {
         if (vid == videoId && radioTracks.isNotEmpty) continue;
 
         final titleRuns = renderer['title']?['runs'] as List<dynamic>? ?? [];
-        final title = titleRuns.isNotEmpty ? titleRuns[0]['text'] as String? ?? 'Unknown Title' : 'Unknown Title';
+        final title = titleRuns.isNotEmpty
+            ? titleRuns[0]['text'] as String? ?? 'Unknown Title'
+            : 'Unknown Title';
 
-        final bylineRuns = renderer['longBylineText']?['runs'] as List<dynamic>? ?? [];
-        final author = bylineRuns.isNotEmpty ? bylineRuns[0]['text'] as String? ?? 'Unknown Artist' : 'Unknown Artist';
+        final bylineRuns =
+            renderer['longBylineText']?['runs'] as List<dynamic>? ?? [];
+        final author = bylineRuns.isNotEmpty
+            ? bylineRuns[0]['text'] as String? ?? 'Unknown Artist'
+            : 'Unknown Artist';
 
-        final lengthText = renderer['lengthText']?['runs']?[0]?['text'] as String? ?? '';
+        final lengthText =
+            renderer['lengthText']?['runs']?[0]?['text'] as String? ?? '';
         final duration = _parseDuration(lengthText);
 
         final track = Video(
@@ -203,7 +215,9 @@ class YouTubeMusicClient {
         if (radioTracks.length >= limit) break;
       }
 
-      debugPrint('[YTM] Extracted ${radioTracks.length} radio automix tracks for seed: $videoId');
+      debugPrint(
+        '[YTM] Extracted ${radioTracks.length} radio automix tracks for seed: $videoId',
+      );
       return radioTracks;
     } catch (e) {
       debugPrint('[YTM] Radio fetch error: $e');
@@ -217,15 +231,16 @@ class YouTubeMusicClient {
       if (flexColumns.isEmpty) return null;
 
       // 1. Title
-      final titleColumn = flexColumns[0]['musicResponsiveListItemFlexColumnRenderer'];
+      final titleColumn =
+          flexColumns[0]['musicResponsiveListItemFlexColumnRenderer'];
       final titleRuns = titleColumn?['text']?['runs'] as List<dynamic>? ?? [];
       if (titleRuns.isEmpty) return null;
       final title = titleRuns[0]['text'] as String? ?? 'Unknown Title';
 
       // 2. VideoId & Navigation
       String? videoId;
-      final playNav = renderer['overlay']?['musicItemThumbnailOverlayRenderer']
-          ?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint'];
+      final playNav =
+          renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint'];
       videoId = playNav?['watchEndpoint']?['videoId'] as String?;
 
       if (videoId == null) {
@@ -240,7 +255,8 @@ class YouTubeMusicClient {
       Duration? duration;
 
       if (flexColumns.length > 1) {
-        final subColumn = flexColumns[1]['musicResponsiveListItemFlexColumnRenderer'];
+        final subColumn =
+            flexColumns[1]['musicResponsiveListItemFlexColumnRenderer'];
         final subRuns = subColumn?['text']?['runs'] as List<dynamic>? ?? [];
         if (subRuns.isNotEmpty) {
           author = subRuns[0]['text'] as String? ?? 'Unknown Artist';

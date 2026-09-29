@@ -83,7 +83,9 @@ class _WaveformScrubberState extends State<WaveformScrubber> {
   Widget build(BuildContext context) {
     final totalMs = widget.duration.inMilliseconds;
     final currentMs = widget.position.inMilliseconds;
-    final liveProgress = totalMs > 0 ? (currentMs / totalMs).clamp(0.0, 1.0) : 0.0;
+    final liveProgress = totalMs > 0
+        ? (currentMs / totalMs).clamp(0.0, 1.0)
+        : 0.0;
     final activeProgress = _dragProgress ?? liveProgress;
 
     final displayPosition = _dragProgress != null
@@ -205,7 +207,9 @@ class _WaveformPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final glowPaint = Paint()
-      ..color = (isDragging ? accentColor : Colors.white).withValues(alpha: 0.35)
+      ..color = (isDragging ? accentColor : Colors.white).withValues(
+        alpha: 0.35,
+      )
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
 
     for (int i = 0; i < barCount; i++) {
@@ -240,8 +244,16 @@ class _WaveformPainter extends CustomPainter {
       ..color = (isDragging ? accentColor : Colors.white).withValues(alpha: 0.6)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
 
-    canvas.drawCircle(Offset(headX, size.height / 2), isDragging ? 6.0 : 4.0, headGlow);
-    canvas.drawCircle(Offset(headX, size.height / 2), isDragging ? 5.0 : 3.5, indicatorPaint);
+    canvas.drawCircle(
+      Offset(headX, size.height / 2),
+      isDragging ? 6.0 : 4.0,
+      headGlow,
+    );
+    canvas.drawCircle(
+      Offset(headX, size.height / 2),
+      isDragging ? 5.0 : 3.5,
+      indicatorPaint,
+    );
   }
 
   @override

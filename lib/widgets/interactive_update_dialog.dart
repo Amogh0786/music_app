@@ -10,13 +10,11 @@ import '../services/preferences_service.dart';
 class InteractiveUpdateDialog extends StatefulWidget {
   final AppUpdateInfo info;
 
-  const InteractiveUpdateDialog({
-    super.key,
-    required this.info,
-  });
+  const InteractiveUpdateDialog({super.key, required this.info});
 
   @override
-  State<InteractiveUpdateDialog> createState() => _InteractiveUpdateDialogState();
+  State<InteractiveUpdateDialog> createState() =>
+      _InteractiveUpdateDialogState();
 }
 
 class _InteractiveUpdateDialogState extends State<InteractiveUpdateDialog>
@@ -82,51 +80,55 @@ class _InteractiveUpdateDialogState extends State<InteractiveUpdateDialog>
     });
 
     try {
-      UpdateService().startOtaUpdate(widget.info.downloadUrl).listen(
-        (OtaEvent event) {
-          if (!mounted) return;
-          switch (event.status) {
-            case OtaStatus.DOWNLOADING:
-              final p = int.tryParse(event.value ?? '0') ?? 0;
-              setState(() {
-                _downloadProgress = p;
-                _statusText = 'Downloading update... ($p%)';
-              });
-              break;
-            case OtaStatus.INSTALLING:
-              setState(() {
-                _statusText = 'Launching package installer...';
-              });
-              break;
-            case OtaStatus.ALREADY_RUNNING_ERROR:
+      UpdateService()
+          .startOtaUpdate(widget.info.downloadUrl)
+          .listen(
+            (OtaEvent event) {
+              if (!mounted) return;
+              switch (event.status) {
+                case OtaStatus.DOWNLOADING:
+                  final p = int.tryParse(event.value ?? '0') ?? 0;
+                  setState(() {
+                    _downloadProgress = p;
+                    _statusText = 'Downloading update... ($p%)';
+                  });
+                  break;
+                case OtaStatus.INSTALLING:
+                  setState(() {
+                    _statusText = 'Launching package installer...';
+                  });
+                  break;
+                case OtaStatus.ALREADY_RUNNING_ERROR:
+                  setState(() {
+                    _isDownloading = false;
+                    _errorMessage = 'Download already in progress.';
+                  });
+                  break;
+                case OtaStatus.PERMISSION_NOT_GRANTED_ERROR:
+                  setState(() {
+                    _isDownloading = false;
+                    _errorMessage =
+                        'Storage/Install permission was not granted.';
+                  });
+                  break;
+                case OtaStatus.INTERNAL_ERROR:
+                default:
+                  setState(() {
+                    _isDownloading = false;
+                    _errorMessage =
+                        'Download error: ${event.value ?? 'Unknown'}';
+                  });
+                  break;
+              }
+            },
+            onError: (err) {
+              if (!mounted) return;
               setState(() {
                 _isDownloading = false;
-                _errorMessage = 'Download already in progress.';
+                _errorMessage = 'Update error: $err';
               });
-              break;
-            case OtaStatus.PERMISSION_NOT_GRANTED_ERROR:
-              setState(() {
-                _isDownloading = false;
-                _errorMessage = 'Storage/Install permission was not granted.';
-              });
-              break;
-            case OtaStatus.INTERNAL_ERROR:
-            default:
-              setState(() {
-                _isDownloading = false;
-                _errorMessage = 'Download error: ${event.value ?? 'Unknown'}';
-              });
-              break;
-          }
-        },
-        onError: (err) {
-          if (!mounted) return;
-          setState(() {
-            _isDownloading = false;
-            _errorMessage = 'Update error: $err';
-          });
-        },
-      );
+            },
+          );
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -434,7 +436,9 @@ class _InteractiveUpdateDialogState extends State<InteractiveUpdateDialog>
                                     : null,
                                 minHeight: 8,
                                 backgroundColor: Colors.white12,
-                                valueColor: AlwaysStoppedAnimation<Color>(themeColor),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  themeColor,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -457,7 +461,9 @@ class _InteractiveUpdateDialogState extends State<InteractiveUpdateDialog>
                               child: TextButton(
                                 onPressed: () => Navigator.of(context).pop(),
                                 style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14),
                                   ),
@@ -481,12 +487,16 @@ class _InteractiveUpdateDialogState extends State<InteractiveUpdateDialog>
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: themeColor,
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14),
                                   ),
-                                  shadowColor: themeColor.withValues(alpha: 0.5),
+                                  shadowColor: themeColor.withValues(
+                                    alpha: 0.5,
+                                  ),
                                 ),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,

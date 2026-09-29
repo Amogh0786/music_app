@@ -38,34 +38,34 @@ class ExportifyTrack {
   });
 
   Map<String, dynamic> toJson() => {
-        'spotifyId': spotifyId,
-        'trackName': trackName,
-        'artistName': artistName,
-        'albumName': albumName,
-        'durationMs': durationMs,
-        'danceability': danceability,
-        'energy': energy,
-        'valence': valence,
-        'tempo': tempo,
-        'acousticness': acousticness,
-        'instrumentalness': instrumentalness,
-        'popularity': popularity,
-      };
+    'spotifyId': spotifyId,
+    'trackName': trackName,
+    'artistName': artistName,
+    'albumName': albumName,
+    'durationMs': durationMs,
+    'danceability': danceability,
+    'energy': energy,
+    'valence': valence,
+    'tempo': tempo,
+    'acousticness': acousticness,
+    'instrumentalness': instrumentalness,
+    'popularity': popularity,
+  };
 
   factory ExportifyTrack.fromJson(Map<String, dynamic> json) => ExportifyTrack(
-        spotifyId: json['spotifyId'] as String? ?? '',
-        trackName: json['trackName'] as String? ?? '',
-        artistName: json['artistName'] as String? ?? '',
-        albumName: json['albumName'] as String? ?? '',
-        durationMs: (json['durationMs'] as num?)?.toInt() ?? 0,
-        danceability: (json['danceability'] as num?)?.toDouble() ?? 0.5,
-        energy: (json['energy'] as num?)?.toDouble() ?? 0.5,
-        valence: (json['valence'] as num?)?.toDouble() ?? 0.5,
-        tempo: (json['tempo'] as num?)?.toDouble() ?? 120.0,
-        acousticness: (json['acousticness'] as num?)?.toDouble() ?? 0.5,
-        instrumentalness: (json['instrumentalness'] as num?)?.toDouble() ?? 0.0,
-        popularity: (json['popularity'] as num?)?.toInt() ?? 50,
-      );
+    spotifyId: json['spotifyId'] as String? ?? '',
+    trackName: json['trackName'] as String? ?? '',
+    artistName: json['artistName'] as String? ?? '',
+    albumName: json['albumName'] as String? ?? '',
+    durationMs: (json['durationMs'] as num?)?.toInt() ?? 0,
+    danceability: (json['danceability'] as num?)?.toDouble() ?? 0.5,
+    energy: (json['energy'] as num?)?.toDouble() ?? 0.5,
+    valence: (json['valence'] as num?)?.toDouble() ?? 0.5,
+    tempo: (json['tempo'] as num?)?.toDouble() ?? 120.0,
+    acousticness: (json['acousticness'] as num?)?.toDouble() ?? 0.5,
+    instrumentalness: (json['instrumentalness'] as num?)?.toDouble() ?? 0.0,
+    popularity: (json['popularity'] as num?)?.toInt() ?? 50,
+  );
 }
 
 /// Represents a distinct playlist extracted from an Exportify CSV or ZIP archive
@@ -92,7 +92,8 @@ class ExportifyPlaylist {
 
   double get avgDanceability {
     if (tracks.isEmpty) return 0.5;
-    return tracks.map((t) => t.danceability).reduce((a, b) => a + b) / tracks.length;
+    return tracks.map((t) => t.danceability).reduce((a, b) => a + b) /
+        tracks.length;
   }
 
   double get avgTempo {
@@ -120,15 +121,16 @@ class UserAudioProfile {
   });
 
   Map<String, dynamic> toJson() => {
-        'avgDanceability': avgDanceability,
-        'avgEnergy': avgEnergy,
-        'avgValence': avgValence,
-        'avgTempo': avgTempo,
-        'avgAcousticness': avgAcousticness,
-        'tracksAnalyzed': tracksAnalyzed,
-      };
+    'avgDanceability': avgDanceability,
+    'avgEnergy': avgEnergy,
+    'avgValence': avgValence,
+    'avgTempo': avgTempo,
+    'avgAcousticness': avgAcousticness,
+    'tracksAnalyzed': tracksAnalyzed,
+  };
 
-  factory UserAudioProfile.fromJson(Map<String, dynamic> json) => UserAudioProfile(
+  factory UserAudioProfile.fromJson(Map<String, dynamic> json) =>
+      UserAudioProfile(
         avgDanceability: (json['avgDanceability'] as num?)?.toDouble() ?? 0.5,
         avgEnergy: (json['avgEnergy'] as num?)?.toDouble() ?? 0.5,
         avgValence: (json['avgValence'] as num?)?.toDouble() ?? 0.5,
@@ -151,7 +153,9 @@ class ExportifyCsvParser {
           String rawName = file.name;
           if (rawName.contains('/')) rawName = rawName.split('/').last;
           if (rawName.contains(r'\')) rawName = rawName.split(r'\').last;
-          final cleanName = rawName.replaceAll(RegExp(r'\.csv$', caseSensitive: false), '').trim();
+          final cleanName = rawName
+              .replaceAll(RegExp(r'\.csv$', caseSensitive: false), '')
+              .trim();
           if (cleanName.isEmpty) continue;
 
           final contentBytes = file.content as List<int>;
@@ -217,7 +221,10 @@ class ExportifyCsvParser {
       }
     }
 
-    final headerTokens = _parseCsvRow(lines[headerLineIdx], delimiter: delimiter);
+    final headerTokens = _parseCsvRow(
+      lines[headerLineIdx],
+      delimiter: delimiter,
+    );
     final columnMap = <String, int>{};
 
     for (int i = 0; i < headerTokens.length; i++) {
@@ -227,17 +234,53 @@ class ExportifyCsvParser {
 
     // Dynamic column index resolution with comprehensive aliases
     int trackNameIdx = _findColumnIndex(columnMap, [
-      'track name', 'track_name', 'track', 'song', 'title', 'name', 'track title', 'track name(s)', 'song name', 'song_name'
+      'track name',
+      'track_name',
+      'track',
+      'song',
+      'title',
+      'name',
+      'track title',
+      'track name(s)',
+      'song name',
+      'song_name',
     ]);
     int artistIdx = _findColumnIndex(columnMap, [
-      'artist name(s)', 'artist name', 'artist(s)', 'artist', 'artists', 'track artist', 'lead artist', 'performer', 'artist_name'
+      'artist name(s)',
+      'artist name',
+      'artist(s)',
+      'artist',
+      'artists',
+      'track artist',
+      'lead artist',
+      'performer',
+      'artist_name',
     ]);
-    final albumIdx = _findColumnIndex(columnMap, ['album name', 'album', 'album title', 'release', 'album_name']);
+    final albumIdx = _findColumnIndex(columnMap, [
+      'album name',
+      'album',
+      'album title',
+      'release',
+      'album_name',
+    ]);
     final durationIdx = _findColumnIndex(columnMap, [
-      'track duration (ms)', 'duration (ms)', 'duration', 'duration_ms', 'duration ms', 'length', 'time'
+      'track duration (ms)',
+      'duration (ms)',
+      'duration',
+      'duration_ms',
+      'duration ms',
+      'length',
+      'time',
     ]);
     final spotifyIdIdx = _findColumnIndex(columnMap, [
-      'spotify id', 'track uri', 'spotify uri', 'id', 'uri', 'spotify_id', 'url', 'link'
+      'spotify id',
+      'track uri',
+      'spotify uri',
+      'id',
+      'uri',
+      'spotify_id',
+      'url',
+      'link',
     ]);
     final danceIdx = _findColumnIndex(columnMap, ['danceability']);
     final energyIdx = _findColumnIndex(columnMap, ['energy']);
@@ -256,7 +299,9 @@ class ExportifyCsvParser {
         artistIdx = 1;
         dataStartRow = headerLineIdx;
       } else {
-        debugPrint('[ExportifyParser] Warning: CSV missing required Track Name or Artist columns');
+        debugPrint(
+          '[ExportifyParser] Warning: CSV missing required Track Name or Artist columns',
+        );
         return [];
       }
     }
@@ -270,38 +315,66 @@ class ExportifyCsvParser {
       final row = _parseCsvRow(line, delimiter: delimiter);
       if (row.isEmpty) continue;
 
-      final trackName = _getValue(row, trackNameIdx, defaultValue: 'Unknown Track');
-      final artistName = _getValue(row, artistIdx, defaultValue: 'Unknown Artist');
+      final trackName = _getValue(
+        row,
+        trackNameIdx,
+        defaultValue: 'Unknown Track',
+      );
+      final artistName = _getValue(
+        row,
+        artistIdx,
+        defaultValue: 'Unknown Artist',
+      );
       if (trackName.isEmpty && artistName.isEmpty) continue;
       // Skip repeated header line if present inside file
-      if (trackName.toLowerCase() == 'track name' || trackName.toLowerCase() == 'title') continue;
+      if (trackName.toLowerCase() == 'track name' ||
+          trackName.toLowerCase() == 'title') {
+        continue;
+      }
 
       final albumName = _getValue(row, albumIdx, defaultValue: '');
       final spotifyId = _getValue(row, spotifyIdIdx, defaultValue: '');
 
-      final durationMs = int.tryParse(_getValue(row, durationIdx, defaultValue: '0')) ?? 0;
-      final danceability = double.tryParse(_getValue(row, danceIdx, defaultValue: '0.5')) ?? 0.5;
-      final energy = double.tryParse(_getValue(row, energyIdx, defaultValue: '0.5')) ?? 0.5;
-      final valence = double.tryParse(_getValue(row, valenceIdx, defaultValue: '0.5')) ?? 0.5;
-      final tempo = double.tryParse(_getValue(row, tempoIdx, defaultValue: '120.0')) ?? 120.0;
-      final acousticness = double.tryParse(_getValue(row, acousticIdx, defaultValue: '0.5')) ?? 0.5;
-      final instrumentalness = double.tryParse(_getValue(row, instrumentalIdx, defaultValue: '0.0')) ?? 0.0;
-      final popularity = int.tryParse(_getValue(row, popularityIdx, defaultValue: '50')) ?? 50;
+      final durationMs =
+          int.tryParse(_getValue(row, durationIdx, defaultValue: '0')) ?? 0;
+      final danceability =
+          double.tryParse(_getValue(row, danceIdx, defaultValue: '0.5')) ?? 0.5;
+      final energy =
+          double.tryParse(_getValue(row, energyIdx, defaultValue: '0.5')) ??
+          0.5;
+      final valence =
+          double.tryParse(_getValue(row, valenceIdx, defaultValue: '0.5')) ??
+          0.5;
+      final tempo =
+          double.tryParse(_getValue(row, tempoIdx, defaultValue: '120.0')) ??
+          120.0;
+      final acousticness =
+          double.tryParse(_getValue(row, acousticIdx, defaultValue: '0.5')) ??
+          0.5;
+      final instrumentalness =
+          double.tryParse(
+            _getValue(row, instrumentalIdx, defaultValue: '0.0'),
+          ) ??
+          0.0;
+      final popularity =
+          int.tryParse(_getValue(row, popularityIdx, defaultValue: '50')) ?? 50;
 
-      tracks.add(ExportifyTrack(
-        spotifyId: spotifyId,
-        trackName: trackName,
-        artistName: artistName,
-        albumName: albumName,
-        durationMs: durationMs,
-        danceability: danceability.clamp(0.0, 1.0),
-        energy: energy.clamp(0.0, 1.0),
-        valence: valence.clamp(0.0, 1.0),
-        tempo: tempo.clamp(40.0, 240.0),
-        acousticness: acousticness.clamp(0.0, 1.0),
-        instrumentalness: instrumentalness.clamp(0.0, 1.0),
-        popularity: popularity.clamp(0, 100),
-      ));
+      tracks.add(
+        ExportifyTrack(
+          spotifyId: spotifyId,
+          trackName: trackName,
+          artistName: artistName,
+          albumName: albumName,
+          durationMs: durationMs,
+          danceability: danceability.clamp(0.0, 1.0),
+          energy: energy.clamp(0.0, 1.0),
+          valence: valence.clamp(0.0, 1.0),
+          tempo: tempo.clamp(40.0, 240.0),
+          acousticness: acousticness.clamp(0.0, 1.0),
+          instrumentalness: instrumentalness.clamp(0.0, 1.0),
+          popularity: popularity.clamp(0, 100),
+        ),
+      );
     }
 
     return tracks;
@@ -317,7 +390,11 @@ class ExportifyCsvParser {
     return -1;
   }
 
-  static String _getValue(List<String> row, int index, {String defaultValue = ''}) {
+  static String _getValue(
+    List<String> row,
+    int index, {
+    String defaultValue = '',
+  }) {
     if (index >= 0 && index < row.length) {
       return row[index].trim();
     }
@@ -387,7 +464,8 @@ class ExportifyCsvParser {
 /// Taste Matrix calibration, and concurrent 320kbps studio track resolution with JioSaavn.
 /// Extends ChangeNotifier so UI screens and global banners can observe live progress.
 class SpotifyImportService extends ChangeNotifier {
-  static final SpotifyImportService _instance = SpotifyImportService._internal();
+  static final SpotifyImportService _instance =
+      SpotifyImportService._internal();
   factory SpotifyImportService() => _instance;
   SpotifyImportService._internal();
 
@@ -444,7 +522,8 @@ class SpotifyImportService extends ChangeNotifier {
   int get lastTotalCount => _lastTotalCount;
 
   List<Map<String, dynamic>> _lastImportedPlaylists = [];
-  List<Map<String, dynamic>> get lastImportedPlaylists => List.unmodifiable(_lastImportedPlaylists);
+  List<Map<String, dynamic>> get lastImportedPlaylists =>
+      List.unmodifiable(_lastImportedPlaylists);
 
   // Cross-playlist deduplication query cache (0ms instant resolution for overlapping tracks)
   final Map<String, Video?> _resolvedTrackCache = {};
@@ -473,7 +552,10 @@ class SpotifyImportService extends ChangeNotifier {
 
   static String _normalizeTrackKey(String title, String artist) {
     final cleanTitle = title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-    final cleanArtist = artist.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final cleanArtist = artist.toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]'),
+      '',
+    );
     return '${cleanTitle}_$cleanArtist';
   }
 
@@ -506,20 +588,43 @@ class SpotifyImportService extends ChangeNotifier {
           _cacheHitCount++;
         } else {
           String cleanTrack = track.trackName
-              .replaceAll(RegExp(r'\s*[\(\[\{](?:feat\.?|with|remaster(?:ed)?|bonus|live|radio edit|deluxe|version|edit|mono|stereo|anniversary).*?[\)\]\}]', caseSensitive: false), '')
-              .replaceAll(RegExp(r'\s*-\s*(?:remaster(?:ed)?|bonus|live|radio edit|deluxe|version|edit).*$', caseSensitive: false), '')
+              .replaceAll(
+                RegExp(
+                  r'\s*[\(\[\{](?:feat\.?|with|remaster(?:ed)?|bonus|live|radio edit|deluxe|version|edit|mono|stereo|anniversary).*?[\)\]\}]',
+                  caseSensitive: false,
+                ),
+                '',
+              )
+              .replaceAll(
+                RegExp(
+                  r'\s*-\s*(?:remaster(?:ed)?|bonus|live|radio edit|deluxe|version|edit).*$',
+                  caseSensitive: false,
+                ),
+                '',
+              )
               .trim();
           if (cleanTrack.isEmpty) cleanTrack = track.trackName.trim();
 
-          final primaryQuery = cleanTrack.isNotEmpty && track.artistName.isNotEmpty
+          final primaryQuery =
+              cleanTrack.isNotEmpty && track.artistName.isNotEmpty
               ? '$cleanTrack ${track.artistName}'.trim()
-              : (cleanTrack.isNotEmpty ? cleanTrack : '${track.trackName} ${track.artistName}'.trim());
+              : (cleanTrack.isNotEmpty
+                    ? cleanTrack
+                    : '${track.trackName} ${track.artistName}'.trim());
 
           try {
-            var searchResults = await _musicService.searchSongs(primaryQuery, page: 1);
-            if (searchResults.isEmpty && cleanTrack.isNotEmpty && track.artistName.isNotEmpty) {
+            var searchResults = await _musicService.searchSongs(
+              primaryQuery,
+              page: 1,
+            );
+            if (searchResults.isEmpty &&
+                cleanTrack.isNotEmpty &&
+                track.artistName.isNotEmpty) {
               // Fallback to title-only search
-              searchResults = await _musicService.searchSongs(cleanTrack, page: 1);
+              searchResults = await _musicService.searchSongs(
+                cleanTrack,
+                page: 1,
+              );
             }
             if (searchResults.isNotEmpty) {
               song = searchResults.firstWhere(
@@ -538,7 +643,8 @@ class SpotifyImportService extends ChangeNotifier {
         onProgress?.call(completedCount, track.trackName);
 
         // Periodically flush resolved songs (every 5 new tracks or when cancelled) to keep playlist live
-        if (onSongsUpdated != null && (completedCount - lastFlushedCount >= 5 || _isCancelled)) {
+        if (onSongsUpdated != null &&
+            (completedCount - lastFlushedCount >= 5 || _isCancelled)) {
           lastFlushedCount = completedCount;
           final current = results.whereType<Video>().toList();
           onSongsUpdated(current);
@@ -588,7 +694,9 @@ class SpotifyImportService extends ChangeNotifier {
         await _prefs.importExportifyTasteData(tracks);
       }
 
-      final cleanName = playlistName.trim().isNotEmpty ? playlistName.trim() : 'Exportify Mix';
+      final cleanName = playlistName.trim().isNotEmpty
+          ? playlistName.trim()
+          : 'Exportify Mix';
       final pid = _musicService.createPlaylist(cleanName);
 
       final resolved = await resolveTracksConcurrently(
@@ -597,8 +705,13 @@ class SpotifyImportService extends ChangeNotifier {
         onProgress: (done, title) {
           _processedTracks = done;
           _currentTrackName = title;
-          _overallProgress = (_processedTracks / (_totalTracks > 0 ? _totalTracks : 1)).clamp(0.05, 0.99);
-          _statusMessage = 'Matching $done of $_totalTracks studio tracks:\n"$title"';
+          _overallProgress =
+              (_processedTracks / (_totalTracks > 0 ? _totalTracks : 1)).clamp(
+                0.05,
+                0.99,
+              );
+          _statusMessage =
+              'Matching $done of $_totalTracks studio tracks:\n"$title"';
           notifyListeners();
         },
         onSongsUpdated: (currentSongs) {
@@ -656,7 +769,8 @@ class SpotifyImportService extends ChangeNotifier {
     _currentPlaylistName = 'Calibrating Taste Matrix...';
     _currentTrackName = '';
     _overallProgress = 0.02;
-    _statusMessage = 'Calibrating Taste Matrix across ${playlists.length} playlists ($_totalTracks tracks)...';
+    _statusMessage =
+        'Calibrating Taste Matrix across ${playlists.length} playlists ($_totalTracks tracks)...';
     _lastImportedPlaylists = [];
     notifyListeners();
 
@@ -689,8 +803,11 @@ class SpotifyImportService extends ChangeNotifier {
           onProgress: (doneInPl, title) {
             _processedTracks = prevProcessedBeforeThisPl + doneInPl;
             _currentTrackName = title;
-            _overallProgress = (_processedTracks / (_totalTracks > 0 ? _totalTracks : 1)).clamp(0.05, 0.99);
-            _statusMessage = 'Playlist ${pIdx + 1} of ${playlists.length} ("${pl.name}")\nSong $doneInPl of ${pl.tracks.length}: "$title"';
+            _overallProgress =
+                (_processedTracks / (_totalTracks > 0 ? _totalTracks : 1))
+                    .clamp(0.05, 0.99);
+            _statusMessage =
+                'Playlist ${pIdx + 1} of ${playlists.length} ("${pl.name}")\nSong $doneInPl of ${pl.tracks.length}: "$title"';
             notifyListeners();
           },
           onSongsUpdated: (currentSongs) {
@@ -763,14 +880,20 @@ class SpotifyImportService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final cleanName = playlistName.trim().isNotEmpty ? playlistName.trim() : 'Spotify Playlist';
+      final cleanName = playlistName.trim().isNotEmpty
+          ? playlistName.trim()
+          : 'Spotify Playlist';
       final pid = _musicService.createPlaylist(cleanName);
-      final tracks = rawTrackQueries.map((q) => ExportifyTrack(
-        spotifyId: '',
-        trackName: q,
-        artistName: '',
-        albumName: '',
-      )).toList();
+      final tracks = rawTrackQueries
+          .map(
+            (q) => ExportifyTrack(
+              spotifyId: '',
+              trackName: q,
+              artistName: '',
+              albumName: '',
+            ),
+          )
+          .toList();
 
       final resolved = await resolveTracksConcurrently(
         tracks: tracks,
@@ -778,7 +901,11 @@ class SpotifyImportService extends ChangeNotifier {
         onProgress: (done, title) {
           _processedTracks = done;
           _currentTrackName = title;
-          _overallProgress = (_processedTracks / (_totalTracks > 0 ? _totalTracks : 1)).clamp(0.05, 0.99);
+          _overallProgress =
+              (_processedTracks / (_totalTracks > 0 ? _totalTracks : 1)).clamp(
+                0.05,
+                0.99,
+              );
           _statusMessage = 'Matching $done of $_totalTracks tracks:\n"$title"';
           notifyListeners();
         },
@@ -855,7 +982,14 @@ class SpotifyImportService extends ChangeNotifier {
   Future<Map<String, dynamic>> importMultiplePlaylists({
     required List<ExportifyPlaylist> playlists,
     required bool calibrateTaste,
-    Function(int currentPlaylist, int totalPlaylists, int currentTrack, int totalTracksInPlaylist, String trackName)? onProgress,
+    Function(
+      int currentPlaylist,
+      int totalPlaylists,
+      int currentTrack,
+      int totalTracksInPlaylist,
+      String trackName,
+    )?
+    onProgress,
   }) async {
     await startBackgroundMultiImport(
       playlists: playlists,

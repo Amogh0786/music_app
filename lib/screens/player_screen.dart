@@ -16,7 +16,6 @@ import '../widgets/equalizer_bottom_sheet.dart';
 import '../widgets/animated_lyrics.dart';
 import '../services/screen_wake_service.dart';
 
-
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key});
 
@@ -61,8 +60,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _onPageScrolled() {
-    if (_pageController.hasClients && _pageController.position.hasContentDimensions) {
-      final page = (_pageController.page ?? _musicService.currentIndex.toDouble()).round();
+    if (_pageController.hasClients &&
+        _pageController.position.hasContentDimensions) {
+      final page =
+          (_pageController.page ?? _musicService.currentIndex.toDouble())
+              .round();
       if (page != _activePageIndex && page >= 0) {
         setState(() {
           _activePageIndex = page;
@@ -73,8 +75,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _onStateChanged() {
     if (!mounted) return;
-    if (_pageController.hasClients && _pageController.position.hasContentDimensions) {
-      final currentPage = _pageController.page?.round() ?? _musicService.currentIndex;
+    if (_pageController.hasClients &&
+        _pageController.position.hasContentDimensions) {
+      final currentPage =
+          _pageController.page?.round() ?? _musicService.currentIndex;
       if (currentPage != _musicService.currentIndex && !_isUserDraggingPage) {
         if (_showLyrics) {
           // In lyrics mode, silently sync carousel in the background with zero lag
@@ -89,7 +93,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       }
     }
     if (!_isUserDraggingPage && _musicService.playlist.isNotEmpty) {
-      _activePageIndex = _musicService.currentIndex.clamp(0, _musicService.playlist.length - 1);
+      _activePageIndex = _musicService.currentIndex.clamp(
+        0,
+        _musicService.playlist.length - 1,
+      );
     }
     setState(() {});
   }
@@ -100,8 +107,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
   }
-
-
 
   void _toggleLyrics(Video song) {
     HapticFeedback.lightImpact();
@@ -114,7 +119,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } else {
       ScreenWakeService.disableWakeLock('lyrics_screen');
       // Ensure PageView is locked to the current song index immediately upon dismissal
-      if (_pageController.hasClients && _pageController.page?.round() != _musicService.currentIndex) {
+      if (_pageController.hasClients &&
+          _pageController.page?.round() != _musicService.currentIndex) {
         _pageController.jumpToPage(_musicService.currentIndex);
       }
     }
@@ -136,212 +142,289 @@ class _PlayerScreenState extends State<PlayerScreen> {
               height: MediaQuery.of(context).size.height * 0.78,
               decoration: BoxDecoration(
                 color: const Color(0xFF14141E).withValues(alpha: 0.96),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 12),
-                    Container(
-                      width: 38,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.white30,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white30,
+                      borderRadius: BorderRadius.circular(2),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Up Next',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: -0.3,
-                                ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Up Next',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: -0.3,
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Drag ☰ on the left to change priority',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.5),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.white12,
-                              borderRadius: BorderRadius.circular(12),
                             ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Drag ☰ on the left to change priority',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.5),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white12,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${playlist.length} Tracks',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(color: Colors.white12, height: 1),
+                  Expanded(
+                    child: playlist.isEmpty
+                        ? const Center(
                             child: Text(
-                              '${playlist.length} Tracks',
-                              style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                              'Queue is empty',
+                              style: TextStyle(color: Colors.white54),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Divider(color: Colors.white12, height: 1),
-                    Expanded(
-                      child: playlist.isEmpty
-                          ? const Center(
-                              child: Text('Queue is empty', style: TextStyle(color: Colors.white54)),
-                            )
-                          : ReorderableListView.builder(
-                              buildDefaultDragHandles: false,
-                              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
-                              itemCount: playlist.length,
-                              // ignore: deprecated_member_use
-                              onReorder: (oldIndex, newIndex) {
-                                HapticFeedback.selectionClick();
-                                _musicService.reorderQueue(oldIndex, newIndex);
-                                setSheetState(() {});
-                              },
-                              itemBuilder: (context, index) {
-                                final song = playlist[index];
-                                final isCurrent = index == currentIndex;
-                                final hdThumbnail = MusicService.getHdThumbnail(song.id.value);
+                          )
+                        : ReorderableListView.builder(
+                            buildDefaultDragHandles: false,
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 8,
+                              horizontal: 14,
+                            ),
+                            itemCount: playlist.length,
+                            // ignore: deprecated_member_use
+                            onReorder: (oldIndex, newIndex) {
+                              HapticFeedback.selectionClick();
+                              _musicService.reorderQueue(oldIndex, newIndex);
+                              setSheetState(() {});
+                            },
+                            itemBuilder: (context, index) {
+                              final song = playlist[index];
+                              final isCurrent = index == currentIndex;
+                              final hdThumbnail = MusicService.getHdThumbnail(
+                                song.id.value,
+                              );
 
-                                return Container(
-                                  key: ValueKey('${song.id.value}_$index'),
-                                  margin: const EdgeInsets.symmetric(vertical: 4),
-                                  decoration: BoxDecoration(
+                              return Container(
+                                key: ValueKey('${song.id.value}_$index'),
+                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isCurrent
+                                      ? Theme.of(
+                                          context,
+                                        ).primaryColor.withValues(alpha: 0.16)
+                                      : const Color(0xFF1B1B26),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
                                     color: isCurrent
-                                        ? Theme.of(context).primaryColor.withValues(alpha: 0.16)
-                                        : const Color(0xFF1B1B26),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color: isCurrent
-                                          ? Theme.of(context).primaryColor.withValues(alpha: 0.45)
-                                          : Colors.white.withValues(alpha: 0.07),
-                                      width: 1,
-                                    ),
+                                        ? Theme.of(
+                                            context,
+                                          ).primaryColor.withValues(alpha: 0.45)
+                                        : Colors.white.withValues(alpha: 0.07),
+                                    width: 1,
                                   ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(14),
-                                      onTap: () {
-                                        Navigator.pop(context);
-                                        _musicService.playPlaylist(playlist, index);
-                                      },
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                                        child: Row(
-                                          children: [
-                                            // Far left 3-line handle for priority reordering
-                                            ReorderableDragStartListener(
-                                              index: index,
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                                                child: const Icon(
-                                                  Icons.menu_rounded,
-                                                  color: Colors.white60,
-                                                  size: 20,
-                                                ),
-                                              ),
-                                            ),
-                                            ClipRRect(
-                                              borderRadius: BorderRadius.circular(8),
-                                              child: Image.network(
-                                                hdThumbnail,
-                                                width: 44,
-                                                height: 44,
-                                                cacheWidth: 100,
-                                                cacheHeight: 100,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (_, _, _) => Image.network(
-                                                  song.thumbnails.lowResUrl,
-                                                  width: 44,
-                                                  height: 44,
-                                                  cacheWidth: 100,
-                                                  cacheHeight: 100,
-                                                  fit: BoxFit.cover,
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Text(
-                                                    song.title,
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: TextStyle(
-                                                      color: isCurrent ? Theme.of(context).primaryColor : Colors.white,
-                                                      fontWeight: isCurrent ? FontWeight.bold : FontWeight.w600,
-                                                      fontSize: 13.5,
-                                                    ),
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(14),
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      _musicService.playPlaylist(
+                                        playlist,
+                                        index,
+                                      );
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 6,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          // Far left 3-line handle for priority reordering
+                                          ReorderableDragStartListener(
+                                            index: index,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 12,
                                                   ),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    song.author,
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: TextStyle(
-                                                      color: isCurrent
-                                                          ? Theme.of(context).primaryColor.withValues(alpha: 0.8)
-                                                          : Colors.white54,
-                                                      fontSize: 12,
-                                                    ),
+                                              child: const Icon(
+                                                Icons.menu_rounded,
+                                                color: Colors.white60,
+                                                size: 20,
+                                              ),
+                                            ),
+                                          ),
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            child: Image.network(
+                                              hdThumbnail,
+                                              width: 44,
+                                              height: 44,
+                                              cacheWidth: 100,
+                                              cacheHeight: 100,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, _, _) =>
+                                                  Image.network(
+                                                    song.thumbnails.lowResUrl,
+                                                    width: 44,
+                                                    height: 44,
+                                                    cacheWidth: 100,
+                                                    cacheHeight: 100,
+                                                    fit: BoxFit.cover,
                                                   ),
-                                                ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  song.title,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    color: isCurrent
+                                                        ? Theme.of(
+                                                            context,
+                                                          ).primaryColor
+                                                        : Colors.white,
+                                                    fontWeight: isCurrent
+                                                        ? FontWeight.bold
+                                                        : FontWeight.w600,
+                                                    fontSize: 13.5,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  song.author,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    color: isCurrent
+                                                        ? Theme.of(context)
+                                                              .primaryColor
+                                                              .withValues(
+                                                                alpha: 0.8,
+                                                              )
+                                                        : Colors.white54,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          if (isCurrent)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                right: 6,
+                                              ),
+                                              child: Icon(
+                                                Icons.equalizer_rounded,
+                                                color: Theme.of(
+                                                  context,
+                                                ).primaryColor,
+                                                size: 22,
                                               ),
                                             ),
-                                            if (isCurrent)
-                                              Padding(
-                                                padding: const EdgeInsets.only(right: 6),
-                                                child: Icon(Icons.equalizer_rounded, color: Theme.of(context).primaryColor, size: 22),
-                                              ),
-                                            IconButton(
-                                              icon: const Icon(Icons.more_vert_rounded, color: Colors.white38, size: 18),
-                                              padding: EdgeInsets.zero,
-                                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                              onPressed: () {
-                                                showSongOptionsBottomSheet(context, song);
-                                              },
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.more_vert_rounded,
+                                              color: Colors.white38,
+                                              size: 18,
                                             ),
-                                            IconButton(
-                                              icon: const Icon(Icons.close_rounded, color: Colors.white38, size: 18),
-                                              padding: EdgeInsets.zero,
-                                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                              onPressed: () {
-                                                HapticFeedback.lightImpact();
-                                                _musicService.removeFromQueue(index);
-                                                setSheetState(() {});
-                                              },
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(
+                                              minWidth: 32,
+                                              minHeight: 32,
                                             ),
-                                            const SizedBox(width: 4),
-                                          ],
-                                        ),
+                                            onPressed: () {
+                                              showSongOptionsBottomSheet(
+                                                context,
+                                                song,
+                                              );
+                                            },
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.close_rounded,
+                                              color: Colors.white38,
+                                              size: 18,
+                                            ),
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(
+                                              minWidth: 32,
+                                              minHeight: 32,
+                                            ),
+                                            onPressed: () {
+                                              HapticFeedback.lightImpact();
+                                              _musicService.removeFromQueue(
+                                                index,
+                                              );
+                                              setSheetState(() {});
+                                            },
+                                          ),
+                                          const SizedBox(width: 4),
+                                        ],
                                       ),
                                     ),
                                   ),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-        },
-      );
-    }
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 
   void _showSleepTimerSheet(BuildContext context) {
     HapticFeedback.lightImpact();
@@ -356,71 +439,100 @@ class _PlayerScreenState extends State<PlayerScreen> {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 38,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white30,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 38,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white30,
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Sleep Timer',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Sleep Timer',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (_musicService.isSleepTimerActive)
+                    TextButton(
+                      onPressed: () {
+                        _musicService.cancelSleepTimer();
+                        Navigator.pop(context);
+                      },
+                      child: const Text(
+                        'Turn Off',
+                        style: TextStyle(color: Colors.redAccent),
                       ),
                     ),
-                    if (_musicService.isSleepTimerActive)
-                      TextButton(
-                        onPressed: () {
-                          _musicService.cancelSleepTimer();
-                          Navigator.pop(context);
-                        },
-                        child: const Text('Turn Off', style: TextStyle(color: Colors.redAccent)),
-                      ),
-                  ],
+                ],
+              ),
+              const SizedBox(height: 8),
+              _buildSleepOption(
+                context,
+                '15 minutes',
+                const Duration(minutes: 15),
+              ),
+              _buildSleepOption(
+                context,
+                '30 minutes',
+                const Duration(minutes: 30),
+              ),
+              _buildSleepOption(
+                context,
+                '45 minutes',
+                const Duration(minutes: 45),
+              ),
+              _buildSleepOption(context, '1 hour', const Duration(hours: 1)),
+              ListTile(
+                leading: const Icon(
+                  Icons.music_off_outlined,
+                  color: Colors.white70,
                 ),
-                const SizedBox(height: 8),
-                _buildSleepOption(context, '15 minutes', const Duration(minutes: 15)),
-                _buildSleepOption(context, '30 minutes', const Duration(minutes: 30)),
-                _buildSleepOption(context, '45 minutes', const Duration(minutes: 45)),
-                _buildSleepOption(context, '1 hour', const Duration(hours: 1)),
-                ListTile(
-                  leading: const Icon(Icons.music_off_outlined, color: Colors.white70),
-                  title: const Text('End of current track', style: TextStyle(color: Colors.white)),
-                  trailing: _musicService.stopAtEndOfTrack
-                      ? const Icon(Icons.check, color: Color(0xFF1DB954))
-                      : null,
-                  onTap: () {
-                    _musicService.setStopAtEndOfTrack(true);
-                    Navigator.pop(context);
-                  },
+                title: const Text(
+                  'End of current track',
+                  style: TextStyle(color: Colors.white),
                 ),
-                const SizedBox(height: 12),
-              ],
-            ),
-          );
-        },
+                trailing: _musicService.stopAtEndOfTrack
+                    ? const Icon(Icons.check, color: Color(0xFF1DB954))
+                    : null,
+                onTap: () {
+                  _musicService.setStopAtEndOfTrack(true);
+                  Navigator.pop(context);
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildSleepOption(BuildContext context, String label, Duration duration) {
-    final isSelected = _musicService.sleepRemaining != null &&
-        (_musicService.sleepRemaining!.inMinutes - duration.inMinutes).abs() < 1;
+  Widget _buildSleepOption(
+    BuildContext context,
+    String label,
+    Duration duration,
+  ) {
+    final isSelected =
+        _musicService.sleepRemaining != null &&
+        (_musicService.sleepRemaining!.inMinutes - duration.inMinutes).abs() <
+            1;
 
     return ListTile(
       leading: const Icon(Icons.timer_outlined, color: Colors.white70),
       title: Text(label, style: const TextStyle(color: Colors.white)),
-      trailing: isSelected ? const Icon(Icons.check, color: Color(0xFF1DB954)) : null,
+      trailing: isSelected
+          ? const Icon(Icons.check, color: Color(0xFF1DB954))
+          : null,
       onTap: () {
         _musicService.startSleepTimer(duration);
         Navigator.pop(context);
@@ -439,193 +551,265 @@ class _PlayerScreenState extends State<PlayerScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
-            final isLiked = _musicService.likedSongs.any((s) => s['id'] == song.id.value);
-            final isDownloaded = _musicService.downloadedSongs.any((s) => s['id'] == song.id.value);
+            final isLiked = _musicService.likedSongs.any(
+              (s) => s['id'] == song.id.value,
+            );
+            final isDownloaded = _musicService.downloadedSongs.any(
+              (s) => s['id'] == song.id.value,
+            );
 
             return Container(
               padding: const EdgeInsets.only(top: 14, bottom: 28),
               decoration: BoxDecoration(
                 color: const Color(0xFF14141E).withValues(alpha: 0.96),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Drag pill
-                    Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.white24,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Drag pill
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
                     ),
-                    const SizedBox(height: 16),
+                  ),
+                  const SizedBox(height: 16),
 
-                    // Song Header Info
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Row(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.network(
-                              hdThumbnail,
+                  // Song Header Info
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            hdThumbnail,
+                            width: 52,
+                            height: 52,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => Container(
                               width: 52,
                               height: 52,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => Container(
-                                width: 52,
-                                height: 52,
-                                color: const Color(0xFF1E1E28),
-                                child: const Icon(Icons.music_note, color: Colors.white54),
+                              color: const Color(0xFF1E1E28),
+                              child: const Icon(
+                                Icons.music_note,
+                                color: Colors.white54,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  song.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 15.5,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: -0.2,
-                                  ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                song.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.2,
                                 ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  song.author,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.65),
-                                    fontSize: 13,
-                                  ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                song.author,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.65),
+                                  fontSize: 13,
                                 ),
-                              ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+                  const Divider(color: Colors.white10, height: 1),
+                  const SizedBox(height: 8),
+
+                  // 1. Sleep Timer
+                  _buildSongActionTile(
+                    icon: Icons.bedtime_rounded,
+                    iconColor: _musicService.isSleepTimerActive
+                        ? Theme.of(context).primaryColor
+                        : Colors.white,
+                    title: 'Sleep Timer',
+                    subtitle: _musicService.isSleepTimerActive
+                        ? 'Active (${_musicService.sleepTimerLabel})'
+                        : 'Set auto-stop timer',
+                    trailing: _musicService.isSleepTimerActive
+                        ? Icon(
+                            Icons.check_circle_rounded,
+                            color: Theme.of(context).primaryColor,
+                            size: 20,
+                          )
+                        : const Icon(
+                            Icons.chevron_right_rounded,
+                            color: Colors.white30,
+                            size: 20,
+                          ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showSleepTimerSheet(context);
+                    },
+                  ),
+
+                  // 2. Add to Playlist
+                  _buildSongActionTile(
+                    icon: Icons.playlist_add_rounded,
+                    title: 'Add to Playlist',
+                    subtitle: 'Save to your custom playlists',
+                    trailing: const Icon(
+                      Icons.chevron_right_rounded,
+                      color: Colors.white30,
+                      size: 20,
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      showAddToPlaylistSheet(context, song);
+                    },
+                  ),
+
+                  // 3. Like Song
+                  _buildSongActionTile(
+                    icon: isLiked
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    iconColor: isLiked ? const Color(0xFFFA2D48) : Colors.white,
+                    title: isLiked ? 'Liked Song' : 'Like Song',
+                    subtitle: isLiked
+                        ? 'Saved in your favorites ❤️'
+                        : 'Save to Liked Songs',
+                    trailing: isLiked
+                        ? const Icon(
+                            Icons.check_rounded,
+                            color: Color(0xFFFA2D48),
+                            size: 20,
+                          )
+                        : null,
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _musicService.toggleLike(song);
+                      setSheetState(() {});
+                      setState(() {});
+                    },
+                  ),
+
+                  // 4. Download
+                  _buildSongActionTile(
+                    icon: isDownloaded
+                        ? Icons.download_done_rounded
+                        : Icons.download_for_offline_rounded,
+                    iconColor: isDownloaded
+                        ? const Color(0xFF1DB954)
+                        : Colors.white,
+                    title: isDownloaded ? 'Downloaded' : 'Download',
+                    subtitle: isDownloaded
+                        ? 'Available offline'
+                        : 'Save audio file locally',
+                    trailing: _musicService.isDownloading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : (isDownloaded
+                              ? const Icon(
+                                  Icons.check_rounded,
+                                  color: Color(0xFF1DB954),
+                                  size: 20,
+                                )
+                              : null),
+                    onTap: () async {
+                      if (isDownloaded) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Song is already downloaded offline'),
+                          ),
+                        );
+                        return;
+                      }
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Starting download...')),
+                      );
+                      final success = await _musicService.downloadSong(song);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              success
+                                  ? 'Saved to Offline Library!'
+                                  : 'Download failed.',
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 14),
-                    const Divider(color: Colors.white10, height: 1),
-                    const SizedBox(height: 8),
-
-                    // 1. Sleep Timer
-                    _buildSongActionTile(
-                      icon: Icons.bedtime_rounded,
-                      iconColor: _musicService.isSleepTimerActive ? Theme.of(context).primaryColor : Colors.white,
-                      title: 'Sleep Timer',
-                      subtitle: _musicService.isSleepTimerActive
-                          ? 'Active (${_musicService.sleepTimerLabel})'
-                          : 'Set auto-stop timer',
-                      trailing: _musicService.isSleepTimerActive
-                          ? Icon(Icons.check_circle_rounded, color: Theme.of(context).primaryColor, size: 20)
-                          : const Icon(Icons.chevron_right_rounded, color: Colors.white30, size: 20),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _showSleepTimerSheet(context);
-                      },
-                    ),
-
-                    // 2. Add to Playlist
-                    _buildSongActionTile(
-                      icon: Icons.playlist_add_rounded,
-                      title: 'Add to Playlist',
-                      subtitle: 'Save to your custom playlists',
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white30, size: 20),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        showAddToPlaylistSheet(context, song);
-                      },
-                    ),
-
-                    // 3. Like Song
-                    _buildSongActionTile(
-                      icon: isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                      iconColor: isLiked ? const Color(0xFFFA2D48) : Colors.white,
-                      title: isLiked ? 'Liked Song' : 'Like Song',
-                      subtitle: isLiked ? 'Saved in your favorites ❤️' : 'Save to Liked Songs',
-                      trailing: isLiked
-                          ? const Icon(Icons.check_rounded, color: Color(0xFFFA2D48), size: 20)
-                          : null,
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        _musicService.toggleLike(song);
-                        setSheetState(() {});
-                        setState(() {});
-                      },
-                    ),
-
-                    // 4. Download
-                    _buildSongActionTile(
-                      icon: isDownloaded ? Icons.download_done_rounded : Icons.download_for_offline_rounded,
-                      iconColor: isDownloaded ? const Color(0xFF1DB954) : Colors.white,
-                      title: isDownloaded ? 'Downloaded' : 'Download',
-                      subtitle: isDownloaded ? 'Available offline' : 'Save audio file locally',
-                      trailing: _musicService.isDownloading
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : (isDownloaded ? const Icon(Icons.check_rounded, color: Color(0xFF1DB954), size: 20) : null),
-                      onTap: () async {
-                        if (isDownloaded) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Song is already downloaded offline')),
-                          );
-                          return;
-                        }
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Starting download...')),
                         );
-                        final success = await _musicService.downloadSong(song);
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(success ? 'Saved to Offline Library!' : 'Download failed.')),
-                          );
-                        }
-                      },
-                    ),
+                      }
+                    },
+                  ),
 
-                    // 5. Share
-                    _buildSongActionTile(
-                      icon: Icons.share_rounded,
-                      title: 'Share',
-                      subtitle: 'Copy link or song details',
-                      trailing: const Icon(Icons.copy_rounded, color: Colors.white30, size: 18),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        Clipboard.setData(ClipboardData(text: '${song.title} - ${song.author}\n${song.url}'));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Song link copied to clipboard!')),
-                        );
-                      },
+                  // 5. Share
+                  _buildSongActionTile(
+                    icon: Icons.share_rounded,
+                    title: 'Share',
+                    subtitle: 'Copy link or song details',
+                    trailing: const Icon(
+                      Icons.copy_rounded,
+                      color: Colors.white30,
+                      size: 18,
                     ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Clipboard.setData(
+                        ClipboardData(
+                          text: '${song.title} - ${song.author}\n${song.url}',
+                        ),
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Song link copied to clipboard!'),
+                        ),
+                      );
+                    },
+                  ),
 
-                    // 6. Report a Bug (Music player options at last)
-                    _buildSongActionTile(
-                      icon: Icons.bug_report_rounded,
-                      iconColor: Colors.redAccent,
-                      title: 'Report a Bug',
-                      subtitle: 'Found an issue with playback or app?',
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white30, size: 20),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _reportBug(context, song: song);
-                      },
+                  // 6. Report a Bug (Music player options at last)
+                  _buildSongActionTile(
+                    icon: Icons.bug_report_rounded,
+                    iconColor: Colors.redAccent,
+                    title: 'Report a Bug',
+                    subtitle: 'Found an issue with playback or app?',
+                    trailing: const Icon(
+                      Icons.chevron_right_rounded,
+                      color: Colors.white30,
+                      size: 20,
                     ),
-                  ],
-                ),
-              );
-            },
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _reportBug(context, song: song);
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
@@ -652,11 +836,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ),
       title: Text(
         title,
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14.5),
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
+          fontSize: 14.5,
+        ),
       ),
       subtitle: Text(
         subtitle,
-        style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12),
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.55),
+          fontSize: 12,
+        ),
       ),
       trailing: trailing,
       onTap: () {
@@ -673,10 +864,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     final songDetails = song != null
         ? '\n\n--- Current Playing Song ---\n'
-          'Title: ${song.title}\n'
-          'Artist: ${song.author}\n'
-          'Song ID: ${song.id.value}\n'
-          'URL: ${song.url}'
+              'Title: ${song.title}\n'
+              'Artist: ${song.author}\n'
+              'Song ID: ${song.id.value}\n'
+              'URL: ${song.url}'
         : '';
 
     final subject = Uri.encodeComponent('Bug Report: DilSe Music App');
@@ -696,13 +887,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (await canLaunchUrl(emailLaunchUri)) {
         await launchUrl(emailLaunchUri);
       } else {
-        await Clipboard.setData(const ClipboardData(
-          text: 'charanteja.kondakalla030206@gmail.com, balaamoghraj@gmail.com',
-        ));
+        await Clipboard.setData(
+          const ClipboardData(
+            text:
+                'charanteja.kondakalla030206@gmail.com, balaamoghraj@gmail.com',
+          ),
+        );
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Support emails copied to clipboard (charanteja & balaamoghraj)'),
+              content: Text(
+                'Support emails copied to clipboard (charanteja & balaamoghraj)',
+              ),
               backgroundColor: Colors.redAccent,
             ),
           );
@@ -711,7 +907,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error opening email: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(
+            content: Text('Error opening email: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     }
@@ -747,7 +946,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOutCubic,
-          padding: EdgeInsets.symmetric(horizontal: pillPaddingH, vertical: pillPaddingV),
+          padding: EdgeInsets.symmetric(
+            horizontal: pillPaddingH,
+            vertical: pillPaddingV,
+          ),
           decoration: BoxDecoration(
             color: isActive
                 ? effectiveColor.withValues(alpha: 0.24)
@@ -765,7 +967,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       color: effectiveColor.withValues(alpha: 0.35),
                       blurRadius: 14,
                       spreadRadius: 1,
-                    )
+                    ),
                   ]
                 : [],
           ),
@@ -778,14 +980,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   Icon(
                     icon,
                     size: pillIconSize,
-                    color: isActive ? effectiveColor : Colors.white.withValues(alpha: 0.9),
+                    color: isActive
+                        ? effectiveColor
+                        : Colors.white.withValues(alpha: 0.9),
                   ),
                   if (badgeCount != null && badgeCount > 0)
                     Positioned(
                       top: -6,
                       right: -10,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
                         decoration: BoxDecoration(
                           color: effectiveColor,
                           borderRadius: BorderRadius.circular(8),
@@ -812,7 +1019,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
               Text(
                 label,
                 style: TextStyle(
-                  color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.85),
+                  color: isActive
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.85),
                   fontSize: pillFontSize,
                   fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
                   letterSpacing: -0.2,
@@ -830,15 +1039,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final song = _musicService.currentSong;
     final isPlaying = _musicService.isPlaying;
     final processingState = _musicService.audioPlayer.processingState;
-    final isBuffering = !kIsWeb && (processingState == ProcessingState.buffering || processingState == ProcessingState.loading);
+    final isBuffering =
+        !kIsWeb &&
+        (processingState == ProcessingState.buffering ||
+            processingState == ProcessingState.loading);
     final isLoading = !isPlaying && (_musicService.isLoading || isBuffering);
-    final isLiked = song != null && _musicService.likedSongs.any((s) => s['id'] == song.id.value);
+    final isLiked =
+        song != null &&
+        _musicService.likedSongs.any((s) => s['id'] == song.id.value);
     final artworkStyle = _prefs.artworkStyle;
 
     if (song == null) {
       return const Scaffold(
         backgroundColor: Color(0xFF0B0B0F),
-        body: Center(child: Text('No song active', style: TextStyle(color: Colors.white))),
+        body: Center(
+          child: Text('No song active', style: TextStyle(color: Colors.white)),
+        ),
       );
     }
 
@@ -853,7 +1069,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       shownSong,
       fallbackDominant: isCurrentSong ? _musicService.dominantColor : null,
       fallbackVibrant: isCurrentSong ? _musicService.vibrantColor : null,
-      fallbackDarkVibrant: isCurrentSong ? _musicService.darkVibrantColor : null,
+      fallbackDarkVibrant: isCurrentSong
+          ? _musicService.darkVibrantColor
+          : null,
     );
     final dominantColor = palette.dominant;
     final vibrantColor = palette.vibrant;
@@ -885,9 +1103,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Color.alphaBlend(vibrantColor.withValues(alpha: 0.32), const Color(0xFF0C0C12)),
-                      Color.alphaBlend(dominantColor.withValues(alpha: 0.18), const Color(0xFF08080C)),
-                      Color.alphaBlend(darkVibrantColor.withValues(alpha: 0.20), const Color(0xFF07070A)),
+                      Color.alphaBlend(
+                        vibrantColor.withValues(alpha: 0.32),
+                        const Color(0xFF0C0C12),
+                      ),
+                      Color.alphaBlend(
+                        dominantColor.withValues(alpha: 0.18),
+                        const Color(0xFF08080C),
+                      ),
+                      Color.alphaBlend(
+                        darkVibrantColor.withValues(alpha: 0.20),
+                        const Color(0xFF07070A),
+                      ),
                     ],
                     stops: const [0.0, 0.52, 1.0],
                   ),
@@ -943,7 +1170,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
             SafeArea(
               child: Padding(
                 padding: EdgeInsets.symmetric(
-                  horizontal: (MediaQuery.of(context).size.width * 0.05).clamp(12.0, 24.0),
+                  horizontal: (MediaQuery.of(context).size.width * 0.05).clamp(
+                    12.0,
+                    24.0,
+                  ),
                   vertical: 10,
                 ),
                 child: Column(
@@ -953,7 +1183,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 34),
+                          icon: const Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            color: Colors.white70,
+                            size: 34,
+                          ),
                           onPressed: () {
                             HapticFeedback.lightImpact();
                             Navigator.pop(context);
@@ -962,7 +1196,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         GestureDetector(
                           onTap: () => _showQueueSheet(context),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
                             color: Colors.transparent,
                             child: Container(
                               width: 40,
@@ -975,7 +1212,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.tune_rounded, color: Colors.white, size: 24),
+                          icon: const Icon(
+                            Icons.tune_rounded,
+                            color: Colors.white,
+                            size: 24,
+                          ),
                           tooltip: 'Audio Equalizer',
                           onPressed: () {
                             HapticFeedback.lightImpact();
@@ -993,7 +1234,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       child: Center(
                         child: LayoutBuilder(
                           builder: (context, constraints) {
-                            final carouselSize = math.min(constraints.maxWidth * 0.88, constraints.maxHeight * 0.95);
+                            final carouselSize = math.min(
+                              constraints.maxWidth * 0.88,
+                              constraints.maxHeight * 0.95,
+                            );
                             final playlist = _musicService.playlist.isNotEmpty
                                 ? _musicService.playlist
                                 : [song];
@@ -1009,9 +1253,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     opacity: _showLyrics ? 0.0 : 1.0,
                                     child: NotificationListener<ScrollNotification>(
                                       onNotification: (notification) {
-                                        if (notification is ScrollStartNotification) {
+                                        if (notification
+                                            is ScrollStartNotification) {
                                           _isUserDraggingPage = true;
-                                        } else if (notification is ScrollEndNotification) {
+                                        } else if (notification
+                                            is ScrollEndNotification) {
                                           _isUserDraggingPage = false;
                                         }
                                         return false;
@@ -1025,27 +1271,53 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                               _activePageIndex = index;
                                             });
                                           }
-                                          if (_isUserDraggingPage && index != _musicService.currentIndex) {
+                                          if (_isUserDraggingPage &&
+                                              index !=
+                                                  _musicService.currentIndex) {
                                             HapticFeedback.selectionClick();
-                                            _musicService.skipToQueueIndex(index);
+                                            _musicService.skipToQueueIndex(
+                                              index,
+                                            );
                                           }
                                         },
                                         physics: const BouncingScrollPhysics(),
                                         itemBuilder: (context, index) {
                                           final track = playlist[index];
-                                          final isCurrent = index == _musicService.currentIndex;
-                                          final trackHdThumbnail = MusicService.getHdThumbnail(track.id.value);
+                                          final isCurrent =
+                                              index ==
+                                              _musicService.currentIndex;
+                                          final trackHdThumbnail =
+                                              MusicService.getHdThumbnail(
+                                                track.id.value,
+                                              );
 
                                           return AnimatedBuilder(
                                             animation: _pageController,
                                             builder: (context, child) {
-                                              double page = _musicService.currentIndex.toDouble();
-                                              if (_pageController.hasClients && _pageController.position.hasContentDimensions) {
-                                                page = _pageController.page ?? _musicService.currentIndex.toDouble();
+                                              double page = _musicService
+                                                  .currentIndex
+                                                  .toDouble();
+                                              if (_pageController.hasClients &&
+                                                  _pageController
+                                                      .position
+                                                      .hasContentDimensions) {
+                                                page =
+                                                    _pageController.page ??
+                                                    _musicService.currentIndex
+                                                        .toDouble();
                                               }
-                                              final double diff = (page - index).abs();
-                                              final double scale = (1.0 - (diff * 0.12)).clamp(0.85, 1.0);
-                                              final double opacity = (1.0 - (diff * 0.45)).clamp(0.40, 1.0);
+                                              final double diff = (page - index)
+                                                  .abs();
+                                              final double scale =
+                                                  (1.0 - (diff * 0.12)).clamp(
+                                                    0.85,
+                                                    1.0,
+                                                  );
+                                              final double opacity =
+                                                  (1.0 - (diff * 0.45)).clamp(
+                                                    0.40,
+                                                    1.0,
+                                                  );
 
                                               return Transform.scale(
                                                 scale: scale,
@@ -1056,65 +1328,139 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                               );
                                             },
                                             child: Center(
-                                              child: artworkStyle == ArtworkStyle.vinyl
+                                              child:
+                                                  artworkStyle ==
+                                                      ArtworkStyle.vinyl
                                                   ? VinylRecordPlayer(
-                                                      key: ValueKey('vinyl_${track.id.value}'),
-                                                      imageUrl: trackHdThumbnail,
-                                                      isPlaying: isCurrent && isPlaying,
-                                                      dominantColor: isCurrent ? dominantColor : const Color(0xFF1E1E2C),
-                                                      vibrantColor: isCurrent ? vibrantColor : const Color(0xFFFA2D48),
+                                                      key: ValueKey(
+                                                        'vinyl_${track.id.value}',
+                                                      ),
+                                                      imageUrl:
+                                                          trackHdThumbnail,
+                                                      isPlaying:
+                                                          isCurrent &&
+                                                          isPlaying,
+                                                      dominantColor: isCurrent
+                                                          ? dominantColor
+                                                          : const Color(
+                                                              0xFF1E1E2C,
+                                                            ),
+                                                      vibrantColor: isCurrent
+                                                          ? vibrantColor
+                                                          : const Color(
+                                                              0xFFFA2D48,
+                                                            ),
                                                       size: carouselSize * 0.94,
                                                     )
                                                   : Container(
                                                       width: carouselSize,
                                                       height: carouselSize,
                                                       decoration: BoxDecoration(
-                                                        borderRadius: BorderRadius.circular(26),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              26,
+                                                            ),
                                                         boxShadow: [
                                                           BoxShadow(
-                                                            color: (isCurrent ? dominantColor : Colors.black).withValues(alpha: 0.60),
+                                                            color:
+                                                                (isCurrent
+                                                                        ? dominantColor
+                                                                        : Colors
+                                                                              .black)
+                                                                    .withValues(
+                                                                      alpha:
+                                                                          0.60,
+                                                                    ),
                                                             blurRadius: 36,
                                                             spreadRadius: 6,
-                                                            offset: const Offset(0, 16),
+                                                            offset:
+                                                                const Offset(
+                                                                  0,
+                                                                  16,
+                                                                ),
                                                           ),
                                                           BoxShadow(
-                                                            color: (isCurrent ? vibrantColor : Colors.black).withValues(alpha: 0.35),
+                                                            color:
+                                                                (isCurrent
+                                                                        ? vibrantColor
+                                                                        : Colors
+                                                                              .black)
+                                                                    .withValues(
+                                                                      alpha:
+                                                                          0.35,
+                                                                    ),
                                                             blurRadius: 48,
                                                             spreadRadius: 8,
-                                                            offset: const Offset(0, 8),
+                                                            offset:
+                                                                const Offset(
+                                                                  0,
+                                                                  8,
+                                                                ),
                                                           ),
                                                         ],
                                                       ),
                                                       child: isCurrent
                                                           ? Hero(
-                                                              tag: 'player_artwork_${track.id.value}',
+                                                              tag:
+                                                                  'player_artwork_${track.id.value}',
                                                               child: ClipRRect(
-                                                                borderRadius: BorderRadius.circular(26),
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      26,
+                                                                    ),
                                                                 child: Image.network(
                                                                   trackHdThumbnail,
-                                                                  fit: BoxFit.cover,
+                                                                  fit: BoxFit
+                                                                      .cover,
                                                                   errorBuilder: (_, _, _) => Image.network(
-                                                                    track.thumbnails.highResUrl,
-                                                                    fit: BoxFit.cover,
+                                                                    track
+                                                                        .thumbnails
+                                                                        .highResUrl,
+                                                                    fit: BoxFit
+                                                                        .cover,
                                                                     errorBuilder: (_, _, _) => Container(
-                                                                      color: const Color(0xFF222230),
-                                                                      child: const Icon(Icons.music_note, color: Colors.white54, size: 64),
+                                                                      color: const Color(
+                                                                        0xFF222230,
+                                                                      ),
+                                                                      child: const Icon(
+                                                                        Icons
+                                                                            .music_note,
+                                                                        color: Colors
+                                                                            .white54,
+                                                                        size:
+                                                                            64,
+                                                                      ),
                                                                     ),
                                                                   ),
                                                                 ),
                                                               ),
                                                             )
                                                           : ClipRRect(
-                                                              borderRadius: BorderRadius.circular(26),
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                    26,
+                                                                  ),
                                                               child: Image.network(
                                                                 trackHdThumbnail,
-                                                                fit: BoxFit.cover,
+                                                                fit: BoxFit
+                                                                    .cover,
                                                                 errorBuilder: (_, _, _) => Image.network(
-                                                                  track.thumbnails.highResUrl,
-                                                                  fit: BoxFit.cover,
+                                                                  track
+                                                                      .thumbnails
+                                                                      .highResUrl,
+                                                                  fit: BoxFit
+                                                                      .cover,
                                                                   errorBuilder: (_, _, _) => Container(
-                                                                    color: const Color(0xFF222230),
-                                                                    child: const Icon(Icons.music_note, color: Colors.white54, size: 64),
+                                                                    color: const Color(
+                                                                      0xFF222230,
+                                                                    ),
+                                                                    child: const Icon(
+                                                                      Icons
+                                                                          .music_note,
+                                                                      color: Colors
+                                                                          .white54,
+                                                                      size: 64,
+                                                                    ),
                                                                   ),
                                                                 ),
                                                               ),
@@ -1137,26 +1483,46 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     child: Container(
                                       width: double.infinity,
                                       height: constraints.maxHeight,
-                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 20,
+                                        vertical: 16,
+                                      ),
                                       decoration: BoxDecoration(
-                                        color: Colors.black.withValues(alpha: 0.35),
+                                        color: Colors.black.withValues(
+                                          alpha: 0.35,
+                                        ),
                                         borderRadius: BorderRadius.circular(24),
-                                        border: Border.all(color: Colors.white10),
+                                        border: Border.all(
+                                          color: Colors.white10,
+                                        ),
                                       ),
                                       child: _musicService.isFetchingLyrics
                                           ? Center(
-                                              child: CircularProgressIndicator(color: Theme.of(context).primaryColor),
+                                              child: CircularProgressIndicator(
+                                                color: Theme.of(
+                                                  context,
+                                                ).primaryColor,
+                                              ),
                                             )
                                           : AnimatedLyrics(
-                                              key: ValueKey('lyrics_${song.id.value}'),
-                                              rawLyrics: _musicService.cachedLyrics ?? '',
-                                              pronunciationLyrics: _musicService.cachedPronunciationLyrics,
-                                              songLanguage: _musicService.currentSongLanguage,
+                                              key: ValueKey(
+                                                'lyrics_${song.id.value}',
+                                              ),
+                                              rawLyrics:
+                                                  _musicService.cachedLyrics ??
+                                                  '',
+                                              pronunciationLyrics: _musicService
+                                                  .cachedPronunciationLyrics,
+                                              songLanguage: _musicService
+                                                  .currentSongLanguage,
                                               songTitle: song.title,
                                               songArtist: song.author,
-                                              positionStream: _musicService.positionStream,
+                                              positionStream:
+                                                  _musicService.positionStream,
                                               onSeek: (targetPosition) {
-                                                _musicService.seek(targetPosition);
+                                                _musicService.seek(
+                                                  targetPosition,
+                                                );
                                               },
                                             ),
                                     ),
@@ -1212,8 +1578,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                         IconButton(
                           icon: Icon(
-                            isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                            color: isLiked ? const Color(0xFFFA2D48) : Colors.white70,
+                            isLiked
+                                ? Icons.favorite_rounded
+                                : Icons.favorite_border_rounded,
+                            color: isLiked
+                                ? const Color(0xFFFA2D48)
+                                : Colors.white70,
                             size: 30,
                           ),
                           onPressed: () {
@@ -1233,11 +1603,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         stream: _musicService.positionStream,
                         builder: (context, snapshot) {
                           final position = snapshot.data ?? Duration.zero;
-                          final duration = _musicService.duration ??
+                          final duration =
+                              _musicService.duration ??
                               (song.duration ?? Duration.zero);
 
                           if (_prefs.scrubberStyle == ScrubberStyle.classic) {
-                            return _buildClassicScrubber(context, position, duration, vibrantColor);
+                            return _buildClassicScrubber(
+                              context,
+                              position,
+                              duration,
+                              vibrantColor,
+                            );
                           }
 
                           return WaveformScrubber(
@@ -1257,25 +1633,47 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
                     // Unified Responsive Playback Controls: Shuffle, -10s, Prev, Play/Pause, Next, +10s, Repeat
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2,
+                        vertical: 4,
+                      ),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           final availableWidth = constraints.maxWidth;
                           final bool isCompact = availableWidth < 360;
                           final bool isUltraCompact = availableWidth < 325;
 
-                          final double playSize = isUltraCompact ? 58.0 : (isCompact ? 64.0 : 72.0);
-                          final double playIconSize = isUltraCompact ? 34.0 : (isCompact ? 38.0 : 42.0);
-                          final double skipIconSize = isUltraCompact ? 30.0 : (isCompact ? 34.0 : 38.0);
-                          final double skipBtnSize = isUltraCompact ? 38.0 : (isCompact ? 42.0 : 46.0);
-                          final double subIconSize = isUltraCompact ? 19.0 : 22.0;
-                          final double subBtnSize = isUltraCompact ? 34.0 : 38.0;
-                          final double skip10IconSize = isUltraCompact ? 15.0 : (isCompact ? 17.0 : 19.0);
-                          final double skip10PadH = isUltraCompact ? 5.0 : (isCompact ? 6.0 : 8.0);
-                          final double skip10PadV = isUltraCompact ? 4.0 : (isCompact ? 5.0 : 6.0);
+                          final double playSize = isUltraCompact
+                              ? 58.0
+                              : (isCompact ? 64.0 : 72.0);
+                          final double playIconSize = isUltraCompact
+                              ? 34.0
+                              : (isCompact ? 38.0 : 42.0);
+                          final double skipIconSize = isUltraCompact
+                              ? 30.0
+                              : (isCompact ? 34.0 : 38.0);
+                          final double skipBtnSize = isUltraCompact
+                              ? 38.0
+                              : (isCompact ? 42.0 : 46.0);
+                          final double subIconSize = isUltraCompact
+                              ? 19.0
+                              : 22.0;
+                          final double subBtnSize = isUltraCompact
+                              ? 34.0
+                              : 38.0;
+                          final double skip10IconSize = isUltraCompact
+                              ? 15.0
+                              : (isCompact ? 17.0 : 19.0);
+                          final double skip10PadH = isUltraCompact
+                              ? 5.0
+                              : (isCompact ? 6.0 : 8.0);
+                          final double skip10PadV = isUltraCompact
+                              ? 4.0
+                              : (isCompact ? 5.0 : 6.0);
 
                           // Min intrinsic width ensuring all 7 items lay out comfortably without collision
-                          final double minRequiredWidth = (subBtnSize * 2) +
+                          final double minRequiredWidth =
+                              (subBtnSize * 2) +
                               (((skip10IconSize + (skip10PadH * 2) + 2)) * 2) +
                               (skipBtnSize * 2) +
                               playSize +
@@ -1287,16 +1685,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             child: SizedBox(
                               width: math.max(availableWidth, minRequiredWidth),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   IconButton(
                                     padding: EdgeInsets.zero,
-                                    constraints: BoxConstraints(minWidth: subBtnSize, minHeight: subBtnSize),
+                                    constraints: BoxConstraints(
+                                      minWidth: subBtnSize,
+                                      minHeight: subBtnSize,
+                                    ),
                                     visualDensity: VisualDensity.compact,
                                     icon: Icon(
                                       Icons.shuffle_rounded,
-                                      color: _musicService.isShuffle ? const Color(0xFF1DB954) : Colors.white54,
+                                      color: _musicService.isShuffle
+                                          ? const Color(0xFF1DB954)
+                                          : Colors.white54,
                                       size: subIconSize,
                                     ),
                                     onPressed: () {
@@ -1310,16 +1714,33 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                       borderRadius: BorderRadius.circular(20),
                                       onTap: () {
                                         HapticFeedback.lightImpact();
-                                        _musicService.seekRelative(const Duration(seconds: -10));
+                                        _musicService.seekRelative(
+                                          const Duration(seconds: -10),
+                                        );
                                       },
                                       child: Container(
-                                        padding: EdgeInsets.symmetric(horizontal: skip10PadH, vertical: skip10PadV),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha: 0.08),
-                                          borderRadius: BorderRadius.circular(20),
-                                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: skip10PadH,
+                                          vertical: skip10PadV,
                                         ),
-                                        child: Icon(Icons.replay_10_rounded, color: Colors.white, size: skip10IconSize),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.08,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.12,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          Icons.replay_10_rounded,
+                                          color: Colors.white,
+                                          size: skip10IconSize,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -1337,14 +1758,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                         height: skipBtnSize,
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
-                                          color: Colors.white.withValues(alpha: 0.10),
+                                          color: Colors.white.withValues(
+                                            alpha: 0.10,
+                                          ),
                                           border: Border.all(
-                                            color: Colors.white.withValues(alpha: 0.16),
+                                            color: Colors.white.withValues(
+                                              alpha: 0.16,
+                                            ),
                                             width: 1.2,
                                           ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.black.withValues(alpha: 0.2),
+                                              color: Colors.black.withValues(
+                                                alpha: 0.2,
+                                              ),
                                               blurRadius: 8,
                                               offset: const Offset(0, 2),
                                             ),
@@ -1383,20 +1810,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                             ],
                                           ),
                                           border: Border.all(
-                                            color: Colors.white.withValues(alpha: 0.90),
+                                            color: Colors.white.withValues(
+                                              alpha: 0.90,
+                                            ),
                                             width: 1.5,
                                           ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: vibrantColor.withValues(alpha: 0.50),
-                                              blurRadius: isUltraCompact ? 16 : 24,
-                                              spreadRadius: isUltraCompact ? 1 : 2,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                            BoxShadow(
-                                              color: Colors.black.withValues(alpha: 0.28),
-                                              blurRadius: 10,
-                                              offset: const Offset(0, 4),
+                                              color: Colors.black.withValues(
+                                                alpha: 0.40,
+                                              ),
+                                              blurRadius: isUltraCompact
+                                                  ? 16
+                                                  : 22,
+                                              spreadRadius: 1,
+                                              offset: const Offset(0, 6),
                                             ),
                                           ],
                                         ),
@@ -1406,22 +1834,41 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                   width: playSize * 0.42,
                                                   height: playSize * 0.42,
                                                   child: const CircularProgressIndicator(
-                                                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0F141C)),
+                                                    valueColor:
+                                                        AlwaysStoppedAnimation<
+                                                          Color
+                                                        >(Color(0xFF0F141C)),
                                                     strokeWidth: 3,
                                                   ),
                                                 ),
                                               )
                                             : Center(
                                                 child: AnimatedSwitcher(
-                                                  duration: const Duration(milliseconds: 220),
-                                                  transitionBuilder: (child, animation) => ScaleTransition(
-                                                    scale: animation,
-                                                    child: FadeTransition(opacity: animation, child: child),
+                                                  duration: const Duration(
+                                                    milliseconds: 220,
                                                   ),
+                                                  transitionBuilder:
+                                                      (
+                                                        child,
+                                                        animation,
+                                                      ) => ScaleTransition(
+                                                        scale: animation,
+                                                        child: FadeTransition(
+                                                          opacity: animation,
+                                                          child: child,
+                                                        ),
+                                                      ),
                                                   child: Icon(
-                                                    isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                                                    key: ValueKey<bool>(isPlaying),
-                                                    color: const Color(0xFF0F141C),
+                                                    isPlaying
+                                                        ? Icons.pause_rounded
+                                                        : Icons
+                                                              .play_arrow_rounded,
+                                                    key: ValueKey<bool>(
+                                                      isPlaying,
+                                                    ),
+                                                    color: const Color(
+                                                      0xFF0F141C,
+                                                    ),
                                                     size: playIconSize,
                                                   ),
                                                 ),
@@ -1443,14 +1890,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                         height: skipBtnSize,
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
-                                          color: Colors.white.withValues(alpha: 0.10),
+                                          color: Colors.white.withValues(
+                                            alpha: 0.10,
+                                          ),
                                           border: Border.all(
-                                            color: Colors.white.withValues(alpha: 0.16),
+                                            color: Colors.white.withValues(
+                                              alpha: 0.16,
+                                            ),
                                             width: 1.2,
                                           ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.black.withValues(alpha: 0.2),
+                                              color: Colors.black.withValues(
+                                                alpha: 0.2,
+                                              ),
                                               blurRadius: 8,
                                               offset: const Offset(0, 2),
                                             ),
@@ -1472,28 +1925,49 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                       borderRadius: BorderRadius.circular(20),
                                       onTap: () {
                                         HapticFeedback.lightImpact();
-                                        _musicService.seekRelative(const Duration(seconds: 10));
+                                        _musicService.seekRelative(
+                                          const Duration(seconds: 10),
+                                        );
                                       },
                                       child: Container(
-                                        padding: EdgeInsets.symmetric(horizontal: skip10PadH, vertical: skip10PadV),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha: 0.08),
-                                          borderRadius: BorderRadius.circular(20),
-                                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: skip10PadH,
+                                          vertical: skip10PadV,
                                         ),
-                                        child: Icon(Icons.forward_10_rounded, color: Colors.white, size: skip10IconSize),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.08,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.12,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          Icons.forward_10_rounded,
+                                          color: Colors.white,
+                                          size: skip10IconSize,
+                                        ),
                                       ),
                                     ),
                                   ),
                                   IconButton(
                                     padding: EdgeInsets.zero,
-                                    constraints: BoxConstraints(minWidth: subBtnSize, minHeight: subBtnSize),
+                                    constraints: BoxConstraints(
+                                      minWidth: subBtnSize,
+                                      minHeight: subBtnSize,
+                                    ),
                                     visualDensity: VisualDensity.compact,
                                     icon: Icon(
                                       _musicService.loopMode == LoopMode.one
                                           ? Icons.repeat_one_rounded
                                           : Icons.repeat_rounded,
-                                      color: _musicService.loopMode != LoopMode.off
+                                      color:
+                                          _musicService.loopMode != LoopMode.off
                                           ? const Color(0xFF1DB954)
                                           : Colors.white54,
                                       size: subIconSize,
@@ -1516,7 +1990,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     // Bottom Screen Options: 3 Main Static Glass Pill Buttons (Low-end static glass)
                     Container(
                       margin: const EdgeInsets.only(top: 4, bottom: 2),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF14141E).withValues(alpha: 0.90),
                         borderRadius: BorderRadius.circular(30),
@@ -1541,7 +2018,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             // 1. Lyrics
                             _buildBarPillButton(
                               context: context,
-                              icon: _showLyrics ? Icons.lyrics_rounded : Icons.lyrics_outlined,
+                              icon: _showLyrics
+                                  ? Icons.lyrics_rounded
+                                  : Icons.lyrics_outlined,
                               label: 'Lyrics',
                               isActive: _showLyrics,
                               activeColor: vibrantColor,
@@ -1566,22 +2045,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               label: 'More',
                               isActive: false,
                               activeColor: vibrantColor,
-                              onTap: () => _showCurrentSongActionsSheet(context, song),
+                              onTap: () =>
+                                  _showCurrentSongActionsSheet(context, song),
                             ),
                           ],
                         ),
                       ),
                     ),
                     const SizedBox(height: 4),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildClassicScrubber(
     BuildContext context,
@@ -1589,7 +2069,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     Duration duration,
     Color accentColor,
   ) {
-    final maxMs = duration.inMilliseconds > 0 ? duration.inMilliseconds.toDouble() : 1.0;
+    final maxMs = duration.inMilliseconds > 0
+        ? duration.inMilliseconds.toDouble()
+        : 1.0;
     final curMs = position.inMilliseconds.clamp(0, maxMs.toInt()).toDouble();
     final remaining = duration > position ? duration - position : Duration.zero;
 
@@ -1605,7 +2087,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
               inactiveTrackColor: Colors.white24,
               thumbColor: Colors.white,
               overlayColor: accentColor.withValues(alpha: 0.2),
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6, elevation: 3),
+              thumbShape: const RoundSliderThumbShape(
+                enabledThumbRadius: 6,
+                elevation: 3,
+              ),
               overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
             ),
             child: Slider(

@@ -13,7 +13,9 @@ class NotificationPermissionService {
 
   /// Explicitly requests notification permission and provides immediate user feedback.
   /// If permanently denied, presents a dialog directing the user to App Settings.
-  static Future<bool> requestNotificationPermission(BuildContext context) async {
+  static Future<bool> requestNotificationPermission(
+    BuildContext context,
+  ) async {
     if (kIsWeb) return true;
     if (!Platform.isAndroid) return true;
 
@@ -57,7 +59,9 @@ class NotificationPermissionService {
       if (result.isPermanentlyDenied && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Enable notifications for lock screen media controls'),
+            content: const Text(
+              'Enable notifications for lock screen media controls',
+            ),
             action: SnackBarAction(
               label: 'Settings',
               textColor: Colors.white,
@@ -73,7 +77,8 @@ class NotificationPermissionService {
   }
 
   /// Alias for backward compatibility
-  static Future<void> checkAndPrompt(BuildContext context) => promptIfNeeded(context);
+  static Future<void> checkAndPrompt(BuildContext context) =>
+      promptIfNeeded(context);
 
   static void _showOpenSettingsDialog(BuildContext context) {
     showDialog(
@@ -85,7 +90,14 @@ class NotificationPermissionService {
           children: [
             Icon(Icons.notifications_active_rounded, color: Color(0xFFFA2D48)),
             SizedBox(width: 10),
-            Text('Enable Controls', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(
+              'Enable Controls',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
         content: const Text(
@@ -95,7 +107,10 @@ class NotificationPermissionService {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Not Now', style: TextStyle(color: Colors.white54)),
+            child: const Text(
+              'Not Now',
+              style: TextStyle(color: Colors.white54),
+            ),
           ),
           ElevatedButton(
             onPressed: () {
@@ -105,7 +120,9 @@ class NotificationPermissionService {
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).primaryColor,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: const Text('Open Settings'),
           ),
@@ -114,4 +131,3 @@ class NotificationPermissionService {
     );
   }
 }
-

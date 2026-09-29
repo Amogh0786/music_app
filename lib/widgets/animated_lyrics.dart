@@ -5,11 +5,7 @@ import '../services/lyrics_transliteration_service.dart';
 import '../services/preferences_service.dart';
 import '../services/screen_wake_service.dart';
 
-enum LyricsDisplayMode {
-  original,
-  pronunciation,
-  dual,
-}
+enum LyricsDisplayMode { original, pronunciation, dual }
 
 class LyricLine {
   final Duration time;
@@ -76,7 +72,9 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
     } else if (saved == 'original') {
       _displayMode = LyricsDisplayMode.original;
     } else {
-      _displayMode = isRomanized ? LyricsDisplayMode.pronunciation : LyricsDisplayMode.original;
+      _displayMode = isRomanized
+          ? LyricsDisplayMode.pronunciation
+          : LyricsDisplayMode.original;
     }
   }
 
@@ -152,26 +150,39 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
 
     if (widget.rawLyrics.trim().isEmpty) return;
 
-    final hasNativeIndic = LyricsTransliterationService.hasIndicScript(widget.rawLyrics);
+    final hasNativeIndic = LyricsTransliterationService.hasIndicScript(
+      widget.rawLyrics,
+    );
     final lang = widget.songLanguage?.toLowerCase() ?? '';
-    final isTeluguSong = lang == 'telugu' ||
+    final isTeluguSong =
+        lang == 'telugu' ||
         LyricsTransliterationService.isRomanizedTelugu(widget.rawLyrics) ||
-        (widget.songTitle != null && (
-            widget.songTitle!.toLowerCase().contains('telugu') ||
-            LyricsTransliterationService.isRomanizedTelugu(widget.songTitle!)
-        ));
-    final bool isRomanized = !hasNativeIndic &&
-        (isTeluguSong || LyricsTransliterationService.isRomanizedIndic(widget.rawLyrics, widget.songLanguage));
+        (widget.songTitle != null &&
+            (widget.songTitle!.toLowerCase().contains('telugu') ||
+                LyricsTransliterationService.isRomanizedTelugu(
+                  widget.songTitle!,
+                )));
+    final bool isRomanized =
+        !hasNativeIndic &&
+        (isTeluguSong ||
+            LyricsTransliterationService.isRomanizedIndic(
+              widget.rawLyrics,
+              widget.songLanguage,
+            ));
 
     _hasIndicScript = hasNativeIndic || isRomanized;
-    _hasPronunciationLyrics = isRomanized ||
-        (widget.pronunciationLyrics != null && widget.pronunciationLyrics!.trim().isNotEmpty);
+    _hasPronunciationLyrics =
+        isRomanized ||
+        (widget.pronunciationLyrics != null &&
+            widget.pronunciationLyrics!.trim().isNotEmpty);
 
     _initDisplayMode(isRomanized: isRomanized);
 
     final lines = widget.rawLyrics.split('\n');
     // Ultra-flexible regex matching: [01:23.45], [1:23.456], [01:23:45], [00:01:23.45], [ 01:23.45 ]
-    final tagRegex = RegExp(r'\[\s*(?:(\d{1,2})\s*:\s*)?(\d{1,2})\s*:\s*(\d{2})(?:[.:](\d{1,4}))?\s*\]');
+    final tagRegex = RegExp(
+      r'\[\s*(?:(\d{1,2})\s*:\s*)?(\d{1,2})\s*:\s*(\d{2})(?:[.:](\d{1,4}))?\s*\]',
+    );
 
     final parsedSynced = <LyricLine>[];
 
@@ -199,7 +210,9 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
         } else {
           // Native Indic script lyrics ("రాజమండ్రి రాగమంజరి")
           originalText = text;
-          pronunciationText = LyricsTransliterationService.transliterateText(text);
+          pronunciationText = LyricsTransliterationService.transliterateText(
+            text,
+          );
         }
 
         for (final m in matches) {
@@ -227,7 +240,9 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
             seconds: seconds,
             milliseconds: milliseconds,
           );
-          parsedSynced.add(LyricLine(duration, originalText, pronunciationText));
+          parsedSynced.add(
+            LyricLine(duration, originalText, pronunciationText),
+          );
         }
       }
     }
@@ -239,7 +254,9 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
     } else {
       // Unsynced Plain Text fallback
       _isSynced = false;
-      final cleanRegex = RegExp(r'\[\s*(?:\d+\s*:\s*)?\d+\s*:\s*\d+(?:[.:]\d+)?\s*\]');
+      final cleanRegex = RegExp(
+        r'\[\s*(?:\d+\s*:\s*)?\d+\s*:\s*\d+(?:[.:]\d+)?\s*\]',
+      );
       final cleaned = <LyricLine>[];
       bool prevWasEmpty = false;
 
@@ -261,10 +278,14 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
             originalText = LyricsTransliterationService.toTeluguScript(line);
           } else {
             originalText = line;
-            pronunciationText = LyricsTransliterationService.transliterateText(line);
+            pronunciationText = LyricsTransliterationService.transliterateText(
+              line,
+            );
           }
 
-          cleaned.add(LyricLine(Duration.zero, originalText, pronunciationText));
+          cleaned.add(
+            LyricLine(Duration.zero, originalText, pronunciationText),
+          );
           prevWasEmpty = false;
         }
       }
@@ -290,7 +311,10 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
       } else if (_scrollController.hasClients) {
         final screenH = MediaQuery.of(context).size.height;
         final targetOffset = (index * 60.0) - (screenH * 0.20);
-        final clampedOffset = targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent);
+        final clampedOffset = targetOffset.clamp(
+          0.0,
+          _scrollController.position.maxScrollExtent,
+        );
 
         _scrollController.animateTo(
           clampedOffset,
@@ -373,7 +397,7 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
                     color: themeColor.withValues(alpha: 0.4),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
-                  )
+                  ),
                 ]
               : null,
         ),
@@ -401,8 +425,14 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
     );
   }
 
-  Widget _buildSyncedLineText(LyricLine item, bool isCurrent, bool isPassed, Color themeColor) {
-    final hasRomanized = item.romanizedText.isNotEmpty && item.romanizedText != item.text;
+  Widget _buildSyncedLineText(
+    LyricLine item,
+    bool isCurrent,
+    bool isPassed,
+    Color themeColor,
+  ) {
+    final hasRomanized =
+        item.romanizedText.isNotEmpty && item.romanizedText != item.text;
 
     if (_displayMode == LyricsDisplayMode.dual && hasRomanized) {
       return Column(
@@ -413,7 +443,9 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
             style: TextStyle(
               color: isCurrent
                   ? themeColor
-                  : (isPassed ? Colors.white.withValues(alpha: 0.72) : Colors.white.withValues(alpha: 0.28)),
+                  : (isPassed
+                        ? Colors.white.withValues(alpha: 0.72)
+                        : Colors.white.withValues(alpha: 0.28)),
               fontSize: isCurrent ? 22 : 18.5,
               fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w600,
               height: 1.35,
@@ -433,7 +465,9 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
             style: TextStyle(
               color: isCurrent
                   ? Colors.white.withValues(alpha: 0.95)
-                  : (isPassed ? Colors.white.withValues(alpha: 0.50) : Colors.white.withValues(alpha: 0.20)),
+                  : (isPassed
+                        ? Colors.white.withValues(alpha: 0.50)
+                        : Colors.white.withValues(alpha: 0.20)),
               fontSize: isCurrent ? 16.5 : 14.5,
               fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
               fontStyle: FontStyle.italic,
@@ -445,7 +479,8 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
       );
     }
 
-    final lineText = (_displayMode == LyricsDisplayMode.pronunciation && hasRomanized)
+    final lineText =
+        (_displayMode == LyricsDisplayMode.pronunciation && hasRomanized)
         ? item.romanizedText
         : item.text;
 
@@ -455,7 +490,9 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
       style: TextStyle(
         color: isCurrent
             ? themeColor
-            : (isPassed ? Colors.white.withValues(alpha: 0.72) : Colors.white.withValues(alpha: 0.28)),
+            : (isPassed
+                  ? Colors.white.withValues(alpha: 0.72)
+                  : Colors.white.withValues(alpha: 0.28)),
         fontSize: isCurrent ? 24 : 19.5,
         fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w600,
         height: 1.45,
@@ -473,7 +510,8 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
   }
 
   Widget _buildUnsyncedLineText(LyricLine item) {
-    final hasRomanized = item.romanizedText.isNotEmpty && item.romanizedText != item.text;
+    final hasRomanized =
+        item.romanizedText.isNotEmpty && item.romanizedText != item.text;
     if (_displayMode == LyricsDisplayMode.dual && hasRomanized) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
@@ -505,7 +543,8 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
       );
     }
 
-    final lineText = (_displayMode == LyricsDisplayMode.pronunciation && hasRomanized)
+    final lineText =
+        (_displayMode == LyricsDisplayMode.pronunciation && hasRomanized)
         ? item.romanizedText
         : item.text;
 
@@ -526,14 +565,19 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
 
   @override
   Widget build(BuildContext context) {
-    final isInfoMessage = _lyrics.isEmpty ||
+    final isInfoMessage =
+        _lyrics.isEmpty ||
         (_lyrics.length <= 2 &&
-            _lyrics.any((l) =>
-                l.text.toLowerCase().contains('no lyrics') ||
-                l.text.toLowerCase().contains('temporarily unavailable')));
+            _lyrics.any(
+              (l) =>
+                  l.text.toLowerCase().contains('no lyrics') ||
+                  l.text.toLowerCase().contains('temporarily unavailable'),
+            ));
 
     if (isInfoMessage) {
-      final msg = _lyrics.isNotEmpty ? _lyrics.first.text : 'No lyrics available for this song';
+      final msg = _lyrics.isNotEmpty
+          ? _lyrics.first.text
+          : 'No lyrics available for this song';
       return Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -545,9 +589,15 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.white.withValues(alpha: 0.06),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.12),
+                  ),
                 ),
-                child: const Icon(Icons.lyrics_outlined, color: Colors.white38, size: 36),
+                child: const Icon(
+                  Icons.lyrics_outlined,
+                  color: Colors.white38,
+                  size: 36,
+                ),
               ),
               const SizedBox(height: 16),
               Text(
@@ -572,36 +622,54 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
     if (!_isSynced) {
       return Column(
         children: [
-          if (_hasIndicScript || _hasPronunciationLyrics) _buildModeToggle(themeColor),
+          if (_hasIndicScript || _hasPronunciationLyrics)
+            _buildModeToggle(themeColor),
           Expanded(
             child: ShaderMask(
               shaderCallback: (bounds) => const LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Colors.transparent, Colors.white, Colors.white, Colors.transparent],
+                colors: [
+                  Colors.transparent,
+                  Colors.white,
+                  Colors.white,
+                  Colors.transparent,
+                ],
                 stops: [0.0, 0.06, 0.94, 1.0],
               ).createShader(bounds),
               blendMode: BlendMode.dstIn,
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Unsynced Lyrics Pill Badge
                     Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
+                        ),
                         margin: const EdgeInsets.only(bottom: 20),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.14),
+                          ),
                         ),
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.notes_rounded, size: 14, color: Colors.white70),
+                            Icon(
+                              Icons.notes_rounded,
+                              size: 14,
+                              color: Colors.white70,
+                            ),
                             SizedBox(width: 6),
                             Text(
                               'Unsynced Lyrics',
@@ -636,13 +704,19 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
     // Synced Lyrics View
     return Column(
       children: [
-        if (_hasIndicScript || _hasPronunciationLyrics) _buildModeToggle(themeColor),
+        if (_hasIndicScript || _hasPronunciationLyrics)
+          _buildModeToggle(themeColor),
         Expanded(
           child: ShaderMask(
             shaderCallback: (bounds) => const LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Colors.transparent, Colors.white, Colors.white, Colors.transparent],
+              colors: [
+                Colors.transparent,
+                Colors.white,
+                Colors.white,
+                Colors.transparent,
+              ],
               stops: [0.0, 0.08, 0.92, 1.0],
             ).createShader(bounds),
             blendMode: BlendMode.dstIn,
@@ -651,12 +725,15 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
                 if (notification is UserScrollNotification) {
                   _isUserScrolling = true;
                   _userScrollResumeTimer?.cancel();
-                  _userScrollResumeTimer = Timer(const Duration(seconds: 3), () {
-                    if (mounted) {
-                      _isUserScrolling = false;
-                      _scrollToActiveLine(_currentIndex);
-                    }
-                  });
+                  _userScrollResumeTimer = Timer(
+                    const Duration(seconds: 3),
+                    () {
+                      if (mounted) {
+                        _isUserScrolling = false;
+                        _scrollToActiveLine(_currentIndex);
+                      }
+                    },
+                  );
                 }
                 return false;
               },
@@ -685,8 +762,16 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
                       _scrollToActiveLine(index);
                     },
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                      child: _buildSyncedLineText(item, isCurrent, isPassed, themeColor),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 8.0,
+                        horizontal: 4.0,
+                      ),
+                      child: _buildSyncedLineText(
+                        item,
+                        isCurrent,
+                        isPassed,
+                        themeColor,
+                      ),
                     ),
                   );
                 },

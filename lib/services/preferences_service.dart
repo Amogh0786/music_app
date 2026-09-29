@@ -7,6 +7,7 @@ import 'spotify_import_service.dart';
 import 'web_player_bridge.dart';
 
 enum ArtworkStyle { card, vinyl }
+
 enum ScrubberStyle { waveform, classic }
 
 class TasteMatrix {
@@ -81,6 +82,7 @@ class PreferencesService extends ChangeNotifier {
   String _lyricsDisplayMode = 'original'; // 'original', 'pronunciation', 'dual'
   String _userName = '';
   bool _hasPromptedName = false;
+  String? _profileImagePath;
 
   // Search History
   List<String> _searchHistory = [];
@@ -96,7 +98,13 @@ class PreferencesService extends ChangeNotifier {
   // Real-time Most Played Tracks (Top 100 on-device playback streams)
   final Map<String, Map<String, dynamic>> _mostPlayedSongs = {};
   int _topArtistPlayCount = 0;
-  List<String> _preferredLanguages = ['Hindi', 'Telugu', 'Tamil', 'Punjabi', 'English'];
+  List<String> _preferredLanguages = [
+    'Hindi',
+    'Telugu',
+    'Tamil',
+    'Punjabi',
+    'English',
+  ];
   String _mostPlayedArtist = '';
   UserAudioProfile _audioProfile = const UserAudioProfile();
 
@@ -120,16 +128,20 @@ class PreferencesService extends ChangeNotifier {
   String get userName => _userName.isEmpty ? 'Friend' : _userName;
   bool get hasCustomName => _userName.isNotEmpty;
   bool get hasPromptedName => _hasPromptedName;
+  String? get profileImagePath => _profileImagePath;
   List<String> get searchHistory => _searchHistory;
   List<Map<String, String>> get listeningHistory => _listeningHistory;
   List<String> get preferredLanguages => _preferredLanguages;
   String get mostPlayedArtist => _mostPlayedArtist;
   int get topArtistPlayCount => _topArtistPlayCount;
-  Map<String, int> get realPlaybackCounts => Map.unmodifiable(_realPlaybackCounts);
+  Map<String, int> get realPlaybackCounts =>
+      Map.unmodifiable(_realPlaybackCounts);
 
   /// Top 100 Most Played Tracks on this device, sorted descending by stream count
   List<Map<String, dynamic>> get mostPlayedSongs {
-    final list = _mostPlayedSongs.values.map((item) => Map<String, dynamic>.from(item)).toList();
+    final list = _mostPlayedSongs.values
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
     list.sort((a, b) {
       final countA = (a['playCount'] as num?)?.toInt() ?? 0;
       final countB = (b['playCount'] as num?)?.toInt() ?? 0;
@@ -150,6 +162,7 @@ class PreferencesService extends ChangeNotifier {
     if (_listeningHistory.isNotEmpty) return _listeningHistory.length;
     return _artistPlayCounts.values.fold(0, (a, b) => a + b);
   }
+
   int get totalSkips => _artistSkipCounts.values.fold(0, (a, b) => a + b);
 
   Future<void> init() async {
@@ -191,17 +204,24 @@ class PreferencesService extends ChangeNotifier {
     _mostPlayedArtist = _prefs.getString('mostPlayedArtist') ?? '';
     _userName = _prefs.getString('userName') ?? '';
     _hasPromptedName = _prefs.getBool('hasPromptedName') ?? false;
+    _profileImagePath = _prefs.getString('profileImagePath');
     final styleStr = _prefs.getString('artworkStyle') ?? 'card';
-    _artworkStyle = styleStr == 'vinyl' ? ArtworkStyle.vinyl : ArtworkStyle.card;
+    _artworkStyle = styleStr == 'vinyl'
+        ? ArtworkStyle.vinyl
+        : ArtworkStyle.card;
     final scrubStr = _prefs.getString('scrubberStyle') ?? 'waveform';
-    _scrubberStyle = scrubStr == 'classic' ? ScrubberStyle.classic : ScrubberStyle.waveform;
+    _scrubberStyle = scrubStr == 'classic'
+        ? ScrubberStyle.classic
+        : ScrubberStyle.waveform;
     _lyricsDisplayMode = _prefs.getString('lyricsDisplayMode') ?? 'original';
 
     final historyJson = _prefs.getString('listeningHistoryJson');
     if (historyJson != null && historyJson.isNotEmpty) {
       try {
         final List<dynamic> decoded = json.decode(historyJson);
-        _listeningHistory = decoded.map((e) => Map<String, String>.from(e)).toList();
+        _listeningHistory = decoded
+            .map((e) => Map<String, String>.from(e))
+            .toList();
       } catch (_) {
         _listeningHistory = [];
       }
@@ -223,9 +243,14 @@ class PreferencesService extends ChangeNotifier {
       } catch (_) {}
     }
 
+    // Auto-heal & decompose legacy composite keys e.g. "S.P. Balasubramaniam, Srinivas D., Khatija Rahman"
+    _sanitizeArtistCountMap(_artistPlayCounts);
+    _sanitizeArtistCountMap(_realPlaybackCounts);
+
     // If realPlaybackCounts is empty, seed from listening history
     if (_realPlaybackCounts.isEmpty && _listeningHistory.isNotEmpty) {
       _rebuildRealPlaybackCountsFromHistory();
+      _sanitizeArtistCountMap(_realPlaybackCounts);
     }
 
     _recalculateTopArtist();
@@ -257,7 +282,8 @@ class PreferencesService extends ChangeNotifier {
               'author': song['author'] ?? 'Unknown Artist',
               'thumbnail': song['thumbnail'] ?? '',
               'playCount': 1,
-              'lastPlayedAt': song['playedAt'] ?? DateTime.now().toIso8601String(),
+              'lastPlayedAt':
+                  song['playedAt'] ?? DateTime.now().toIso8601String(),
             };
           }
         }
@@ -293,31 +319,60 @@ class PreferencesService extends ChangeNotifier {
   static String _canonicalizeArtistName(String raw) {
     final clean = PlaylistArtistFilter.normalize(raw);
     if (clean == 'dsp' || clean == 'devi sri prasad') return 'Devi Sri Prasad';
-    if (clean == 'anirudh' || clean == 'anirudh ravichander') return 'Anirudh Ravichander';
+    if (clean == 'anirudh' || clean == 'anirudh ravichander') {
+      return 'Anirudh Ravichander';
+    }
     if (clean == 'sid' || clean == 'sid sriram') return 'Sid Sriram';
     if (clean == 'arijit' || clean == 'arijit singh') return 'Arijit Singh';
-    if (clean == 'arr' || clean == 'ar rahman' || clean == 'a r rahman' || clean == 'rahman') return 'A.R. Rahman';
+    if (clean == 'arr' ||
+        clean == 'ar rahman' ||
+        clean == 'a r rahman' ||
+        clean == 'rahman') {
+      return 'A.R. Rahman';
+    }
     if (clean == 'shreya' || clean == 'shreya ghoshal') return 'Shreya Ghoshal';
-    if (clean == 'thaman' || clean == 'thaman s' || clean == 's thaman') return 'Thaman S';
-    if (clean == 'spb' || clean == 's p balasubrahmanyam' || clean == 'balasubrahmanyam') return 'S.P. Balasubrahmanyam';
-    if (clean == 'keeravani' || clean == 'm m keeravani' || clean == 'keeravaani') return 'M.M. Keeravaani';
+    if (clean == 'thaman' || clean == 'thaman s' || clean == 's thaman') {
+      return 'Thaman S';
+    }
+    if (clean == 'spb' ||
+        clean.contains('balasubra') ||
+        clean == 's p balasubrahmanyam' ||
+        clean == 's p balasubramaniam' ||
+        clean == 'balasubrahmanyam' ||
+        clean == 'balasubramaniam') {
+      return 'S.P. Balasubrahmanyam';
+    }
+    if (clean == 'keeravani' ||
+        clean == 'm m keeravani' ||
+        clean == 'keeravaani') {
+      return 'M.M. Keeravaani';
+    }
     if (clean == 'pritam' || clean == 'pritam chakraborty') return 'Pritam';
-    if (clean == 'yuvan' || clean == 'yuvan shankar raja') return 'Yuvan Shankar Raja';
-    if (clean == 'santhosh' || clean == 'santhosh narayanan') return 'Santhosh Narayanan';
+    if (clean == 'yuvan' || clean == 'yuvan shankar raja') {
+      return 'Yuvan Shankar Raja';
+    }
+    if (clean == 'santhosh' || clean == 'santhosh narayanan') {
+      return 'Santhosh Narayanan';
+    }
     if (clean == 'harris' || clean == 'harris jayaraj') return 'Harris Jayaraj';
     if (clean == 'shilpa' || clean == 'shilpa rao') return 'Shilpa Rao';
     if (clean == 'jonita' || clean == 'jonita gandhi') return 'Jonita Gandhi';
     if (clean == 'ilayaraja' || clean == 'ilaiyaraaja') return 'Ilaiyaraaja';
 
     final words = raw.trim().split(RegExp(r'\s+'));
-    return words.map((w) {
-      if (w.isEmpty) return '';
-      return '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}';
-    }).join(' ');
+    return words
+        .map((w) {
+          if (w.isEmpty) return '';
+          return '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}';
+        })
+        .join(' ');
   }
 
   /// Resolves genuine artist names from song metadata, stripping channel/record label noise
-  static List<String> _resolveCanonicalArtists(String rawAuthor, String rawTitle) {
+  static List<String> _resolveCanonicalArtists(
+    String rawAuthor,
+    String rawTitle,
+  ) {
     final artists = PlaylistArtistFilter.extractArtistsFromSong({
       'author': rawAuthor,
       'title': rawTitle,
@@ -333,6 +388,71 @@ class PreferencesService extends ChangeNotifier {
       return [_canonicalizeArtistName(rawAuthor.trim())];
     }
     return [];
+  }
+
+  void _sanitizeArtistCountMap(Map<String, int> map) {
+    if (map.isEmpty) return;
+    final entries = Map<String, int>.from(map);
+    map.clear();
+    for (final entry in entries.entries) {
+      final key = entry.key.trim();
+      final count = entry.value;
+      if (key.isEmpty || count <= 0) continue;
+
+      final resolved = _resolveCanonicalArtists(key, '');
+      if (resolved.isNotEmpty) {
+        for (final a in resolved) {
+          final norm = PlaylistArtistFilter.normalize(a);
+          if (norm.isNotEmpty &&
+              norm != 'aditya music' &&
+              norm != 'tseries' &&
+              norm != 't-series' &&
+              norm != 'sony music' &&
+              norm != 'zee music') {
+            map[a] = (map[a] ?? 0) + count;
+          }
+        }
+      } else {
+        final norm = PlaylistArtistFilter.normalize(key);
+        if (norm.isNotEmpty &&
+            norm != 'aditya music' &&
+            norm != 'tseries' &&
+            norm != 't-series' &&
+            norm != 'sony music' &&
+            norm != 'zee music') {
+          final canon = _canonicalizeArtistName(key);
+          map[canon] = (map[canon] ?? 0) + count;
+        }
+      }
+    }
+  }
+
+  static String _extractSingleLeadArtist(String raw) {
+    if (raw.trim().isEmpty) return '';
+    final resolved = _resolveCanonicalArtists(raw, '');
+    if (resolved.isNotEmpty) {
+      return resolved.first;
+    }
+    final parts = raw.split(
+      RegExp(
+        r'[,;&/|]|(?:\s+feat\.?\s+)|\s+ft\.?\s+|\s+with\s+|\s+and\s+',
+        caseSensitive: false,
+      ),
+    );
+    for (final p in parts) {
+      final trimmed = p.trim();
+      final norm = PlaylistArtistFilter.normalize(trimmed);
+      if (norm.isNotEmpty &&
+          norm != 'aditya music' &&
+          norm != 'tseries' &&
+          norm != 't-series' &&
+          norm != 'sony music' &&
+          norm != 'zee music' &&
+          trimmed.length >= 2) {
+        return _canonicalizeArtistName(trimmed);
+      }
+    }
+    return _canonicalizeArtistName(raw.trim());
   }
 
   void _rebuildRealPlaybackCountsFromHistory() {
@@ -364,7 +484,13 @@ class PreferencesService extends ChangeNotifier {
     if (maxCount == 0) {
       _artistPlayCounts.forEach((artist, count) {
         final norm = PlaylistArtistFilter.normalize(artist);
-        if (norm == 'aditya music' || norm == 'tseries' || norm == 't-series' || norm == 'sony music' || norm == 'zee music') return;
+        if (norm == 'aditya music' ||
+            norm == 'tseries' ||
+            norm == 't-series' ||
+            norm == 'sony music' ||
+            norm == 'zee music') {
+          return;
+        }
         if (count > maxCount) {
           maxCount = count;
           topArtist = _canonicalizeArtistName(artist);
@@ -383,14 +509,18 @@ class PreferencesService extends ChangeNotifier {
         ..sort((a, b) => b.value.compareTo(a.value));
       return sorted.take(limit).toList();
     }
-    final sorted = _artistPlayCounts.entries
-        .where((e) {
-          final norm = PlaylistArtistFilter.normalize(e.key);
-          return norm != 'aditya music' && norm != 'tseries' && norm != 't-series' && norm != 'sony music';
-        })
-        .map((e) => MapEntry(_canonicalizeArtistName(e.key), e.value))
-        .toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final sorted =
+        _artistPlayCounts.entries
+            .where((e) {
+              final norm = PlaylistArtistFilter.normalize(e.key);
+              return norm != 'aditya music' &&
+                  norm != 'tseries' &&
+                  norm != 't-series' &&
+                  norm != 'sony music';
+            })
+            .map((e) => MapEntry(_canonicalizeArtistName(e.key), e.value))
+            .toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
     return sorted.take(limit).toList();
   }
 
@@ -410,8 +540,14 @@ class PreferencesService extends ChangeNotifier {
 
     _recalculateTopArtist();
 
-    await _prefs.setString('realPlaybackCountsJson', json.encode(_realPlaybackCounts));
-    await _prefs.setString('artistPlayCountsJson', json.encode(_artistPlayCounts));
+    await _prefs.setString(
+      'realPlaybackCountsJson',
+      json.encode(_realPlaybackCounts),
+    );
+    await _prefs.setString(
+      'artistPlayCountsJson',
+      json.encode(_artistPlayCounts),
+    );
     if (_mostPlayedArtist.isNotEmpty) {
       await _prefs.setString('mostPlayedArtist', _mostPlayedArtist);
     }
@@ -424,7 +560,10 @@ class PreferencesService extends ChangeNotifier {
 
     final count = (_artistSkipCounts[artist] ?? 0) + 1;
     _artistSkipCounts[artist] = count;
-    await _prefs.setString('artistSkipCountsJson', json.encode(_artistSkipCounts));
+    await _prefs.setString(
+      'artistSkipCountsJson',
+      json.encode(_artistSkipCounts),
+    );
     notifyListeners();
   }
 
@@ -448,11 +587,30 @@ class PreferencesService extends ChangeNotifier {
     final affinities = <String, double>{};
     final allArtists = {..._artistPlayCounts.keys, ..._artistSkipCounts.keys};
 
-    for (final artist in allArtists) {
-      final plays = _artistPlayCounts[artist] ?? 0;
-      final skips = _artistSkipCounts[artist] ?? 0;
-      // Affinity: 2 points per play minus 1 point per skip
-      affinities[artist] = (plays * 2.0) - (skips * 1.0);
+    for (final rawArtist in allArtists) {
+      final plays = _artistPlayCounts[rawArtist] ?? 0;
+      final skips = _artistSkipCounts[rawArtist] ?? 0;
+      final netAffinity = (plays * 2.0) - (skips * 1.0);
+
+      // Decompose any composite artist string so individual artists get scored
+      final resolved = _resolveCanonicalArtists(rawArtist, '');
+      final targets = resolved.isNotEmpty
+          ? resolved
+          : [_canonicalizeArtistName(rawArtist)];
+
+      for (final a in targets) {
+        final norm = PlaylistArtistFilter.normalize(a);
+        if (norm.isEmpty ||
+            norm == 'aditya music' ||
+            norm == 'tseries' ||
+            norm == 't-series' ||
+            norm == 'sony music' ||
+            norm == 'zee music' ||
+            a.length < 2) {
+          continue;
+        }
+        affinities[a] = (affinities[a] ?? 0) + netAffinity;
+      }
     }
 
     final sorted = affinities.entries.toList()
@@ -460,7 +618,13 @@ class PreferencesService extends ChangeNotifier {
 
     List<String> top = sorted.take(5).map((e) => e.key).toList();
     if (top.isEmpty) {
-      top = ['Arijit Singh', 'Anirudh Ravichander', 'Pritam', 'Sid Sriram', 'Shreya Ghoshal'];
+      top = [
+        'Arijit Singh',
+        'Anirudh Ravichander',
+        'Pritam',
+        'Sid Sriram',
+        'Shreya Ghoshal',
+      ];
     }
 
     return TasteMatrix(
@@ -482,7 +646,9 @@ class PreferencesService extends ChangeNotifier {
   /// Morning (acoustic/ambient), Afternoon (upbeat/tempo), Evening (trending/hits), Late Night (lo-fi/slowed)
   CircadianContext getCircadianContext() {
     final hour = DateTime.now().hour;
-    final primaryLang = _preferredLanguages.isNotEmpty ? _preferredLanguages.first : 'Telugu';
+    final primaryLang = _preferredLanguages.isNotEmpty
+        ? _preferredLanguages.first
+        : 'Telugu';
 
     if (hour >= 5 && hour < 12) {
       return CircadianContext(
@@ -525,13 +691,24 @@ class PreferencesService extends ChangeNotifier {
   }
 
   /// Multi-Seed Daily Mix Synthesizer (Inspired by Spotube)
-  static void Function(bool enabled, Map<int, double> bands)? onEqualizerChanged;
+  static void Function(bool enabled, Map<int, double> bands)?
+  onEqualizerChanged;
 
   List<DailyMixConfig> getDailyMixConfigs() {
     final top = getTopArtists(limit: 5);
-    final primaryLang = _preferredLanguages.isNotEmpty ? _preferredLanguages.first : 'Telugu';
-    final artist1 = top.isNotEmpty ? top[0] : (primaryLang == 'Telugu' ? 'Sid Sriram' : 'Arijit Singh');
-    final artist2 = top.length > 1 ? top[1] : (primaryLang == 'Telugu' ? 'Anirudh Ravichander' : 'Pritam');
+    final primaryLang = _preferredLanguages.isNotEmpty
+        ? _preferredLanguages.first
+        : 'Telugu';
+    final rawArtist1 = top.isNotEmpty
+        ? top[0]
+        : (primaryLang == 'Telugu' ? 'Sid Sriram' : 'Arijit Singh');
+    final rawArtist2 = top.length > 1
+        ? top[1]
+        : (primaryLang == 'Telugu' ? 'Anirudh Ravichander' : 'Pritam');
+
+    // Guarantee that artist1 and artist2 are single, primary, clean artist names
+    final artist1 = _extractSingleLeadArtist(rawArtist1);
+    final artist2 = _extractSingleLeadArtist(rawArtist2);
 
     return [
       DailyMixConfig(
@@ -547,7 +724,7 @@ class PreferencesService extends ChangeNotifier {
       DailyMixConfig(
         title: 'Made For You',
         subtitle: 'Personalized Blend',
-        query: top.isNotEmpty ? '$primaryLang ${top[0]} hit songs' : '$primaryLang Super Hits',
+        query: '$primaryLang $artist1 hit songs',
       ),
     ];
   }
@@ -567,7 +744,12 @@ class PreferencesService extends ChangeNotifier {
 
     for (final track in tracks) {
       final artists = track.artistName
-          .split(RegExp(r'[,;&/|]|(?:\s+feat\.?\s+)|\s+ft\.?\s+', caseSensitive: false))
+          .split(
+            RegExp(
+              r'[,;&/|]|(?:\s+feat\.?\s+)|\s+ft\.?\s+',
+              caseSensitive: false,
+            ),
+          )
           .map((a) => a.trim())
           .where((a) => a.isNotEmpty && a.length > 1);
 
@@ -575,7 +757,9 @@ class PreferencesService extends ChangeNotifier {
         _artistPlayCounts[artist] = (_artistPlayCounts[artist] ?? 0) + 3;
       }
 
-      final detected = CanonicalSongDedup.detectLanguage('${track.trackName} ${track.artistName}');
+      final detected = CanonicalSongDedup.detectLanguage(
+        '${track.trackName} ${track.artistName}',
+      );
       if (detected != null) {
         langScores[detected] = (langScores[detected] ?? 0) + 1;
       }
@@ -599,11 +783,15 @@ class PreferencesService extends ChangeNotifier {
         avgAcousticness: totalAcoustic / featureCount,
         tracksAnalyzed: featureCount,
       );
-      await _prefs.setString('userAudioProfileJson', json.encode(_audioProfile.toJson()));
+      await _prefs.setString(
+        'userAudioProfileJson',
+        json.encode(_audioProfile.toJson()),
+      );
     }
 
     if (langScores.isNotEmpty) {
-      final sortedLangs = langScores.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+      final sortedLangs = langScores.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
       final topDetected = sortedLangs.take(3).map((e) => e.key).toList();
       for (final l in topDetected) {
         if (!_preferredLanguages.contains(l)) {
@@ -616,7 +804,10 @@ class PreferencesService extends ChangeNotifier {
       await _prefs.setStringList('preferredLanguages', _preferredLanguages);
     }
 
-    await _prefs.setString('artistPlayCountsJson', json.encode(_artistPlayCounts));
+    await _prefs.setString(
+      'artistPlayCountsJson',
+      json.encode(_artistPlayCounts),
+    );
 
     String topArtist = _mostPlayedArtist;
     int maxCount = 0;
@@ -638,18 +829,17 @@ class PreferencesService extends ChangeNotifier {
   List<String> getPersonalizedMixSeeds() {
     final mixes = getDailyMixConfigs();
     final vibe = getCircadianContext();
-    return [
-      mixes[0].query,
-      mixes[1].query,
-      vibe.query,
-    ];
+    return [mixes[0].query, mixes[1].query, vibe.query];
   }
 
   /// Caches home feed data with timestamp TTL (6 hours)
   Future<void> cacheHomeFeed(String key, String jsonData) async {
     if (!_isInitialized) return;
     await _prefs.setString('home_cache_$key', jsonData);
-    await _prefs.setInt('home_cache_time_$key', DateTime.now().millisecondsSinceEpoch);
+    await _prefs.setInt(
+      'home_cache_time_$key',
+      DateTime.now().millisecondsSinceEpoch,
+    );
   }
 
   /// Retrieves cached home feed data if less than 6 hours old
@@ -658,7 +848,9 @@ class PreferencesService extends ChangeNotifier {
     final timestamp = _prefs.getInt('home_cache_time_$key');
     if (timestamp == null) return null;
 
-    final age = DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(timestamp));
+    final age = DateTime.now().difference(
+      DateTime.fromMillisecondsSinceEpoch(timestamp),
+    );
     if (age.inHours >= 6) return null; // Stale
 
     return _prefs.getString('home_cache_$key');
@@ -804,11 +996,17 @@ class PreferencesService extends ChangeNotifier {
     if (_listeningHistory.length > 50) {
       _listeningHistory = _listeningHistory.sublist(0, 50);
     }
-    await _prefs.setString('listeningHistoryJson', json.encode(_listeningHistory));
+    await _prefs.setString(
+      'listeningHistoryJson',
+      json.encode(_listeningHistory),
+    );
 
     // Record in real-time Most Played tracks
     _recordSongInMostPlayed(song);
-    await _prefs.setString('mostPlayedSongsJson', json.encode(_mostPlayedSongs));
+    await _prefs.setString(
+      'mostPlayedSongsJson',
+      json.encode(_mostPlayedSongs),
+    );
 
     notifyListeners();
   }
@@ -827,8 +1025,12 @@ class PreferencesService extends ChangeNotifier {
       final normAuthor = CanonicalSongDedup.cleanArtist(author);
       if (normTitle.isNotEmpty) {
         for (final entry in _mostPlayedSongs.entries) {
-          final existingTitle = CanonicalSongDedup.cleanTitle((entry.value['title'] as String?) ?? '');
-          final existingAuthor = CanonicalSongDedup.cleanArtist((entry.value['author'] as String?) ?? '');
+          final existingTitle = CanonicalSongDedup.cleanTitle(
+            (entry.value['title'] as String?) ?? '',
+          );
+          final existingAuthor = CanonicalSongDedup.cleanArtist(
+            (entry.value['author'] as String?) ?? '',
+          );
           if (normTitle == existingTitle) {
             if (normAuthor.isEmpty ||
                 existingAuthor.isEmpty ||
@@ -848,7 +1050,8 @@ class PreferencesService extends ChangeNotifier {
       final currentCount = (existing['playCount'] as num?)?.toInt() ?? 0;
       existing['playCount'] = currentCount + 1;
       existing['lastPlayedAt'] = DateTime.now().toIso8601String();
-      if (((existing['thumbnail'] as String?)?.isEmpty ?? true) && thumbnail.isNotEmpty) {
+      if (((existing['thumbnail'] as String?)?.isEmpty ?? true) &&
+          thumbnail.isNotEmpty) {
         existing['thumbnail'] = thumbnail;
       }
     } else {
@@ -867,7 +1070,10 @@ class PreferencesService extends ChangeNotifier {
   Future<void> recordSongPlayback(Map<String, String> song) async {
     if (!_isInitialized) return;
     _recordSongInMostPlayed(song);
-    await _prefs.setString('mostPlayedSongsJson', json.encode(_mostPlayedSongs));
+    await _prefs.setString(
+      'mostPlayedSongsJson',
+      json.encode(_mostPlayedSongs),
+    );
     notifyListeners();
   }
 
@@ -895,6 +1101,18 @@ class PreferencesService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setProfileImagePath(String? path) async {
+    _profileImagePath = path;
+    if (_isInitialized) {
+      if (path == null || path.isEmpty) {
+        await _prefs.remove('profileImagePath');
+      } else {
+        await _prefs.setString('profileImagePath', path);
+      }
+    }
+    notifyListeners();
+  }
+
   Future<void> setArtworkStyle(ArtworkStyle style) async {
     if (!_isInitialized) return;
     _artworkStyle = style;
@@ -903,7 +1121,9 @@ class PreferencesService extends ChangeNotifier {
   }
 
   Future<void> toggleArtworkStyle() async {
-    final next = _artworkStyle == ArtworkStyle.card ? ArtworkStyle.vinyl : ArtworkStyle.card;
+    final next = _artworkStyle == ArtworkStyle.card
+        ? ArtworkStyle.vinyl
+        : ArtworkStyle.card;
     await setArtworkStyle(next);
   }
 
@@ -916,6 +1136,7 @@ class PreferencesService extends ChangeNotifier {
 
   @visibleForTesting
   void resetForTesting() {
+    _isInitialized = false;
     _realPlaybackCounts.clear();
     _artistPlayCounts.clear();
     _artistSkipCounts.clear();
@@ -924,5 +1145,6 @@ class PreferencesService extends ChangeNotifier {
     _mostPlayedSongs.clear();
     _mostPlayedArtist = '';
     _topArtistPlayCount = 0;
+    _profileImagePath = null;
   }
 }

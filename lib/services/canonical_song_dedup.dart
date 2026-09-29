@@ -11,7 +11,10 @@ class CanonicalSongDedup {
 
   // Noise regex for titles
   static final RegExp _bracketNoise = RegExp(r'\([^)]*\)|\[[^\]]*\]');
-  static final RegExp _featNoise = RegExp(r'\b(feat\.?|ft\.?)\b.*$', caseSensitive: false);
+  static final RegExp _featNoise = RegExp(
+    r'\b(feat\.?|ft\.?)\b.*$',
+    caseSensitive: false,
+  );
   static final RegExp _videoNoiseWords = RegExp(
     r'\b(official\s+video|official\s+music\s+video|official\s+lyric\s+video|lyric\s+video|'
     r'full\s+video\s+song|video\s+song|full\s+song|full\s+audio|audio\s+song|lyrics|'
@@ -46,19 +49,100 @@ class CanonicalSongDedup {
 
   // Record label, media company and noise words in artist names
   static const Set<String> _labelNoise = {
-    't-series', 'tseries', 'aditya music', 'sony music', 'zee music',
-    'lahari music', 'speed audio', 'tips official', 'tips', 'saregama',
-    'yrf', 'think music', 'vevo', 'records', 'entertainment', 'music',
-    'official', 'channel', 'audio', 'soundtracks', 'company',
-    'shreyas media', 'shreyas', 'nik studios', 'abhishek pictures',
-    'gr lyrics', 'lyrics', 'lyrical', 'filmnagar', 'media', 'news', 'tv'
+    't-series',
+    'tseries',
+    'aditya music',
+    'sony music',
+    'zee music',
+    'lahari music',
+    'speed audio',
+    'tips official',
+    'tips',
+    'saregama',
+    'yrf',
+    'think music',
+    'vevo',
+    'records',
+    'entertainment',
+    'music',
+    'official',
+    'channel',
+    'audio',
+    'soundtracks',
+    'company',
+    'shreyas media',
+    'shreyas',
+    'nik studios',
+    'abhishek pictures',
+    'gr lyrics',
+    'lyrics',
+    'lyrical',
+    'filmnagar',
+    'media',
+    'news',
+    'tv',
   };
 
   /// Common stopwords ignored during token set comparison
   static const Set<String> _stopwords = {
-    'the', 'a', 'an', 'and', 'from', 'in', 'on', 'at', 'to', 'for', 'of',
-    'with', 'by', 'song', 'track', 'movie', 'album'
+    'the',
+    'a',
+    'an',
+    'and',
+    'from',
+    'in',
+    'on',
+    'at',
+    'to',
+    'for',
+    'of',
+    'with',
+    'by',
+    'song',
+    'track',
+    'movie',
+    'album',
   };
+
+  /// Cleans duplicate repeated bracket descriptors e.g. "Perfect (Acoustic) (Acoustic)" -> "Perfect (Acoustic)"
+  static String deduplicateRepeatedTokens(String text) {
+    if (text.isEmpty) return text;
+    var result = text;
+    // Deduplicate identical consecutive parenthetical or bracketed groups e.g. (Acoustic) (Acoustic)
+    final bracketPattern = RegExp(
+      r'(\([^\)]+\)|\[[^\]]+\])(?:\s+\1)+',
+      caseSensitive: false,
+    );
+    result = result.replaceAllMapped(bracketPattern, (m) => m.group(1)!);
+
+    // Deduplicate repeated identical words in parentheses: (Acoustic Acoustic) -> (Acoustic)
+    final innerWordPattern = RegExp(
+      r'\(\s*(\b\w+\b)(?:\s+\1)+\s*\)',
+      caseSensitive: false,
+    );
+    result = result.replaceAllMapped(
+      innerWordPattern,
+      (m) => '(${m.group(1)})',
+    );
+
+    // Clean multiple identical tags like (Acoustic) ... (Acoustic)
+    final tags = RegExp(
+      r'\(([^\)]+)\)',
+    ).allMatches(result).map((m) => m.group(1)!.trim().toLowerCase()).toList();
+    if (tags.length > 1 && tags.toSet().length < tags.length) {
+      final seenTag = <String>{};
+      result = result.replaceAllMapped(RegExp(r'\s*\(([^\)]+)\)'), (m) {
+        final tag = m.group(1)!.trim().toLowerCase();
+        if (seenTag.contains(tag)) {
+          return '';
+        }
+        seenTag.add(tag);
+        return ' (${m.group(1)!.trim()})';
+      });
+    }
+
+    return result.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
 
   /// Normalizes a song title to its canonical core name
   static String cleanTitle(String raw) {
@@ -126,7 +210,10 @@ class CanonicalSongDedup {
 
   /// Extracts primary core song title, secondary context keywords (e.g. movie/album name, composer),
   /// and resolved artist from YouTube video metadata.
-  static Map<String, dynamic> extractSongContext(String rawTitle, String rawAuthor) {
+  static Map<String, dynamic> extractSongContext(
+    String rawTitle,
+    String rawAuthor,
+  ) {
     final cleanT = cleanTitle(rawTitle);
     String cleanA = cleanArtist(rawAuthor);
 
@@ -137,7 +224,10 @@ class CanonicalSongDedup {
       var segment = parts[i].trim();
       segment = segment.replaceAll(_bracketNoise, ' ');
       segment = segment.replaceAll(_videoNoiseWords, ' ');
-      segment = segment.replaceAll(_punctuation, ' ').replaceAll(_whitespace, ' ').trim();
+      segment = segment
+          .replaceAll(_punctuation, ' ')
+          .replaceAll(_whitespace, ' ')
+          .trim();
       if (segment.length > 2 && !segment.toLowerCase().contains('official')) {
         keywords.add(segment);
       }
@@ -164,11 +254,7 @@ class CanonicalSongDedup {
       }
     }
 
-    return {
-      'title': cleanT,
-      'artist': cleanA,
-      'contextKeywords': keywords,
-    };
+    return {'title': cleanT, 'artist': cleanA, 'contextKeywords': keywords};
   }
 
   /// Strict audio validator.
@@ -186,7 +272,8 @@ class CanonicalSongDedup {
     // 2. Blacklist non-music channels unless the title explicitly states it's an official song
     if (_nonMusicAuthorNoise.hasMatch(author)) {
       final titleLower = title.toLowerCase();
-      final hasSongIndicator = titleLower.contains('full video song') ||
+      final hasSongIndicator =
+          titleLower.contains('full video song') ||
           titleLower.contains('official music video') ||
           titleLower.contains('official song') ||
           titleLower.contains('lyrical video') ||
@@ -281,7 +368,9 @@ class CanonicalSongDedup {
     if (RegExp(r'\b(english)\b').hasMatch(lower)) return 'english';
 
     // Channel / Record Label language associations
-    if (lower.contains('aditya music') || lower.contains('madhura audio')) return 'telugu';
+    if (lower.contains('aditya music') || lower.contains('madhura audio')) {
+      return 'telugu';
+    }
     if (lower.contains('think music')) return 'tamil';
 
     // Check Romanized Indic scripts
@@ -312,7 +401,8 @@ class CanonicalSongDedup {
   }) {
     final synced = candidate['syncedLyrics'] as String?;
     final plain = candidate['plainLyrics'] as String?;
-    final lyrics = (synced?.isNotEmpty == true ? synced! : (plain ?? '')).trim();
+    final lyrics = (synced?.isNotEmpty == true ? synced! : (plain ?? ''))
+        .trim();
     if (lyrics.isEmpty) return -9999;
 
     // Hard reject instrumental or empty placeholders
@@ -325,7 +415,9 @@ class CanonicalSongDedup {
     }
 
     // Strip timestamps for script analysis
-    final cleanLyrics = lyrics.replaceAll(RegExp(r'\[\d+:\d+\.?\d*\]'), '').trim();
+    final cleanLyrics = lyrics
+        .replaceAll(RegExp(r'\[\d+:\d+\.?\d*\]'), '')
+        .trim();
     if (cleanLyrics.length < 4) return -9999;
 
     final script = detectScript(cleanLyrics, minCount: 8);
@@ -353,7 +445,10 @@ class CanonicalSongDedup {
     }
 
     // 2. Strict metadata language compatibility
-    if (tLang != null && tLang.isNotEmpty && metaLang != null && metaLang != 'english') {
+    if (tLang != null &&
+        tLang.isNotEmpty &&
+        metaLang != null &&
+        metaLang != 'english') {
       if (metaLang != tLang) {
         // Hard reject conflicting dubbed album tags
         return -9999;
@@ -380,7 +475,8 @@ class CanonicalSongDedup {
       if (tTokens.intersection(cTokens).isNotEmpty) {
         score += 180;
       } else if (tTokens.isNotEmpty) {
-        score -= 350; // Heavy penalty: prevents songs by different artists passing on generic titles
+        score -=
+            350; // Heavy penalty: prevents songs by different artists passing on generic titles
       }
     }
 
@@ -484,6 +580,20 @@ class CanonicalSongDedup {
     return v0[t.length];
   }
 
+  /// Extracts tokens from the full artist credit string, removing record label noise.
+  static Set<String> _extractFullArtistTokens(String raw) {
+    if (raw.isEmpty) return {};
+    var s = raw
+        .replaceAll(' - Topic', '')
+        .replaceAll('- Topic', '')
+        .toLowerCase();
+    for (final label in _labelNoise) {
+      s = s.replaceAll(label, ' ');
+    }
+    s = s.replaceAll(_punctuation, ' ').replaceAll(_whitespace, ' ').trim();
+    return tokenize(s);
+  }
+
   /// Determines if two song items represent the exact same track.
   static bool areDuplicateSongs({
     required String titleA,
@@ -502,16 +612,27 @@ class CanonicalSongDedup {
       final cleanAA = cleanArtist(artistA);
       final cleanAB = cleanArtist(artistB);
       if (cleanAA.isEmpty || cleanAB.isEmpty) return true;
-      if (cleanAA == cleanAB || cleanAA.contains(cleanAB) || cleanAB.contains(cleanAA)) {
+      if (cleanAA == cleanAB ||
+          cleanAA.contains(cleanAB) ||
+          cleanAB.contains(cleanAA)) {
         return true;
       }
       final tokensAA = tokenize(cleanAA);
       final tokensAB = tokenize(cleanAB);
       if (tokensAA.intersection(tokensAB).isNotEmpty) return true;
 
+      // Compare across all individual artists in composite credits (e.g. composer vs singer)
+      final fullTokensA = _extractFullArtistTokens(artistA);
+      final fullTokensB = _extractFullArtistTokens(artistB);
+      if (fullTokensA.intersection(fullTokensB).isNotEmpty) return true;
+
       // In Indian cinema, one credit may list composer and the other playback singer
-      final isIndicA = detectLanguage(artistA) != null || LyricsTransliterationService.isRomanizedTelugu(artistA);
-      final isIndicB = detectLanguage(artistB) != null || LyricsTransliterationService.isRomanizedTelugu(artistB);
+      final isIndicA =
+          detectLanguage(artistA) != null ||
+          LyricsTransliterationService.isRomanizedTelugu(artistA);
+      final isIndicB =
+          detectLanguage(artistB) != null ||
+          LyricsTransliterationService.isRomanizedTelugu(artistB);
       if (isIndicA && isIndicB) {
         return true;
       }
@@ -556,7 +677,9 @@ class CanonicalSongDedup {
       final cleanAA = cleanArtist(artistA);
       final cleanAB = cleanArtist(artistB);
       if (cleanAA.isNotEmpty && cleanAB.isNotEmpty) {
-        if (cleanAA == cleanAB || cleanAA.contains(cleanAB) || cleanAB.contains(cleanAA)) {
+        if (cleanAA == cleanAB ||
+            cleanAA.contains(cleanAB) ||
+            cleanAB.contains(cleanAA)) {
           return true;
         }
         final tokensAA = tokenize(cleanAA);
@@ -571,7 +694,10 @@ class CanonicalSongDedup {
   /// Deduplicates [incoming] songs against [primary] existing songs.
   /// If [incoming] is omitted, deduplicates [primary] against itself.
   /// Any song in [incoming] that duplicates a song in [primary] (or earlier in [incoming]) is dropped.
-  static List<Video> deduplicateList(List<Video> primary, [List<Video>? incoming]) {
+  static List<Video> deduplicateList(
+    List<Video> primary, [
+    List<Video>? incoming,
+  ]) {
     if (incoming == null) {
       final result = <Video>[];
       for (final song in primary) {
@@ -632,7 +758,9 @@ class CanonicalSongDedup {
     final remaining = List<Video>.from(songs);
 
     while (remaining.isNotEmpty) {
-      final lastArtist = result.isEmpty ? null : cleanArtist(result.last.author);
+      final lastArtist = result.isEmpty
+          ? null
+          : cleanArtist(result.last.author);
 
       // Select the highest-ranked song in remaining that does not duplicate the last song's artist
       int targetIdx = 0;
@@ -650,5 +778,13 @@ class CanonicalSongDedup {
     }
 
     return result;
+  }
+
+  /// Validates whether an ID string is a genuine 11-character YouTube video ID.
+  /// Purely numeric 11-character IDs or non-11 char IDs are synthetic IDs (e.g. from JioSaavn catalogs).
+  static bool isLikelyYouTubeId(String id) {
+    if (id.length != 11) return false;
+    if (RegExp(r'^\d{11}$').hasMatch(id)) return false;
+    return RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(id);
   }
 }
