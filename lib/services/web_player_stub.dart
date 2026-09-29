@@ -45,4 +45,6 @@ class WebPlayerBridge {
   }) {}
 
   static void setEqualizer(bool enabled, Map<int, double> bands) {}
+
+  static void setFallbackVideoId(String realYtId) {}
 }

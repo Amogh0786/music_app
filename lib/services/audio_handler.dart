@@ -11,7 +11,8 @@ Future<void> initAudioService() async {
   audioHandler = await AudioService.init(
     builder: () => DilSeAudioHandler(),
     config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.example.music_app.channel.audio_playback_v3',
+      androidNotificationChannelId:
+          'com.example.music_app.channel.audio_playback_v3',
       androidNotificationChannelName: 'DilSe Music Playback',
       androidNotificationOngoing: false,
       androidStopForegroundOnPause: false,
@@ -37,16 +38,20 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
 
   /// Proactively keeps Android Foreground Service alive during screen-off song transitions.
   void notifyLoading({bool isLoading = true}) {
-    playbackState.add(playbackState.value.copyWith(
-      processingState: isLoading ? AudioProcessingState.loading : AudioProcessingState.ready,
-      playing: true,
-      controls: [
-        MediaControl.skipToPrevious,
-        MediaControl.pause,
-        MediaControl.stop,
-        MediaControl.skipToNext,
-      ],
-    ));
+    playbackState.add(
+      playbackState.value.copyWith(
+        processingState: isLoading
+            ? AudioProcessingState.loading
+            : AudioProcessingState.ready,
+        playing: true,
+        controls: [
+          MediaControl.skipToPrevious,
+          MediaControl.pause,
+          MediaControl.stop,
+          MediaControl.skipToNext,
+        ],
+      ),
+    );
   }
 
   @override
@@ -59,34 +64,38 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
     _durationSub?.cancel();
     _player = player;
 
-    _playbackEventSub = _player.playbackEventStream.listen((PlaybackEvent event) {
+    _playbackEventSub = _player.playbackEventStream.listen((
+      PlaybackEvent event,
+    ) {
       final playing = _player.playing;
-      playbackState.add(playbackState.value.copyWith(
-        controls: [
-          MediaControl.skipToPrevious,
-          if (playing) MediaControl.pause else MediaControl.play,
-          MediaControl.stop,
-          MediaControl.skipToNext,
-        ],
-        systemActions: const {
-          MediaAction.seek,
-          MediaAction.seekForward,
-          MediaAction.seekBackward,
-        },
-        androidCompactActionIndices: const [0, 1, 3],
-        processingState: const {
-          ProcessingState.idle: AudioProcessingState.idle,
-          ProcessingState.loading: AudioProcessingState.loading,
-          ProcessingState.buffering: AudioProcessingState.buffering,
-          ProcessingState.ready: AudioProcessingState.ready,
-          ProcessingState.completed: AudioProcessingState.completed,
-        }[_player.processingState]!,
-        playing: playing,
-        updatePosition: _player.position,
-        bufferedPosition: _player.bufferedPosition,
-        speed: _player.speed,
-        queueIndex: event.currentIndex,
-      ));
+      playbackState.add(
+        playbackState.value.copyWith(
+          controls: [
+            MediaControl.skipToPrevious,
+            if (playing) MediaControl.pause else MediaControl.play,
+            MediaControl.stop,
+            MediaControl.skipToNext,
+          ],
+          systemActions: const {
+            MediaAction.seek,
+            MediaAction.seekForward,
+            MediaAction.seekBackward,
+          },
+          androidCompactActionIndices: const [0, 1, 3],
+          processingState: const {
+            ProcessingState.idle: AudioProcessingState.idle,
+            ProcessingState.loading: AudioProcessingState.loading,
+            ProcessingState.buffering: AudioProcessingState.buffering,
+            ProcessingState.ready: AudioProcessingState.ready,
+            ProcessingState.completed: AudioProcessingState.completed,
+          }[_player.processingState]!,
+          playing: playing,
+          updatePosition: _player.position,
+          bufferedPosition: _player.bufferedPosition,
+          speed: _player.speed,
+          queueIndex: event.currentIndex,
+        ),
+      );
     });
 
     _durationSub = _player.durationStream.listen((Duration? duration) {
@@ -119,7 +128,8 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> fastForward() => seek(_player.position + const Duration(seconds: 10));
+  Future<void> fastForward() =>
+      seek(_player.position + const Duration(seconds: 10));
 
   @override
   Future<void> rewind() => seek(_player.position - const Duration(seconds: 10));

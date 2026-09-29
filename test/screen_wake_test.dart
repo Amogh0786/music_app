@@ -75,27 +75,30 @@ void main() {
       expect(platformCalls, isEmpty);
     });
 
-    test('Lifecycle state changes handle background pause and resume gracefully', () async {
-      final service = ScreenWakeService();
+    test(
+      'Lifecycle state changes handle background pause and resume gracefully',
+      () async {
+        final service = ScreenWakeService();
 
-      await ScreenWakeService.enableWakeLock('lyrics');
-      expect(ScreenWakeService.isWakeLockActive, isTrue);
-      expect(platformCalls, [true]);
+        await ScreenWakeService.enableWakeLock('lyrics');
+        expect(ScreenWakeService.isWakeLockActive, isTrue);
+        expect(platformCalls, [true]);
 
-      // Simulate app sent to background -> wakelock is paused (platform toggle false)
-      service.didChangeAppLifecycleState(AppLifecycleState.paused);
-      expect(platformCalls, [true, false]);
+        // Simulate app sent to background -> wakelock is paused (platform toggle false)
+        service.didChangeAppLifecycleState(AppLifecycleState.paused);
+        expect(platformCalls, [true, false]);
 
-      // Simulate app resumed -> wakelock is restored (platform toggle true)
-      service.didChangeAppLifecycleState(AppLifecycleState.resumed);
-      expect(platformCalls, [true, false, true]);
+        // Simulate app resumed -> wakelock is restored (platform toggle true)
+        service.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        expect(platformCalls, [true, false, true]);
 
-      // Wakelock should still be recorded as active
-      expect(ScreenWakeService.isWakeLockActive, isTrue);
+        // Wakelock should still be recorded as active
+        expect(ScreenWakeService.isWakeLockActive, isTrue);
 
-      await ScreenWakeService.disableWakeLock('lyrics');
-      expect(ScreenWakeService.isWakeLockActive, isFalse);
-      expect(platformCalls, [true, false, true, false]);
-    });
+        await ScreenWakeService.disableWakeLock('lyrics');
+        expect(ScreenWakeService.isWakeLockActive, isFalse);
+        expect(platformCalls, [true, false, true, false]);
+      },
+    );
   });
 }

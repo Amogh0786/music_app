@@ -49,24 +49,32 @@ class UpdateService {
       final currentVersion = packageInfo.version;
       final currentBuildNumber = packageInfo.buildNumber;
 
-      final url = Uri.parse('https://api.github.com/repos/$_githubRepoOwner/$_githubRepoName/releases/latest');
-      final response = await http.get(
-        url,
-        headers: {
-          'Accept': 'application/vnd.github+json',
-          'User-Agent': 'MusicApp-Updater',
-        },
-      ).timeout(const Duration(seconds: 10));
+      final url = Uri.parse(
+        'https://api.github.com/repos/$_githubRepoOwner/$_githubRepoName/releases/latest',
+      );
+      final response = await http
+          .get(
+            url,
+            headers: {
+              'Accept': 'application/vnd.github+json',
+              'User-Agent': 'MusicApp-Updater',
+            },
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) {
-        debugPrint('[UpdateService] GitHub releases returned status: ${response.statusCode}');
+        debugPrint(
+          '[UpdateService] GitHub releases returned status: ${response.statusCode}',
+        );
         return null;
       }
 
       final data = json.decode(response.body) as Map<String, dynamic>;
       final tagName = (data['tag_name'] as String? ?? '').trim();
       final releaseName = (data['name'] as String? ?? tagName).trim();
-      final changelog = (data['body'] as String? ?? 'Bug fixes and performance improvements.').trim();
+      final changelog =
+          (data['body'] as String? ?? 'Bug fixes and performance improvements.')
+              .trim();
 
       // Find APK asset in release
       final assets = (data['assets'] as List<dynamic>? ?? []);
@@ -83,7 +91,9 @@ class UpdateService {
       }
 
       if (apkDownloadUrl == null || apkDownloadUrl.isEmpty) {
-        debugPrint('[UpdateService] No APK asset found in latest GitHub release ($tagName)');
+        debugPrint(
+          '[UpdateService] No APK asset found in latest GitHub release ($tagName)',
+        );
         return null;
       }
 
@@ -120,10 +130,18 @@ class UpdateService {
 
     // Extract version part and build number
     final remoteParts = cleanRemote.split('+');
-    final remoteSemver = remoteParts[0].split('.').map((e) => int.tryParse(e) ?? 0).toList();
-    final remoteBuild = remoteParts.length > 1 ? (int.tryParse(remoteParts[1]) ?? 0) : 0;
+    final remoteSemver = remoteParts[0]
+        .split('.')
+        .map((e) => int.tryParse(e) ?? 0)
+        .toList();
+    final remoteBuild = remoteParts.length > 1
+        ? (int.tryParse(remoteParts[1]) ?? 0)
+        : 0;
 
-    final currentSemver = cleanCurrent.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final currentSemver = cleanCurrent
+        .split('.')
+        .map((e) => int.tryParse(e) ?? 0)
+        .toList();
     final localBuild = int.tryParse(currentBuild) ?? 0;
 
     // Pad to 3 components (major.minor.patch)
@@ -150,7 +168,9 @@ class UpdateService {
   /// Starts downloading the APK and triggers Android's package installer.
   Stream<OtaEvent> startOtaUpdate(String downloadUrl) {
     if (kIsWeb || !Platform.isAndroid) {
-      throw UnsupportedError('OTA updates via APK are only supported on Android.');
+      throw UnsupportedError(
+        'OTA updates via APK are only supported on Android.',
+      );
     }
     return OtaUpdate().execute(
       downloadUrl,

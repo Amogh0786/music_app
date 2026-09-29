@@ -286,31 +286,148 @@ class LyricsTransliterationService {
   // ---------------------------------------------------------------------------
 
   static final Set<String> _teluguKeywords = {
-    'naa', 'neeku', 'ninnu', 'nannu', 'naatho', 'naaku', 'meeru', 'manaki', 'manaku',
-    'vaadu', 'aame', 'atanu', 'idi', 'adi', 'evaru', 'emi', 'emiti', 'enti', 'enduku',
-    'ippudu', 'appudu', 'eppudu', 'ekkada', 'akkada', 'ela', 'elaaga',
-    'choosi', 'choodu', 'choodangane', 'chuste', 'chusa', 'vachhi', 'vache', 'vastava',
-    'vellu', 'velli', 'vellave', 'undi', 'unnadi', 'unnave', 'undedi', 'ledu', 'leru',
-    'leka', 'cheppu', 'chebutha', 'cheppave', 'telusu', 'telusa', 'thelusaa', 'telisi',
-    'telusunaa', 'anukuni', 'anipisthondi', 'anipistondi', 'kavale', 'kaavali', 'kaavaale',
-    'padipoya', 'poyave', 'kallu', 'kaallu', 'kanulu', 'chupu', 'choopu', 'manasu',
-    'manasulona', 'gundello', 'gundellona', 'prema', 'preme', 'cheliya', 'priya',
-    'priyurala', 'chinni', 'pilla', 'pillada', 'pillagaada', 'bomma', 'lokam',
-    'lokame', 'praanam', 'swasalo', 'kalale', 'kala', 'jaabili', 'vennela', 'maata',
-    'maatallo', 'paata', 'raagam', 'raagamajari', 'muddhu', 'navvu', 'navvula',
-    'kanneeti', 'kanneellu', 'lona', 'kante', 'kanna', 'gaani', 'samajavaragamana',
-    'inthakanna', 'kurchi', 'madathapetti', 'rajamandri', 'mayamma', 'talavanollu',
-    'mestiri', 'chuttamalle', 'chuttestaandi', 'ammu', 'podhu', 'nammu', 'thattaledu',
-    'antukunnadhante', 'polikedi', 'peru', 'choodangaane', 'oorike', 'kaasepu', 'astamaanam',
-    'maimarapu', 'tuntari', 'pattuku', 'vadalanannavi', 'choode', 'tokkuku', 'dayaleda',
-    'asalu', 'subhanallah', 'annaavu'
+    'naa',
+    'neeku',
+    'ninnu',
+    'nannu',
+    'naatho',
+    'naaku',
+    'meeru',
+    'manaki',
+    'manaku',
+    'vaadu',
+    'aame',
+    'atanu',
+    'idi',
+    'adi',
+    'evaru',
+    'emi',
+    'emiti',
+    'enti',
+    'enduku',
+    'ippudu',
+    'appudu',
+    'eppudu',
+    'ekkada',
+    'akkada',
+    'ela',
+    'elaaga',
+    'choosi',
+    'choodu',
+    'choodangane',
+    'chuste',
+    'chusa',
+    'vachhi',
+    'vache',
+    'vastava',
+    'vellu',
+    'velli',
+    'vellave',
+    'undi',
+    'unnadi',
+    'unnave',
+    'undedi',
+    'ledu',
+    'leru',
+    'leka',
+    'cheppu',
+    'chebutha',
+    'cheppave',
+    'telusu',
+    'telusa',
+    'thelusaa',
+    'telisi',
+    'telusunaa',
+    'anukuni',
+    'anipisthondi',
+    'anipistondi',
+    'kavale',
+    'kaavali',
+    'kaavaale',
+    'padipoya',
+    'poyave',
+    'kallu',
+    'kaallu',
+    'kanulu',
+    'chupu',
+    'choopu',
+    'manasu',
+    'manasulona',
+    'gundello',
+    'gundellona',
+    'prema',
+    'preme',
+    'cheliya',
+    'priya',
+    'priyurala',
+    'chinni',
+    'pilla',
+    'pillada',
+    'pillagaada',
+    'bomma',
+    'lokam',
+    'lokame',
+    'praanam',
+    'swasalo',
+    'kalale',
+    'kala',
+    'jaabili',
+    'vennela',
+    'maata',
+    'maatallo',
+    'paata',
+    'raagam',
+    'raagamajari',
+    'muddhu',
+    'navvu',
+    'navvula',
+    'kanneeti',
+    'kanneellu',
+    'lona',
+    'kante',
+    'kanna',
+    'gaani',
+    'samajavaragamana',
+    'inthakanna',
+    'kurchi',
+    'madathapetti',
+    'rajamandri',
+    'mayamma',
+    'talavanollu',
+    'mestiri',
+    'chuttamalle',
+    'chuttestaandi',
+    'ammu',
+    'podhu',
+    'nammu',
+    'thattaledu',
+    'antukunnadhante',
+    'polikedi',
+    'peru',
+    'choodangaane',
+    'oorike',
+    'kaasepu',
+    'astamaanam',
+    'maimarapu',
+    'tuntari',
+    'pattuku',
+    'vadalanannavi',
+    'choode',
+    'tokkuku',
+    'dayaleda',
+    'asalu',
+    'subhanallah',
+    'annaavu',
   };
 
   /// Checks if Latin text contains characteristic Romanized Telugu (Tenglish) vocabulary
   static bool isRomanizedTelugu(String text) {
     if (text.isEmpty || hasIndicScript(text)) return false;
     final clean = text.toLowerCase().replaceAll(RegExp(r'[^a-z\s]'), ' ');
-    final words = clean.split(RegExp(r'\s+')).where((w) => w.length >= 2).toSet();
+    final words = clean
+        .split(RegExp(r'\s+'))
+        .where((w) => w.length >= 2)
+        .toSet();
     int matchCount = 0;
     for (final word in words) {
       if (_teluguKeywords.contains(word)) {
@@ -325,7 +442,11 @@ class LyricsTransliterationService {
     if (text.isEmpty || hasIndicScript(text)) return false;
     if (targetLang != null && targetLang.isNotEmpty) {
       final lang = targetLang.toLowerCase();
-      if (lang == 'telugu' || lang == 'hindi' || lang == 'tamil' || lang == 'kannada' || lang == 'malayalam') {
+      if (lang == 'telugu' ||
+          lang == 'hindi' ||
+          lang == 'tamil' ||
+          lang == 'kannada' ||
+          lang == 'malayalam') {
         return true;
       }
     }
@@ -333,26 +454,43 @@ class LyricsTransliterationService {
   }
 
   static const Map<String, String> _teluguIndependentVowels = {
-    'aa': 'ఆ', 'a': 'అ',
-    'ee': 'ఈ', 'ii': 'ఈ', 'i': 'ఇ',
-    'oo': 'ఊ', 'uu': 'ఊ', 'u': 'ఉ',
+    'aa': 'ఆ',
+    'a': 'అ',
+    'ee': 'ఈ',
+    'ii': 'ఈ',
+    'i': 'ఇ',
+    'oo': 'ఊ',
+    'uu': 'ఊ',
+    'u': 'ఉ',
     'ru': 'ఋ',
-    'ae': 'ఏ', 'ea': 'ఏ', 'e': 'ఎ',
+    'ae': 'ఏ',
+    'ea': 'ఏ',
+    'e': 'ఎ',
     'ai': 'ఐ',
-    'oa': 'ఓ', 'o': 'ఒ',
-    'au': 'ఔ', 'ou': 'ఔ',
+    'oa': 'ఓ',
+    'o': 'ఒ',
+    'au': 'ఔ',
+    'ou': 'ఔ',
   };
 
   static const Map<String, String> _teluguMatras = {
     'aa': 'ా',
     'a': '',
-    'ee': 'ీ', 'ii': 'ీ', 'i': 'ి',
-    'oo': 'ూ', 'uu': 'ూ', 'u': 'ు',
+    'ee': 'ీ',
+    'ii': 'ీ',
+    'i': 'ి',
+    'oo': 'ూ',
+    'uu': 'ూ',
+    'u': 'ు',
     'ru': 'ృ',
-    'ae': 'ే', 'ea': 'ే', 'e': 'ె',
+    'ae': 'ే',
+    'ea': 'ే',
+    'e': 'ె',
     'ai': 'ై',
-    'oa': 'ో', 'o': 'ొ',
-    'au': 'ౌ', 'ou': 'ౌ',
+    'oa': 'ో',
+    'o': 'ొ',
+    'au': 'ౌ',
+    'ou': 'ౌ',
   };
 
   static const List<MapEntry<String, String>> _teluguConsonants = [
@@ -409,10 +547,30 @@ class LyricsTransliterationService {
       }
 
       // Check if start of word or after non-letter -> Independent vowel
-      final isStartOfWord = i == 0 || (lower.codeUnitAt(i - 1) < 0x61 || lower.codeUnitAt(i - 1) > 0x7A);
+      final isStartOfWord =
+          i == 0 ||
+          (lower.codeUnitAt(i - 1) < 0x61 || lower.codeUnitAt(i - 1) > 0x7A);
       if (isStartOfWord) {
         bool matchedVowel = false;
-        for (final v in ['aa', 'ee', 'ii', 'oo', 'uu', 'ae', 'ea', 'ai', 'oa', 'au', 'ou', 'ru', 'a', 'i', 'u', 'e', 'o']) {
+        for (final v in [
+          'aa',
+          'ee',
+          'ii',
+          'oo',
+          'uu',
+          'ae',
+          'ea',
+          'ai',
+          'oa',
+          'au',
+          'ou',
+          'ru',
+          'a',
+          'i',
+          'u',
+          'e',
+          'o',
+        ]) {
           if (lower.startsWith(v, i)) {
             sb.write(_teluguIndependentVowels[v] ?? v);
             i += v.length;
@@ -439,7 +597,25 @@ class LyricsTransliterationService {
 
         // Check if followed by vowel / matra
         bool matchedMatra = false;
-        for (final v in ['aa', 'ee', 'ii', 'oo', 'uu', 'ae', 'ea', 'ai', 'oa', 'au', 'ou', 'ru', 'a', 'i', 'u', 'e', 'o']) {
+        for (final v in [
+          'aa',
+          'ee',
+          'ii',
+          'oo',
+          'uu',
+          'ae',
+          'ea',
+          'ai',
+          'oa',
+          'au',
+          'ou',
+          'ru',
+          'a',
+          'i',
+          'u',
+          'e',
+          'o',
+        ]) {
           if (i < len && lower.startsWith(v, i)) {
             final matra = _teluguMatras[v]!;
             sb.write(matchedConsonant);
@@ -449,9 +625,22 @@ class LyricsTransliterationService {
             // Check if followed by anusvara ('m' or 'n' before next consonant or at word end)
             if (i < len && (lower[i] == 'm' || lower[i] == 'n')) {
               final nextNext = i + 1 < len ? lower.codeUnitAt(i + 1) : 0;
-              final isNextConsonant = nextNext >= 0x61 && nextNext <= 0x7A && !['a', 'e', 'i', 'o', 'u'].contains(String.fromCharCode(nextNext));
-              final isWordEnd = i + 1 >= len || lower.codeUnitAt(i + 1) < 0x61 || lower.codeUnitAt(i + 1) > 0x7A;
-              if (isNextConsonant && lower[i] != String.fromCharCode(nextNext)) {
+              final isNextConsonant =
+                  nextNext >= 0x61 &&
+                  nextNext <= 0x7A &&
+                  ![
+                    'a',
+                    'e',
+                    'i',
+                    'o',
+                    'u',
+                  ].contains(String.fromCharCode(nextNext));
+              final isWordEnd =
+                  i + 1 >= len ||
+                  lower.codeUnitAt(i + 1) < 0x61 ||
+                  lower.codeUnitAt(i + 1) > 0x7A;
+              if (isNextConsonant &&
+                  lower[i] != String.fromCharCode(nextNext)) {
                 sb.write('ం');
                 i++;
               } else if (isWordEnd && v == 'a') {

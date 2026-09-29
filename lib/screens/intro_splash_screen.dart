@@ -72,7 +72,8 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 700),
-        pageBuilder: (context, animation, secondaryAnimation) => const MainScreen(),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const MainScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -123,7 +124,9 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFFA2D48).withValues(alpha: bloomOpacity),
+                        color: const Color(
+                          0xFFFA2D48,
+                        ).withValues(alpha: bloomOpacity),
                         blurRadius: 120,
                         spreadRadius: 40 * bloomScale,
                       ),
@@ -174,7 +177,9 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
               double xOffset = 0.0;
               if (t >= 0.48) {
                 final glideProgress = ((t - 0.48) / 0.22).clamp(0.0, 1.0);
-                final curvedGlide = Curves.easeInOutCubic.transform(glideProgress);
+                final curvedGlide = Curves.easeInOutCubic.transform(
+                  glideProgress,
+                );
                 xOffset = -72.0 * curvedGlide;
               }
 
@@ -207,7 +212,9 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFFFA2D48).withValues(alpha: 0.6),
+                                  color: const Color(
+                                    0xFFFA2D48,
+                                  ).withValues(alpha: 0.6),
                                   blurRadius: 36,
                                   spreadRadius: 6,
                                 ),
@@ -279,7 +286,9 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
                                   Text(
                                     'Suno Dil Se',
                                     style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.88),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.88,
+                                      ),
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
                                       letterSpacing: 2.2,
@@ -366,12 +375,13 @@ class _ParticlePainter extends CustomPainter {
 
     for (final p in particles) {
       final currentY = (p.y - (progress * 0.15 * p.speed)) % 1.0;
-      final currentX = (p.x + math.sin(p.phase + progress * math.pi * 4) * 0.02) % 1.0;
+      final currentX =
+          (p.x + math.sin(p.phase + progress * math.pi * 4) * 0.02) % 1.0;
       final blink = (math.sin(p.phase + progress * math.pi * 6) + 1.0) / 2.0;
 
-      paint.color = const Color(0xFFFF758C).withValues(
-        alpha: (p.alpha * blink * 0.8).clamp(0.0, 1.0),
-      );
+      paint.color = const Color(
+        0xFFFF758C,
+      ).withValues(alpha: (p.alpha * blink * 0.8).clamp(0.0, 1.0));
 
       canvas.drawCircle(
         Offset(currentX * size.width, currentY * size.height),

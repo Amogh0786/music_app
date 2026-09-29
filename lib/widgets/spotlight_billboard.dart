@@ -129,7 +129,10 @@ class _SpotlightBillboardState extends State<SpotlightBillboard> {
                             top: 14,
                             left: 14,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.black.withValues(alpha: 0.5),
                                 borderRadius: BorderRadius.circular(100),
@@ -141,7 +144,11 @@ class _SpotlightBillboardState extends State<SpotlightBillboard> {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.local_fire_department_rounded, color: primaryColor, size: 14),
+                                  Icon(
+                                    Icons.local_fire_department_rounded,
+                                    color: primaryColor,
+                                    size: 14,
+                                  ),
                                   const SizedBox(width: 4),
                                   const Text(
                                     'SPOTLIGHT',
@@ -166,7 +173,8 @@ class _SpotlightBillboardState extends State<SpotlightBillboard> {
                               children: [
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
@@ -186,7 +194,9 @@ class _SpotlightBillboardState extends State<SpotlightBillboard> {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                          color: Colors.white.withValues(alpha: 0.75),
+                                          color: Colors.white.withValues(
+                                            alpha: 0.75,
+                                          ),
                                           fontSize: 13,
                                           fontWeight: FontWeight.w500,
                                         ),
@@ -204,7 +214,9 @@ class _SpotlightBillboardState extends State<SpotlightBillboard> {
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: primaryColor.withValues(alpha: 0.5),
+                                        color: primaryColor.withValues(
+                                          alpha: 0.5,
+                                        ),
                                         blurRadius: 14,
                                         spreadRadius: 2,
                                       ),

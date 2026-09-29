@@ -120,9 +120,7 @@ class _VinylRecordPlayerState extends State<VinylRecordPlayer>
                 children: [
                   // Realistic Vinyl Grooves & Light Sheen
                   Positioned.fill(
-                    child: CustomPaint(
-                      painter: _VinylGroovesPainter(),
-                    ),
+                    child: CustomPaint(painter: _VinylGroovesPainter()),
                   ),
 
                   // Center Label (Song Album Artwork)
@@ -172,10 +170,7 @@ class _VinylRecordPlayerState extends State<VinylRecordPlayer>
                                 width: 2.2,
                               ),
                               boxShadow: const [
-                                BoxShadow(
-                                  color: Colors.black54,
-                                  blurRadius: 4,
-                                ),
+                                BoxShadow(color: Colors.black54, blurRadius: 4),
                               ],
                             ),
                           ),

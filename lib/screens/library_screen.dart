@@ -6,6 +6,7 @@ import '../services/music_service.dart';
 import '../services/preferences_service.dart';
 import 'spotify_import_screen.dart';
 import 'custom_playlist_screen.dart';
+import '../widgets/animated_equalizer.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -22,7 +23,6 @@ class _LibraryScreenState extends State<LibraryScreen>
   @override
   bool get wantKeepAlive => true;
 
-  int _totalDownloadedBytes = 0;
   final Map<String, int> _songFileSizes = {};
   int _lastDownloadedCount = -1;
 
@@ -55,7 +55,6 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   Future<void> _calculateStorageUsage() async {
     if (kIsWeb) return;
-    int total = 0;
     final downloaded = _musicService.downloadedSongs;
     for (final s in downloaded) {
       final path = s['localPath'];
@@ -66,15 +65,12 @@ class _LibraryScreenState extends State<LibraryScreen>
           if (await f.exists()) {
             final len = await f.length();
             _songFileSizes[id] = len;
-            total += len;
           }
         } catch (_) {}
       }
     }
     if (mounted) {
-      setState(() {
-        _totalDownloadedBytes = total;
-      });
+      setState(() {});
     }
   }
 
@@ -93,16 +89,10 @@ class _LibraryScreenState extends State<LibraryScreen>
     super.build(context);
     final downloaded = _musicService.downloadedSongs;
     final liked = _musicService.likedSongs;
-    final mostPlayed = _prefs.mostPlayedSongs;
     final history = _prefs.listeningHistory;
-    final primaryColor = Theme.of(context).primaryColor;
-
-    final allocatedMB = _prefs.cacheSizeMB > 0 ? _prefs.cacheSizeMB : 500.0;
-    final usedMB = _totalDownloadedBytes / (1024 * 1024);
-    final storageFraction = (usedMB / allocatedMB).clamp(0.0, 1.0);
 
     return DefaultTabController(
-      length: 5,
+      length: 4,
       child: Scaffold(
         backgroundColor: const Color(0xFF0B0B0F),
         appBar: AppBar(
@@ -131,13 +121,17 @@ class _LibraryScreenState extends State<LibraryScreen>
                   foregroundColor: Colors.black,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(horizontal: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                 ),
                 onPressed: () {
                   HapticFeedback.lightImpact();
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const SpotifyImportScreen()),
+                    MaterialPageRoute(
+                      builder: (context) => const SpotifyImportScreen(),
+                    ),
                   );
                 },
               ),
@@ -145,148 +139,37 @@ class _LibraryScreenState extends State<LibraryScreen>
           ],
 
           bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(138),
-            child: Column(
-              children: [
-                // Storage Usage Ring Meter Card
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF14141E),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.16),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.35),
-                          blurRadius: 14,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        // Storage Ring Indicator
-                        SizedBox(
-                          width: 46,
-                          height: 46,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              CircularProgressIndicator(
-                                value: storageFraction,
-                                strokeWidth: 4.5,
-                                backgroundColor: Colors.white12,
-                                valueColor: AlwaysStoppedAnimation(
-                                  storageFraction > 0.9 ? Colors.orangeAccent : primaryColor,
-                                ),
-                              ),
-                              Icon(
-                                Icons.offline_pin_rounded,
-                                color: storageFraction > 0.9 ? Colors.orangeAccent : primaryColor,
-                                size: 22,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        // Storage Details
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    '${usedMB.toStringAsFixed(1)} MB',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 15,
-                                      letterSpacing: -0.2,
-                                    ),
-                                  ),
-                                  Text(
-                                    ' / ${allocatedMB.toStringAsFixed(0)} MB',
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.5),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                downloaded.isEmpty
-                                    ? 'Offline Storage Ready • Lossless'
-                                    : '${downloaded.length} Offline Tracks Saved',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.65),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Manage Pill Badge
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: primaryColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: primaryColor.withValues(alpha: 0.35),
-                              width: 1,
-                            ),
-                          ),
-                          child: Text(
-                            '${(storageFraction * 100).toInt()}% Used',
-                            style: TextStyle(
-                              color: primaryColor,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+            preferredSize: const Size.fromHeight(48),
+            child: Container(
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.only(bottom: 6),
+              child: TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicator: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.22),
+                    width: 1,
                   ),
                 ),
-                const SizedBox(height: 10),
-
-                // Modern Pill TabBar
-                TabBar(
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  indicatorColor: primaryColor,
-                  indicatorWeight: 3,
-                  indicatorSize: TabBarIndicatorSize.label,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white38,
-                  labelStyle: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13.5,
-                    letterSpacing: -0.2,
+                dividerColor: Colors.transparent,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white54,
+                labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                tabs: [
+                  _buildPillTab('Downloaded', downloaded.length),
+                  _buildPillTab('Liked', liked.length),
+                  _buildPillTab(
+                    'Playlists',
+                    _musicService.customPlaylists.length,
                   ),
-                  unselectedLabelStyle: const TextStyle(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 13.5,
-                  ),
-                  tabs: [
-                    Tab(text: 'Downloaded (${downloaded.length})'),
-                    Tab(text: 'Liked (${liked.length})'),
-                    Tab(text: 'Most Played (${mostPlayed.length})'),
-                    Tab(text: 'Playlists (${_musicService.customPlaylists.length})'),
-                    Tab(text: 'History (${history.length})'),
-                  ],
-                ),
-              ],
+                  _buildPillTab('History', history.length),
+                ],
+              ),
             ),
           ),
         ),
@@ -297,7 +180,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                 ? _buildEmptyState(
                     icon: Icons.download_for_offline_outlined,
                     title: 'No downloaded songs yet',
-                    subtitle: 'Tap the download icon while playing any song to listen offline without internet.',
+                    subtitle:
+                        'Tap the download icon while playing any song to listen offline without internet.',
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.only(bottom: 160, top: 12),
@@ -322,26 +206,48 @@ class _LibraryScreenState extends State<LibraryScreen>
                       final songId = song['id'] ?? '';
                       final sizeBytes = _songFileSizes[songId] ?? 0;
                       final sizeFormatted = _formatBytes(sizeBytes);
+                      final isCurrent =
+                          _musicService.currentSong?.id.value == songId;
 
                       return RepaintBoundary(
                         key: ValueKey('down_$songId'),
                         child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
+                          ),
                           leading: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: SizedBox(
                               width: 52,
                               height: 52,
-                              child: Image.network(
-                                song['thumbnail'] ?? '',
-                                cacheWidth: 150,
-                                cacheHeight: 150,
-                                filterQuality: FilterQuality.medium,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => Container(
-                                  color: const Color(0xFF1E1E28),
-                                  child: const Icon(Icons.music_note, color: Colors.white54),
-                                ),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Image.network(
+                                    song['thumbnail'] ?? '',
+                                    cacheWidth: 120,
+                                    cacheHeight: 120,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) => Container(
+                                      color: const Color(0xFF1E1E28),
+                                      child: const Icon(
+                                        Icons.music_note,
+                                        color: Colors.white54,
+                                      ),
+                                    ),
+                                  ),
+                                  if (isCurrent)
+                                    Container(
+                                      color: Colors.black54,
+                                      child: Center(
+                                        child: AnimatedEqualizer(
+                                          isPlaying: _musicService.isPlaying,
+                                          size: 22,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ),
@@ -372,7 +278,10 @@ class _LibraryScreenState extends State<LibraryScreen>
                             if (sizeBytes > 0) ...[
                               const SizedBox(width: 6),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1.5,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.white12,
                                   borderRadius: BorderRadius.circular(6),
@@ -392,29 +301,63 @@ class _LibraryScreenState extends State<LibraryScreen>
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.offline_pin_rounded, color: Color(0xFF1DB954), size: 20),
+                            const Icon(
+                              Icons.offline_pin_rounded,
+                              color: Color(0xFF1DB954),
+                              size: 20,
+                            ),
                             IconButton(
-                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.white38, size: 20),
+                              icon: const Icon(
+                                Icons.delete_outline_rounded,
+                                color: Colors.white38,
+                                size: 20,
+                              ),
                               onPressed: () async {
                                 HapticFeedback.mediumImpact();
                                 final confirm = await showDialog<bool>(
                                   context: context,
                                   builder: (ctx) => AlertDialog(
                                     backgroundColor: const Color(0xFF1E1E28),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                    title: const Text('Delete Download?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                    content: Text('Remove "${song['title']}" from offline storage?', style: const TextStyle(color: Colors.white70)),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    title: const Text(
+                                      'Delete Download?',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    content: Text(
+                                      'Remove "${song['title']}" from offline storage?',
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                      ),
+                                    ),
                                     actions: [
-                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
                                       TextButton(
-                                        onPressed: () => Navigator.pop(ctx, true),
-                                        child: const Text('Delete', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, true),
+                                        child: const Text(
+                                          'Delete',
+                                          style: TextStyle(
+                                            color: Colors.redAccent,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                       ),
                                     ],
                                   ),
                                 );
                                 if (confirm == true) {
-                                  await _musicService.deleteDownloadedSong(song['id']!);
+                                  await _musicService.deleteDownloadedSong(
+                                    song['id']!,
+                                  );
                                 }
                               },
                             ),
@@ -434,7 +377,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                 ? _buildEmptyState(
                     icon: Icons.favorite_border_rounded,
                     title: 'No liked songs yet',
-                    subtitle: 'Tap the heart icon while playing any song to save it in your favorites collection.',
+                    subtitle:
+                        'Tap the heart icon while playing any song to save it in your favorites collection.',
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.only(bottom: 160, top: 12),
@@ -456,25 +400,49 @@ class _LibraryScreenState extends State<LibraryScreen>
                       }
 
                       final song = liked[index - 1];
+                      final songId = song['id'] ?? '';
+                      final isCurrent =
+                          _musicService.currentSong?.id.value == songId;
+
                       return RepaintBoundary(
-                        key: ValueKey('liked_${song['id']}'),
+                        key: ValueKey('liked_$songId'),
                         child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
+                          ),
                           leading: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: SizedBox(
                               width: 52,
                               height: 52,
-                              child: Image.network(
-                                song['thumbnail'] ?? '',
-                                fit: BoxFit.cover,
-                                cacheWidth: 150,
-                                cacheHeight: 150,
-                                filterQuality: FilterQuality.medium,
-                                errorBuilder: (_, _, _) => Container(
-                                  color: const Color(0xFF1E1E28),
-                                  child: const Icon(Icons.music_note, color: Colors.white54),
-                                ),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Image.network(
+                                    song['thumbnail'] ?? '',
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 120,
+                                    cacheHeight: 120,
+                                    errorBuilder: (_, _, _) => Container(
+                                      color: const Color(0xFF1E1E28),
+                                      child: const Icon(
+                                        Icons.music_note,
+                                        color: Colors.white54,
+                                      ),
+                                    ),
+                                  ),
+                                  if (isCurrent)
+                                    Container(
+                                      color: Colors.black54,
+                                      child: Center(
+                                        child: AnimatedEqualizer(
+                                          isPlaying: _musicService.isPlaying,
+                                          size: 22,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ),
@@ -498,7 +466,11 @@ class _LibraryScreenState extends State<LibraryScreen>
                           ),
                         ),
                         trailing: IconButton(
-                          icon: const Icon(Icons.favorite_rounded, color: Color(0xFFFA2D48), size: 22),
+                          icon: const Icon(
+                            Icons.favorite_rounded,
+                            color: Color(0xFFFA2D48),
+                            size: 22,
+                          ),
                           onPressed: () {
                             HapticFeedback.selectionClick();
                             _musicService.removeLikedSong(song['id'] ?? '');
@@ -513,237 +485,13 @@ class _LibraryScreenState extends State<LibraryScreen>
                     },
                   ),
 
-            // TAB 3: MOST PLAYED SONGS (Top 100 on-device playback streams)
-            mostPlayed.isEmpty
-                ? _buildEmptyState(
-                    icon: Icons.local_fire_department_rounded,
-                    title: 'No most played songs yet',
-                    subtitle: 'Songs you stream will be ranked here up to your top 100 most played in real time.',
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 160, top: 12),
-                    itemCount: mostPlayed.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildActionHeader(
-                              count: mostPlayed.length,
-                              onPlayAll: () {
-                                HapticFeedback.lightImpact();
-                                _musicService.playMostPlayedSong(mostPlayed.first, allSongs: mostPlayed, startIndex: 0);
-                              },
-                              onShuffle: () {
-                                HapticFeedback.lightImpact();
-                                _musicService.toggleShuffle();
-                                _musicService.playMostPlayedSong(mostPlayed.first, allSongs: mostPlayed);
-                              },
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                              child: Row(
-                                children: [
-                                  Text(
-                                    'TOP ${mostPlayed.length} STREAMED TRACKS',
-                                    style: const TextStyle(
-                                      color: Colors.white54,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1.1,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: primaryColor.withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: primaryColor.withValues(alpha: 0.35)),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          width: 6,
-                                          height: 6,
-                                          decoration: BoxDecoration(
-                                            color: primaryColor,
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 5),
-                                        Text(
-                                          'Live Sync',
-                                          style: TextStyle(
-                                            color: primaryColor,
-                                            fontSize: 10.5,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        );
-                      }
-
-                      final song = mostPlayed[index - 1];
-                      final rank = index;
-                      final isTop3 = rank <= 3;
-                      final playCount = (song['playCount'] as num?)?.toInt() ?? 1;
-                      final songId = (song['id'] as String?) ?? '';
-                      final isCurrent = _musicService.currentSong?.id.value == songId;
-                      final isLiked = _musicService.isLiked(songId);
-
-                      return RepaintBoundary(
-                        key: ValueKey('most_$songId'),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                          leading: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: 26,
-                                child: Center(
-                                  child: Text(
-                                    '$rank',
-                                    style: TextStyle(
-                                      color: isTop3 ? primaryColor : Colors.white54,
-                                      fontWeight: isTop3 ? FontWeight.w900 : FontWeight.w600,
-                                      fontSize: rank > 99 ? 12 : 14,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(10),
-                                child: SizedBox(
-                                  width: 52,
-                                  height: 52,
-                                  child: Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      Image.network(
-                                        song['thumbnail'] ?? '',
-                                        fit: BoxFit.cover,
-                                        cacheWidth: 150,
-                                        cacheHeight: 150,
-                                        filterQuality: FilterQuality.medium,
-                                        errorBuilder: (_, _, _) => Container(
-                                          color: const Color(0xFF1E1E28),
-                                          child: const Icon(Icons.music_note, color: Colors.white54),
-                                        ),
-                                      ),
-                                    if (isCurrent)
-                                      Container(
-                                        color: Colors.black54,
-                                        child: Center(
-                                          child: Icon(
-                                            _musicService.isPlaying ? Icons.equalizer_rounded : Icons.play_arrow_rounded,
-                                            color: primaryColor,
-                                            size: 24,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        title: Text(
-                          song['title'] ?? 'Unknown Track',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: isCurrent ? primaryColor : Colors.white,
-                            fontSize: 14.5,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                        subtitle: Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                song['author'] ?? 'Unknown Artist',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.6),
-                                  fontSize: 12.5,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: isTop3 ? primaryColor.withValues(alpha: 0.15) : const Color(0xFF1E1E28),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: isTop3 ? primaryColor.withValues(alpha: 0.4) : Colors.white12,
-                                  width: 1,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.play_arrow_rounded,
-                                    size: 13,
-                                    color: isTop3 ? primaryColor : Colors.white60,
-                                  ),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    '$playCount ${playCount == 1 ? "play" : "plays"}',
-                                    style: TextStyle(
-                                      color: isTop3 ? Colors.white : Colors.white70,
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            IconButton(
-                              icon: Icon(
-                                isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                color: isLiked ? const Color(0xFFFA2D48) : Colors.white38,
-                                size: 20,
-                              ),
-                              onPressed: () {
-                                HapticFeedback.selectionClick();
-                                _musicService.toggleLikeMap(song);
-                              },
-                            ),
-                          ],
-                        ),
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          _musicService.playMostPlayedSong(song, allSongs: mostPlayed, startIndex: index - 1);
-                        },
-                      ),
-                    );
-                    },
-                  ),
-
-            // TAB 4: PLAYLISTS
+            // TAB 3: PLAYLISTS
             _musicService.customPlaylists.isEmpty
                 ? _buildEmptyState(
                     icon: Icons.featured_play_list_outlined,
                     title: 'No custom playlists yet',
-                    subtitle: 'Import any public playlist from Spotify or create your own custom playlist.',
+                    subtitle:
+                        'Import any public playlist from Spotify or create your own custom playlist.',
                     action: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -753,13 +501,18 @@ class _LibraryScreenState extends State<LibraryScreen>
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF1DB954),
                             foregroundColor: Colors.black,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
                           onPressed: () {
                             HapticFeedback.lightImpact();
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => const SpotifyImportScreen()),
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const SpotifyImportScreen(),
+                              ),
                             );
                           },
                         ),
@@ -769,8 +522,12 @@ class _LibraryScreenState extends State<LibraryScreen>
                           label: const Text('New Playlist'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.white,
-                            side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            side: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.2),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
                           onPressed: () {
                             HapticFeedback.lightImpact();
@@ -786,7 +543,10 @@ class _LibraryScreenState extends State<LibraryScreen>
                     itemBuilder: (context, index) {
                       if (index == 0) {
                         return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -801,17 +561,28 @@ class _LibraryScreenState extends State<LibraryScreen>
                               Row(
                                 children: [
                                   IconButton(
-                                    icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.white70, size: 20),
+                                    icon: const Icon(
+                                      Icons.add_circle_outline_rounded,
+                                      color: Colors.white70,
+                                      size: 20,
+                                    ),
                                     tooltip: 'New Playlist',
                                     onPressed: _showCreatePlaylistDialog,
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.queue_music_rounded, color: Color(0xFF1DB954), size: 20),
+                                    icon: const Icon(
+                                      Icons.queue_music_rounded,
+                                      color: Color(0xFF1DB954),
+                                      size: 20,
+                                    ),
                                     tooltip: 'Import from Spotify',
                                     onPressed: () {
                                       Navigator.push(
                                         context,
-                                        MaterialPageRoute(builder: (context) => const SpotifyImportScreen()),
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const SpotifyImportScreen(),
+                                        ),
                                       );
                                     },
                                   ),
@@ -823,40 +594,59 @@ class _LibraryScreenState extends State<LibraryScreen>
                       }
 
                       final playlist = _musicService.customPlaylists[index - 1];
-                      final name = (playlist['name'] as String?) ?? 'Unknown Playlist';
-                      final songs = List<Map<String, dynamic>>.from(playlist['songs'] ?? []);
+                      final name =
+                          (playlist['name'] as String?) ?? 'Unknown Playlist';
+                      final songs = List<Map<String, dynamic>>.from(
+                        playlist['songs'] ?? [],
+                      );
                       final id = (playlist['id'] as String?) ?? '';
-                      final firstThumbnail = songs.isNotEmpty ? songs.first['thumbnail'] as String? : null;
+                      final firstThumbnail = songs.isNotEmpty
+                          ? songs.first['thumbnail'] as String?
+                          : null;
 
                       return RepaintBoundary(
                         key: ValueKey('plist_$id'),
                         child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 6,
+                          ),
                           leading: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: Container(
                               width: 52,
                               height: 52,
-                              color: const Color(0xFF1E1E28),
-                              child: firstThumbnail != null && firstThumbnail.isNotEmpty
+                              decoration: BoxDecoration(
+                                color: _prefs.themeColor.withValues(alpha: 0.16),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.08),
+                                  width: 1,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child:
+                                  firstThumbnail != null &&
+                                      firstThumbnail.isNotEmpty
                                   ? Image.network(
                                       firstThumbnail,
                                       fit: BoxFit.cover,
-                                      cacheWidth: 150,
-                                      cacheHeight: 150,
-                                      filterQuality: FilterQuality.medium,
-                                    errorBuilder: (_, _, _) => const Icon(
-                                      Icons.featured_play_list_rounded,
-                                      color: Color(0xFF1DB954),
+                                      cacheWidth: 120,
+                                      cacheHeight: 120,
+                                      errorBuilder: (_, _, _) => Icon(
+                                        Icons.queue_music_rounded,
+                                        color: _prefs.themeColor.withValues(
+                                          alpha: 0.85,
+                                        ),
                                       size: 26,
                                     ),
                                   )
-                                : const Icon(
-                                    Icons.featured_play_list_rounded,
-                                    color: Color(0xFF1DB954),
+                                : Icon(
+                                    Icons.queue_music_rounded,
+                                    color: _prefs.themeColor.withValues(
+                                      alpha: 0.85,
+                                    ),
                                     size: 26,
                                   ),
-
                           ),
                         ),
                         title: Text(
@@ -881,7 +671,11 @@ class _LibraryScreenState extends State<LibraryScreen>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.edit_outlined, color: Colors.white54, size: 20),
+                              icon: const Icon(
+                                Icons.edit_outlined,
+                                color: Colors.white54,
+                                size: 20,
+                              ),
                               tooltip: 'Rename playlist',
                               onPressed: () {
                                 HapticFeedback.lightImpact();
@@ -889,7 +683,11 @@ class _LibraryScreenState extends State<LibraryScreen>
                               },
                             ),
                             IconButton(
-                              icon: const Icon(Icons.delete_outline, color: Colors.white54, size: 22),
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.white54,
+                                size: 22,
+                              ),
                               tooltip: 'Delete playlist',
                               onPressed: () {
                                 HapticFeedback.lightImpact();
@@ -898,7 +696,11 @@ class _LibraryScreenState extends State<LibraryScreen>
                             ),
                             const SizedBox(width: 4),
                             IconButton(
-                              icon: const Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 36),
+                              icon: const Icon(
+                                Icons.play_circle_fill_rounded,
+                                color: Colors.white,
+                                size: 36,
+                              ),
 
                               onPressed: songs.isEmpty
                                   ? null
@@ -913,7 +715,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                           HapticFeedback.lightImpact();
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) => CustomPlaylistScreen(playlistId: id),
+                              builder: (_) =>
+                                  CustomPlaylistScreen(playlistId: id),
                             ),
                           );
                         },
@@ -922,13 +725,13 @@ class _LibraryScreenState extends State<LibraryScreen>
                     },
                   ),
 
-
             // TAB 4: LISTENING HISTORY
             history.isEmpty
                 ? _buildEmptyState(
                     icon: Icons.history_toggle_off_rounded,
                     title: 'No listening history yet',
-                    subtitle: 'Songs you stream will automatically appear here for quick replay.',
+                    subtitle:
+                        'Songs you stream will automatically appear here for quick replay.',
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.only(bottom: 160, top: 12),
@@ -936,7 +739,10 @@ class _LibraryScreenState extends State<LibraryScreen>
                     itemBuilder: (context, index) {
                       if (index == 0) {
                         return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -950,8 +756,18 @@ class _LibraryScreenState extends State<LibraryScreen>
                                 ),
                               ),
                               TextButton.icon(
-                                icon: const Icon(Icons.delete_sweep_rounded, size: 16, color: Colors.white54),
-                                label: const Text('Clear', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                                icon: const Icon(
+                                  Icons.delete_sweep_rounded,
+                                  size: 16,
+                                  color: Colors.white54,
+                                ),
+                                label: const Text(
+                                  'Clear',
+                                  style: TextStyle(
+                                    color: Colors.white54,
+                                    fontSize: 13,
+                                  ),
+                                ),
                                 onPressed: () {
                                   HapticFeedback.lightImpact();
                                   _prefs.clearListeningHistory();
@@ -963,28 +779,52 @@ class _LibraryScreenState extends State<LibraryScreen>
                       }
 
                       final song = history[index - 1];
+                      final songId = song['id'] ?? '';
+                      final isCurrent =
+                          _musicService.currentSong?.id.value == songId;
+
                       return RepaintBoundary(
-                        key: ValueKey('hist_${song['id']}'),
+                        key: ValueKey('hist_$songId'),
                         child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
+                          ),
                           leading: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: SizedBox(
                               width: 52,
                               height: 52,
-                              child: Image.network(
-                                song['thumbnail'] ?? '',
-                                fit: BoxFit.cover,
-                                cacheWidth: 150,
-                                cacheHeight: 150,
-                                filterQuality: FilterQuality.medium,
-                              errorBuilder: (_, _, _) => Container(
-                                color: const Color(0xFF1E1E28),
-                                child: const Icon(Icons.music_note, color: Colors.white54),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Image.network(
+                                    song['thumbnail'] ?? '',
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 120,
+                                    cacheHeight: 120,
+                                    errorBuilder: (_, _, _) => Container(
+                                      color: const Color(0xFF1E1E28),
+                                      child: const Icon(
+                                        Icons.music_note,
+                                        color: Colors.white54,
+                                      ),
+                                    ),
+                                  ),
+                                  if (isCurrent)
+                                    Container(
+                                      color: Colors.black54,
+                                      child: Center(
+                                        child: AnimatedEqualizer(
+                                          isPlaying: _musicService.isPlaying,
+                                          size: 22,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ),
-                        ),
                         title: Text(
                           song['title'] ?? 'Unknown Track',
                           maxLines: 1,
@@ -1004,7 +844,11 @@ class _LibraryScreenState extends State<LibraryScreen>
                             fontSize: 12.5,
                           ),
                         ),
-                        trailing: const Icon(Icons.play_circle_fill_rounded, color: Colors.white38, size: 24),
+                        trailing: const Icon(
+                          Icons.play_circle_fill_rounded,
+                          color: Colors.white38,
+                          size: 24,
+                        ),
                         onTap: () {
                           HapticFeedback.lightImpact();
                           _musicService.playHistorySong(song);
@@ -1024,21 +868,31 @@ class _LibraryScreenState extends State<LibraryScreen>
     required VoidCallback onPlayAll,
     required VoidCallback onShuffle,
   }) {
-    final primaryColor = Theme.of(context).primaryColor;
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
           Expanded(
             child: ElevatedButton.icon(
-              icon: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 20),
-              label: Text('Play All ($count)', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              icon: const Icon(
+                Icons.play_arrow_rounded,
+                color: Colors.black,
+                size: 20,
+              ),
+              label: Text(
+                'Play All ($count)',
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
+                backgroundColor: Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               onPressed: onPlayAll,
             ),
@@ -1046,12 +900,24 @@ class _LibraryScreenState extends State<LibraryScreen>
           const SizedBox(width: 12),
           Expanded(
             child: OutlinedButton.icon(
-              icon: const Icon(Icons.shuffle_rounded, color: Colors.white70, size: 18),
-              label: const Text('Shuffle', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+              icon: const Icon(
+                Icons.shuffle_rounded,
+                color: Colors.white70,
+                size: 18,
+              ),
+              label: const Text(
+                'Shuffle',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               style: OutlinedButton.styleFrom(
                 side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               onPressed: onShuffle,
             ),
@@ -1068,7 +934,10 @@ class _LibraryScreenState extends State<LibraryScreen>
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E28),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Create New Playlist', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Create New Playlist',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -1076,20 +945,31 @@ class _LibraryScreenState extends State<LibraryScreen>
           decoration: InputDecoration(
             hintText: 'Playlist name',
             hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
-            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2))),
-            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Theme.of(context).primaryColor)),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(
+                color: Colors.white.withValues(alpha: 0.2),
+              ),
+            ),
+            focusedBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.white70),
+            ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white54),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).primaryColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: () {
               final name = controller.text.trim();
@@ -1112,7 +992,10 @@ class _LibraryScreenState extends State<LibraryScreen>
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E28),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Rename Playlist', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Rename Playlist',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -1120,20 +1003,31 @@ class _LibraryScreenState extends State<LibraryScreen>
           decoration: InputDecoration(
             hintText: 'New playlist name',
             hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
-            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2))),
-            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Theme.of(context).primaryColor)),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(
+                color: Colors.white.withValues(alpha: 0.2),
+              ),
+            ),
+            focusedBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.white70),
+            ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white54),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).primaryColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: () {
               final newName = controller.text.trim();
@@ -1155,18 +1049,29 @@ class _LibraryScreenState extends State<LibraryScreen>
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E28),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete Playlist', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: Text('Are you sure you want to delete "$name"?', style: const TextStyle(color: Colors.white70)),
+        title: const Text(
+          'Delete Playlist',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Are you sure you want to delete "$name"?',
+          style: const TextStyle(color: Colors.white70),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white54),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.redAccent,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: () {
               _musicService.deletePlaylist(id);
@@ -1179,7 +1084,49 @@ class _LibraryScreenState extends State<LibraryScreen>
     );
   }
 
-
+  Widget _buildPillTab(String title, int count) {
+    return Tab(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: Colors.white.withValues(alpha: 0.04),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.06),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(width: 7),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildEmptyState({
     required IconData icon,
@@ -1222,10 +1169,7 @@ class _LibraryScreenState extends State<LibraryScreen>
               ),
               textAlign: TextAlign.center,
             ),
-            if (action != null) ...[
-              const SizedBox(height: 18),
-              action,
-            ],
+            if (action != null) ...[const SizedBox(height: 18), action],
           ],
         ),
       ),

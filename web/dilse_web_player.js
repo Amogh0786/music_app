@@ -400,6 +400,16 @@
     }, 5000);
   }
 
+  function isValidYtId(id) {
+    return Boolean(
+      id &&
+      typeof id === 'string' &&
+      id.length === 11 &&
+      !/^\d{11}$/.test(id) &&
+      /^[a-zA-Z0-9_-]{11}$/.test(id)
+    );
+  }
+
   function triggerFallback() {
     clearFallbackTimer();
     if (activeEngine === ENGINE_IFRAME) return; // already in fallback
@@ -417,6 +427,28 @@
     activeEngine = ENGINE_IFRAME;
 
     const startAt = lastReportedPos > 0 ? lastReportedPos : currentStartSec;
+
+    if (!isValidYtId(currentVideoId)) {
+      console.warn('[DilSe Web Player] currentVideoId is synthetic/non-YouTube:', currentVideoId, '- resolving via search API…');
+      const q = `${currentTitle} ${currentArtist}`.trim();
+      const secondaryBackend = window.dilseApiBaseUrl || 'https://music-backend-4kel.onrender.com';
+      fetch(`${secondaryBackend}/search?q=${encodeURIComponent(q)}&limit=1`)
+        .then((r) => r.json())
+        .then((results) => {
+          if (Array.isArray(results) && results.length > 0 && results[0].id) {
+            currentVideoId = results[0].id;
+            console.log('[DilSe Web Player] Resolved fallback YouTube ID:', currentVideoId);
+            playViaIframe(currentVideoId, startAt);
+          } else {
+            console.warn('[DilSe Web Player] Could not resolve YouTube ID for fallback:', q);
+          }
+        })
+        .catch((err) => {
+          console.warn('[DilSe Web Player] Fallback search error:', err);
+        });
+      return;
+    }
+
     playViaIframe(currentVideoId, startAt);
   }
 
@@ -1028,6 +1060,13 @@
     } else {
       // If direct stream URL was not passed directly, fall back to dilsePlay to resolve and play
       window.dilsePlay(videoId, 0, title, artist, streamToPlay);
+    }
+  };
+
+  window.dilseSetFallbackVideoId = function (realYtId) {
+    if (isValidYtId(realYtId)) {
+      console.log('[DilSe Web Player] Fallback YouTube ID updated to:', realYtId);
+      currentVideoId = realYtId;
     }
   };
 

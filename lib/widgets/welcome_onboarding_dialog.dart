@@ -6,13 +6,13 @@ import '../services/preferences_service.dart';
 class WelcomeOnboardingDialog extends StatefulWidget {
   final VoidCallback onCompleted;
 
-  const WelcomeOnboardingDialog({
-    super.key,
-    required this.onCompleted,
-  });
+  const WelcomeOnboardingDialog({super.key, required this.onCompleted});
 
   /// Static helper to display the onboarding canvas responsively
-  static Future<void> show(BuildContext context, {required VoidCallback onCompleted}) {
+  static Future<void> show(
+    BuildContext context, {
+    required VoidCallback onCompleted,
+  }) {
     return showGeneralDialog(
       context: context,
       barrierDismissible: false,
@@ -23,20 +23,21 @@ class WelcomeOnboardingDialog extends StatefulWidget {
         return WelcomeOnboardingDialog(onCompleted: onCompleted);
       },
       transitionBuilder: (ctx, anim1, anim2, child) {
-        final curved = CurvedAnimation(parent: anim1, curve: Curves.easeOutBack);
+        final curved = CurvedAnimation(
+          parent: anim1,
+          curve: Curves.easeOutBack,
+        );
         return Transform.scale(
           scale: curved.value,
-          child: Opacity(
-            opacity: anim1.value.clamp(0.0, 1.0),
-            child: child,
-          ),
+          child: Opacity(opacity: anim1.value.clamp(0.0, 1.0), child: child),
         );
       },
     );
   }
 
   @override
-  State<WelcomeOnboardingDialog> createState() => _WelcomeOnboardingDialogState();
+  State<WelcomeOnboardingDialog> createState() =>
+      _WelcomeOnboardingDialogState();
 }
 
 class _WelcomeOnboardingDialogState extends State<WelcomeOnboardingDialog>
@@ -81,7 +82,9 @@ class _WelcomeOnboardingDialogState extends State<WelcomeOnboardingDialog>
       duration: const Duration(milliseconds: 2400),
     );
 
-    final isTest = WidgetsBinding.instance.runtimeType.toString().contains('Test');
+    final isTest = WidgetsBinding.instance.runtimeType.toString().contains(
+      'Test',
+    );
     if (isTest) {
       _pulseController.value = 1.0;
     } else {
@@ -111,13 +114,13 @@ class _WelcomeOnboardingDialogState extends State<WelcomeOnboardingDialog>
       curve: Curves.easeOut,
     );
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.08),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _entranceController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _entranceController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
 
     _entranceController.forward();
 
@@ -160,9 +163,7 @@ class _WelcomeOnboardingDialogState extends State<WelcomeOnboardingDialog>
         children: [
           // Background static glass overlay
           Positioned.fill(
-            child: Container(
-              color: Colors.black.withValues(alpha: 0.75),
-            ),
+            child: Container(color: Colors.black.withValues(alpha: 0.75)),
           ),
 
           // Glowing background orbs
@@ -314,7 +315,10 @@ class _WelcomeOnboardingDialogState extends State<WelcomeOnboardingDialog>
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: themeColor.withValues(
-                        alpha: (0.35 * (1.3 - _ringAnimation.value)).clamp(0.0, 1.0),
+                        alpha: (0.35 * (1.3 - _ringAnimation.value)).clamp(
+                          0.0,
+                          1.0,
+                        ),
                       ),
                       width: 1.5,
                     ),
@@ -370,7 +374,10 @@ class _WelcomeOnboardingDialogState extends State<WelcomeOnboardingDialog>
                   decoration: BoxDecoration(
                     color: themeColor,
                     shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFF14141E), width: 2),
+                    border: Border.all(
+                      color: const Color(0xFF14141E),
+                      width: 2,
+                    ),
                     boxShadow: [
                       BoxShadow(
                         color: themeColor.withValues(alpha: 0.6),
@@ -399,10 +406,7 @@ class _WelcomeOnboardingDialogState extends State<WelcomeOnboardingDialog>
       decoration: BoxDecoration(
         color: themeColor.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: themeColor.withValues(alpha: 0.35),
-          width: 1,
-        ),
+        border: Border.all(color: themeColor.withValues(alpha: 0.35), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -533,7 +537,11 @@ class _WelcomeOnboardingDialogState extends State<WelcomeOnboardingDialog>
           ),
           suffixIcon: hasText
               ? IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 18),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: Colors.white54,
+                    size: 18,
+                  ),
                   onPressed: () {
                     _controller.clear();
                     HapticFeedback.selectionClick();
@@ -541,7 +549,10 @@ class _WelcomeOnboardingDialogState extends State<WelcomeOnboardingDialog>
                 )
               : const SizedBox(width: 44),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
         ),
         onSubmitted: (_) => _submit(),
       ),
@@ -568,7 +579,10 @@ class _WelcomeOnboardingDialogState extends State<WelcomeOnboardingDialog>
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
                       ? themeColor.withValues(alpha: 0.22)
@@ -622,7 +636,8 @@ class _WelcomeOnboardingDialogState extends State<WelcomeOnboardingDialog>
               gradient: LinearGradient(
                 colors: [
                   themeColor,
-                  Color.lerp(themeColor, const Color(0xFFFF6584), 0.3) ?? themeColor,
+                  Color.lerp(themeColor, const Color(0xFFFF6584), 0.3) ??
+                      themeColor,
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -651,7 +666,11 @@ class _WelcomeOnboardingDialogState extends State<WelcomeOnboardingDialog>
                 const SizedBox(width: 8),
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
-                  transform: Matrix4.translationValues(_isButtonHovered ? 4 : 0, 0, 0),
+                  transform: Matrix4.translationValues(
+                    _isButtonHovered ? 4 : 0,
+                    0,
+                    0,
+                  ),
                   child: const Icon(
                     Icons.arrow_forward_rounded,
                     color: Colors.white,

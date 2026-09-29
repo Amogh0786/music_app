@@ -5,11 +5,7 @@ class ShimmerLoading extends StatefulWidget {
   final Widget child;
   final bool isLoading;
 
-  const ShimmerLoading({
-    super.key,
-    required this.child,
-    this.isLoading = true,
-  });
+  const ShimmerLoading({super.key, required this.child, this.isLoading = true});
 
   @override
   State<ShimmerLoading> createState() => _ShimmerLoadingState();
@@ -76,7 +72,11 @@ class _SlidingGradientTransform extends GradientTransform {
 
   @override
   Matrix4? transform(Rect bounds, {TextDirection? textDirection}) {
-    return Matrix4.translationValues(bounds.width * (slidePercent * 2 - 1), 0.0, 0.0);
+    return Matrix4.translationValues(
+      bounds.width * (slidePercent * 2 - 1),
+      0.0,
+      0.0,
+    );
   }
 }
 
@@ -183,7 +183,11 @@ class ShimmerSongRow extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: const [
-                      ShimmerBox(width: double.infinity, height: 14, borderRadius: 6),
+                      ShimmerBox(
+                        width: double.infinity,
+                        height: 14,
+                        borderRadius: 6,
+                      ),
                       SizedBox(height: 6),
                       ShimmerBox(width: 140, height: 10, borderRadius: 4),
                     ],

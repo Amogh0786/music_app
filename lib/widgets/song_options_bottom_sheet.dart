@@ -56,136 +56,151 @@ void showSongOptionsBottomSheet(BuildContext context, Video song) {
                         width: 52,
                         height: 52,
                         color: const Color(0xFF1E1E28),
-                        child: const Icon(Icons.music_note, color: Colors.white54),
+                        child: const Icon(
+                          Icons.music_note,
+                          color: Colors.white54,
+                        ),
                       ),
                     ),
                   ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            song.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.2,
-                            ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          song.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
                           ),
-                          const SizedBox(height: 3),
-                          Text(
-                            song.author,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              fontSize: 13,
-                            ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          song.author,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.6),
+                            fontSize: 13,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+            ),
 
-              const SizedBox(height: 16),
-              const Divider(color: Colors.white10, height: 1),
-              const SizedBox(height: 6),
+            const SizedBox(height: 16),
+            const Divider(color: Colors.white10, height: 1),
+            const SizedBox(height: 6),
 
-              // Action 1: Play Next
-              _buildActionTile(
-                icon: Icons.playlist_play_rounded,
-                title: 'Play Next',
-                subtitle: 'Add to the top of your queue',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  musicService.playNext(song);
-                  _showToast(context, 'Playing next: "${song.title}"');
-                },
-              ),
+            // Action 1: Play Next
+            _buildActionTile(
+              icon: Icons.playlist_play_rounded,
+              title: 'Play Next',
+              subtitle: 'Add to the top of your queue',
+              onTap: () {
+                Navigator.pop(ctx);
+                musicService.playNext(song);
+                _showToast(context, 'Playing next: "${song.title}"');
+              },
+            ),
 
-              // Action 2: Add to Queue
-              _buildActionTile(
-                icon: Icons.queue_music_rounded,
-                title: 'Add to Queue',
-                subtitle: 'Play after currently queued songs',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  musicService.addToQueue(song);
-                  _showToast(context, 'Added to queue: "${song.title}"');
-                },
-              ),
+            // Action 2: Add to Queue
+            _buildActionTile(
+              icon: Icons.queue_music_rounded,
+              title: 'Add to Queue',
+              subtitle: 'Play after currently queued songs',
+              onTap: () {
+                Navigator.pop(ctx);
+                musicService.addToQueue(song);
+                _showToast(context, 'Added to queue: "${song.title}"');
+              },
+            ),
 
-              // Action 3: Add to Playlist
-              _buildActionTile(
-                icon: Icons.playlist_add_rounded,
-                title: 'Add to Playlist',
-                subtitle: 'Save to your personal playlists',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  showAddToPlaylistSheet(context, song);
-                },
-              ),
+            // Action 3: Add to Playlist
+            _buildActionTile(
+              icon: Icons.playlist_add_rounded,
+              title: 'Add to Playlist',
+              subtitle: 'Save to your personal playlists',
+              onTap: () {
+                Navigator.pop(ctx);
+                showAddToPlaylistSheet(context, song);
+              },
+            ),
 
-              // Action 4: Like / Favorite
-              _buildActionTile(
-                icon: isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                iconColor: isLiked ? const Color(0xFFFA2D48) : Colors.white,
-                title: isLiked ? 'Remove from Liked' : 'Like Song',
-                subtitle: isLiked ? 'Saved in your favorites' : 'Add to your Liked collection',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  musicService.toggleLike(song);
-                  _showToast(
-                    context,
-                    isLiked ? 'Removed from Liked' : 'Added to Liked Songs ❤️',
-                  );
-                },
-              ),
+            // Action 4: Like / Favorite
+            _buildActionTile(
+              icon: isLiked
+                  ? Icons.favorite_rounded
+                  : Icons.favorite_border_rounded,
+              iconColor: isLiked ? const Color(0xFFFA2D48) : Colors.white,
+              title: isLiked ? 'Remove from Liked' : 'Like Song',
+              subtitle: isLiked
+                  ? 'Saved in your favorites'
+                  : 'Add to your Liked collection',
+              onTap: () {
+                Navigator.pop(ctx);
+                musicService.toggleLike(song);
+                _showToast(
+                  context,
+                  isLiked ? 'Removed from Liked' : 'Added to Liked Songs ❤️',
+                );
+              },
+            ),
 
-              // Action 5: Download Offline
-              _buildActionTile(
-                icon: isDownloaded ? Icons.download_done_rounded : Icons.download_rounded,
-                iconColor: isDownloaded ? const Color(0xFF1DB954) : Colors.white,
-                title: isDownloaded ? 'Downloaded' : 'Download for Offline',
-                subtitle: isDownloaded ? 'Available without internet' : 'Save audio file locally',
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  if (isDownloaded) {
-                    _showToast(context, 'Song is already downloaded offline');
-                  } else {
-                    _showToast(context, 'Starting download...');
-                    final success = await musicService.downloadSong(song);
-                    if (context.mounted) {
-                      _showToast(
-                        context,
-                        success ? 'Download complete!' : 'Download failed.',
-                      );
-                    }
+            // Action 5: Download Offline
+            _buildActionTile(
+              icon: isDownloaded
+                  ? Icons.download_done_rounded
+                  : Icons.download_rounded,
+              iconColor: isDownloaded ? const Color(0xFF1DB954) : Colors.white,
+              title: isDownloaded ? 'Downloaded' : 'Download for Offline',
+              subtitle: isDownloaded
+                  ? 'Available without internet'
+                  : 'Save audio file locally',
+              onTap: () async {
+                Navigator.pop(ctx);
+                if (isDownloaded) {
+                  _showToast(context, 'Song is already downloaded offline');
+                } else {
+                  _showToast(context, 'Starting download...');
+                  final success = await musicService.downloadSong(song);
+                  if (context.mounted) {
+                    _showToast(
+                      context,
+                      success ? 'Download complete!' : 'Download failed.',
+                    );
                   }
-                },
-              ),
+                }
+              },
+            ),
 
-              // Action 6: Share Song
-              _buildActionTile(
-                icon: Icons.share_rounded,
-                title: 'Share Song',
-                subtitle: 'Copy link or song details',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Clipboard.setData(ClipboardData(text: '${song.title} - ${song.author}\n${song.url}'));
-                  _showToast(context, 'Song link copied to clipboard!');
-                },
-              ),
-            ],
-          ),
-        );
-      },
+            // Action 6: Share Song
+            _buildActionTile(
+              icon: Icons.share_rounded,
+              title: 'Share Song',
+              subtitle: 'Copy link or song details',
+              onTap: () {
+                Navigator.pop(ctx);
+                Clipboard.setData(
+                  ClipboardData(
+                    text: '${song.title} - ${song.author}\n${song.url}',
+                  ),
+                );
+                _showToast(context, 'Song link copied to clipboard!');
+              },
+            ),
+          ],
+        ),
+      );
+    },
   );
 }
 
@@ -209,11 +224,18 @@ Widget _buildActionTile({
     ),
     title: Text(
       title,
-      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14.5),
+      style: const TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.w600,
+        fontSize: 14.5,
+      ),
     ),
     subtitle: Text(
       subtitle,
-      style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 12),
+      style: TextStyle(
+        color: Colors.white.withValues(alpha: 0.5),
+        fontSize: 12,
+      ),
     ),
     onTap: () {
       HapticFeedback.lightImpact();
@@ -246,7 +268,11 @@ void showAddToPlaylistSheet(BuildContext context, Video song) {
                 children: [
                   const Text(
                     'Add to Playlist',
-                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   TextButton.icon(
                     icon: const Icon(Icons.add_rounded, size: 18),
@@ -266,7 +292,9 @@ void showAddToPlaylistSheet(BuildContext context, Video song) {
                 child: Center(
                   child: Text(
                     'No playlists yet. Tap "New" above to create one!',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                    ),
                   ),
                 ),
               )
@@ -282,7 +310,10 @@ void showAddToPlaylistSheet(BuildContext context, Video song) {
                   final pTracks = List<dynamic>.from(p['songs'] ?? []);
 
                   return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 4,
+                    ),
                     leading: Container(
                       width: 44,
                       height: 44,
@@ -290,10 +321,26 @@ void showAddToPlaylistSheet(BuildContext context, Video song) {
                         color: const Color(0xFF1E1E28),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.featured_play_list_rounded, color: Color(0xFF1DB954), size: 22),
+                      child: const Icon(
+                        Icons.featured_play_list_rounded,
+                        color: Color(0xFF1DB954),
+                        size: 22,
+                      ),
                     ),
-                    title: Text(pName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                    subtitle: Text('${pTracks.length} tracks', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    title: Text(
+                      pName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${pTracks.length} tracks',
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                      ),
+                    ),
                     onTap: () {
                       musicService.addSongToPlaylist(pId, song);
                       Navigator.pop(ctx);
@@ -316,7 +363,10 @@ void _showNewPlaylistPrompt(BuildContext context, Video song) {
     builder: (ctx) => AlertDialog(
       backgroundColor: const Color(0xFF1E1E28),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text('Create New Playlist', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      title: const Text(
+        'Create New Playlist',
+        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      ),
       content: TextField(
         controller: controller,
         autofocus: true,
@@ -356,7 +406,10 @@ void _showToast(BuildContext context, String message) {
   ScaffoldMessenger.of(context).hideCurrentSnackBar();
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
-      content: Text(message, style: const TextStyle(fontWeight: FontWeight.w600)),
+      content: Text(
+        message,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
       backgroundColor: const Color(0xFF222230),
       duration: const Duration(seconds: 2),
       behavior: SnackBarBehavior.floating,

@@ -129,7 +129,8 @@ class _SearchScreenState extends State<SearchScreen>
     _musicService.addListener(_onPrefsChanged);
     _searchController.addListener(_onSearchChanged);
     _scrollController.addListener(() {
-      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 200) {
         _loadMoreResults();
       }
     });
@@ -153,7 +154,10 @@ class _SearchScreenState extends State<SearchScreen>
     if (query != _currentQuery) {
       _debounceTimer = Timer(const Duration(milliseconds: 250), () async {
         if (!mounted) return;
-        final results = await _musicService.fetchEntitySuggestions(query, limit: 10);
+        final results = await _musicService.fetchEntitySuggestions(
+          query,
+          limit: 10,
+        );
         if (mounted && _searchController.text.trim() == query) {
           setState(() {
             _suggestions = results;
@@ -204,14 +208,19 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   void _loadMoreResults() async {
-    if (_isLoadingMore || !_hasMore || _isSearching || _currentQuery.isEmpty) return;
+    if (_isLoadingMore || !_hasMore || _isSearching || _currentQuery.isEmpty) {
+      return;
+    }
 
     setState(() {
       _isLoadingMore = true;
     });
 
     final nextPage = _currentPage + 1;
-    final newResults = await _musicService.searchSongs(_currentQuery, page: nextPage);
+    final newResults = await _musicService.searchSongs(
+      _currentQuery,
+      page: nextPage,
+    );
 
     if (mounted) {
       setState(() {
@@ -279,11 +288,22 @@ class _SearchScreenState extends State<SearchScreen>
                 style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500),
                 decoration: InputDecoration(
                   hintText: 'Artists, Songs, Lyrics, and More',
-                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.38), fontSize: 14),
-                  prefixIcon: const Icon(Icons.search_rounded, color: Colors.white70, size: 22),
+                  hintStyle: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.38),
+                    fontSize: 14,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    color: Colors.white70,
+                    size: 22,
+                  ),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear_rounded, color: Colors.white70, size: 18),
+                          icon: const Icon(
+                            Icons.clear_rounded,
+                            color: Colors.white70,
+                            size: 18,
+                          ),
                           onPressed: () {
                             HapticFeedback.lightImpact();
                             _searchController.clear();
@@ -305,305 +325,320 @@ class _SearchScreenState extends State<SearchScreen>
             // Content Area: Either Searching, Live Suggestions, Search Results, or Browse Categories
             Expanded(
               child: _isSearching
-                  ? Center(child: CircularProgressIndicator(color: Theme.of(context).primaryColor))
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        color: Theme.of(context).primaryColor,
+                      ),
+                    )
                   : (_searchController.text.trim().isNotEmpty &&
-                          _suggestions.isNotEmpty &&
-                          _searchController.text.trim() != _currentQuery)
-                      ? ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 160),
-                          itemCount: _suggestions.length,
-                          itemBuilder: (context, index) {
-                            final suggestion = _suggestions[index];
-                            return RepaintBoundary(
-                              key: ValueKey('sugg_${suggestion.type}_${suggestion.text}'),
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 2),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: ListTile(
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  leading: _buildSuggestionLeading(suggestion.type),
-                                  title: Text(
-                                    suggestion.text,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: -0.2,
-                                    ),
-                                  ),
-                                  subtitle: suggestion.subtitle.isNotEmpty
-                                      ? Text(
-                                          suggestion.subtitle,
-                                          style: TextStyle(
-                                            color: Colors.white.withValues(alpha: 0.45),
-                                            fontSize: 12,
-                                          ),
-                                        )
-                                      : null,
-                                  trailing: const Icon(Icons.north_west_rounded, color: Colors.white38, size: 18),
-                                  onTap: () {
-                                    HapticFeedback.lightImpact();
-                                    _searchController.text = suggestion.text;
-                                    _performSearch(suggestion.text);
-                                  },
-                                ),
-                              ),
-                            );
-                          },
-                        )
-                      : _searchResults.isNotEmpty
-                          ? ListView.builder(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.only(bottom: 160),
-                          itemCount: _searchResults.length + (_isLoadingMore ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (index == _searchResults.length) {
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                child: Center(
-                                  child: CircularProgressIndicator(color: Theme.of(context).primaryColor, strokeWidth: 2.5),
-                                ),
-                              );
-                            }
-
-                            final video = _searchResults[index];
-                            final currentId = _musicService.currentSong?.id.value;
-                            final isCurrent = currentId == video.id.value;
-                            final isPlayingThis = isCurrent && _musicService.isPlaying;
-                            final hdThumbnail = MusicService.getHdThumbnail(video.id.value);
-
-                            return RepaintBoundary(
-                              key: ValueKey('search_result_${video.id.value}'),
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 3.5),
-                                decoration: BoxDecoration(
-                                  color: isCurrent ? const Color(0xFF1C1929) : const Color(0xFF14141E),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: isCurrent
-                                        ? Theme.of(context).primaryColor.withValues(alpha: 0.45)
-                                        : Colors.white.withValues(alpha: 0.07),
-                                    width: isCurrent ? 1.2 : 0.8,
-                                  ),
-                                ),
-                                child: ListTile(
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                                  leading: ClipRRect(
-                                    borderRadius: BorderRadius.circular(9),
-                                    child: Image.network(
-                                      hdThumbnail,
-                                      width: 50,
-                                      height: 50,
-                                      cacheWidth: 150,
-                                      cacheHeight: 150,
-                                      filterQuality: FilterQuality.medium,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, _, _) => Image.network(
-                                        video.thumbnails.lowResUrl,
-                                        width: 50,
-                                        height: 50,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    ),
-                                  ),
-                                  title: Text(
-                                    video.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: isCurrent ? Theme.of(context).primaryColor : Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 14,
-                                      letterSpacing: -0.2,
-                                    ),
-                                  ),
-                                  subtitle: Text(
-                                    video.author,
-                                    maxLines: 1,
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.5),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (isCurrent) ...[
-                                        AnimatedEqualizer(
-                                          isPlaying: isPlayingThis,
-                                          color: Theme.of(context).primaryColor,
-                                        ),
-                                        const SizedBox(width: 4),
-                                      ],
-                                      IconButton(
-                                        icon: const Icon(Icons.more_horiz_rounded, color: Colors.white54, size: 20),
-                                        onPressed: () => showSongOptionsBottomSheet(context, video),
-                                      ),
-                                    ],
-                                  ),
-                                  onTap: () {
-                                    HapticFeedback.lightImpact();
-                                    _musicService.playSong(video);
-                                  },
-                                ),
-                              ),
-                            );
-                          },
-                        )
-
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (history.isNotEmpty) ...[
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(5),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha: 0.08),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: const Icon(
-                                          Icons.history_rounded,
-                                          size: 16,
-                                          color: Colors.white70,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      const Text(
-                                        'Recent Searches',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: -0.3,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  TextButton.icon(
-                                    onPressed: () {
-                                      HapticFeedback.lightImpact();
-                                      _prefs.clearSearchHistory();
-                                      setState(() {});
-                                    },
-                                    icon: Icon(
-                                      Icons.delete_sweep_rounded,
-                                      size: 15,
-                                      color: Theme.of(context).primaryColor,
-                                    ),
-                                    label: Text(
-                                      'Clear All',
-                                      style: TextStyle(
-                                        color: Theme.of(context).primaryColor,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: history.map((item) {
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF161622),
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(
-                                        color: Colors.white.withValues(alpha: 0.12),
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(20),
-                                        onTap: () {
-                                          HapticFeedback.lightImpact();
-                                          _searchController.text = item;
-                                          _performSearch(item);
-                                        },
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                Icons.search_rounded,
-                                                size: 14,
-                                                color: Theme.of(context).primaryColor.withValues(alpha: 0.8),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              ConstrainedBox(
-                                                constraints: const BoxConstraints(maxWidth: 180),
-                                                child: Text(
-                                                  item,
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              GestureDetector(
-                                                behavior: HitTestBehavior.opaque,
-                                                onTap: () {
-                                                  HapticFeedback.selectionClick();
-                                                  _prefs.removeFromSearchHistory(item);
-                                                },
-                                                child: Container(
-                                                  padding: const EdgeInsets.all(2),
-                                                  decoration: const BoxDecoration(
-                                                    color: Colors.white12,
-                                                    shape: BoxShape.circle,
-                                                  ),
-                                                  child: const Icon(
-                                                    Icons.close_rounded,
-                                                    size: 12,
-                                                    color: Colors.white70,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                              const SizedBox(height: 14),
-                            ],
-                            // Two Boxes Switcher: Categories and Artists
-                            _buildBrowseTabsHeader(context),
-                            const SizedBox(height: 14),
-                            // Swappable Grid with PageView matching MainScreen switching animation
-                            Expanded(
-                              child: PageView(
-                                controller: _browsePageController,
-                                physics: const ClampingScrollPhysics(),
-                                onPageChanged: (index) {
-                                  setState(() => _browseTabIndex = index);
-                                },
-                                children: [
-                                  _buildCategoriesGrid(),
-                                  _buildArtistsGrid(),
-                                ],
+_suggestions.isNotEmpty &&
+                        _searchController.text.trim() != _currentQuery)
+                  ? ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 160),
+                      itemCount: _suggestions.length,
+                      itemBuilder: (context, index) {
+                        final suggestion = _suggestions[index];
+                        return RepaintBoundary(
+                          key: ValueKey('sugg_${suggestion.type}_${suggestion.text}'),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            leading: _buildSuggestionLeading(suggestion.type),
+                            title: Text(
+                              suggestion.text,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          ],
+                            subtitle: suggestion.subtitle.isNotEmpty
+                                ? Text(
+                                    suggestion.subtitle,
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.45),
+                                      fontSize: 12,
+                                    ),
+                                  )
+                                : null,
+                            trailing: const Icon(
+                              Icons.north_west_rounded,
+                              color: Colors.white38,
+                              size: 18,
+                            ),
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              _searchController.text = suggestion.text;
+                              _performSearch(suggestion.text);
+                            },
+                          ),
+                        );
+                      },
+                    )
+                  : _searchResults.isNotEmpty
+                  ? ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.only(bottom: 160),
+                      itemCount:
+                          _searchResults.length + (_isLoadingMore ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index == _searchResults.length) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                color: Theme.of(context).primaryColor,
+                                strokeWidth: 2.5,
+                              ),
+                            ),
+                          );
+                        }
+
+                        final video = _searchResults[index];
+                        final hdThumbnail = MusicService.getHdThumbnail(
+                          video.id.value,
+                        );
+                        final isCurrentSong =
+                            _musicService.currentSong?.id.value ==
+                            video.id.value;
+
+                        return RepaintBoundary(
+                          key: ValueKey('res_${video.id.value}'),
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 2),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              leading: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  hdThumbnail,
+                                  width: 52,
+                                  height: 52,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Image.network(
+                                    video.thumbnails.lowResUrl,
+                                    width: 52,
+                                    height: 52,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                              title: Text(
+                                video.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: isCurrentSong
+                                      ? Theme.of(context).primaryColor
+                                      : Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                              subtitle: Text(
+                                video.author,
+                                maxLines: 1,
+                                style: TextStyle(
+                                  color: isCurrentSong
+                                      ? Theme.of(context).primaryColor.withValues(alpha: 0.8)
+                                      : Colors.white.withValues(alpha: 0.5),
+                                  fontSize: 12,
+                                ),
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (isCurrentSong)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: AnimatedEqualizer(
+                                        isPlaying: _musicService.isPlaying,
+                                        barCount: 3,
+                                        color: Theme.of(context).primaryColor,
+                                        size: 16,
+                                      ),
+                                    ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.more_horiz,
+                                      color: Colors.white54,
+                                    ),
+                                    onPressed: () =>
+                                        showSongOptionsBottomSheet(context, video),
+                                  ),
+                                ],
+                              ),
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                _musicService.playPlaylist(_searchResults, index);
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (history.isNotEmpty) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(5),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.08,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      Icons.history_rounded,
+                                      size: 16,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Recent Searches',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: -0.3,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              TextButton.icon(
+                                onPressed: () {
+                                  HapticFeedback.lightImpact();
+                                  _prefs.clearSearchHistory();
+                                  setState(() {});
+                                },
+                                icon: Icon(
+                                  Icons.delete_sweep_rounded,
+                                  size: 15,
+                                  color: Theme.of(context).primaryColor,
+                                ),
+                                label: Text(
+                                  'Clear All',
+                                  style: TextStyle(
+                                    color: Theme.of(context).primaryColor,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: history.map((item) {
+                              return Container(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF161622),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.12),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(20),
+                                    onTap: () {
+                                      HapticFeedback.lightImpact();
+                                      _searchController.text = item;
+                                      _performSearch(item);
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.search_rounded,
+                                            size: 14,
+                                            color: Theme.of(context).primaryColor.withValues(alpha: 0.8),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(maxWidth: 180),
+                                            child: Text(
+                                              item,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          GestureDetector(
+                                            behavior: HitTestBehavior.opaque,
+                                            onTap: () {
+                                              HapticFeedback.selectionClick();
+                                              _prefs.removeFromSearchHistory(item);
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.all(2),
+                                              decoration: const BoxDecoration(
+                                                color: Colors.white12,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(
+                                                Icons.close_rounded,
+                                                size: 12,
+                                                color: Colors.white70,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+                        // Two Boxes Switcher: Categories and Artists
+                        _buildBrowseTabsHeader(context),
+                        const SizedBox(height: 14),
+                        // Swappable Grid with PageView matching MainScreen switching animation
+                        Expanded(
+                          child: PageView(
+                            controller: _browsePageController,
+                            physics: const ClampingScrollPhysics(),
+                            onPageChanged: (index) {
+                              setState(() => _browseTabIndex = index);
+                            },
+                            children: [
+                              _buildCategoriesGrid(),
+                              _buildArtistsGrid(),
+                            ],
+                          ),
                         ),
+                      ],
+                    ),
             ),
           ],
         ),
@@ -926,7 +961,11 @@ class _SearchScreenState extends State<SearchScreen>
             color: const Color(0xFF1DB954).withValues(alpha: 0.15),
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.person_rounded, color: Color(0xFF1DB954), size: 18),
+          child: const Icon(
+            Icons.person_rounded,
+            color: Color(0xFF1DB954),
+            size: 18,
+          ),
         );
       case SearchSuggestionType.song:
         return Container(
@@ -936,7 +975,11 @@ class _SearchScreenState extends State<SearchScreen>
             color: const Color(0xFF00c6ff).withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Icon(Icons.music_note_rounded, color: Color(0xFF00c6ff), size: 18),
+          child: const Icon(
+            Icons.music_note_rounded,
+            color: Color(0xFF00c6ff),
+            size: 18,
+          ),
         );
       case SearchSuggestionType.album:
         return Container(
@@ -946,7 +989,11 @@ class _SearchScreenState extends State<SearchScreen>
             color: const Color(0xFFFF8008).withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Icon(Icons.album_rounded, color: Color(0xFFFF8008), size: 18),
+          child: const Icon(
+            Icons.album_rounded,
+            color: Color(0xFFFF8008),
+            size: 18,
+          ),
         );
       case SearchSuggestionType.history:
         return const SizedBox(

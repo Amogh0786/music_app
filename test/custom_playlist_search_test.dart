@@ -81,7 +81,10 @@ void main() {
       }).toList();
 
       expect(matches2.length, equals(2));
-      expect(matches2.map((s) => s['id']), containsAll(['aaaaaaaaaaa', 'bbbbbbbbbbb']));
+      expect(
+        matches2.map((s) => s['id']),
+        containsAll(['aaaaaaaaaaa', 'bbbbbbbbbbb']),
+      );
     });
 
     test('Identifies when searched song is absent from playlist', () {
@@ -92,7 +95,8 @@ void main() {
       final matches = songs.where((s) {
         final t = (s['title'] as String).toLowerCase();
         final a = (s['author'] as String).toLowerCase();
-        return t.contains(missingQuery.toLowerCase()) || a.contains(missingQuery.toLowerCase());
+        return t.contains(missingQuery.toLowerCase()) ||
+            a.contains(missingQuery.toLowerCase());
       }).toList();
 
       // Confirms song is absent from playlist
@@ -100,13 +104,19 @@ void main() {
     });
 
     test('Adding recommended song dynamically includes it in the playlist', () {
-      final recommendedVideo = makeVideo('ddddddddddd', 'Kesariya', 'Arijit Singh, Pritam');
+      final recommendedVideo = makeVideo(
+        'ddddddddddd',
+        'Kesariya',
+        'Arijit Singh, Pritam',
+      );
 
       // Add to playlist
       musicService.addSongToPlaylist('playlist_search_1', recommendedVideo);
 
       final updatedPlaylist = musicService.customPlaylists.first;
-      final updatedSongs = List<Map<String, dynamic>>.from(updatedPlaylist['songs']);
+      final updatedSongs = List<Map<String, dynamic>>.from(
+        updatedPlaylist['songs'],
+      );
 
       expect(updatedSongs.length, equals(4));
       expect(updatedSongs.last['id'], equals('ddddddddddd'));
@@ -123,7 +133,11 @@ void main() {
     });
 
     test('Avoids adding duplicate songs to the playlist', () {
-      final duplicateVideo = makeVideo('aaaaaaaaaaa', 'Chuttamalle', 'Anirudh Ravichander');
+      final duplicateVideo = makeVideo(
+        'aaaaaaaaaaa',
+        'Chuttamalle',
+        'Anirudh Ravichander',
+      );
 
       // Try adding duplicate
       musicService.addSongToPlaylist('playlist_search_1', duplicateVideo);
@@ -137,23 +151,37 @@ void main() {
       expect(songs.length, equals(3));
     });
 
-    test('PlaylistArtistFilter returns only songs of the particular artist searched in the playlist', () {
-      final playlist = musicService.customPlaylists.first;
-      final songs = List<Map<String, dynamic>>.from(playlist['songs']);
+    test(
+      'PlaylistArtistFilter returns only songs of the particular artist searched in the playlist',
+      () {
+        final playlist = musicService.customPlaylists.first;
+        final songs = List<Map<String, dynamic>>.from(playlist['songs']);
 
-      // Searching for Sid Sriram should only return Sid Sriram's song, not Anirudh's
-      final sidResult = PlaylistArtistFilter.searchPlaylist(songs: songs, query: 'Sid Sriram');
-      expect(sidResult.isArtistSearch, isTrue);
-      expect(sidResult.matchedArtist, equals('Sid Sriram'));
-      expect(sidResult.matchedIndices.length, equals(1));
-      expect(songs[sidResult.matchedIndices.first]['id'], equals('ccccccccccc'));
+        // Searching for Sid Sriram should only return Sid Sriram's song, not Anirudh's
+        final sidResult = PlaylistArtistFilter.searchPlaylist(
+          songs: songs,
+          query: 'Sid Sriram',
+        );
+        expect(sidResult.isArtistSearch, isTrue);
+        expect(sidResult.matchedArtist, equals('Sid Sriram'));
+        expect(sidResult.matchedIndices.length, equals(1));
+        expect(
+          songs[sidResult.matchedIndices.first]['id'],
+          equals('ccccccccccc'),
+        );
 
-      // Searching for Anirudh should return both of Anirudh's songs, and none of Sid's
-      final anirudhResult = PlaylistArtistFilter.searchPlaylist(songs: songs, query: 'Anirudh');
-      expect(anirudhResult.isArtistSearch, isTrue);
-      expect(anirudhResult.matchedIndices.length, equals(2));
-      final ids = anirudhResult.matchedIndices.map((i) => songs[i]['id']).toList();
-      expect(ids, equals(['aaaaaaaaaaa', 'bbbbbbbbbbb']));
-    });
+        // Searching for Anirudh should return both of Anirudh's songs, and none of Sid's
+        final anirudhResult = PlaylistArtistFilter.searchPlaylist(
+          songs: songs,
+          query: 'Anirudh',
+        );
+        expect(anirudhResult.isArtistSearch, isTrue);
+        expect(anirudhResult.matchedIndices.length, equals(2));
+        final ids = anirudhResult.matchedIndices
+            .map((i) => songs[i]['id'])
+            .toList();
+        expect(ids, equals(['aaaaaaaaaaa', 'bbbbbbbbbbb']));
+      },
+    );
   });
 }

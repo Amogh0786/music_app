@@ -8,7 +8,8 @@ Future<AppPickedFile?> pickMusicArchiveOrCsv() async {
   try {
     final uploadInput = web.HTMLInputElement()
       ..type = 'file'
-      ..accept = '.csv,.zip,text/csv,application/zip,application/x-zip-compressed';
+      ..accept =
+          '.csv,.zip,text/csv,application/zip,application/x-zip-compressed';
 
     uploadInput.addEventListener(
       'change',
@@ -25,10 +26,9 @@ Future<AppPickedFile?> pickMusicArchiveOrCsv() async {
               if (result != null) {
                 final bytes = (result as JSArrayBuffer).toDart.asUint8List();
                 if (!completer.isCompleted) {
-                  completer.complete(AppPickedFile(
-                    name: file.name,
-                    bytes: bytes,
-                  ));
+                  completer.complete(
+                    AppPickedFile(name: file.name, bytes: bytes),
+                  );
                 }
               } else {
                 if (!completer.isCompleted) completer.complete(null);

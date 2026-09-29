@@ -16,7 +16,6 @@ class FloatingNavDock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).primaryColor;
-
     final tabs = [
       _NavTabItem(
         icon: Icons.play_circle_outline_rounded,

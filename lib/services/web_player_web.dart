@@ -79,7 +79,9 @@ class WebPlayerBridge {
             final state = (stateVal as JSString?)?.toDart ?? 'unknown';
             if (state == 'playing') {
               _isPlaying = true;
-            } else if (state == 'paused' || state == 'ended' || state == 'idle') {
+            } else if (state == 'paused' ||
+                state == 'ended' ||
+                state == 'idle') {
               _isPlaying = false;
             }
             _stateController.add(state);
@@ -167,7 +169,10 @@ class WebPlayerBridge {
     globalWindow.setProperty('dilseWorkerBaseUrl'.toJS, workerBase.toJS);
 
     // Set direct stream URL if provided
-    globalWindow.setProperty('dilseCurrentStreamUrl'.toJS, (streamUrl ?? '').toJS);
+    globalWindow.setProperty(
+      'dilseCurrentStreamUrl'.toJS,
+      (streamUrl ?? '').toJS,
+    );
 
     // Update MediaSession
     if (globalWindow.hasProperty('dilseSetMetadata'.toJS).toDart) {
@@ -221,7 +226,10 @@ class WebPlayerBridge {
   static void setVolume(double volumePercent) {
     final globalWindow = web.window as JSObject;
     if (globalWindow.hasProperty('dilseSetVolume'.toJS).toDart) {
-      globalWindow.callMethod('dilseSetVolume'.toJS, (volumePercent * 100).toJS);
+      globalWindow.callMethod(
+        'dilseSetVolume'.toJS,
+        (volumePercent * 100).toJS,
+      );
     }
   }
 
@@ -245,8 +253,14 @@ class WebPlayerBridge {
     final workerBase = ApiConfig.cloudflareWorkerUrl;
     globalWindow.setProperty('dilseWorkerBaseUrl'.toJS, workerBase.toJS);
 
-    globalWindow.setProperty('dilseCurrentStreamUrl'.toJS, (streamUrl ?? '').toJS);
-    globalWindow.setProperty('dilseCrossfadeSeconds'.toJS, crossfadeSeconds.toJS);
+    globalWindow.setProperty(
+      'dilseCurrentStreamUrl'.toJS,
+      (streamUrl ?? '').toJS,
+    );
+    globalWindow.setProperty(
+      'dilseCrossfadeSeconds'.toJS,
+      crossfadeSeconds.toJS,
+    );
 
     if (globalWindow.hasProperty('dilseSetMetadata'.toJS).toDart) {
       globalWindow.callMethod(
@@ -281,7 +295,18 @@ class WebPlayerBridge {
     if (globalWindow.hasProperty('dilseSetEqualizer'.toJS).toDart) {
       final mapForJson = bands.map((k, v) => MapEntry(k.toString(), v));
       final bandsJson = json.encode(mapForJson);
-      globalWindow.callMethod('dilseSetEqualizer'.toJS, enabled.toJS, bandsJson.toJS);
+      globalWindow.callMethod(
+        'dilseSetEqualizer'.toJS,
+        enabled.toJS,
+        bandsJson.toJS,
+      );
+    }
+  }
+
+  static void setFallbackVideoId(String realYtId) {
+    final globalWindow = web.window as JSObject;
+    if (globalWindow.hasProperty('dilseSetFallbackVideoId'.toJS).toDart) {
+      globalWindow.callMethod('dilseSetFallbackVideoId'.toJS, realYtId.toJS);
     }
   }
 }

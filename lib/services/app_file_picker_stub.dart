@@ -12,10 +12,7 @@ Future<AppPickedFile?> pickMusicArchiveOrCsv() async {
       final file = pickedFiles.first;
       final bytes = await file.xFile.readAsBytes();
       if (bytes.isNotEmpty) {
-        return AppPickedFile(
-          name: file.name,
-          bytes: bytes,
-        );
+        return AppPickedFile(name: file.name, bytes: bytes);
       }
     }
   } catch (_) {}

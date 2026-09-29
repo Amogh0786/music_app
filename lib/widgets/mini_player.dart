@@ -41,7 +41,8 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 440),
         reverseTransitionDuration: const Duration(milliseconds: 380),
-        pageBuilder: (context, animation, secondaryAnimation) => const PlayerScreen(),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const PlayerScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           final curve = CurvedAnimation(
             parent: animation,
@@ -61,10 +62,7 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
             child: ScaleTransition(
               scale: scale,
               alignment: Alignment.bottomCenter,
-              child: FadeTransition(
-                opacity: fade,
-                child: child,
-              ),
+              child: FadeTransition(opacity: fade, child: child),
             ),
           );
         },
@@ -77,9 +75,14 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
     final song = _musicService.currentSong;
     final isPlaying = _musicService.isPlaying;
     final processingState = _musicService.audioPlayer.processingState;
-    final isBuffering = !kIsWeb && (processingState == ProcessingState.buffering || processingState == ProcessingState.loading);
+    final isBuffering =
+        !kIsWeb &&
+        (processingState == ProcessingState.buffering ||
+            processingState == ProcessingState.loading);
     final isLoading = !isPlaying && (_musicService.isLoading || isBuffering);
-    final hdThumbnail = song != null ? MusicService.getHdThumbnail(song.id.value) : '';
+    final hdThumbnail = song != null
+        ? MusicService.getHdThumbnail(song.id.value)
+        : '';
 
     if (song == null && !isLoading) {
       return const SizedBox.shrink();
@@ -266,8 +269,7 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
                               ],
                             ),
                           ),
-
-                          // Control Buttons (Previous, Play/Pause & Next)
+                          const SizedBox(width: 8),
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [

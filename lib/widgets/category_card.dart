@@ -32,7 +32,6 @@ class _CategoryCardState extends State<CategoryCard> {
   @override
   Widget build(BuildContext context) {
     final scale = _isPressed ? 0.96 : (_isHovered ? 1.025 : 1.0);
-    final primaryColor = widget.colors.first;
 
     return RepaintBoundary(
       child: MouseRegion(
@@ -53,23 +52,21 @@ class _CategoryCardState extends State<CategoryCard> {
           curve: Curves.easeOutCubic,
           child: Container(
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: widget.colors,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: const Color(0xFF161622),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: _isHovered
-                    ? Colors.white.withValues(alpha: 0.45)
-                    : Colors.white.withValues(alpha: 0.16),
-                width: _isHovered ? 1.4 : 1.0,
+                    ? Colors.white.withValues(alpha: 0.24)
+                    : Colors.white.withValues(alpha: 0.10),
+                width: 1.0,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: primaryColor.withValues(alpha: _isHovered ? 0.48 : 0.28),
-                  blurRadius: _isHovered ? 18 : 10,
-                  offset: Offset(0, _isHovered ? 8 : 4),
+                  color: Colors.black.withValues(
+                    alpha: _isHovered ? 0.45 : 0.25,
+                  ),
+                  blurRadius: _isHovered ? 16 : 8,
+                  offset: Offset(0, _isHovered ? 6 : 3),
                 ),
               ],
             ),
@@ -77,20 +74,12 @@ class _CategoryCardState extends State<CategoryCard> {
               borderRadius: BorderRadius.circular(20),
               child: Stack(
                 children: [
-                  // Inner diagonal gloss shine on hover
+                  // Subtle translucent hover highlight
                   Positioned.fill(
                     child: AnimatedOpacity(
                       duration: const Duration(milliseconds: 250),
-                      opacity: _isHovered ? 0.12 : 0.0,
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topRight,
-                            end: Alignment.bottomLeft,
-                            colors: [Colors.white, Colors.transparent],
-                          ),
-                        ),
-                      ),
+                      opacity: _isHovered ? 0.06 : 0.0,
+                      child: Container(color: Colors.white),
                     ),
                   ),
 
@@ -110,7 +99,7 @@ class _CategoryCardState extends State<CategoryCard> {
                           widget.icon,
                           size: 78,
                           color: Colors.white.withValues(
-                            alpha: _isHovered ? 0.28 : 0.17,
+                            alpha: _isHovered ? 0.14 : 0.08,
                           ),
                         ),
                       ),
@@ -119,7 +108,10 @@ class _CategoryCardState extends State<CategoryCard> {
 
                   // Card Content
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -130,7 +122,10 @@ class _CategoryCardState extends State<CategoryCard> {
                           children: [
                             // Frosted Category Pill
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.black.withValues(alpha: 0.28),
                                 borderRadius: BorderRadius.circular(10),

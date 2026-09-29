@@ -173,7 +173,9 @@ class _BackgroundImportBanner extends StatelessWidget {
             decoration: BoxDecoration(
               color: const Color(0xFF161622).withValues(alpha: 0.95),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF1DB954).withValues(alpha: 0.4)),
+              border: Border.all(
+                color: const Color(0xFF1DB954).withValues(alpha: 0.4),
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.45),
@@ -188,7 +190,9 @@ class _BackgroundImportBanner extends StatelessWidget {
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(
-                    value: service.overallProgress > 0 ? service.overallProgress : null,
+                    value: service.overallProgress > 0
+                        ? service.overallProgress
+                        : null,
                     strokeWidth: 2.4,
                     color: const Color(0xFF1DB954),
                     backgroundColor: Colors.white12,
@@ -241,7 +245,10 @@ class _BackgroundImportBanner extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF1DB954).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
@@ -259,7 +266,11 @@ class _BackgroundImportBanner extends StatelessWidget {
                         ),
                       ),
                       SizedBox(width: 2),
-                      Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF1DB954), size: 9),
+                      Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: Color(0xFF1DB954),
+                        size: 9,
+                      ),
                     ],
                   ),
                 ),
