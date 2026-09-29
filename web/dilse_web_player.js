@@ -539,8 +539,14 @@
       ytPlayer.loadVideoById({
         videoId: videoId,
         startSeconds: startSeconds || 0,
+        suggestedQuality: 'small',
       });
       ytPlayer.playVideo();
+      try {
+        if (typeof ytPlayer.setPlaybackQuality === 'function') {
+          ytPlayer.setPlaybackQuality('small');
+        }
+      } catch (_) {}
       if (typeof ytPlayer.unMute === 'function') {
         try { ytPlayer.unMute(); } catch (_) {}
       }
@@ -558,6 +564,7 @@
 
   function startTicker() {
     stopTicker();
+    const intervalMs = document.visibilityState === 'hidden' ? 2000 : 250;
     ticker = setInterval(() => {
       if (activeEngine === ENGINE_IFRAME && ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
         const pos = ytPlayer.getCurrentTime() || 0;
@@ -567,7 +574,7 @@
         broadcastTime(pos, dur);
         updateMediaSessionPosition(pos, dur);
       }
-    }, 250);
+    }, intervalMs);
   }
 
   function stopTicker() {
@@ -585,6 +592,11 @@
       case 1:
         stateName = 'playing';
         clearIframeWatchdog();
+        try {
+          if (ytPlayer && typeof ytPlayer.setPlaybackQuality === 'function') {
+            ytPlayer.setPlaybackQuality('small');
+          }
+        } catch (_) {}
         startTicker();
         startBgAudio();
         if (ytPlayer && typeof ytPlayer.isMuted === 'function' && ytPlayer.isMuted()) {
@@ -715,6 +727,34 @@
       attemptAutoResumeAfterInterruption();
     }
   }, 2000);
+
+  // Background tab CPU & thermal optimization: throttle background tickers, snap UI on focus
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      // Immediately snap UI into sync
+      if (activeEngine === ENGINE_IFRAME && ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
+        const pos = ytPlayer.getCurrentTime() || 0;
+        const dur = ytPlayer.getDuration() || 0;
+        lastReportedPos = pos;
+        if (dur > 0) lastReportedDur = dur;
+        broadcastTime(pos, dur);
+        updateMediaSessionPosition(pos, dur);
+        startTicker();
+      } else if (activeEngine === ENGINE_AUDIO && audioEl) {
+        const pos = audioEl.currentTime || 0;
+        const dur = audioEl.duration || 0;
+        lastReportedPos = pos;
+        if (dur > 0) lastReportedDur = dur;
+        broadcastTime(pos, dur);
+        updateMediaSessionPosition(pos, dur);
+      }
+    } else {
+      // Background tab: re-trigger ticker to adopt throttled 2000ms interval
+      if (ticker) {
+        startTicker();
+      }
+    }
+  });
 
   window.dilsePlayWithOptions = function (opts) {
     opts = opts || {};

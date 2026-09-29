@@ -10,6 +10,141 @@ enum ArtworkStyle { card, vinyl }
 
 enum ScrubberStyle { waveform, classic }
 
+enum AudioQualityPreset {
+  studioMaster, // 320 kbps (Direct JioSaavn 320k CDN / max bitrate)
+  high, // 160 kbps (High Fidelity Opus / 160k AAC)
+  balanced, // 128 kbps (Standard balanced, Format 18 / 128k AAC)
+  dataSaver, // 64 kbps (Low-bandwidth 48-64k Opus/AAC, saves data)
+}
+
+extension AudioQualityPresetExt on AudioQualityPreset {
+  String get label {
+    switch (this) {
+      case AudioQualityPreset.studioMaster:
+        return 'Studio Master (320 kbps)';
+      case AudioQualityPreset.high:
+        return 'High Fidelity (160 kbps)';
+      case AudioQualityPreset.balanced:
+        return 'Balanced (128 kbps)';
+      case AudioQualityPreset.dataSaver:
+        return 'Data Saver (64 kbps)';
+    }
+  }
+
+  String get shortLabel {
+    switch (this) {
+      case AudioQualityPreset.studioMaster:
+        return '320 kbps';
+      case AudioQualityPreset.high:
+        return '160 kbps';
+      case AudioQualityPreset.balanced:
+        return '128 kbps';
+      case AudioQualityPreset.dataSaver:
+        return '64 kbps';
+    }
+  }
+
+  String get badge {
+    switch (this) {
+      case AudioQualityPreset.studioMaster:
+        return '320K';
+      case AudioQualityPreset.high:
+        return '160K';
+      case AudioQualityPreset.balanced:
+        return '128K';
+      case AudioQualityPreset.dataSaver:
+        return '64K';
+    }
+  }
+
+  String get description {
+    switch (this) {
+      case AudioQualityPreset.studioMaster:
+        return 'Pristine 320 kbps direct CDN audio with maximum dynamic range. Recommended for headphones and Wi-Fi.';
+      case AudioQualityPreset.high:
+        return '160 kbps Opus & AAC. Crystal clear audio with fast buffering.';
+      case AudioQualityPreset.balanced:
+        return '128 kbps standard audio. Optimal balance between quality and data efficiency.';
+      case AudioQualityPreset.dataSaver:
+        return 'Compact 48-64 kbps stream. Minimizes mobile data consumption on cellular networks.';
+    }
+  }
+
+  int get approxBitrate {
+    switch (this) {
+      case AudioQualityPreset.studioMaster:
+        return 320;
+      case AudioQualityPreset.high:
+        return 160;
+      case AudioQualityPreset.balanced:
+        return 128;
+      case AudioQualityPreset.dataSaver:
+        return 64;
+    }
+  }
+}
+
+enum AudioFormatPreference {
+  auto, // Smart Auto (Platform Optimal)
+  opus, // Opus (WebM Audio)
+  aac, // AAC (MP4 / Apple Core)
+  mp3, // MP3 (Direct Audio)
+}
+
+extension AudioFormatPreferenceExt on AudioFormatPreference {
+  String get label {
+    switch (this) {
+      case AudioFormatPreference.auto:
+        return 'Auto (Smart Engine)';
+      case AudioFormatPreference.opus:
+        return 'Opus (WebM Audio)';
+      case AudioFormatPreference.aac:
+        return 'AAC (MP4 / Apple Core)';
+      case AudioFormatPreference.mp3:
+        return 'MP3 (Direct Audio)';
+    }
+  }
+
+  String get shortLabel {
+    switch (this) {
+      case AudioFormatPreference.auto:
+        return 'Auto';
+      case AudioFormatPreference.opus:
+        return 'Opus';
+      case AudioFormatPreference.aac:
+        return 'AAC';
+      case AudioFormatPreference.mp3:
+        return 'MP3';
+    }
+  }
+
+  String get badge {
+    switch (this) {
+      case AudioFormatPreference.auto:
+        return 'AUTO';
+      case AudioFormatPreference.opus:
+        return 'OPUS';
+      case AudioFormatPreference.aac:
+        return 'AAC';
+      case AudioFormatPreference.mp3:
+        return 'MP3';
+    }
+  }
+
+  String get description {
+    switch (this) {
+      case AudioFormatPreference.auto:
+        return 'Intelligently chooses the lowest latency and highest fidelity stream for your device.';
+      case AudioFormatPreference.opus:
+        return 'Modern next-gen open lossy codec. Superior acoustic clarity and rich detail per bit.';
+      case AudioFormatPreference.aac:
+        return 'Industry standard Advanced Audio Coding. Hardware-accelerated decoding across all devices.';
+      case AudioFormatPreference.mp3:
+        return 'Standard direct audio container for maximum legacy cross-platform compatibility.';
+    }
+  }
+}
+
 class TasteMatrix {
   final List<String> topArtists;
   final List<String> preferredLanguages;
@@ -79,6 +214,8 @@ class PreferencesService extends ChangeNotifier {
   String _cloudflareWorkerUrl = '';
   ArtworkStyle _artworkStyle = ArtworkStyle.card;
   ScrubberStyle _scrubberStyle = ScrubberStyle.waveform;
+  AudioQualityPreset _audioQuality = AudioQualityPreset.balanced;
+  AudioFormatPreference _audioFormat = AudioFormatPreference.auto;
   String _lyricsDisplayMode = 'original'; // 'original', 'pronunciation', 'dual'
   String _userName = '';
   bool _hasPromptedName = false;
@@ -124,6 +261,8 @@ class PreferencesService extends ChangeNotifier {
   String get cloudflareWorkerUrl => _cloudflareWorkerUrl;
   ArtworkStyle get artworkStyle => _artworkStyle;
   ScrubberStyle get scrubberStyle => _scrubberStyle;
+  AudioQualityPreset get audioQuality => _audioQuality;
+  AudioFormatPreference get audioFormat => _audioFormat;
   String get lyricsDisplayMode => _lyricsDisplayMode;
   String get userName => _userName.isEmpty ? 'Friend' : _userName;
   bool get hasCustomName => _userName.isNotEmpty;
@@ -213,6 +352,16 @@ class PreferencesService extends ChangeNotifier {
     _scrubberStyle = scrubStr == 'classic'
         ? ScrubberStyle.classic
         : ScrubberStyle.waveform;
+    final qualityStr = _prefs.getString('audioQualityPreset') ?? 'balanced';
+    _audioQuality = AudioQualityPreset.values.firstWhere(
+      (e) => e.name == qualityStr,
+      orElse: () => AudioQualityPreset.balanced,
+    );
+    final formatStr = _prefs.getString('audioFormatPreference') ?? 'auto';
+    _audioFormat = AudioFormatPreference.values.firstWhere(
+      (e) => e.name == formatStr,
+      orElse: () => AudioFormatPreference.auto,
+    );
     _lyricsDisplayMode = _prefs.getString('lyricsDisplayMode') ?? 'original';
 
     final historyJson = _prefs.getString('listeningHistoryJson');
@@ -1241,9 +1390,27 @@ class PreferencesService extends ChangeNotifier {
     await _prefs.remove('last_played_playlist_index');
   }
 
+  Future<void> setAudioQuality(AudioQualityPreset quality) async {
+    _audioQuality = quality;
+    if (_isInitialized) {
+      await _prefs.setString('audioQualityPreset', quality.name);
+    }
+    notifyListeners();
+  }
+
+  Future<void> setAudioFormat(AudioFormatPreference format) async {
+    _audioFormat = format;
+    if (_isInitialized) {
+      await _prefs.setString('audioFormatPreference', format.name);
+    }
+    notifyListeners();
+  }
+
   @visibleForTesting
   void resetForTesting() {
     _isInitialized = false;
+    _audioQuality = AudioQualityPreset.balanced;
+    _audioFormat = AudioFormatPreference.auto;
     _realPlaybackCounts.clear();
     _artistPlayCounts.clear();
     _artistSkipCounts.clear();

@@ -12,7 +12,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(const MethodChannel('com.ryanheise.just_audio.methods'), (call) async {
-        return null;
+        return {};
       });
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(const MethodChannel('plugins.flutter.io/path_provider'), (call) async {
