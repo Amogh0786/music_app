@@ -20,6 +20,7 @@ import 'canonical_song_dedup.dart';
 import 'youtube_music_client.dart';
 import 'album_color_deriver.dart';
 import 'lyrics_transliteration_service.dart';
+import 'widget_update_service.dart';
 
 enum SearchSuggestionType { artist, song, album, history, query }
 
@@ -818,6 +819,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         player.playerStateStream.listen((state) async {
           if (identical(player, _activePlayer)) {
             notifyListeners();
+            _syncWidgetPlayback();
           }
           if (state.processingState == ProcessingState.completed) {
             if (_isTransitioning ||
@@ -2527,6 +2529,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
     cancelSleepTimer();
     notifyListeners();
+    _syncWidgetPlayback();
   }
 
   Future<void> playPlaylist(List<Video> playlist, int index) async {
@@ -3730,6 +3733,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       _isLoading = false;
       notifyListeners();
       persistPlaybackSession(force: true);
+      _syncWidgetPlayback();
 
       _reportClientLog('playback_active', {
         'videoId': song.id.value,
@@ -5094,5 +5098,17 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _savedPosition = null;
     _savedDuration = null;
     _lastSessionSaveTime = DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  void _syncWidgetPlayback() {
+    if (kIsWeb) return;
+    final song = _currentSong;
+    WidgetUpdateService().updateWidget(
+      title: song?.title ?? 'DilSe Music',
+      artist: song?.author ?? 'Tap to play',
+      isPlaying: isPlaying,
+      artworkPath: song != null ? _artworkMap[song.id.value] : null,
+      trackId: song?.id.value,
+    );
   }
 }

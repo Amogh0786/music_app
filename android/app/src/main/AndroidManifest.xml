@@ -61,6 +61,22 @@
             </intent-filter>
         </receiver>
 
+        <!-- DilSe Home Screen Music Widget Receiver -->
+        <receiver
+            android:name=".DilSeMusicWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.music_app.ACTION_PLAY_PAUSE" />
+                <action android:name="com.example.music_app.ACTION_NEXT" />
+                <action android:name="com.example.music_app.ACTION_PREVIOUS" />
+                <action android:name="com.example.music_app.ACTION_UPDATE_WIDGET" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/dilse_music_widget_info" />
+        </receiver>
+
         <!-- FileProvider and Receiver for OTA Updates -->
         <provider
             android:name="sk.fourq.otaupdate.OtaUpdateFileProvider"

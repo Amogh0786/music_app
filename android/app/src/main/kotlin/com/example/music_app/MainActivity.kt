@@ -8,11 +8,27 @@ import android.os.Build
 import android.os.Bundle
 import com.ryanheise.audioservice.AudioServiceActivity
 
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
+
 class MainActivity : AudioServiceActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createNotificationChannel()
         keepAudioServiceDrawables()
+    }
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.example.music_app/widget")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "updateWidget") {
+                    DilSeMusicWidgetProvider.updateAllWidgets(this)
+                    result.success(true)
+                } else {
+                    result.notImplemented()
+                }
+            }
     }
 
     private fun keepAudioServiceDrawables() {

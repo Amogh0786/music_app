@@ -52,4 +52,4 @@ node_modules/
 **/node_modules/
 
 # Nested clone
-music_app/
+/music_app/
