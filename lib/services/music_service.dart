@@ -101,7 +101,7 @@ class ActiveStreamInfo {
   );
 }
 
-class MusicService extends ChangeNotifier {
+class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   static final MusicService _instance = MusicService._internal();
   factory MusicService() => _instance;
 
@@ -111,7 +111,21 @@ class MusicService extends ChangeNotifier {
       _initAudioSession();
     }
     loadDownloadedSongs();
+    WidgetsBinding.instance.addObserver(this);
   }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      persistPlaybackSession(force: true);
+    }
+  }
+
+  Duration? _savedPosition;
+  Duration? _savedDuration;
+  DateTime _lastSessionSaveTime = DateTime.fromMillisecondsSinceEpoch(0);
 
   late final AudioPlayer _playerA;
   late final AudioPlayer _playerB;
@@ -205,10 +219,20 @@ class MusicService extends ChangeNotifier {
 
   bool get isPlaying =>
       kIsWeb ? WebPlayerBridge.isPlaying : _activePlayer.playing;
-  Duration get position =>
-      kIsWeb ? WebPlayerBridge.currentPosition : _activePlayer.position;
-  Duration? get duration =>
-      kIsWeb ? WebPlayerBridge.currentDuration : _activePlayer.duration;
+  Duration get position {
+    if (kIsWeb) return WebPlayerBridge.currentPosition;
+    final p = _activePlayer.position;
+    if (p > Duration.zero) return p;
+    return _savedPosition ?? Duration.zero;
+  }
+
+  Duration? get duration {
+    if (kIsWeb) return WebPlayerBridge.currentDuration;
+    final d = _activePlayer.duration;
+    if (d != null && d > Duration.zero) return d;
+    return _savedDuration ?? _currentSong?.duration;
+  }
+
   Stream<Duration> get positionStream => _positionBroadcaster.stream;
   Stream<Duration?> get durationStream => _durationBroadcaster.stream;
 
@@ -1070,7 +1094,8 @@ class MusicService extends ChangeNotifier {
     if (_isCrossfading ||
         _isTransitioning ||
         _isLoading ||
-        _currentSong == null) {
+        _currentSong == null ||
+        !isPlaying) {
       return;
     }
     if (_loopMode == LoopMode.one) return;
@@ -2484,6 +2509,7 @@ class MusicService extends ChangeNotifier {
   }
 
   void _stopPlayback() {
+    persistPlaybackSession(force: true);
     if (kIsWeb) {
       WebPlayerBridge.pause();
       WebPlayerBridge.setVolume(100.0);
@@ -3101,6 +3127,9 @@ class MusicService extends ChangeNotifier {
     bool updateQueue = true,
     bool isCrossfade = false,
   }) async {
+    _savedPosition = null;
+    _savedDuration = null;
+
     if (!isCrossfade) {
       _cancelActiveFade();
       if (kIsWeb && WebPlayerBridge.isPlaying) {
@@ -3692,6 +3721,7 @@ class MusicService extends ChangeNotifier {
       }
       _isLoading = false;
       notifyListeners();
+      persistPlaybackSession(force: true);
 
       _reportClientLog('playback_active', {
         'videoId': song.id.value,
@@ -4778,18 +4808,22 @@ class MusicService extends ChangeNotifier {
     if (_isCrossfading) {
       _cancelActiveFade();
     }
+    _savedPosition = position;
     if (kIsWeb) {
       WebPlayerBridge.seek(position);
       notifyListeners();
+      PreferencesService().updateLastPlaybackPosition(position.inMilliseconds);
       return;
     }
     await _audioPlayer.seek(position);
+    PreferencesService().updateLastPlaybackPosition(position.inMilliseconds);
   }
 
   void togglePlayPause() {
     if (kIsWeb) {
       if (WebPlayerBridge.isPlaying) {
         WebPlayerBridge.pause();
+        persistPlaybackSession(force: true);
       } else {
         WebPlayerBridge.resume();
       }
@@ -4801,6 +4835,7 @@ class MusicService extends ChangeNotifier {
       if (_isCrossfading) {
         _standbyPlayer.pause();
       }
+      persistPlaybackSession(force: true);
     } else {
       // If the player has no loaded audio source or is idle/completed, re-trigger playSong to load and start track
       final pState = _audioPlayer.processingState;
@@ -4856,6 +4891,170 @@ class MusicService extends ChangeNotifier {
     }
   }
 
+  Map<String, dynamic> _videoToMap(Video video) {
+    return {
+      'id': video.id.value,
+      'title': video.title,
+      'author': video.author,
+      'durationMs': video.duration?.inMilliseconds ?? 0,
+      'thumbnail': MusicService.getHdThumbnail(video.id.value),
+      'streamUrl': _webStreamUrls[video.id.value] ?? '',
+    };
+  }
+
+  Video _mapToVideo(Map<String, dynamic> map) {
+    final id = (map['id'] as String?) ?? '';
+    final durationMs = (map['durationMs'] as int?) ?? 0;
+    final cleanId = id.isNotEmpty ? id : '00000000000';
+    final safeId = cleanId.length >= 11
+        ? cleanId.substring(0, 11)
+        : cleanId.padRight(11, '0');
+    return Video(
+      VideoId(safeId),
+      (map['title'] as String?) ?? 'Unknown Title',
+      (map['author'] as String?) ?? 'Unknown Artist',
+      ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+      DateTime.now(),
+      '',
+      null,
+      '',
+      durationMs > 0 ? Duration(milliseconds: durationMs) : null,
+      ThumbnailSet(safeId),
+      null,
+      Engagement(0, null, null),
+      false,
+    );
+  }
+
+  Future<void> persistPlaybackSession({
+    Duration? pos,
+    bool force = false,
+  }) async {
+    final song = _currentSong;
+    if (song == null) return;
+
+    final now = DateTime.now();
+    if (!force && now.difference(_lastSessionSaveTime).inMilliseconds < 1000) {
+      return;
+    }
+    _lastSessionSaveTime = now;
+
+    final curPos = pos ?? position;
+    final curDur = duration ?? (song.duration ?? Duration.zero);
+
+    // If near the end of track (within 2 seconds), reset position to 0 on resume
+    final int posMs =
+        (curDur.inMilliseconds > 0 &&
+            curPos.inMilliseconds >= curDur.inMilliseconds - 2000)
+        ? 0
+        : curPos.inMilliseconds;
+    final int durMs = curDur.inMilliseconds;
+
+    final songMap = _videoToMap(song);
+    final playlistMaps = _playlist.take(50).map(_videoToMap).toList();
+
+    await PreferencesService().saveLastPlaybackSession(
+      song: songMap,
+      positionMs: posMs,
+      durationMs: durMs,
+      playlist: playlistMaps,
+      playlistIndex: _currentIndex,
+      dominantColor: _dominantColor,
+      vibrantColor: _vibrantColor,
+      darkVibrantColor: _darkVibrantColor,
+    );
+  }
+
+  void restoreLastPlaybackSession() {
+    try {
+      final prefs = PreferencesService();
+      if (!prefs.isInitialized) return;
+      final songMap = prefs.lastPlayedSong;
+      if (songMap == null || songMap.isEmpty) return;
+
+      final restoredSong = _mapToVideo(songMap);
+      if (restoredSong.id.value.isEmpty ||
+          restoredSong.id.value == '00000000000') {
+        return;
+      }
+
+      _currentSong = restoredSong;
+      final posMs = prefs.lastPlayedPositionMs;
+      final durMs = prefs.lastPlayedDurationMs;
+
+      if (posMs > 0) {
+        _savedPosition = Duration(milliseconds: posMs);
+      } else {
+        _savedPosition = Duration.zero;
+      }
+
+      if (durMs > 0) {
+        _savedDuration = Duration(milliseconds: durMs);
+      } else if (restoredSong.duration != null) {
+        _savedDuration = restoredSong.duration;
+      }
+
+      final playlistMaps = prefs.lastPlayedPlaylist;
+      if (playlistMaps.isNotEmpty) {
+        _playlist = playlistMaps.map(_mapToVideo).toList();
+        _currentIndex = prefs.lastPlayedPlaylistIndex.clamp(
+          0,
+          _playlist.length - 1,
+        );
+      } else {
+        _playlist = [restoredSong];
+        _currentIndex = 0;
+      }
+
+      final streamUrl = (songMap['streamUrl'] as String?) ?? '';
+      if (streamUrl.isNotEmpty) {
+        _webStreamUrls[restoredSong.id.value] = streamUrl;
+      }
+      final thumbnail = (songMap['thumbnail'] as String?) ?? '';
+      if (thumbnail.isNotEmpty) {
+        _artworkMap[restoredSong.id.value] = thumbnail;
+      }
+
+      final domColorInt = prefs.lastPlayedDominantColor;
+      if (domColorInt != null) {
+        _dominantColor = Color(domColorInt);
+      }
+      final vibColorInt = prefs.lastPlayedVibrantColor;
+      if (vibColorInt != null) {
+        _vibrantColor = Color(vibColorInt);
+      }
+      final darkVibColorInt = prefs.lastPlayedDarkVibrantColor;
+      if (darkVibColorInt != null) {
+        _darkVibrantColor = Color(darkVibColorInt);
+      }
+
+      if (_savedPosition != null) {
+        _positionBroadcaster.add(_savedPosition!);
+      }
+      if (_savedDuration != null) {
+        _durationBroadcaster.add(_savedDuration);
+      }
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[MusicService] Error restoring last playback session: $e');
+    }
+  }
+
+  Future<void> resumeLastPlaybackSession() async {
+    final prefs = PreferencesService();
+    final songMap = prefs.lastPlayedSong;
+    if (songMap == null) return;
+    restoreLastPlaybackSession();
+    if (_currentSong != null) {
+      final posMs = prefs.lastPlayedPositionMs;
+      await playSong(_currentSong!, updateQueue: false);
+      if (posMs > 0) {
+        await seek(Duration(milliseconds: posMs));
+      }
+    }
+  }
+
   @visibleForTesting
   void setPlaylistForTesting(List<Video> list, {int initialIndex = 0}) {
     _playlist = List.from(list);
@@ -4877,5 +5076,15 @@ class MusicService extends ChangeNotifier {
   @visibleForTesting
   void setLoopModeForTesting(LoopMode mode) {
     _loopMode = mode;
+  }
+
+  @visibleForTesting
+  void resetForTesting() {
+    _currentSong = null;
+    _playlist.clear();
+    _currentIndex = 0;
+    _savedPosition = null;
+    _savedDuration = null;
+    _lastSessionSaveTime = DateTime.fromMillisecondsSinceEpoch(0);
   }
 }

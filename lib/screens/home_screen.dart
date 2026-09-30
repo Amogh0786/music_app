@@ -90,6 +90,7 @@ class _HomeScreenState extends State<HomeScreen>
   void initState() {
     super.initState();
     _prefs.addListener(_onPrefsChanged);
+    _musicService.addListener(_onPrefsChanged);
     // Instant zero-wait display if background preload completed during splash
     if (_musicService.hasPreloadedHome &&
         _musicService.preloadedTopChartsIndia.isNotEmpty) {
@@ -102,6 +103,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    _musicService.removeListener(_onPrefsChanged);
     _prefs.removeListener(_onPrefsChanged);
     super.dispose();
   }
@@ -460,6 +462,9 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
 
+            // Smart Playback Quick Resume Banner
+            _buildQuickResumeBanner(),
+
             // Horizontal Mood & Activity Filter Chips
             SliverToBoxAdapter(
               child: SizedBox(
@@ -632,6 +637,200 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickResumeBanner() {
+    final songMap = _prefs.lastPlayedSong;
+    if (songMap == null || _musicService.currentSong != null) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
+
+    final title = (songMap['title'] as String?) ?? 'Last Played';
+    final author = (songMap['author'] as String?) ?? 'Unknown Artist';
+    final thumbnail = (songMap['thumbnail'] as String?) ?? '';
+    final posMs = _prefs.lastPlayedPositionMs;
+    final durMs = _prefs.lastPlayedDurationMs;
+    final progress = (durMs > 0) ? (posMs / durMs).clamp(0.0, 1.0) : 0.0;
+
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                const Color(0xFF1E1E2C).withValues(alpha: 0.95),
+                const Color(0xFF13131E).withValues(alpha: 0.95),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.10),
+              width: 1.0,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () {
+                HapticFeedback.mediumImpact();
+                _musicService.resumeLastPlaybackSession();
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: thumbnail.isNotEmpty
+                              ? Image.network(
+                                  thumbnail,
+                                  width: 48,
+                                  height: 48,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Container(
+                                    width: 48,
+                                    height: 48,
+                                    color: const Color(0xFF262636),
+                                    child: const Icon(
+                                      Icons.music_note,
+                                      color: Colors.white54,
+                                    ),
+                                  ),
+                                )
+                              : Container(
+                                  width: 48,
+                                  height: 48,
+                                  color: const Color(0xFF262636),
+                                  child: const Icon(
+                                    Icons.music_note,
+                                    color: Colors.white54,
+                                  ),
+                                ),
+                        ),
+                        if (progress > 0)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: ClipRRect(
+                              borderRadius: const BorderRadius.only(
+                                bottomLeft: Radius.circular(10),
+                                bottomRight: Radius.circular(10),
+                              ),
+                              child: LinearProgressIndicator(
+                                value: progress,
+                                minHeight: 3,
+                                backgroundColor: Colors.black45,
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  Color(0xFFFA2D48),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.history_rounded,
+                                size: 13,
+                                color: Colors.white.withValues(alpha: 0.5),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'JUMP BACK IN',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.0,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 1),
+                          Text(
+                            author,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.65),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.play_circle_fill_rounded,
+                        color: Colors.white,
+                        size: 36,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 40,
+                        minHeight: 40,
+                      ),
+                      onPressed: () {
+                        HapticFeedback.mediumImpact();
+                        _musicService.resumeLastPlaybackSession();
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white38,
+                        size: 18,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        _prefs.clearLastPlaybackSession();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
