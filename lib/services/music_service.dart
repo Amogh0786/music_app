@@ -220,14 +220,22 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   bool get isPlaying =>
       kIsWeb ? WebPlayerBridge.isPlaying : _activePlayer.playing;
   Duration get position {
-    if (kIsWeb) return WebPlayerBridge.currentPosition;
+    if (kIsWeb) {
+      final p = WebPlayerBridge.currentPosition;
+      if (p > Duration.zero) return p;
+      return _savedPosition ?? Duration.zero;
+    }
     final p = _activePlayer.position;
     if (p > Duration.zero) return p;
     return _savedPosition ?? Duration.zero;
   }
 
   Duration? get duration {
-    if (kIsWeb) return WebPlayerBridge.currentDuration;
+    if (kIsWeb) {
+      final d = WebPlayerBridge.currentDuration;
+      if (d > Duration.zero) return d;
+      return _savedDuration ?? _currentSong?.duration;
+    }
     final d = _activePlayer.duration;
     if (d != null && d > Duration.zero) return d;
     return _savedDuration ?? _currentSong?.duration;
