@@ -54,7 +54,7 @@ class BugReportSnapshot {
   });
 }
 
-class BugReportService {
+class BugReportService with WidgetsBindingObserver {
   static final BugReportService instance = BugReportService._internal();
   factory BugReportService() => instance;
 
@@ -80,8 +80,25 @@ class BugReportService {
       _shakeEnabled = prefs.getBool(prefShakeToReport) ?? true;
     } catch (_) {}
 
+    try {
+      WidgetsBinding.instance.addObserver(this);
+    } catch (_) {}
+
     if (_shakeEnabled) {
       startShakeListener();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (_shakeEnabled) {
+        startShakeListener();
+      }
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      stopShakeListener();
     }
   }
 
