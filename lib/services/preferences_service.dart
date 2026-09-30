@@ -1299,6 +1299,126 @@ class PreferencesService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Map<String, dynamic>? get lastPlayedSong {
+    if (!_isInitialized) return null;
+    final raw = _prefs.getString('last_played_song_json');
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = json.decode(raw);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    return null;
+  }
+
+  int get lastPlayedPositionMs {
+    if (!_isInitialized) return 0;
+    return _prefs.getInt('last_played_position_ms') ?? 0;
+  }
+
+  int get lastPlayedDurationMs {
+    if (!_isInitialized) return 0;
+    return _prefs.getInt('last_played_duration_ms') ?? 0;
+  }
+
+  List<Map<String, dynamic>> get lastPlayedPlaylist {
+    if (!_isInitialized) return [];
+    final raw = _prefs.getString('last_played_playlist_json');
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final list = json.decode(raw);
+      if (list is List) {
+        return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  int get lastPlayedPlaylistIndex {
+    if (!_isInitialized) return 0;
+    return _prefs.getInt('last_played_playlist_index') ?? 0;
+  }
+
+  int? get lastPlayedDominantColor {
+    if (!_isInitialized) return null;
+    return _prefs.getInt('last_played_dominant_color');
+  }
+
+  int? get lastPlayedVibrantColor {
+    if (!_isInitialized) return null;
+    return _prefs.getInt('last_played_vibrant_color');
+  }
+
+  int? get lastPlayedDarkVibrantColor {
+    if (!_isInitialized) return null;
+    return _prefs.getInt('last_played_dark_vibrant_color');
+  }
+
+  Future<void> saveLastPlaybackSession({
+    required Map<String, dynamic> song,
+    required int positionMs,
+    required int durationMs,
+    List<Map<String, dynamic>>? playlist,
+    int? playlistIndex,
+    Color? dominantColor,
+    Color? vibrantColor,
+    Color? darkVibrantColor,
+  }) async {
+    if (!_isInitialized) return;
+    await _prefs.setString('last_played_song_json', json.encode(song));
+    await _prefs.setInt('last_played_position_ms', positionMs);
+    await _prefs.setInt('last_played_duration_ms', durationMs);
+    if (playlist != null && playlist.isNotEmpty) {
+      await _prefs.setString(
+        'last_played_playlist_json',
+        json.encode(playlist),
+      );
+    }
+    if (playlistIndex != null) {
+      await _prefs.setInt('last_played_playlist_index', playlistIndex);
+    }
+    if (dominantColor != null) {
+      await _prefs.setInt(
+        'last_played_dominant_color',
+        dominantColor.toARGB32(),
+      );
+    }
+    if (vibrantColor != null) {
+      await _prefs.setInt('last_played_vibrant_color', vibrantColor.toARGB32());
+    }
+    if (darkVibrantColor != null) {
+      await _prefs.setInt(
+        'last_played_dark_vibrant_color',
+        darkVibrantColor.toARGB32(),
+      );
+    }
+    notifyListeners();
+  }
+
+  Future<void> updateLastPlaybackPosition(
+    int positionMs, {
+    int? durationMs,
+  }) async {
+    if (!_isInitialized) return;
+    await _prefs.setInt('last_played_position_ms', positionMs);
+    if (durationMs != null && durationMs > 0) {
+      await _prefs.setInt('last_played_duration_ms', durationMs);
+    }
+  }
+
+  Future<void> clearLastPlaybackSession() async {
+    if (!_isInitialized) return;
+    await _prefs.remove('last_played_song_json');
+    await _prefs.remove('last_played_position_ms');
+    await _prefs.remove('last_played_duration_ms');
+    await _prefs.remove('last_played_playlist_json');
+    await _prefs.remove('last_played_playlist_index');
+    await _prefs.remove('last_played_dominant_color');
+    await _prefs.remove('last_played_vibrant_color');
+    await _prefs.remove('last_played_dark_vibrant_color');
+    notifyListeners();
+  }
+
   @visibleForTesting
   void resetForTesting() {
     _isInitialized = false;
