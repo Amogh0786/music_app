@@ -58,7 +58,7 @@ class ApiConfig {
   }
 
   /// Primary JioSaavn catalog search via Cloudflare Edge Worker (instant, zero cold start).
-  static Uri jioSearchUri(String query, {int limit = 20}) {
+  static Uri jioSearchUri(String query, {int limit = 50, int page = 1}) {
     final customUrl = PreferencesService().customServerUrl;
     final base = customUrl.isNotEmpty
         ? (customUrl.endsWith('/')
@@ -66,7 +66,7 @@ class ApiConfig {
               : customUrl)
         : cloudflareWorkerUrl;
     return Uri.parse(
-      '$base/jio/search?q=${Uri.encodeComponent(query)}&limit=$limit',
+      '$base/jio/search?q=${Uri.encodeComponent(query)}&limit=$limit&page=$page',
     );
   }
 

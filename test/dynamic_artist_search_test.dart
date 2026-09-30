@@ -123,5 +123,53 @@ void main() {
         expect(tapped, isTrue);
       },
     );
+
+    test(
+      'Curated catalog contains 45+ verified artists without placeholder hashes',
+      () {
+        final artists = artistService.getDynamicArtists();
+        expect(artists.length, greaterThanOrEqualTo(45));
+
+        for (final a in artists) {
+          expect(a.imageUrl, contains('500x500'));
+          expect(
+            a.imageUrl.contains('c9d19c4bba2c1605876c762729974916'),
+            isFalse,
+            reason: '${a.name} has placeholder hash',
+          );
+        }
+
+        // Verify specific key artists use official JioSaavn CDN
+        final rahman = artists.firstWhere((a) => a.name == 'A.R. Rahman');
+        expect(rahman.imageUrl, contains('c.saavncdn.com/artists/'));
+
+        final keeravaani = artists.firstWhere(
+          (a) => a.name.contains('Keerava'),
+        );
+        expect(keeravaani.imageUrl, contains('c.saavncdn.com/artists/'));
+      },
+    );
+
+    test(
+      'Non-artist strings, channel names and song titles in history are filtered out',
+      () async {
+        // User plays tracks with record label authors or full title tokens
+        await prefs.recordSongPlay('Aditya Music', 'Pushpa Trailer');
+        await prefs.recordSongPlay('T-Series Telugu', 'Devara Glimpse');
+        await prefs.recordSongPlay('Love Me (From Movie)', 'Love Me');
+        await prefs.recordSongPlay(
+          'Akada Unnadu Ayyappa Full Song',
+          'Devotional',
+        );
+
+        final artists = artistService.getDynamicArtists();
+        final names = artists.map((a) => a.name.toLowerCase()).toList();
+
+        expect(names.contains('aditya music'), isFalse);
+        expect(names.contains('t-series telugu'), isFalse);
+        expect(names.contains('love me (from movie)'), isFalse);
+        expect(names.contains('akada unnadu ayyappa full song'), isFalse);
+      },
+    );
   });
 }

@@ -102,17 +102,62 @@ class DynamicArtistService {
       name: 'M.M. Keeravaani',
       genre: 'Oscar Maestro • Epic Melodies',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/dda61305d6a8f2953a74e5a417605237/500x500-000000-80-0-0.jpg',
+          'https://c.saavncdn.com/artists/M__M__Keeravani_002_20240129101710_500x500.webp',
       language: 'Telugu',
       badge: 'MAESTRO',
     ),
     ArtistItem(
       name: 'Mickey J Meyer',
       genre: 'Tollywood • Youthful Melodies',
-      imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/afaa927b76799f4b6d682e809b6cb440/500x500-000000-80-0-0.jpg',
+      imageUrl: 'https://c.saavncdn.com/artists/Mickey_J_Meyer_500x500.webp',
       language: 'Telugu',
       badge: 'NOSTALGIA',
+    ),
+    ArtistItem(
+      name: 'S.P. Balasubrahmanyam',
+      genre: 'Legendary Maestro • Evergreen',
+      imageUrl:
+          'https://c.saavncdn.com/artists/S_P_Balasubrahmanyam_500x500.webp',
+      language: 'Telugu',
+      badge: 'LEGEND',
+    ),
+    ArtistItem(
+      name: 'K.S. Chithra',
+      genre: 'Melody Queen of India',
+      imageUrl:
+          'https://c.saavncdn.com/artists/K_S_Chithra_002_20190906071921_500x500.webp',
+      language: 'Telugu',
+      badge: 'QUEEN',
+    ),
+    ArtistItem(
+      name: 'Mangli',
+      genre: 'Folk Anthems & High Energy',
+      imageUrl:
+          'https://c.saavncdn.com/artists/Mangli_Satyavathi_001_20240701121028_500x500.webp',
+      language: 'Telugu',
+      badge: 'FOLK QUEEN',
+    ),
+    ArtistItem(
+      name: 'Sunitha',
+      genre: 'Tollywood • Timeless Melodies',
+      imageUrl:
+          'https://c.saavncdn.com/artists/Sunitha_Upadrashta_003_20240424064243_500x500.webp',
+      language: 'Telugu',
+      badge: 'MELODY',
+    ),
+    ArtistItem(
+      name: 'Karthik',
+      genre: 'Soulful Vocals & Romantic Hits',
+      imageUrl: 'https://c.saavncdn.com/artists/Karthik_500x500.webp',
+      language: 'Telugu',
+      badge: 'ROMANTIC',
+    ),
+    ArtistItem(
+      name: 'Haricharan',
+      genre: 'Carnatic & Film Melodies',
+      imageUrl: 'https://c.saavncdn.com/artists/Haricharan_500x500.webp',
+      language: 'Telugu',
+      badge: 'SOULFUL',
     ),
 
     // --- Tamil ---
@@ -120,7 +165,7 @@ class DynamicArtistService {
       name: 'Anirudh Ravichander',
       genre: 'Rockstar • Modern Pop & Mass',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/9da0a547b39e99bc35c6a9724aef91bf/500x500-000000-80-0-0.jpg',
+          'https://c.saavncdn.com/artists/Anirudh_Ravichander_003_20260121134149_500x500.webp',
       language: 'Tamil',
       badge: 'ROCKSTAR',
     ),
@@ -128,7 +173,7 @@ class DynamicArtistService {
       name: 'A.R. Rahman',
       genre: 'The Mozart of Madras • Sufi & Pop',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/c04a1ff9cdd57d305c51663654a21590/500x500-000000-80-0-0.jpg',
+          'https://c.saavncdn.com/artists/AR_Rahman_002_20210120084455_500x500.webp',
       language: 'Tamil',
       badge: 'MAESTRO',
     ),
@@ -136,7 +181,7 @@ class DynamicArtistService {
       name: 'Sai Abhyankkar',
       genre: 'Tamil Indie • Viral RnB & Pop',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/234646e93d6ab2923f3bdc363f53d330/500x500-000000-80-0-0.jpg',
+          'https://c.saavncdn.com/artists/Sai_Abhyankkar_003_20250707122433_500x500.webp',
       language: 'Tamil',
       badge: 'VIRAL HIT',
     ),
@@ -144,7 +189,7 @@ class DynamicArtistService {
       name: 'Yuvan Shankar Raja',
       genre: 'BGM King • Lo-Fi & Melancholy',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/1dbf7d81a2e964d9c707e53478407974/500x500-000000-80-0-0.jpg',
+          'https://c.saavncdn.com/artists/Yuvan_Shankar_Raja_002_20180802174245_500x500.webp',
       language: 'Tamil',
       badge: 'VIBES',
     ),
@@ -152,7 +197,7 @@ class DynamicArtistService {
       name: 'Santhosh Narayanan',
       genre: 'Raw Indie • Acoustic & Folk',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/74004fed94dddf9ae2d7c83084eaf1ad/500x500-000000-80-0-0.jpg',
+          'https://c.saavncdn.com/artists/Santhosh_Narayanan_002_20250527101718_500x500.webp',
       language: 'Tamil',
       badge: 'RAW INDIE',
     ),
@@ -160,9 +205,25 @@ class DynamicArtistService {
       name: 'Harris Jayaraj',
       genre: 'Romantic Pop & Timeless Melodies',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/b10caf45eae518a2b16997874ded7143/500x500-000000-80-0-0.jpg',
+          'https://c.saavncdn.com/artists/Harris_Jayaraj_002_20230718071330_500x500.webp',
       language: 'Tamil',
       badge: 'CLASSIC',
+    ),
+    ArtistItem(
+      name: 'Ilaiyaraaja',
+      genre: 'Isaignani • Timeless Orchestrations',
+      imageUrl:
+          'https://c.saavncdn.com/artists/Ilaiyaraaja_001_20251020081419_500x500.webp',
+      language: 'Tamil',
+      badge: 'MAESTRO',
+    ),
+    ArtistItem(
+      name: 'G.V. Prakash Kumar',
+      genre: 'Acoustic Folk & Chartbusters',
+      imageUrl:
+          'https://c.saavncdn.com/artists/G_V__Prakash_Kumar_003_20251113063655_500x500.webp',
+      language: 'Tamil',
+      badge: 'HITMAKER',
     ),
 
     // --- Hindi / Bollywood ---
@@ -170,7 +231,7 @@ class DynamicArtistService {
       name: 'Arijit Singh',
       genre: 'Bollywood • Romantic & Soul',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/ac5350cff290edd5b69fa584b8b1bd4f/500x500-000000-80-0-0.jpg',
+          'https://c.saavncdn.com/artists/Arijit_Singh_004_20241118063717_500x500.webp',
       language: 'Hindi',
       badge: 'SOUL KING',
     ),
@@ -178,7 +239,7 @@ class DynamicArtistService {
       name: 'Pritam',
       genre: 'Bollywood • Chartbuster Anthems',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/d4914ccd414067cd5e2c108867079a85/500x500-000000-80-0-0.jpg',
+          'https://c.saavncdn.com/artists/Pritam_Chakraborty-20170711073326_500x500.webp',
       language: 'Hindi',
       badge: 'HITMAKER',
     ),
@@ -186,7 +247,7 @@ class DynamicArtistService {
       name: 'Shreya Ghoshal',
       genre: 'Bollywood • Melodious Vocals',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/3bb832d37d10ff2affcfa9afdc7c68a0/500x500-000000-80-0-0.jpg',
+          'https://c.saavncdn.com/artists/Shreya_Ghoshal_007_20241101074144_500x500.webp',
       language: 'Hindi',
       badge: 'QUEEN',
     ),
@@ -194,9 +255,56 @@ class DynamicArtistService {
       name: 'Badshah',
       genre: 'Desi Hip-Hop & Party Anthems',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/5b90b89299a7d42f81d79afa263a85d2/500x500-000000-80-0-0.jpg',
+          'https://c.saavncdn.com/artists/Badshah_006_20241118064015_500x500.webp',
       language: 'Hindi',
       badge: 'PARTY KING',
+    ),
+    ArtistItem(
+      name: 'Atif Aslam',
+      genre: 'Sufi Rock & Soulful Ballads',
+      imageUrl:
+          'https://cdn-images.dzcdn.net/images/artist/0ea90444148fff9c11d77f06a344724e/500x500-000000-80-0-0.jpg',
+      language: 'Hindi',
+      badge: 'SOULFUL',
+    ),
+    ArtistItem(
+      name: 'Sonu Nigam',
+      genre: 'Golden Voice • Evergreen Romantic',
+      imageUrl:
+          'https://c.saavncdn.com/artists/Sonu_Nigam_003_20260813182013_500x500.webp',
+      language: 'Hindi',
+      badge: 'LEGEND',
+    ),
+    ArtistItem(
+      name: 'Shankar Mahadevan',
+      genre: 'Breathless • Fusion & Classical',
+      imageUrl: 'https://c.saavncdn.com/artists/Shankar_Mahadevan_500x500.webp',
+      language: 'Hindi',
+      badge: 'VIRTUOSO',
+    ),
+    ArtistItem(
+      name: 'Armaan Malik',
+      genre: 'Prince of Romance • Pop Ballads',
+      imageUrl:
+          'https://c.saavncdn.com/artists/Armaan_Malik_006_20260813132832_500x500.webp',
+      language: 'Hindi',
+      badge: 'POP PRINCE',
+    ),
+    ArtistItem(
+      name: 'Neha Kakkar',
+      genre: 'Peppy Party Hits & Pop',
+      imageUrl:
+          'https://c.saavncdn.com/artists/Neha_Kakkar_007_20241212115832_500x500.webp',
+      language: 'Hindi',
+      badge: 'PARTY POP',
+    ),
+    ArtistItem(
+      name: 'Jubin Nautiyal',
+      genre: 'Soulful Melodies & Devotional',
+      imageUrl:
+          'https://c.saavncdn.com/artists/Jubin_Nautiyal_003_20231130204020_500x500.webp',
+      language: 'Hindi',
+      badge: 'DEVOTION',
     ),
 
     // --- Punjabi ---
@@ -204,7 +312,7 @@ class DynamicArtistService {
       name: 'Diljit Dosanjh',
       genre: 'Global Punjabi • Folk & Pop',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/79b85e695e0ca6529e56bf3b628e92bd/500x500-000000-80-0-0.jpg',
+          'https://c.saavncdn.com/artists/Diljit_Dosanjh_005_20231025073054_500x500.webp',
       language: 'Punjabi',
       badge: 'G.O.A.T',
     ),
@@ -212,7 +320,7 @@ class DynamicArtistService {
       name: 'Karan Aujla',
       genre: 'Punjabi Hip-Hop & Trap',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/a91a1d5ea91e85e4f0966569b50e8d6a/500x500-000000-80-0-0.jpg',
+          'https://c.saavncdn.com/artists/Karan_Aujla_005_20260925061936_500x500.webp',
       language: 'Punjabi',
       badge: 'CHARTBUSTER',
     ),
@@ -220,7 +328,7 @@ class DynamicArtistService {
       name: 'AP Dhillon',
       genre: 'Punjabi R&B • Retro Melodies',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/52594ac9fa763dc163ed13d21cb130ec/500x500-000000-80-0-0.jpg',
+          'https://c.saavncdn.com/artists/AP_Dhillon_004_20251023102150_500x500.jpg',
       language: 'Punjabi',
       badge: 'RETRO WAVE',
     ),
@@ -228,59 +336,17 @@ class DynamicArtistService {
       name: 'Sidhu Moose Wala',
       genre: 'Punjabi Rap & Legend Folk',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/f559ebe3851db26a6a47a76b1d95748f/500x500-000000-80-0-0.jpg',
+          'https://c.saavncdn.com/artists/Sidhu_Moose_Wala_004_20250617183705_500x500.webp',
       language: 'Punjabi',
       badge: 'LEGEND',
     ),
-
-    // --- Global / English ---
     ArtistItem(
-      name: 'The Weeknd',
-      genre: 'Dark R&B • Synth-Pop',
+      name: 'Guru Randhawa',
+      genre: 'High Rated Punjabi Pop',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/581693b4724a7fcfa754455101e13a44/500x500-000000-80-0-0.jpg',
-      language: 'English',
-      badge: 'AFTER HOURS',
-    ),
-    ArtistItem(
-      name: 'Taylor Swift',
-      genre: 'Pop & Narrative Anthems',
-      imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/cc2495870fe1a792ad0cdb05501ad5ec/500x500-000000-80-0-0.jpg',
-      language: 'English',
-      badge: 'POP QUEEN',
-    ),
-    ArtistItem(
-      name: 'Ed Sheeran',
-      genre: 'Acoustic Pop & Ballads',
-      imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/d6bb84390641d8ae9118228d9544e53d/500x500-000000-80-0-0.jpg',
-      language: 'English',
-      badge: 'ACOUSTIC',
-    ),
-    ArtistItem(
-      name: 'Dua Lipa',
-      genre: 'Dance Pop & Future Nostalgia',
-      imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/877872aaf75694f11d53c318700ab2b5/500x500-000000-80-0-0.jpg',
-      language: 'English',
-      badge: 'DANCE POP',
-    ),
-    ArtistItem(
-      name: 'Billie Eilish',
-      genre: 'Alt-Pop • Dark & Soulful',
-      imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/8eab1a9a644889aabaca1e193e05f984/500x500-000000-80-0-0.jpg',
-      language: 'English',
-      badge: 'ALT POP',
-    ),
-    ArtistItem(
-      name: 'Bruno Mars',
-      genre: 'Funk, Pop & Retro Soul',
-      imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/90f0b5b11df4f87ee878f38569b5995b/500x500-000000-80-0-0.jpg',
-      language: 'English',
-      badge: '24K MAGIC',
+          'https://c.saavncdn.com/artists/Guru_Randhawa_004_20250701125845_500x500.webp',
+      language: 'Punjabi',
+      badge: 'POP HIT',
     ),
 
     // --- Malayalam ---
@@ -288,38 +354,209 @@ class DynamicArtistService {
       name: 'Sushin Shyam',
       genre: 'Malayalam • Electronic & Indie',
       imageUrl:
-          'https://cdn-images.dzcdn.net/images/artist/6ba914ca28d2c5cc21dc3effa07c690d/500x500-000000-80-0-0.jpg',
+          'https://c.saavncdn.com/artists/Sushin_Shyam_002_20250707125538_500x500.webp',
       language: 'Malayalam',
       badge: 'NEW WAVE',
+    ),
+    ArtistItem(
+      name: 'K.J. Yesudas',
+      genre: 'Celestial Voice • Classical Legend',
+      imageUrl: 'https://c.saavncdn.com/artists/KJ_Yesudas_500x500.webp',
+      language: 'Malayalam',
+      badge: 'LEGEND',
+    ),
+    ArtistItem(
+      name: 'Hesham Abdul Wahab',
+      genre: 'Soulful Malayalam Indie & Melodies',
+      imageUrl:
+          'https://c.saavncdn.com/artists/Hesham_Abdul_Wahab_001_20220919094035_500x500.webp',
+      language: 'Malayalam',
+      badge: 'SOULFUL',
+    ),
+
+    // --- Global / English ---
+    ArtistItem(
+      name: 'The Weeknd',
+      genre: 'Dark R&B • Synth-Pop',
+      imageUrl:
+          'https://c.saavncdn.com/artists/The_Weeknd_002_20241003071400_500x500.webp',
+      language: 'English',
+      badge: 'AFTER HOURS',
+    ),
+    ArtistItem(
+      name: 'Taylor Swift',
+      genre: 'Pop & Narrative Anthems',
+      imageUrl:
+          'https://c.saavncdn.com/artists/Taylor_Swift_003_20200226074119_500x500.webp',
+      language: 'English',
+      badge: 'POP QUEEN',
+    ),
+    ArtistItem(
+      name: 'Ed Sheeran',
+      genre: 'Acoustic Pop & Ballads',
+      imageUrl:
+          'https://c.saavncdn.com/artists/Ed_Sheeran_002_20250625073038_500x500.webp',
+      language: 'English',
+      badge: 'ACOUSTIC',
+    ),
+    ArtistItem(
+      name: 'Dua Lipa',
+      genre: 'Dance Pop & Future Nostalgia',
+      imageUrl:
+          'https://c.saavncdn.com/artists/Dua_Lipa_004_20231120090922_500x500.webp',
+      language: 'English',
+      badge: 'DANCE POP',
+    ),
+    ArtistItem(
+      name: 'Billie Eilish',
+      genre: 'Alt-Pop • Dark & Soulful',
+      imageUrl:
+          'https://c.saavncdn.com/artists/Billie_Eilish_20190211151539_500x500.webp',
+      language: 'English',
+      badge: 'ALT POP',
+    ),
+    ArtistItem(
+      name: 'Bruno Mars',
+      genre: 'Funk, Pop & Retro Soul',
+      imageUrl:
+          'https://c.saavncdn.com/artists/Bruno_Mars_003_20260324060413_500x500.webp',
+      language: 'English',
+      badge: '24K MAGIC',
     ),
   ];
 
   /// Canonical map to find curated items by lower-cased / normalized artist keys.
   static final Map<String, ArtistItem> _catalogByNormalized = {
     for (final a in _curatedCatalog) PlaylistArtistFilter.normalize(a.name): a,
+    // Telugu Aliases
     'dsp': _curatedCatalog.firstWhere((a) => a.name == 'Devi Sri Prasad'),
     'devi sri prasad': _curatedCatalog.firstWhere(
       (a) => a.name == 'Devi Sri Prasad',
     ),
+    'thaman': _curatedCatalog.firstWhere((a) => a.name == 'Thaman S'),
+    's thaman': _curatedCatalog.firstWhere((a) => a.name == 'Thaman S'),
+    'thaman s': _curatedCatalog.firstWhere((a) => a.name == 'Thaman S'),
+    'sid sriram': _curatedCatalog.firstWhere((a) => a.name == 'Sid Sriram'),
+    'anurag kulkarni': _curatedCatalog.firstWhere(
+      (a) => a.name == 'Anurag Kulkarni',
+    ),
+    'ram miriyala': _curatedCatalog.firstWhere((a) => a.name == 'Ram Miriyala'),
+    'keeravani': _curatedCatalog.firstWhere((a) => a.name == 'M.M. Keeravaani'),
+    'm m keeravani': _curatedCatalog.firstWhere(
+      (a) => a.name == 'M.M. Keeravaani',
+    ),
+    'mm keeravaani': _curatedCatalog.firstWhere(
+      (a) => a.name == 'M.M. Keeravaani',
+    ),
+    'm.m. keeravaani': _curatedCatalog.firstWhere(
+      (a) => a.name == 'M.M. Keeravaani',
+    ),
+    'mickey j meyer': _curatedCatalog.firstWhere(
+      (a) => a.name == 'Mickey J Meyer',
+    ),
+    'spb': _curatedCatalog.firstWhere((a) => a.name == 'S.P. Balasubrahmanyam'),
+    's p balasubrahmanyam': _curatedCatalog.firstWhere(
+      (a) => a.name == 'S.P. Balasubrahmanyam',
+    ),
+    's.p. balasubrahmanyam': _curatedCatalog.firstWhere(
+      (a) => a.name == 'S.P. Balasubrahmanyam',
+    ),
+    'balasubrahmanyam': _curatedCatalog.firstWhere(
+      (a) => a.name == 'S.P. Balasubrahmanyam',
+    ),
+    'chithra': _curatedCatalog.firstWhere((a) => a.name == 'K.S. Chithra'),
+    'k s chithra': _curatedCatalog.firstWhere((a) => a.name == 'K.S. Chithra'),
+    'k.s. chithra': _curatedCatalog.firstWhere((a) => a.name == 'K.S. Chithra'),
+    'mangli': _curatedCatalog.firstWhere((a) => a.name == 'Mangli'),
+    'sunitha': _curatedCatalog.firstWhere((a) => a.name == 'Sunitha'),
+    'karthik': _curatedCatalog.firstWhere((a) => a.name == 'Karthik'),
+    'haricharan': _curatedCatalog.firstWhere((a) => a.name == 'Haricharan'),
+
+    // Tamil Aliases
     'anirudh': _curatedCatalog.firstWhere(
       (a) => a.name == 'Anirudh Ravichander',
     ),
     'anirudh ravichander': _curatedCatalog.firstWhere(
       (a) => a.name == 'Anirudh Ravichander',
     ),
-    'sid sriram': _curatedCatalog.firstWhere((a) => a.name == 'Sid Sriram'),
-    'arijit singh': _curatedCatalog.firstWhere((a) => a.name == 'Arijit Singh'),
     'ar rahman': _curatedCatalog.firstWhere((a) => a.name == 'A.R. Rahman'),
     'a r rahman': _curatedCatalog.firstWhere((a) => a.name == 'A.R. Rahman'),
+    'a.r. rahman': _curatedCatalog.firstWhere((a) => a.name == 'A.R. Rahman'),
     'rahman': _curatedCatalog.firstWhere((a) => a.name == 'A.R. Rahman'),
-    'thaman': _curatedCatalog.firstWhere((a) => a.name == 'Thaman S'),
-    's thaman': _curatedCatalog.firstWhere((a) => a.name == 'Thaman S'),
-    'keeravani': _curatedCatalog.firstWhere((a) => a.name == 'M.M. Keeravaani'),
+    'sai abhyankkar': _curatedCatalog.firstWhere(
+      (a) => a.name == 'Sai Abhyankkar',
+    ),
     'yuvan': _curatedCatalog.firstWhere((a) => a.name == 'Yuvan Shankar Raja'),
+    'yuvan shankar raja': _curatedCatalog.firstWhere(
+      (a) => a.name == 'Yuvan Shankar Raja',
+    ),
     'santhosh': _curatedCatalog.firstWhere(
       (a) => a.name == 'Santhosh Narayanan',
     ),
+    'santhosh narayanan': _curatedCatalog.firstWhere(
+      (a) => a.name == 'Santhosh Narayanan',
+    ),
     'harris': _curatedCatalog.firstWhere((a) => a.name == 'Harris Jayaraj'),
+    'harris jayaraj': _curatedCatalog.firstWhere(
+      (a) => a.name == 'Harris Jayaraj',
+    ),
+    'ilaiyaraaja': _curatedCatalog.firstWhere((a) => a.name == 'Ilaiyaraaja'),
+    'ilayaraja': _curatedCatalog.firstWhere((a) => a.name == 'Ilaiyaraaja'),
+    'gv prakash': _curatedCatalog.firstWhere(
+      (a) => a.name == 'G.V. Prakash Kumar',
+    ),
+    'g.v. prakash kumar': _curatedCatalog.firstWhere(
+      (a) => a.name == 'G.V. Prakash Kumar',
+    ),
+
+    // Hindi Aliases
+    'arijit singh': _curatedCatalog.firstWhere((a) => a.name == 'Arijit Singh'),
+    'pritam': _curatedCatalog.firstWhere((a) => a.name == 'Pritam'),
+    'shreya ghoshal': _curatedCatalog.firstWhere(
+      (a) => a.name == 'Shreya Ghoshal',
+    ),
+    'badshah': _curatedCatalog.firstWhere((a) => a.name == 'Badshah'),
+    'atif aslam': _curatedCatalog.firstWhere((a) => a.name == 'Atif Aslam'),
+    'sonu nigam': _curatedCatalog.firstWhere((a) => a.name == 'Sonu Nigam'),
+    'shankar mahadevan': _curatedCatalog.firstWhere(
+      (a) => a.name == 'Shankar Mahadevan',
+    ),
+    'armaan malik': _curatedCatalog.firstWhere((a) => a.name == 'Armaan Malik'),
+    'neha kakkar': _curatedCatalog.firstWhere((a) => a.name == 'Neha Kakkar'),
+    'jubin nautiyal': _curatedCatalog.firstWhere(
+      (a) => a.name == 'Jubin Nautiyal',
+    ),
+
+    // Punjabi Aliases
+    'diljit dosanjh': _curatedCatalog.firstWhere(
+      (a) => a.name == 'Diljit Dosanjh',
+    ),
+    'karan aujla': _curatedCatalog.firstWhere((a) => a.name == 'Karan Aujla'),
+    'ap dhillon': _curatedCatalog.firstWhere((a) => a.name == 'AP Dhillon'),
+    'sidhu moose wala': _curatedCatalog.firstWhere(
+      (a) => a.name == 'Sidhu Moose Wala',
+    ),
+    'guru randhawa': _curatedCatalog.firstWhere(
+      (a) => a.name == 'Guru Randhawa',
+    ),
+
+    // Malayalam Aliases
+    'sushin shyam': _curatedCatalog.firstWhere((a) => a.name == 'Sushin Shyam'),
+    'kj yesudas': _curatedCatalog.firstWhere((a) => a.name == 'K.J. Yesudas'),
+    'k.j. yesudas': _curatedCatalog.firstWhere((a) => a.name == 'K.J. Yesudas'),
+    'hesham abdul wahab': _curatedCatalog.firstWhere(
+      (a) => a.name == 'Hesham Abdul Wahab',
+    ),
+
+    // Global
+    'the weeknd': _curatedCatalog.firstWhere((a) => a.name == 'The Weeknd'),
+    'taylor swift': _curatedCatalog.firstWhere((a) => a.name == 'Taylor Swift'),
+    'ed sheeran': _curatedCatalog.firstWhere((a) => a.name == 'Ed Sheeran'),
+    'dua lipa': _curatedCatalog.firstWhere((a) => a.name == 'Dua Lipa'),
+    'billie eilish': _curatedCatalog.firstWhere(
+      (a) => a.name == 'Billie Eilish',
+    ),
+    'bruno mars': _curatedCatalog.firstWhere((a) => a.name == 'Bruno Mars'),
   };
 
   /// Generates the dynamic list of artists tailored to the user:
@@ -377,7 +614,7 @@ class DynamicArtistService {
     // 2. Process user artists and place them first
     for (final rawArtist in userArtistNames) {
       final norm = PlaylistArtistFilter.normalize(rawArtist);
-      if (norm.isEmpty || _isBlacklistedChannel(norm)) continue;
+      if (norm.isEmpty || !_isValidArtistName(rawArtist)) continue;
 
       final matchedInCatalog = _catalogByNormalized[norm];
       final canonicalName =
@@ -407,7 +644,7 @@ class DynamicArtistService {
         );
         result.add(artistItem);
 
-        // Fetch image in background if not cached yet
+        // Safely fetch verified image in background if not cached yet
         if (cachedImg == null) {
           _fetchArtistImageAsync(canonicalName);
         }
@@ -446,13 +683,80 @@ class DynamicArtistService {
       'author': author,
       'title': title,
     });
-    if (extracted.isNotEmpty) return extracted;
+    if (extracted.isNotEmpty) {
+      return extracted.where(_isValidArtistName).toList();
+    }
 
     final cleaned = CanonicalSongDedup.cleanArtist(author);
-    if (cleaned.isNotEmpty) return [cleaned];
+    if (cleaned.isNotEmpty && _isValidArtistName(cleaned)) {
+      return [cleaned];
+    }
 
-    if (author.trim().isNotEmpty) return [author.trim()];
+    if (author.trim().isNotEmpty && _isValidArtistName(author)) {
+      return [author.trim()];
+    }
     return [];
+  }
+
+  static bool _isValidArtistName(String raw) {
+    final s = raw.trim();
+    if (s.length < 3 || s.length > 35) return false;
+
+    final lower = s.toLowerCase();
+    if (_isBlacklistedChannel(lower)) return false;
+
+    // Reject non-artist keywords, record labels, and common video/soundtrack tokens
+    const nonArtistTokens = [
+      'aditya',
+      't-series',
+      'tseries',
+      'sony music',
+      'zee music',
+      'speed audio',
+      'saregama',
+      'lahari music',
+      'tips official',
+      'geetha arts',
+      'mythri',
+      'annapurna',
+      'suresh productions',
+      'mango music',
+      'madhura',
+      'think music',
+      'muzik247',
+      'svcc',
+      'sithara',
+      'dvv',
+      'entertainment',
+      'records',
+      'productions',
+      'company',
+      'channel',
+      'jukebox',
+      'mashup',
+      'lyrical',
+      'video song',
+      'official song',
+      'full song',
+      'remix',
+      'promo',
+      'teaser',
+      'trailer',
+      'cover song',
+      'karaoke',
+      'theme',
+      'title track',
+      '(from',
+      'from "',
+      'feat.',
+      'ft.',
+    ];
+
+    for (final token in nonArtistTokens) {
+      if (lower.contains(token)) return false;
+    }
+
+    return true;
   }
 
   static bool _isBlacklistedChannel(String norm) {
@@ -482,25 +786,33 @@ class DynamicArtistService {
     return 'https://ui-avatars.com/api/?name=$encoded&background=1E1E2C&color=fff&size=512&bold=true';
   }
 
-  /// Background fetch for unknown artist Deezer CDN image
+  /// Background fetch for unknown artist from JioSaavn official catalog
   Future<void> _fetchArtistImageAsync(String artistName) async {
     final key = artistName.toLowerCase();
     if (_artistImageCache.containsKey(key)) return;
 
     try {
       final url = Uri.parse(
-        'https://api.deezer.com/search/artist?q=${Uri.encodeComponent(artistName)}&limit=1',
+        'https://www.jiosaavn.com/api.php?__call=search.getArtistResults&_format=json&cc=in&api_version=4&ctx=android&q=${Uri.encodeComponent(artistName)}',
       );
       final response = await http.get(url).timeout(const Duration(seconds: 4));
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
-        final items = data['data'] as List<dynamic>?;
+        final items = data['results'] as List<dynamic>?;
         if (items != null && items.isNotEmpty) {
           final first = items.first as Map<String, dynamic>;
-          final img =
-              (first['picture_big'] ?? first['picture_medium']) as String?;
-          if (img != null && img.isNotEmpty && !img.contains('//500x500')) {
-            _artistImageCache[key] = img;
+          final returnedName = (first['name'] as String? ?? '').toLowerCase();
+          // Check that the returned artist name actually matches our search query
+          if (returnedName.contains(key) || key.contains(returnedName)) {
+            final rawImg = first['image'] as String?;
+            if (rawImg != null &&
+                rawImg.contains('c.saavncdn.com/artists/') &&
+                !rawImg.contains('artist-default')) {
+              final img = rawImg
+                  .replaceAll('50x50', '500x500')
+                  .replaceAll('150x150', '500x500');
+              _artistImageCache[key] = img;
+            }
           }
         }
       }

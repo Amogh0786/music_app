@@ -1999,7 +1999,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   Future<List<Video>> searchSongs(
     String query, {
     int page = 1,
-    int limit = 25,
+    int limit = 50,
   }) async {
     if (query.trim().isEmpty) return [];
 
@@ -2008,8 +2008,15 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       final int ytmLimit = (limit * 0.7).round().clamp(10, 50);
 
       // 1. Tier 1: JioSaavn search (highest priority for 320k studio quality)
+      final String effectiveJioQuery = page > 1 ? '$query hits' : query;
       final jioFuture = http
-          .get(ApiConfig.jioSearchUri(query, limit: jioLimit))
+          .get(
+            ApiConfig.jioSearchUri(
+              effectiveJioQuery,
+              limit: jioLimit,
+              page: page,
+            ),
+          )
           .timeout(const Duration(seconds: 8));
 
       // 2. Tier 2: YouTube Music Search (official releases)
@@ -2024,6 +2031,26 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       List<Video> jioResults = jioResponse.statusCode == 200
           ? _parseJioResults(jioResponse.body, query: query)
           : [];
+
+      // Supplement with recommendations for artists if initial results are under 25
+      if (page == 1 && jioResults.length < 25) {
+        try {
+          final recResp = await http
+              .get(ApiConfig.jioRecommendationsUri(query, limit: jioLimit))
+              .timeout(const Duration(seconds: 5))
+              .catchError((_) => http.Response('[]', 500));
+          if (recResp.statusCode == 200) {
+            final recList = _parseJioResults(recResp.body, query: query);
+            if (recList.isNotEmpty) {
+              final dedupedRec = CanonicalSongDedup.deduplicateList(
+                jioResults,
+                recList,
+              );
+              jioResults = [...jioResults, ...dedupedRec];
+            }
+          }
+        } catch (_) {}
+      }
 
       // Await Tier 2 in parallel
       final ytmResults = await ytmFuture.catchError((_) => <Video>[]);

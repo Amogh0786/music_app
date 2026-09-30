@@ -5,6 +5,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
 import '../services/preferences_service.dart';
 import '../services/dynamic_artist_service.dart';
+import '../services/canonical_song_dedup.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/category_card.dart';
 import '../widgets/artist_card.dart';
@@ -193,15 +194,13 @@ class _SearchScreenState extends State<SearchScreen>
       _searchResults.clear();
     });
 
-    final results = await _musicService.searchSongs(query, page: 1);
+    final results = await _musicService.searchSongs(query, page: 1, limit: 50);
 
     if (mounted) {
       setState(() {
         _searchResults = results;
         _isSearching = false;
-        if (results.isEmpty || results.length < 20) {
-          _hasMore = false;
-        }
+        _hasMore = results.isNotEmpty;
       });
     }
   }
@@ -219,6 +218,7 @@ class _SearchScreenState extends State<SearchScreen>
     final newResults = await _musicService.searchSongs(
       _currentQuery,
       page: nextPage,
+      limit: 50,
     );
 
     if (mounted) {
@@ -227,8 +227,16 @@ class _SearchScreenState extends State<SearchScreen>
         if (newResults.isEmpty) {
           _hasMore = false;
         } else {
-          _currentPage = nextPage;
-          _searchResults.addAll(newResults);
+          final deduped = CanonicalSongDedup.deduplicateList(
+            _searchResults,
+            newResults,
+          );
+          if (deduped.isEmpty) {
+            _hasMore = false;
+          } else {
+            _currentPage = nextPage;
+            _searchResults.addAll(deduped);
+          }
         }
       });
     }
