@@ -266,9 +266,15 @@
   let pendingStartSec = 0;
   let ticker = null;
 
-  // Silent background keeper for iOS audio session activation
+  // Silent background keeper strictly for iOS Safari / PWA audio session activation
   let bgAudio = null;
+  const isIOS =
+    typeof navigator !== 'undefined' &&
+    (/iPad|iPhone|iPod/.test(navigator.userAgent || '') ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
   function ensureBgAudio() {
+    if (!isIOS) return null;
     if (!bgAudio) {
       bgAudio = document.createElement('audio');
       bgAudio.setAttribute('playsinline', 'true');
@@ -283,9 +289,10 @@
   }
 
   function startBgAudio() {
+    if (!isIOS) return;
     try {
       const audio = ensureBgAudio();
-      audio.play().catch(() => {});
+      if (audio) audio.play().catch(() => {});
     } catch (_) {}
   }
 

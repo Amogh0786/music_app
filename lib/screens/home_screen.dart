@@ -202,8 +202,16 @@ class _HomeScreenState extends State<HomeScreen>
       );
       final futureMix1 = _loadRichDailyMix(_dailyMixConfigs[0]);
       final futureMix2 = _loadRichDailyMix(_dailyMixConfigs[1]);
-      final futureCharts = _musicService.searchSongs('$primaryLang Top Hits');
-      final futureTrending = _musicService.searchSongs('$primaryLang Trending');
+      final futureCharts =
+          _musicService.hasPreloadedHome &&
+              _musicService.preloadedTopChartsIndia.isNotEmpty
+          ? Future.value(_musicService.preloadedTopChartsIndia)
+          : _musicService.searchSongs('$primaryLang Top Hits');
+      final futureTrending =
+          _musicService.hasPreloadedHome &&
+              _musicService.preloadedTrending.isNotEmpty
+          ? Future.value(_musicService.preloadedTrending)
+          : _musicService.searchSongs('$primaryLang Trending');
       final futureNewReleases = _musicService.searchSongs(
         '$primaryLang Latest Songs',
       );
@@ -703,6 +711,8 @@ class _HomeScreenState extends State<HomeScreen>
                                   width: 48,
                                   height: 48,
                                   fit: BoxFit.cover,
+                                  cacheWidth: 120,
+                                  cacheHeight: 120,
                                   errorBuilder: (_, _, _) => Container(
                                     width: 48,
                                     height: 48,
@@ -1095,9 +1105,13 @@ class _HomeScreenState extends State<HomeScreen>
                           Image.network(
                             hdThumbnail,
                             fit: BoxFit.cover,
+                            cacheWidth: 320,
+                            cacheHeight: 320,
                             errorBuilder: (_, _, _) => Image.network(
                               song.thumbnails.highResUrl,
                               fit: BoxFit.cover,
+                              cacheWidth: 320,
+                              cacheHeight: 320,
                             ),
                           ),
                           Positioned(
@@ -1225,11 +1239,13 @@ class _HomeScreenState extends State<HomeScreen>
                                   Image.network(
                                     hdThumbnail,
                                     fit: BoxFit.cover,
-                                    cacheWidth: 100,
-                                    cacheHeight: 100,
+                                    cacheWidth: 120,
+                                    cacheHeight: 120,
                                     errorBuilder: (_, _, _) => Image.network(
                                       song.thumbnails.lowResUrl,
                                       fit: BoxFit.cover,
+                                      cacheWidth: 120,
+                                      cacheHeight: 120,
                                     ),
                                   ),
                                   if (isCurrent)
@@ -1356,11 +1372,15 @@ class _HomeScreenState extends State<HomeScreen>
                   width: 50,
                   height: 50,
                   fit: BoxFit.cover,
+                  cacheWidth: 120,
+                  cacheHeight: 120,
                   errorBuilder: (_, _, _) => Image.network(
                     song.thumbnails.lowResUrl,
                     width: 50,
                     height: 50,
                     fit: BoxFit.cover,
+                    cacheWidth: 120,
+                    cacheHeight: 120,
                   ),
                 ),
               ),
@@ -1461,6 +1481,8 @@ class _HomeScreenState extends State<HomeScreen>
                   width: 50,
                   height: 50,
                   fit: BoxFit.cover,
+                  cacheWidth: 120,
+                  cacheHeight: 120,
                   errorBuilder: (context, error, stackTrace) => Container(
                     width: 50,
                     height: 50,

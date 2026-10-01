@@ -48,9 +48,13 @@ class MusicApp extends StatelessWidget {
           ),
           navigatorKey: BugReportService.instance.rootNavKey,
           builder: (context, child) {
+            final appChild = child ?? const SizedBox.shrink();
+            if (kIsWeb) {
+              return appChild;
+            }
             return RepaintBoundary(
               key: BugReportService.instance.repaintBoundaryKey,
-              child: child ?? const SizedBox.shrink(),
+              child: appChild,
             );
           },
           home: const IntroSplashScreen(),

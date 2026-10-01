@@ -63,40 +63,43 @@ class _AnimatedEqualizerState extends State<AnimatedEqualizer>
     final barWidth = (widget.size / (widget.barCount * 1.8)).clamp(2.0, 3.5);
     final maxHeight = widget.size;
 
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final t = _controller.value;
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final t = _controller.value;
 
-        return SizedBox(
-          width: widget.size,
-          height: widget.size,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: List.generate(widget.barCount, (i) {
-              double fraction;
-              if (!widget.isPlaying) {
-                fraction = 0.25;
-              } else {
-                // Stagger phase per bar using sine offsets
-                final phase = (i / widget.barCount) * math.pi;
-                fraction =
-                    0.25 + 0.70 * ((math.sin(t * math.pi * 2 + phase) + 1) / 2);
-              }
+          return SizedBox(
+            width: widget.size,
+            height: widget.size,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: List.generate(widget.barCount, (i) {
+                double fraction;
+                if (!widget.isPlaying) {
+                  fraction = 0.25;
+                } else {
+                  // Stagger phase per bar using sine offsets
+                  final phase = (i / widget.barCount) * math.pi;
+                  fraction =
+                      0.25 +
+                      0.70 * ((math.sin(t * math.pi * 2 + phase) + 1) / 2);
+                }
 
-              return Container(
-                width: barWidth,
-                height: (fraction * maxHeight).clamp(barWidth, maxHeight),
-                decoration: BoxDecoration(
-                  color: widget.color,
-                  borderRadius: BorderRadius.circular(barWidth / 2),
-                ),
-              );
-            }),
-          ),
-        );
-      },
+                return Container(
+                  width: barWidth,
+                  height: (fraction * maxHeight).clamp(barWidth, maxHeight),
+                  decoration: BoxDecoration(
+                    color: widget.color,
+                    borderRadius: BorderRadius.circular(barWidth / 2),
+                  ),
+                );
+              }),
+            ),
+          );
+        },
+      ),
     );
   }
 }
