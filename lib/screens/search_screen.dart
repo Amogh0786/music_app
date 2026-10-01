@@ -36,6 +36,7 @@ class _SearchScreenState extends State<SearchScreen>
   bool _isSearching = false;
   bool _isLoadingMore = false;
   bool _hasMore = true;
+  bool _isArtistSearchActive = false;
   int _currentPage = 1;
   String _currentQuery = '';
 
@@ -179,22 +180,27 @@ class _SearchScreenState extends State<SearchScreen>
     super.dispose();
   }
 
-  void _performSearch(String query) async {
+  void _performSearch(String query, {bool isArtist = false}) async {
     if (query.trim().isEmpty) return;
     _debounceTimer?.cancel();
 
     await _prefs.addToSearchHistory(query);
+
+    final bool isArtistSearch = isArtist || _artistService.isKnownArtist(query);
 
     setState(() {
       _isSearching = true;
       _currentQuery = query;
       _currentPage = 1;
       _hasMore = true;
+      _isArtistSearchActive = isArtistSearch;
       _suggestions.clear();
       _searchResults.clear();
     });
 
-    final results = await _musicService.searchSongs(query, page: 1, limit: 50);
+    final results = isArtistSearch
+        ? await _musicService.fetchArtistDiscography(query, page: 1)
+        : await _musicService.searchSongs(query, page: 1, limit: 50);
 
     if (mounted) {
       setState(() {
@@ -215,11 +221,16 @@ class _SearchScreenState extends State<SearchScreen>
     });
 
     final nextPage = _currentPage + 1;
-    final newResults = await _musicService.searchSongs(
-      _currentQuery,
-      page: nextPage,
-      limit: 50,
-    );
+    final newResults = _isArtistSearchActive
+        ? await _musicService.fetchArtistDiscography(
+            _currentQuery,
+            page: nextPage,
+          )
+        : await _musicService.searchSongs(
+            _currentQuery,
+            page: nextPage,
+            limit: 50,
+          );
 
     if (mounted) {
       setState(() {
@@ -376,7 +387,12 @@ class _SearchScreenState extends State<SearchScreen>
                           onTap: () {
                             HapticFeedback.lightImpact();
                             _searchController.text = suggestion.text;
-                            _performSearch(suggestion.text);
+                            _performSearch(
+                              suggestion.text,
+                              isArtist:
+                                  suggestion.type ==
+                                  SearchSuggestionType.artist,
+                            );
                           },
                         );
                       },
@@ -970,7 +986,7 @@ class _SearchScreenState extends State<SearchScreen>
                   onTap: () {
                     HapticFeedback.lightImpact();
                     _searchController.text = artist.name;
-                    _performSearch(artist.name);
+                    _performSearch(artist.name, isArtist: true);
                   },
                 );
               },

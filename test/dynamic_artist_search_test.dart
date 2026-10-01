@@ -171,5 +171,88 @@ void main() {
         expect(names.contains('akada unnadu ayyappa full song'), isFalse);
       },
     );
+
+    test('isKnownArtist correctly recognizes catalog artists and aliases', () {
+      expect(artistService.isKnownArtist('Devi Sri Prasad'), isTrue);
+      expect(artistService.isKnownArtist('dsp'), isTrue);
+      expect(artistService.isKnownArtist('Thaman S'), isTrue);
+      expect(artistService.isKnownArtist('thaman'), isTrue);
+      expect(artistService.isKnownArtist('A.R. Rahman'), isTrue);
+      expect(artistService.isKnownArtist('ar rahman'), isTrue);
+      expect(artistService.isKnownArtist('Anirudh'), isTrue);
+      expect(artistService.isKnownArtist('Arijit Singh'), isTrue);
+      expect(artistService.isKnownArtist('Diljit Dosanjh'), isTrue);
+      expect(artistService.isKnownArtist('The Weeknd'), isTrue);
+
+      // Negative cases
+      expect(artistService.isKnownArtist('random song title'), isFalse);
+      expect(artistService.isKnownArtist(''), isFalse);
+      expect(artistService.isKnownArtist('aditya music'), isFalse);
+    });
+
+    test(
+      'getArtistDiscographyQueries generates targeted, language-aware query fanout',
+      () {
+        // Telugu Artist (Devi Sri Prasad)
+        final dspPage1 = artistService.getArtistDiscographyQueries(
+          'Devi Sri Prasad',
+          page: 1,
+        );
+        expect(dspPage1, contains('Devi Sri Prasad'));
+        expect(dspPage1.any((q) => q.contains('melody hits')), isTrue);
+        expect(dspPage1.any((q) => q.contains('mass hits')), isTrue);
+        expect(dspPage1.any((q) => q.contains('classics')), isTrue);
+
+        final dspPage2 = artistService.getArtistDiscographyQueries(
+          'Devi Sri Prasad',
+          page: 2,
+        );
+        expect(dspPage2.any((q) => q.contains('Telugu songs')), isTrue);
+        expect(dspPage2.any((q) => q.contains('all songs')), isTrue);
+
+        // Tamil Artist (Anirudh)
+        final anirudhPage1 = artistService.getArtistDiscographyQueries(
+          'Anirudh Ravichander',
+          page: 1,
+        );
+        expect(anirudhPage1.any((q) => q.contains('Tamil hits')), isTrue);
+
+        // Hindi Artist (Arijit Singh)
+        final arijitPage1 = artistService.getArtistDiscographyQueries(
+          'Arijit Singh',
+          page: 1,
+        );
+        expect(arijitPage1.any((q) => q.contains('Bollywood hits')), isTrue);
+
+        // Global Artist (The Weeknd)
+        final weekndPage1 = artistService.getArtistDiscographyQueries(
+          'The Weeknd',
+          page: 1,
+        );
+        expect(weekndPage1.any((q) => q.contains('greatest hits')), isTrue);
+      },
+    );
+
+    test(
+      'Echo-chamber prevention caps user history artists to at most 3',
+      () async {
+        // User listens to 6 different artists
+        await prefs.recordSongPlay('Devi Sri Prasad', 'Song 1');
+        await prefs.recordSongPlay('Thaman S', 'Song 2');
+        await prefs.recordSongPlay('Sid Sriram', 'Song 3');
+        await prefs.recordSongPlay('Anirudh Ravichander', 'Song 4');
+        await prefs.recordSongPlay('Arijit Singh', 'Song 5');
+        await prefs.recordSongPlay('Armaan Malik', 'Song 6');
+
+        final artists = artistService.getDynamicArtists();
+        final userHistoryArtists = artists
+            .where((a) => a.isFromUserHistory)
+            .toList();
+
+        // Must be capped at 3 so curated icons remain immediately accessible
+        expect(userHistoryArtists.length, lessThanOrEqualTo(3));
+        expect(artists.length, greaterThanOrEqualTo(20));
+      },
+    );
   });
 }

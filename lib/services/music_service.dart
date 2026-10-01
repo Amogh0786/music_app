@@ -21,6 +21,7 @@ import 'youtube_music_client.dart';
 import 'album_color_deriver.dart';
 import 'lyrics_transliteration_service.dart';
 import 'widget_update_service.dart';
+import 'dynamic_artist_service.dart';
 
 enum SearchSuggestionType { artist, song, album, history, query }
 
@@ -1992,6 +1993,66 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// 3-Tier Multi-Engine Search with JioSaavn Studio-First Priority:
+  /// Fetches an expansive, multi-dimensional catalog (80-150+ tracks) for an artist across their entire career.
+  /// Fans out parallel queries across vocal tracks, melody hits, mass blockbusters, regional classics, and YTM studio releases.
+  Future<List<Video>> fetchArtistDiscography(
+    String artistName, {
+    int page = 1,
+  }) async {
+    final clean = artistName.trim();
+    if (clean.isEmpty) return [];
+
+    try {
+      final queries = DynamicArtistService().getArtistDiscographyQueries(
+        clean,
+        page: page,
+      );
+
+      // 1. Parallel fetch across all thematic queries on JioSaavn 320k
+      final jioFutures = queries.map((q) async {
+        try {
+          final uri = ApiConfig.jioSearchUri(q, limit: 50, page: 1);
+          final res = await http.get(uri).timeout(const Duration(seconds: 7));
+          if (res.statusCode == 200) {
+            return _parseJioResults(res.body, query: clean);
+          }
+        } catch (_) {}
+        return <Video>[];
+      }).toList();
+
+      // 2. Parallel companion fetch from YouTube Music InnerTube studio releases
+      final ytmFuture = (page == 1)
+          ? YouTubeMusicClient().searchSongs('$clean songs', limit: 30)
+          : YouTubeMusicClient().searchSongs('$clean hits', limit: 30);
+
+      final jioResultsLists = await Future.wait(jioFutures);
+      final ytmResults = await ytmFuture.catchError((_) => <Video>[]);
+
+      // 3. Progressive deduplication across streams
+      final List<Video> combined = [];
+      for (final list in jioResultsLists) {
+        final deduped = CanonicalSongDedup.deduplicateList(combined, list);
+        combined.addAll(deduped);
+      }
+
+      final dedupedYtm = CanonicalSongDedup.deduplicateList(
+        combined,
+        ytmResults,
+      );
+      combined.addAll(dedupedYtm);
+
+      debugPrint(
+        '[Artist Discography] Fetched ${combined.length} unique songs for "$clean" (page: $page)',
+      );
+      return combined;
+    } catch (e) {
+      debugPrint(
+        '[Artist Discography] Error fetching discography for $clean: $e',
+      );
+      return [];
+    }
+  }
+
   /// Tier 1: JioSaavn (320kbps studio releases with pristine album covers)
   /// Tier 2: YouTube Music (Official studio releases via InnerTube)
   /// Tier 3: YouTube Standard (Safety net fallback only if Jio + YTM have < 8 results)
@@ -2002,6 +2063,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     int limit = 50,
   }) async {
     if (query.trim().isEmpty) return [];
+
+    // Transparently expand to multi-dimensional discography if query is a verified artist
+    if (DynamicArtistService().isKnownArtist(query)) {
+      final discography = await fetchArtistDiscography(query, page: page);
+      if (discography.isNotEmpty) return discography;
+    }
 
     try {
       final int jioLimit = limit.clamp(10, 60);

@@ -611,8 +611,11 @@ class DynamicArtistService {
       userArtistNames.addAll(extracted);
     }
 
-    // 2. Process user artists and place them first
+    // 2. Process top user artists (capped at 3 to prevent echo-chamber)
+    int userArtistCount = 0;
+    const int maxUserArtists = 3;
     for (final rawArtist in userArtistNames) {
+      if (userArtistCount >= maxUserArtists) break;
       final norm = PlaylistArtistFilter.normalize(rawArtist);
       if (norm.isEmpty || !_isValidArtistName(rawArtist)) continue;
 
@@ -650,6 +653,7 @@ class DynamicArtistService {
         }
       }
       addedNames.add(key);
+      userArtistCount++;
     }
 
     // 3. Add genre/language-similar artists based on detected user languages
@@ -820,6 +824,137 @@ class DynamicArtistService {
       debugPrint(
         '[DynamicArtistService] Image fetch error for $artistName: $e',
       );
+    }
+  }
+
+  /// Returns whether a search query matches a known artist in the catalog or alias map
+  bool isKnownArtist(String query) {
+    final norm = PlaylistArtistFilter.normalize(query);
+    if (norm.isEmpty) return false;
+    if (_catalogByNormalized.containsKey(norm)) return true;
+    for (final artist in _curatedCatalog) {
+      if (artist.name.toLowerCase() == query.trim().toLowerCase()) return true;
+      final aNorm = PlaylistArtistFilter.normalize(artist.name);
+      if (aNorm == norm) return true;
+    }
+    return false;
+  }
+
+  /// Returns the matched artist item from the curated catalog or alias map, if any
+  ArtistItem? findArtist(String query) {
+    final norm = PlaylistArtistFilter.normalize(query);
+    if (norm.isEmpty) return null;
+    if (_catalogByNormalized.containsKey(norm)) {
+      return _catalogByNormalized[norm];
+    }
+    for (final artist in _curatedCatalog) {
+      if (artist.name.toLowerCase() == query.trim().toLowerCase()) {
+        return artist;
+      }
+      final aNorm = PlaylistArtistFilter.normalize(artist.name);
+      if (aNorm == norm) return artist;
+    }
+    return null;
+  }
+
+  /// Returns language-tailored discography search queries for an artist across paginated tiers.
+  List<String> getArtistDiscographyQueries(String artistName, {int page = 1}) {
+    final clean = artistName.trim();
+    if (clean.isEmpty) return [];
+
+    final matched = findArtist(clean);
+    final lang = matched?.language.toLowerCase() ?? 'telugu';
+
+    if (page == 1) {
+      // Tier 1: Core Vocal, Melodies, Mass Hits, Blockbusters & Regional Classics
+      if (lang == 'telugu') {
+        return [
+          clean,
+          '$clean melody hits',
+          '$clean mass hits',
+          '$clean classics',
+          '$clean blockbuster',
+        ];
+      } else if (lang == 'tamil') {
+        return [
+          clean,
+          '$clean Tamil hits',
+          '$clean melody',
+          '$clean mass hits',
+          '$clean classics',
+        ];
+      } else if (lang == 'hindi') {
+        return [
+          clean,
+          '$clean Bollywood hits',
+          '$clean romantic hits',
+          '$clean classics',
+          '$clean melody',
+        ];
+      } else if (lang == 'punjabi') {
+        return [
+          clean,
+          '$clean Punjabi hits',
+          '$clean bhangra',
+          '$clean songs',
+          '$clean all songs',
+        ];
+      } else if (lang == 'english' || lang == 'global') {
+        return [
+          clean,
+          '$clean greatest hits',
+          '$clean live',
+          '$clean acoustic',
+          '$clean songs',
+        ];
+      } else {
+        return [
+          clean,
+          '$clean $lang hits',
+          '$clean melody',
+          '$clean classics',
+          '$clean songs',
+        ];
+      }
+    } else if (page == 2) {
+      // Tier 2: Deep discography, album cuts, evergreen collections
+      if (lang == 'telugu') {
+        return [
+          '$clean Telugu songs',
+          '$clean all songs',
+          '$clean evergreen',
+          '$clean album hits',
+        ];
+      } else if (lang == 'tamil') {
+        return [
+          '$clean Tamil songs',
+          '$clean all songs',
+          '$clean evergreen',
+          '$clean album hits',
+        ];
+      } else if (lang == 'hindi') {
+        return [
+          '$clean all songs',
+          '$clean evergreen',
+          '$clean album hits',
+          '$clean unplugged',
+        ];
+      } else {
+        return [
+          '$clean all songs',
+          '$clean evergreen',
+          '$clean album hits',
+          '$clean best songs',
+        ];
+      }
+    } else {
+      // Tier 3+: Jukeboxes, golden era, live performances
+      return [
+        '$clean jukebox',
+        '$clean golden hits',
+        '$clean romantic songs',
+        '$clean old hits',
+      ];
     }
   }
 }

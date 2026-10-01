@@ -6626,6 +6626,7 @@ var worker_source_default = {
     if (url.pathname === "/jio/search") {
       const query = url.searchParams.get("q") || "";
       const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get("limit") || "20")));
+      const page = Math.max(1, parseInt(url.searchParams.get("page") || "1"));
       if (!query || query.trim().length < 1) {
         return new Response(
           JSON.stringify([]),
@@ -6633,7 +6634,7 @@ var worker_source_default = {
         );
       }
       try {
-        const results = await searchJioSaavn(query.trim(), limit);
+        const results = await searchJioSaavn(query.trim(), limit, page);
         return new Response(
           JSON.stringify(results),
           {
@@ -6977,8 +6978,8 @@ function decryptMediaUrl(encryptedUrl) {
     return "";
   }
 }
-async function searchJioSaavn(query, limit = 20) {
-  const url = "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&api_version=4&ctx=android&n=" + limit + "&p=1&q=" + encodeURIComponent(query);
+async function searchJioSaavn(query, limit = 20, page = 1) {
+  const url = "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&api_version=4&ctx=android&n=" + limit + "&p=" + page + "&q=" + encodeURIComponent(query);
   const res = await fetch(url, {
     headers: {
       "User-Agent": "SaavnAndroid/9.0.0",
