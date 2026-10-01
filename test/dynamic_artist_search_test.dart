@@ -207,8 +207,8 @@ void main() {
           'Devi Sri Prasad',
           page: 2,
         );
-        expect(dspPage2.any((q) => q.contains('Telugu songs')), isTrue);
-        expect(dspPage2.any((q) => q.contains('all songs')), isTrue);
+        expect(dspPage2.any((q) => q.contains('romantic songs')), isTrue);
+        expect(dspPage2.any((q) => q.contains('evergreen hits')), isTrue);
 
         // Tamil Artist (Anirudh)
         final anirudhPage1 = artistService.getArtistDiscographyQueries(

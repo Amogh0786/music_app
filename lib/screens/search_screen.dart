@@ -242,11 +242,15 @@ class _SearchScreenState extends State<SearchScreen>
             _searchResults,
             newResults,
           );
-          if (deduped.isEmpty) {
-            _hasMore = false;
-          } else {
+          if (deduped.isNotEmpty) {
             _currentPage = nextPage;
             _searchResults.addAll(deduped);
+            _hasMore = true;
+          } else if (_isArtistSearchActive && nextPage < 5) {
+            _currentPage = nextPage;
+            _hasMore = true;
+          } else {
+            _hasMore = false;
           }
         }
       });
@@ -402,9 +406,49 @@ class _SearchScreenState extends State<SearchScreen>
                       controller: _scrollController,
                       padding: const EdgeInsets.only(bottom: 160),
                       itemCount:
-                          _searchResults.length + (_isLoadingMore ? 1 : 0),
+                          _searchResults.length +
+                          (_isArtistSearchActive ? 1 : 0) +
+                          (_isLoadingMore ? 1 : 0),
                       itemBuilder: (context, index) {
-                        if (index == _searchResults.length) {
+                        final int headerOffset = _isArtistSearchActive ? 1 : 0;
+                        if (_isArtistSearchActive && index == 0) {
+                          return Container(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.library_music_rounded,
+                                  color: Color(0xFF1DB954),
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '${_searchResults.length} Tracks • Complete Discography',
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 0.2,
+                                    ),
+                                  ),
+                                ),
+                                if (_isLoadingMore)
+                                  const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Color(0xFF1DB954),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        final songIndex = index - headerOffset;
+                        if (songIndex == _searchResults.length) {
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             child: Center(
@@ -416,7 +460,7 @@ class _SearchScreenState extends State<SearchScreen>
                           );
                         }
 
-                        final video = _searchResults[index];
+                        final video = _searchResults[songIndex];
                         final hdThumbnail = MusicService.getHdThumbnail(
                           video.id.value,
                         );

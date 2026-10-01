@@ -866,13 +866,18 @@ class DynamicArtistService {
     final lang = matched?.language.toLowerCase() ?? 'telugu';
 
     if (page == 1) {
-      // Tier 1: Core Vocal, Melodies, Mass Hits, Blockbusters & Regional Classics
+      // Tier 1 (Immediate 150-250+ songs on first load): Core Vocal, Melodies, Mass Hits, Dance, Blockbusters & Regional Classics
       if (lang == 'telugu') {
         return [
           clean,
           '$clean melody hits',
           '$clean mass hits',
+          '$clean dance hits',
           '$clean classics',
+          '$clean Tollywood',
+          '$clean golden hits',
+          '$clean item songs',
+          '$clean party songs',
           '$clean blockbuster',
         ];
       } else if (lang == 'tamil') {
@@ -881,7 +886,11 @@ class DynamicArtistService {
           '$clean Tamil hits',
           '$clean melody',
           '$clean mass hits',
+          '$clean dance hits',
+          '$clean Kollywood',
           '$clean classics',
+          '$clean golden hits',
+          '$clean blockbuster',
         ];
       } else if (lang == 'hindi') {
         return [
@@ -890,12 +899,18 @@ class DynamicArtistService {
           '$clean romantic hits',
           '$clean classics',
           '$clean melody',
+          '$clean dance hits',
+          '$clean unplugged',
+          '$clean party hits',
+          '$clean golden hits',
         ];
       } else if (lang == 'punjabi') {
         return [
           clean,
           '$clean Punjabi hits',
           '$clean bhangra',
+          '$clean dance hits',
+          '$clean beats',
           '$clean songs',
           '$clean all songs',
         ];
@@ -903,8 +918,11 @@ class DynamicArtistService {
         return [
           clean,
           '$clean greatest hits',
+          '$clean billboard',
           '$clean live',
           '$clean acoustic',
+          '$clean dance',
+          '$clean remix',
           '$clean songs',
         ];
       } else {
@@ -912,48 +930,58 @@ class DynamicArtistService {
           clean,
           '$clean $lang hits',
           '$clean melody',
+          '$clean dance hits',
           '$clean classics',
+          '$clean golden hits',
           '$clean songs',
         ];
       }
     } else if (page == 2) {
-      // Tier 2: Deep discography, album cuts, evergreen collections
+      // Tier 2 (Deep catalog: 100+ additional tracks on scroll): Romantic, folk, fast beats, emotional, album cuts
       if (lang == 'telugu') {
         return [
-          '$clean Telugu songs',
-          '$clean all songs',
-          '$clean evergreen',
-          '$clean album hits',
+          '$clean romantic songs',
+          '$clean folk songs',
+          '$clean fast beats',
+          '$clean sad songs',
+          '$clean super hits',
+          '$clean evergreen hits',
+          '$clean album',
         ];
       } else if (lang == 'tamil') {
         return [
-          '$clean Tamil songs',
-          '$clean all songs',
+          '$clean romantic songs',
+          '$clean folk hits',
+          '$clean kuthu songs',
           '$clean evergreen',
           '$clean album hits',
+          '$clean sad songs',
         ];
       } else if (lang == 'hindi') {
         return [
-          '$clean all songs',
+          '$clean sad songs',
+          '$clean ghazals',
+          '$clean 90s hits',
           '$clean evergreen',
           '$clean album hits',
-          '$clean unplugged',
+          '$clean live performance',
         ];
       } else {
         return [
           '$clean all songs',
-          '$clean evergreen',
+          '$clean evergreen hits',
           '$clean album hits',
           '$clean best songs',
+          '$clean romantic',
         ];
       }
     } else {
-      // Tier 3+: Jukeboxes, golden era, live performances
+      // Tier 3+ (Deep catalog archive): Jukeboxes, golden era, complete soundscapes
       return [
         '$clean jukebox',
-        '$clean golden hits',
-        '$clean romantic songs',
-        '$clean old hits',
+        '$clean super hits collection',
+        '$clean all time favorites',
+        '$clean original soundtrack',
       ];
     }
   }

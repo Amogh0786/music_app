@@ -2011,7 +2011,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       // 1. Parallel fetch across all thematic queries on JioSaavn 320k
       final jioFutures = queries.map((q) async {
         try {
-          final uri = ApiConfig.jioSearchUri(q, limit: 50, page: 1);
+          final uri = ApiConfig.jioSearchUri(q, limit: 50, page: page);
           final res = await http.get(uri).timeout(const Duration(seconds: 7));
           if (res.statusCode == 200) {
             return _parseJioResults(res.body, query: clean);
@@ -2022,8 +2022,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
       // 2. Parallel companion fetch from YouTube Music InnerTube studio releases
       final ytmFuture = (page == 1)
-          ? YouTubeMusicClient().searchSongs('$clean songs', limit: 30)
-          : YouTubeMusicClient().searchSongs('$clean hits', limit: 30);
+          ? YouTubeMusicClient().searchSongs('$clean songs', limit: 40)
+          : (page == 2)
+          ? YouTubeMusicClient().searchSongs('$clean hits', limit: 40)
+          : YouTubeMusicClient().searchSongs('$clean all songs', limit: 40);
 
       final jioResultsLists = await Future.wait(jioFutures);
       final ytmResults = await ytmFuture.catchError((_) => <Video>[]);
