@@ -187,10 +187,13 @@ class _SearchScreenState extends State<SearchScreen>
     await _prefs.addToSearchHistory(query);
 
     final bool isArtistSearch = isArtist || _artistService.isKnownArtist(query);
+    final String effectiveQuery = isArtistSearch
+        ? (_artistService.findArtist(query)?.name ?? query)
+        : query;
 
     setState(() {
       _isSearching = true;
-      _currentQuery = query;
+      _currentQuery = effectiveQuery;
       _currentPage = 1;
       _hasMore = true;
       _isArtistSearchActive = isArtistSearch;
@@ -199,8 +202,8 @@ class _SearchScreenState extends State<SearchScreen>
     });
 
     final results = isArtistSearch
-        ? await _musicService.fetchArtistDiscography(query, page: 1)
-        : await _musicService.searchSongs(query, page: 1, limit: 50);
+        ? await _musicService.fetchArtistDiscography(effectiveQuery, page: 1)
+        : await _musicService.searchSongs(effectiveQuery, page: 1, limit: 50);
 
     if (mounted) {
       setState(() {
@@ -220,38 +223,54 @@ class _SearchScreenState extends State<SearchScreen>
       _isLoadingMore = true;
     });
 
-    final nextPage = _currentPage + 1;
-    final newResults = _isArtistSearchActive
-        ? await _musicService.fetchArtistDiscography(
-            _currentQuery,
-            page: nextPage,
-          )
-        : await _musicService.searchSongs(
-            _currentQuery,
-            page: nextPage,
-            limit: 50,
-          );
+    final initialPage = _currentPage;
+    int targetPage = initialPage + 1;
+    final List<Video> accumulatedNewSongs = [];
+
+    const int maxAttempts = 3;
+    const int pageLimit = 35;
+    int attempts = 0;
+
+    while (targetPage <= pageLimit &&
+        attempts < maxAttempts &&
+        accumulatedNewSongs.isEmpty) {
+      attempts++;
+      final batch = _isArtistSearchActive
+          ? await _musicService.fetchArtistDiscography(
+              _currentQuery,
+              page: targetPage,
+            )
+          : await _musicService.searchSongs(
+              _currentQuery,
+              page: targetPage,
+              limit: 50,
+            );
+
+      if (batch.isEmpty) {
+        break;
+      }
+
+      final deduped = CanonicalSongDedup.deduplicateList(_searchResults, batch);
+
+      if (deduped.isNotEmpty) {
+        accumulatedNewSongs.addAll(deduped);
+        break;
+      } else {
+        // Current batch had songs that were already loaded in _searchResults.
+        // Advance to next page tier and retry immediately so scroll never stalls.
+        targetPage++;
+      }
+    }
 
     if (mounted) {
       setState(() {
         _isLoadingMore = false;
-        if (newResults.isEmpty) {
-          _hasMore = false;
+        if (accumulatedNewSongs.isNotEmpty) {
+          _currentPage = targetPage;
+          _searchResults.addAll(accumulatedNewSongs);
+          _hasMore = targetPage < pageLimit;
         } else {
-          final deduped = CanonicalSongDedup.deduplicateList(
-            _searchResults,
-            newResults,
-          );
-          if (deduped.isNotEmpty) {
-            _currentPage = nextPage;
-            _searchResults.addAll(deduped);
-            _hasMore = true;
-          } else if (_isArtistSearchActive && nextPage < 5) {
-            _currentPage = nextPage;
-            _hasMore = true;
-          } else {
-            _hasMore = false;
-          }
+          _hasMore = false;
         }
       });
     }
