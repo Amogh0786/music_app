@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
 import '../services/dynamic_artist_service.dart';
+import '../services/canonical_song_dedup.dart';
 import '../widgets/responsive_wrapper.dart';
 import '../widgets/animated_equalizer.dart';
 import '../widgets/song_options_bottom_sheet.dart';
@@ -110,6 +111,11 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
           _isLoading = false;
           _hasMore = songs.isNotEmpty;
         });
+
+        // Immediately prefetch page 2 in background so the profile unlocks 150-200+ songs right away
+        if (songs.isNotEmpty) {
+          _prefetchPage2();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -118,6 +124,27 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
         });
       }
     }
+  }
+
+  Future<void> _prefetchPage2() async {
+    if (!mounted || _isLoadingMore || _currentPage >= 2) return;
+    try {
+      final batch = await _musicService.fetchArtistDiscography(
+        _canonicalName,
+        page: 2,
+      );
+      if (mounted && batch.isNotEmpty) {
+        setState(() {
+          _currentPage = 2;
+          final uniqueNew = CanonicalSongDedup.deduplicateList(
+            _allSongs,
+            batch,
+          );
+          _allSongs.addAll(uniqueNew);
+          _hasMore = true;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadMoreDiscography() async {
@@ -137,13 +164,16 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
       if (mounted) {
         setState(() {
           _isLoadingMore = false;
+          _currentPage = nextPage;
           if (batch.isNotEmpty) {
-            _currentPage = nextPage;
-            _allSongs.addAll(batch);
-            _hasMore = batch.length >= 10;
-          } else {
-            _hasMore = false;
+            final uniqueNew = CanonicalSongDedup.deduplicateList(
+              _allSongs,
+              batch,
+            );
+            _allSongs.addAll(uniqueNew);
           }
+          // Exhaust up to 10 deep query tiers; stop if empty past album tiers
+          _hasMore = nextPage < 10 && (batch.isNotEmpty || nextPage <= 4);
         });
       }
     } catch (_) {
@@ -859,93 +889,162 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
                   ),
                 ),
               )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.only(bottom: 160),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final song = filtered[index];
-                    final isCurrentSong =
-                        _musicService.currentSong?.id.value == song.id.value;
-                    final hdThumbnail = MusicService.getHdThumbnail(
-                      song.id.value,
-                    );
+            else ...[
+              SliverList(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final song = filtered[index];
+                  final isCurrentSong =
+                      _musicService.currentSong?.id.value == song.id.value;
+                  final hdThumbnail = MusicService.getHdThumbnail(
+                    song.id.value,
+                  );
 
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 2,
-                      ),
-                      leading: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.network(
-                          hdThumbnail,
+                  return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 2,
+                    ),
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(
+                        hdThumbnail,
+                        width: 50,
+                        height: 50,
+                        fit: BoxFit.cover,
+                        cacheWidth: 120,
+                        cacheHeight: 120,
+                        errorBuilder: (_, _, _) => Image.network(
+                          song.thumbnails.lowResUrl,
                           width: 50,
                           height: 50,
                           fit: BoxFit.cover,
                           cacheWidth: 120,
                           cacheHeight: 120,
-                          errorBuilder: (_, _, _) => Image.network(
-                            song.thumbnails.lowResUrl,
-                            width: 50,
-                            height: 50,
-                            fit: BoxFit.cover,
-                            cacheWidth: 120,
-                            cacheHeight: 120,
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      song.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isCurrentSong ? themeColor : Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    subtitle: Text(
+                      song.author,
+                      maxLines: 1,
+                      style: TextStyle(
+                        color: isCurrentSong
+                            ? themeColor.withValues(alpha: 0.8)
+                            : Colors.grey[400],
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isCurrentSong)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: AnimatedEqualizer(
+                              isPlaying: _musicService.isPlaying,
+                              barCount: 3,
+                              color: themeColor,
+                              size: 16,
+                            ),
                           ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.more_horiz,
+                            color: Colors.white54,
+                          ),
+                          onPressed: () =>
+                              showSongOptionsBottomSheet(context, song),
                         ),
-                      ),
-                      title: Text(
-                        song.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: isCurrentSong ? themeColor : Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      subtitle: Text(
-                        song.author,
-                        maxLines: 1,
-                        style: TextStyle(
-                          color: isCurrentSong
-                              ? themeColor.withValues(alpha: 0.8)
-                              : Colors.grey[400],
-                          fontSize: 12,
-                        ),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (isCurrentSong)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: AnimatedEqualizer(
-                                isPlaying: _musicService.isPlaying,
-                                barCount: 3,
-                                color: themeColor,
-                                size: 16,
+                      ],
+                    ),
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _musicService.playPlaylist(filtered, index);
+                    },
+                  );
+                }, childCount: filtered.length),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 20, bottom: 160),
+                  child: Center(
+                    child: _isLoadingMore
+                        ? Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    themeColor,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              const Text(
+                                'Loading more tracks from discography...',
+                                style: TextStyle(
+                                  color: Colors.white60,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          )
+                        : _hasMore
+                        ? OutlinedButton.icon(
+                            onPressed: _loadMoreDiscography,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: themeColor,
+                              side: BorderSide(
+                                color: themeColor.withValues(alpha: 0.5),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 22,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
                               ),
                             ),
-                          IconButton(
                             icon: const Icon(
-                              Icons.more_horiz,
-                              color: Colors.white54,
+                              Icons.expand_more_rounded,
+                              size: 18,
                             ),
-                            onPressed: () =>
-                                showSongOptionsBottomSheet(context, song),
+                            label: Text(
+                              'Load More Tracks (${_allSongs.length} loaded)',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          )
+                        : Text(
+                            filtered.length >= 30
+                                ? '• Complete Discography Loaded (${filtered.length} songs) •'
+                                : '',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.35),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.5,
+                            ),
                           ),
-                        ],
-                      ),
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        _musicService.playPlaylist(filtered, index);
-                      },
-                    );
-                  }, childCount: filtered.length),
+                  ),
                 ),
               ),
+            ],
           ],
         ),
       ),
