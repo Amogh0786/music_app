@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_app/screens/search_screen.dart';
+import 'package:music_app/screens/artist_profile_screen.dart';
+import 'package:music_app/widgets/artist_card.dart';
 import 'package:music_app/services/preferences_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -101,6 +103,35 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Tapping ArtistCard in Artists tab navigates to ArtistProfileScreen',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1920, 1080);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(const MaterialApp(home: SearchScreen()));
+      await tester.pumpAndSettle();
+
+      // Switch to Artists tab
+      final artistsTab = find.widgetWithText(InkWell, 'Artists');
+      await tester.tap(artistsTab);
+      await tester.pumpAndSettle();
+
+      // Find first ArtistCard and tap it
+      final firstArtistCard = find.byType(ArtistCard).first;
+      expect(firstArtistCard, findsOneWidget);
+      await tester.tap(firstArtistCard);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Should now be on ArtistProfileScreen
+      expect(find.byType(ArtistProfileScreen), findsOneWidget);
+      expect(find.text('LANGUAGE'), findsOneWidget);
+      expect(find.text('MOVIE & ERA RANGE'), findsOneWidget);
     },
   );
 }

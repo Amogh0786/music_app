@@ -262,5 +262,43 @@ void main() {
         expect(artists.length, greaterThanOrEqualTo(20));
       },
     );
+
+    test(
+      'getFilmography returns verified movies for artists with curated catalogs',
+      () {
+        final dspFilms = artistService.getFilmography('Devi Sri Prasad');
+        expect(dspFilms, isNotEmpty);
+        expect(dspFilms, contains('Pushpa The Rise'));
+        expect(dspFilms, contains('Arya'));
+        expect(dspFilms, contains('Jalsa'));
+
+        final rahmanFilms = artistService.getFilmography('A.R. Rahman');
+        expect(rahmanFilms, isNotEmpty);
+        expect(rahmanFilms, contains('Roja'));
+        expect(rahmanFilms, contains('Dil Se'));
+
+        final unknownFilms = artistService.getFilmography(
+          'NonExistentArtistXYZ',
+        );
+        expect(unknownFilms, isEmpty);
+      },
+    );
+
+    test('getArtistLanguages returns multi-lingual repertoire or fallback', () {
+      final dspLangs = artistService.getArtistLanguages('Devi Sri Prasad');
+      expect(dspLangs, contains('Telugu'));
+      expect(dspLangs, contains('Tamil'));
+      expect(dspLangs, contains('Hindi'));
+
+      final rahmanLangs = artistService.getArtistLanguages('A R Rahman');
+      expect(rahmanLangs, contains('Tamil'));
+      expect(rahmanLangs, contains('Hindi'));
+      expect(rahmanLangs, contains('Telugu'));
+
+      final defaultLang = artistService.getArtistLanguages(
+        'Unknown Person 123',
+      );
+      expect(defaultLang, equals(['Telugu']));
+    });
   });
 }

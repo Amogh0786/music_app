@@ -10,6 +10,7 @@ import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/category_card.dart';
 import '../widgets/artist_card.dart';
 import '../widgets/animated_equalizer.dart';
+import 'artist_profile_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -409,13 +410,20 @@ class _SearchScreenState extends State<SearchScreen>
                           ),
                           onTap: () {
                             HapticFeedback.lightImpact();
-                            _searchController.text = suggestion.text;
-                            _performSearch(
-                              suggestion.text,
-                              isArtist:
-                                  suggestion.type ==
-                                  SearchSuggestionType.artist,
-                            );
+                            if (suggestion.type ==
+                                SearchSuggestionType.artist) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ArtistProfileScreen(
+                                    artistName: suggestion.text,
+                                  ),
+                                ),
+                              );
+                            } else {
+                              _searchController.text = suggestion.text;
+                              _performSearch(suggestion.text, isArtist: false);
+                            }
                           },
                         );
                       },
@@ -443,7 +451,7 @@ class _SearchScreenState extends State<SearchScreen>
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    '${_searchResults.length} Tracks • Complete Discography',
+                                    '${_searchResults.length} Tracks • Discography',
                                     style: const TextStyle(
                                       color: Colors.white70,
                                       fontSize: 13,
@@ -452,7 +460,50 @@ class _SearchScreenState extends State<SearchScreen>
                                     ),
                                   ),
                                 ),
-                                if (_isLoadingMore)
+                                InkWell(
+                                  onTap: () {
+                                    HapticFeedback.lightImpact();
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ArtistProfileScreen(
+                                          artistName: _searchController.text
+                                              .trim(),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          'Filters',
+                                          style: TextStyle(
+                                            color: Theme.of(
+                                              context,
+                                            ).primaryColor,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 2),
+                                        Icon(
+                                          Icons.arrow_forward_ios_rounded,
+                                          size: 10,
+                                          color: Theme.of(context).primaryColor,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                if (_isLoadingMore) ...[
+                                  const SizedBox(width: 8),
                                   const SizedBox(
                                     width: 14,
                                     height: 14,
@@ -461,6 +512,7 @@ class _SearchScreenState extends State<SearchScreen>
                                       color: Color(0xFF1DB954),
                                     ),
                                   ),
+                                ],
                               ],
                             ),
                           );
@@ -1048,8 +1100,15 @@ class _SearchScreenState extends State<SearchScreen>
                   artist: artist,
                   onTap: () {
                     HapticFeedback.lightImpact();
-                    _searchController.text = artist.name;
-                    _performSearch(artist.name, isArtist: true);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ArtistProfileScreen(
+                          artist: artist,
+                          artistName: artist.name,
+                        ),
+                      ),
+                    );
                   },
                 );
               },
