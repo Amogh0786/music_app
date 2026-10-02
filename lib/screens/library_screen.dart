@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -196,8 +197,12 @@ class _LibraryScreenState extends State<LibraryScreen>
                           },
                           onShuffle: () {
                             HapticFeedback.lightImpact();
-                            _musicService.toggleShuffle();
-                            _musicService.playDownloadedSong(downloaded.first);
+                            _musicService.setShuffle(true);
+                            final randomIndex =
+                                Random().nextInt(downloaded.length);
+                            _musicService.playDownloadedSong(
+                              downloaded[randomIndex],
+                            );
                           },
                         );
                       }
@@ -390,8 +395,9 @@ class _LibraryScreenState extends State<LibraryScreen>
                           },
                           onShuffle: () {
                             HapticFeedback.lightImpact();
-                            _musicService.toggleShuffle();
-                            _musicService.playLikedSong(liked.first);
+                            _musicService.setShuffle(true);
+                            final randomIndex = Random().nextInt(liked.length);
+                            _musicService.playLikedSong(liked[randomIndex]);
                           },
                         );
                       }
@@ -856,6 +862,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     required VoidCallback onPlayAll,
     required VoidCallback onShuffle,
   }) {
+    final isShuffle = _musicService.isShuffle;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
@@ -888,20 +895,27 @@ class _LibraryScreenState extends State<LibraryScreen>
           const SizedBox(width: 12),
           Expanded(
             child: OutlinedButton.icon(
-              icon: const Icon(
+              icon: Icon(
                 Icons.shuffle_rounded,
-                color: Colors.white70,
+                color: isShuffle ? const Color(0xFF1DB954) : Colors.white70,
                 size: 18,
               ),
-              label: const Text(
+              label: Text(
                 'Shuffle',
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: isShuffle ? const Color(0xFF1DB954) : Colors.white70,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               style: OutlinedButton.styleFrom(
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                backgroundColor: isShuffle
+                    ? const Color(0xFF1DB954).withValues(alpha: 0.12)
+                    : null,
+                side: BorderSide(
+                  color: isShuffle
+                      ? const Color(0xFF1DB954).withValues(alpha: 0.6)
+                      : Colors.white.withValues(alpha: 0.2),
+                ),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
