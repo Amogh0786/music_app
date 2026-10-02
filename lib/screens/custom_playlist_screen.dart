@@ -7,6 +7,7 @@ import '../services/playlist_artist_filter.dart';
 import '../services/preferences_service.dart';
 import '../widgets/animated_equalizer.dart';
 import '../widgets/playlist_action_menu.dart';
+import '../widgets/song_options_bottom_sheet.dart';
 
 class CustomPlaylistScreen extends StatefulWidget {
   final String playlistId;
@@ -650,17 +651,25 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                             ),
                           ),
                           trailing: IconButton(
+                            key: ValueKey('local_match_more_$songId'),
                             icon: const Icon(
-                              Icons.close_rounded,
-                              color: Colors.white30,
+                              Icons.more_vert_rounded,
+                              color: Colors.white38,
                               size: 20,
                             ),
-                            tooltip: 'Remove from playlist',
+                            tooltip: 'Song options',
                             onPressed: () {
                               HapticFeedback.lightImpact();
-                              _musicService.removeSongFromPlaylist(
-                                widget.playlistId,
-                                songId,
+                              showPlaylistSongOptionsBottomSheet(
+                                context,
+                                songMap: song,
+                                playlistId: widget.playlistId,
+                                onPlayNow: () {
+                                  _musicService.playCustomPlaylist(
+                                    widget.playlistId,
+                                    originalIndex,
+                                  );
+                                },
                               );
                             },
                           ),
@@ -1224,17 +1233,25 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
+                                    key: ValueKey('playlist_song_more_$songId'),
                                     icon: const Icon(
-                                      Icons.close_rounded,
-                                      color: Colors.white30,
+                                      Icons.more_vert_rounded,
+                                      color: Colors.white38,
                                       size: 20,
                                     ),
-                                    tooltip: 'Remove from playlist',
+                                    tooltip: 'Song options',
                                     onPressed: () {
                                       HapticFeedback.lightImpact();
-                                      _musicService.removeSongFromPlaylist(
-                                        widget.playlistId,
-                                        songId,
+                                      showPlaylistSongOptionsBottomSheet(
+                                        context,
+                                        songMap: song,
+                                        playlistId: widget.playlistId,
+                                        onPlayNow: () {
+                                          _musicService.playCustomPlaylist(
+                                            widget.playlistId,
+                                            index,
+                                          );
+                                        },
                                       );
                                     },
                                   ),

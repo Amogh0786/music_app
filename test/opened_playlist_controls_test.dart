@@ -160,4 +160,54 @@ void main() {
       expect(find.text('Open'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'Playlist song rows expose three-dot More action and preserve presentation and reorder handle',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CustomPlaylistScreen(playlistId: 'test_playlist_opened'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 1. Verify song presentation intact
+      expect(find.text('Samajavaragamana'), findsOneWidget);
+      expect(find.text('Sid Sriram'), findsOneWidget);
+      expect(find.text('1'), findsOneWidget);
+      expect(find.text('2'), findsOneWidget);
+
+      // 2. Verify drag handle exists
+      expect(find.byIcon(Icons.drag_handle_rounded), findsNWidgets(2));
+
+      // 3. Verify song More button exists on each row
+      final song1More = find.byKey(const ValueKey('playlist_song_more_song_1'));
+      expect(song1More, findsOneWidget);
+
+      // 4. Tap the song More button
+      await tester.tap(song1More);
+      await tester.pumpAndSettle();
+
+      // 5. Verify song options bottom sheet is displayed with relevant actions
+      expect(find.text('Play'), findsWidgets);
+      expect(find.text('Add to Queue'), findsOneWidget);
+      expect(find.text('Add to Playlist'), findsOneWidget);
+      expect(find.text('Like Song'), findsOneWidget);
+      expect(find.text('Remove from Playlist'), findsOneWidget);
+
+      // 6. Test Remove from Playlist action
+      await tester.tap(find.text('Remove from Playlist'));
+      await tester.pumpAndSettle();
+
+      // 7. Verify song_1 was removed from the playlist
+      final remainingSongs =
+          musicService.customPlaylists.first['songs'] as List;
+      expect(remainingSongs.length, equals(1));
+      expect(remainingSongs.first['id'], equals('song_2'));
+    },
+  );
 }
