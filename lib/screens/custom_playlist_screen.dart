@@ -330,11 +330,15 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _musicService.isShuffle
-                                ? const Color(0xFF1DB954).withValues(alpha: 0.18)
+                                ? const Color(
+                                    0xFF1DB954,
+                                  ).withValues(alpha: 0.18)
                                 : Colors.white.withValues(alpha: 0.12),
                             side: BorderSide(
                               color: _musicService.isShuffle
-                                  ? const Color(0xFF1DB954).withValues(alpha: 0.6)
+                                  ? const Color(
+                                      0xFF1DB954,
+                                    ).withValues(alpha: 0.6)
                                   : Colors.white.withValues(alpha: 0.20),
                               width: 1.2,
                             ),

@@ -788,11 +788,15 @@ class ProfileScreen extends StatelessWidget {
                           ),
                           style: OutlinedButton.styleFrom(
                             backgroundColor: music.isShuffle
-                                ? const Color(0xFF1DB954).withValues(alpha: 0.12)
+                                ? const Color(
+                                    0xFF1DB954,
+                                  ).withValues(alpha: 0.12)
                                 : null,
                             side: BorderSide(
                               color: music.isShuffle
-                                  ? const Color(0xFF1DB954).withValues(alpha: 0.6)
+                                  ? const Color(
+                                      0xFF1DB954,
+                                    ).withValues(alpha: 0.6)
                                   : Colors.white.withValues(alpha: 0.2),
                             ),
                             padding: const EdgeInsets.symmetric(vertical: 12),

@@ -1640,11 +1640,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }) async {
     final Map<String, dynamic> playlist;
     if (playlistId == 'liked') {
-      playlist = {
-        'id': 'liked',
-        'name': 'Liked Songs',
-        'songs': _likedSongs,
-      };
+      playlist = {'id': 'liked', 'name': 'Liked Songs', 'songs': _likedSongs};
     } else {
       playlist = _customPlaylists.firstWhere(
         (p) => p['id'] == playlistId,
@@ -1733,11 +1729,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> playCustomPlaylistWithShuffle(String playlistId) async {
     final Map<String, dynamic> playlist;
     if (playlistId == 'liked') {
-      playlist = {
-        'id': 'liked',
-        'name': 'Liked Songs',
-        'songs': _likedSongs,
-      };
+      playlist = {'id': 'liked', 'name': 'Liked Songs', 'songs': _likedSongs};
     } else {
       playlist = _customPlaylists.firstWhere(
         (p) => p['id'] == playlistId,
