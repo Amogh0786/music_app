@@ -33,13 +33,13 @@ void main() {
       'name': 'Telugu Party Hits',
       'songs': [
         {
-          'id': 'song_1',
+          'id': 'dQw4w9WgXcQ',
           'title': 'Samajavaragamana',
           'author': 'Sid Sriram',
           'thumbnail': 'https://example.com/1.jpg',
         },
         {
-          'id': 'song_2',
+          'id': 'kJQP7kiw5Fk',
           'title': 'Butta Bomma',
           'author': 'Armaan Malik',
           'thumbnail': 'https://example.com/2.jpg',
@@ -185,7 +185,9 @@ void main() {
       expect(find.byIcon(Icons.drag_handle_rounded), findsNWidgets(2));
 
       // 3. Verify song More button exists on each row
-      final song1More = find.byKey(const ValueKey('playlist_song_more_song_1'));
+      final song1More = find.byKey(
+        const ValueKey('playlist_song_more_dQw4w9WgXcQ'),
+      );
       expect(song1More, findsOneWidget);
 
       // 4. Tap the song More button
@@ -207,7 +209,96 @@ void main() {
       final remainingSongs =
           musicService.customPlaylists.first['songs'] as List;
       expect(remainingSongs.length, equals(1));
-      expect(remainingSongs.first['id'], equals('song_2'));
+      expect(remainingSongs.first['id'], equals('kJQP7kiw5Fk'));
+    },
+  );
+
+  testWidgets(
+    'Screen-level mini-player policy hides mini-player in opened playlist and restores it upon leaving',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      // 1. Initially, mini-player visibility is active
+      expect(MiniPlayer.isVisible.value, isTrue);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Stack(
+                children: [
+                  Center(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const CustomPlaylistScreen(
+                              playlistId: 'test_playlist_opened',
+                            ),
+                          ),
+                        );
+                      },
+                      child: const Text('Open Playlist'),
+                    ),
+                  ),
+                  const Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: MiniPlayer(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 2. Open CustomPlaylistScreen
+      await tester.tap(find.text('Open Playlist'));
+      await tester.pumpAndSettle();
+
+      // 3. MiniPlayer policy is now hidden while playlist screen is active
+      expect(MiniPlayer.isVisible.value, isFalse);
+
+      // On CustomPlaylistScreen, no on-stage MiniPlayer is visible
+      expect(find.byType(MiniPlayer), findsNothing);
+
+      // Verify opened playlist screen has play button intact
+      expect(find.widgetWithText(ElevatedButton, 'Play'), findsOneWidget);
+
+      // 4. Leaving playlist screen via back button
+      await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
+      await tester.pumpAndSettle();
+
+      // 5. Leaving playlist screen restores normal mini-player visibility
+      expect(MiniPlayer.isVisible.value, isTrue);
+      expect(find.byType(MiniPlayer), findsOneWidget);
+      expect(find.text('Open Playlist'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'MiniPlayer widget collapses to zero size when MiniPlayer.isVisible is false',
+    (WidgetTester tester) async {
+      MiniPlayer.isVisible.value = true;
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: MiniPlayer())),
+      );
+      await tester.pump();
+      expect(find.byType(MiniPlayer), findsOneWidget);
+
+      MiniPlayer.hide();
+      await tester.pumpAndSettle();
+      expect(MiniPlayer.isVisible.value, isFalse);
+      expect(tester.getSize(find.byType(MiniPlayer)), equals(Size.zero));
+
+      MiniPlayer.show();
+      await tester.pumpAndSettle();
+      expect(MiniPlayer.isVisible.value, isTrue);
     },
   );
 }

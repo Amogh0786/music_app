@@ -1,12 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:just_audio/just_audio.dart';
 import '../services/music_service.dart';
 import '../screens/player_screen.dart';
 
 class MiniPlayer extends StatefulWidget {
   const MiniPlayer({super.key});
+
+  /// Screen-level visibility policy. When false, the mini-player hides itself.
+  static final ValueNotifier<bool> isVisible = ValueNotifier<bool>(true);
+
+  /// Temporarily hides the mini-player while a specific screen is active.
+  static void hide() {
+    isVisible.value = false;
+  }
+
+  /// Restores mini-player visibility when leaving a screen.
+  static void show() {
+    isVisible.value = true;
+  }
 
   @override
   State<MiniPlayer> createState() => _MiniPlayerState();
@@ -19,12 +33,28 @@ class _MiniPlayerState extends State<MiniPlayer> {
   void initState() {
     super.initState();
     _musicService.addListener(_onMusicStateChanged);
+    MiniPlayer.isVisible.addListener(_onVisibilityChanged);
   }
 
   @override
   void dispose() {
     _musicService.removeListener(_onMusicStateChanged);
+    MiniPlayer.isVisible.removeListener(_onVisibilityChanged);
     super.dispose();
+  }
+
+  void _onVisibilityChanged() {
+    if (!mounted) return;
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.persistentCallbacks ||
+        phase == SchedulerPhase.midFrameMicrotasks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+      WidgetsBinding.instance.scheduleFrame();
+    } else {
+      setState(() {});
+    }
   }
 
   void _onMusicStateChanged() {
@@ -68,6 +98,10 @@ class _MiniPlayerState extends State<MiniPlayer> {
 
   @override
   Widget build(BuildContext context) {
+    if (!MiniPlayer.isVisible.value) {
+      return const SizedBox.shrink();
+    }
+
     final song = _musicService.currentSong;
     final isPlaying = _musicService.isPlaying;
     final processingState = _musicService.audioPlayer.processingState;
