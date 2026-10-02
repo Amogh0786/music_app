@@ -478,7 +478,7 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
                         backgroundColor: const Color(0xFF1E1E2C),
                         foregroundColor: Colors.white70,
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
+                          horizontal: 14,
                           vertical: 12,
                         ),
                         shape: RoundedRectangleBorder(
@@ -487,6 +487,61 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
                             color: Colors.white.withValues(alpha: 0.12),
                           ),
                         ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Smart Artist Radio Button
+                    ElevatedButton.icon(
+                      onPressed: filtered.isEmpty
+                          ? null
+                          : () async {
+                              HapticFeedback.mediumImpact();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Starting ${widget.artistName} Smart Radio…',
+                                  ),
+                                  duration: const Duration(seconds: 2),
+                                  backgroundColor: themeColor.withValues(
+                                    alpha: 0.9,
+                                  ),
+                                ),
+                              );
+                              final topSong = filtered.first;
+                              final radioTracks = await _musicService
+                                  .fetchRadioTracksForSong(topSong, limit: 40);
+                              if (radioTracks.isNotEmpty) {
+                                _musicService.playPlaylist([
+                                  topSong,
+                                  ...radioTracks,
+                                ], 0);
+                              } else {
+                                _musicService.playPlaylist(filtered, 0);
+                              }
+                            },
+                      icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                      label: const Text(
+                        'Radio',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1E1E2C),
+                        foregroundColor: themeColor,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          side: BorderSide(
+                            color: themeColor.withValues(alpha: 0.45),
+                            width: 1.2,
+                          ),
+                        ),
+                        elevation: 2,
                       ),
                     ),
                   ],

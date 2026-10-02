@@ -118,27 +118,28 @@ class _HomeScreenState extends State<HomeScreen>
     return _prefs.getTimeOfDayGreeting();
   }
 
-  /// Fetches an expanded catalog (40-50+ tracks) for Daily Mixes using high-limit search & variety
+  /// Fetches an expanded, highly personalized catalog for Daily Mixes using
+  /// Universal Reverse YTM Seed Radio + In-App TasteMatrixScorer.
   Future<List<Video>> _loadRichDailyMix(DailyMixConfig config) async {
     try {
-      final primaryFuture = _musicService.searchSongs(config.query, limit: 50);
-      final leadArtist = config.subtitle
-          .split('&')
-          .first
-          .replaceAll('Melodies', '')
-          .trim();
-      final secondaryQuery = config.query.contains('hit')
-          ? '$leadArtist songs'
-          : '$leadArtist hit songs';
-      final secondaryFuture = _musicService.searchSongs(
-        secondaryQuery,
-        limit: 30,
+      // 1. Fetch initial candidate pool for the mix's primary theme
+      final primary = await _musicService.searchSongs(config.query, limit: 25);
+      if (primary.isEmpty) {
+        return _musicService.searchSongs(config.query, limit: 30);
+      }
+
+      // 2. Use the #1 top track as the anchor seed for the Universal Radio Bridge
+      final seedTrack = primary.first;
+      final radioMix = await _musicService.fetchRadioTracksForSong(
+        seedTrack,
+        limit: 35,
       );
 
-      final responses = await Future.wait([primaryFuture, secondaryFuture]);
-      final combined = [...responses[0], ...responses[1]];
+      // 3. Combine seed tracks and radio mix, deduplicate and balance
+      final combined = [seedTrack, ...radioMix, ...primary.skip(1)];
       final deduped = CanonicalSongDedup.deduplicateList(combined);
-      return deduped.isNotEmpty ? deduped : responses[0];
+      final balanced = CanonicalSongDedup.balanceArtistDistribution(deduped);
+      return balanced.isNotEmpty ? balanced : primary;
     } catch (_) {
       return _musicService.searchSongs(config.query, limit: 45);
     }
