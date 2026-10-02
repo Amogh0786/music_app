@@ -2712,6 +2712,17 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// Starts an instant smart radio seeded by [song], resetting the queue and
+  /// populating a 50-song progressive queue scored by TasteMatrixScorer.
+  Future<void> startSongRadio(Video song) async {
+    _playlist = [song];
+    _currentIndex = 0;
+    _seedPlaylistArtists = [];
+    _playlistArtistRecommendationOffset = 0;
+    await playSong(song, updateQueue: false);
+    _generate50SongProgressiveQueue(song);
+  }
+
   void _checkAndPreloadNextQueue() {
     // When repeat mode is on (all or one), do not append recommendations to the queue
     if (_loopMode == LoopMode.all || _loopMode == LoopMode.one) return;

@@ -606,7 +606,14 @@ class _SearchScreenState extends State<SearchScreen>
                             ],
                           ),
                           onTap: () {
-                            _musicService.playPlaylist(_searchResults, index);
+                            if (_isArtistSearchActive) {
+                              _musicService.playPlaylist(
+                                _searchResults,
+                                songIndex,
+                              );
+                            } else {
+                              _musicService.startSongRadio(video);
+                            }
                           },
                         );
                       },
