@@ -77,6 +77,15 @@ void main() {
         // Verify playlist item is present
         expect(find.text('Party Vibes'), findsOneWidget);
 
+        // Verify top-right Import / Exportify button remains present
+        expect(find.text('Import / Exportify'), findsOneWidget);
+
+        // Verify New Playlist button is present in the header
+        expect(find.byTooltip('New Playlist'), findsOneWidget);
+
+        // Verify the old 'Import from Spotify' icon beside New Playlist is REMOVED
+        expect(find.byTooltip('Import from Spotify'), findsNothing);
+
         // Verify pencil (Icons.edit_outlined) and bin (Icons.delete_outline) are REMOVED from the row
         expect(find.byIcon(Icons.edit_outlined), findsNothing);
         expect(find.byIcon(Icons.delete_outline), findsNothing);

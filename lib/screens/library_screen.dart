@@ -559,35 +559,14 @@ class _LibraryScreenState extends State<LibraryScreen>
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              Row(
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.add_circle_outline_rounded,
-                                      color: Colors.white70,
-                                      size: 20,
-                                    ),
-                                    tooltip: 'New Playlist',
-                                    onPressed: _showCreatePlaylistDialog,
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.queue_music_rounded,
-                                      color: Color(0xFF1DB954),
-                                      size: 20,
-                                    ),
-                                    tooltip: 'Import from Spotify',
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              const SpotifyImportScreen(),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ],
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.add_circle_outline_rounded,
+                                  color: Colors.white70,
+                                  size: 20,
+                                ),
+                                tooltip: 'New Playlist',
+                                onPressed: _showCreatePlaylistDialog,
                               ),
                             ],
                           ),
