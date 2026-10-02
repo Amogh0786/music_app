@@ -1591,6 +1591,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                     targetPosition,
                                                   );
                                                 },
+                                                highlightColor:
+                                                    AlbumColorDeriver.resolveLyricHighlightColor(
+                                                      dominantColor,
+                                                    ),
                                               ),
                                       ),
                                     ),
@@ -2738,6 +2742,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         context,
                         song,
                         vibrantColor,
+                        dominantColor,
                       ),
                     ),
                   ),
@@ -2763,6 +2768,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     BuildContext context,
     Video song,
     Color vibrantColor,
+    Color dominantColor,
   ) {
     if (_landscapeTab == LandscapeActiveTab.lyrics) {
       if (_musicService.isFetchingLyrics) {
@@ -2788,6 +2794,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
           songArtist: song.author,
           positionStream: _musicService.positionStream,
           onSeek: (pos) => _musicService.seek(pos),
+          highlightColor: AlbumColorDeriver.resolveLyricHighlightColor(
+            dominantColor,
+          ),
         ),
       );
     }
