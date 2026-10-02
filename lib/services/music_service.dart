@@ -1377,24 +1377,59 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  String createPlaylist(String name) {
+  String createPlaylist(
+    String name, {
+    bool isSpotify = false,
+    String source = 'custom',
+  }) {
     final playlistId =
         '${DateTime.now().millisecondsSinceEpoch}_${_customPlaylists.length}';
-    return createPlaylistWithId(playlistId, name);
+    return createPlaylistWithId(
+      playlistId,
+      name,
+      isSpotify: isSpotify,
+      source: source,
+    );
   }
 
-  String createPlaylistWithId(String playlistId, String name) {
+  String createPlaylistWithId(
+    String playlistId,
+    String name, {
+    bool isSpotify = false,
+    String source = 'custom',
+  }) {
     // If playlist with this ID already exists, return existing
     final existingIndex = _customPlaylists.indexWhere(
       (p) => p['id'] == playlistId,
     );
     if (existingIndex != -1) {
+      if (isSpotify) {
+        _customPlaylists[existingIndex]['isSpotify'] = true;
+        _customPlaylists[existingIndex]['source'] = source;
+        saveCustomPlaylists();
+      }
       return playlistId;
     }
-    _customPlaylists.add({'id': playlistId, 'name': name, 'songs': []});
+    _customPlaylists.add({
+      'id': playlistId,
+      'name': name,
+      'songs': [],
+      'isSpotify': isSpotify,
+      'source': source,
+    });
     saveCustomPlaylists();
     notifyListeners();
     return playlistId;
+  }
+
+  void setPlaylistSource(String playlistId, {required bool isSpotify}) {
+    final idx = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
+    if (idx != -1) {
+      _customPlaylists[idx]['isSpotify'] = isSpotify;
+      _customPlaylists[idx]['source'] = isSpotify ? 'spotify' : 'custom';
+      saveCustomPlaylists();
+      notifyListeners();
+    }
   }
 
   void addSongToPlaylist(String playlistId, Video song) {

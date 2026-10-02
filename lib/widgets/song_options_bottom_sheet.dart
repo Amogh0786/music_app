@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
+import '../services/preferences_service.dart';
 
 /// Shows an Apple Music / Spotify-inspired frosted glass options sheet for a song.
 void showSongOptionsBottomSheet(BuildContext context, Video song) {
@@ -389,7 +390,13 @@ void _showNewPlaylistPrompt(BuildContext context, Video song) {
           onPressed: () {
             final name = controller.text.trim();
             if (name.isNotEmpty) {
-              final newId = MusicService().createPlaylist(name);
+              final newId = MusicService().createPlaylist(
+                name,
+                isSpotify: false,
+                source: 'custom',
+              );
+              PreferencesService().registerManualPlaylistId(newId);
+              PreferencesService().unregisterSpotifyPlaylistId(newId);
               MusicService().addSongToPlaylist(newId, song);
               Navigator.pop(ctx);
               _showToast(context, 'Created "$name" and added song!');

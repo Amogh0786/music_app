@@ -6,6 +6,7 @@ import '../services/music_service.dart';
 import '../services/playlist_artist_filter.dart';
 import '../services/preferences_service.dart';
 import '../widgets/animated_equalizer.dart';
+import '../widgets/playlist_action_menu.dart';
 
 class CustomPlaylistScreen extends StatefulWidget {
   final String playlistId;
@@ -284,7 +285,54 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                             );
                           },
                         ),
+                        const SizedBox(width: 8),
                       ],
+                      PlaylistActionMenu(
+                        playlistId: widget.playlistId,
+                        playlistName: name,
+                        isSpotifyImport: PreferencesService()
+                            .isSpotifyImportedPlaylist(widget.playlistId),
+                        customTrigger: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.10),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.more_vert_rounded,
+                            color: Colors.white70,
+                            size: 20,
+                          ),
+                        ),
+                        closeScreenOnDelete: true,
+                        onRenamed: (_) {
+                          if (mounted) setState(() {});
+                        },
+                        onToggleSource: () {
+                          final prefs = PreferencesService();
+                          final nowSpotify = prefs.isSpotifyImportedPlaylist(
+                            widget.playlistId,
+                          );
+                          if (nowSpotify) {
+                            prefs.unregisterSpotifyPlaylistId(
+                              widget.playlistId,
+                            );
+                            prefs.registerManualPlaylistId(widget.playlistId);
+                            _musicService.setPlaylistSource(
+                              widget.playlistId,
+                              isSpotify: false,
+                            );
+                          } else {
+                            prefs.unregisterManualPlaylistId(widget.playlistId);
+                            prefs.registerSpotifyPlaylistId(widget.playlistId);
+                            _musicService.setPlaylistSource(
+                              widget.playlistId,
+                              isSpotify: true,
+                            );
+                          }
+                          if (mounted) setState(() {});
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -1221,8 +1269,8 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                   ),
               ],
 
-              // Bottom spacing for miniplayer
-              const SliverToBoxAdapter(child: SizedBox(height: 120)),
+              // Bottom spacing
+              const SliverToBoxAdapter(child: SizedBox(height: 36)),
             ],
           ),
         ],
