@@ -77,6 +77,28 @@ void main() {
   );
 
   testWidgets(
+    'SearchScreen switches smoothly to Albums tab and displays Soundtracks & Albums header',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1920, 1080);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(const MaterialApp(home: SearchScreen()));
+      await tester.pumpAndSettle();
+
+      // Tap on Albums tab switcher
+      final albumsTabFinder = find.widgetWithText(InkWell, 'Albums');
+      expect(albumsTabFinder, findsOneWidget);
+      await tester.tap(albumsTabFinder);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Soundtracks & Albums'), findsOneWidget);
+      expect(find.text('Telugu'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'SearchScreen renders on mobile device portrait size without overflow',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(390, 844);

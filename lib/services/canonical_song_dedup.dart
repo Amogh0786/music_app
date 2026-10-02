@@ -786,10 +786,12 @@ class CanonicalSongDedup {
       // In Indian cinema, one credit may list composer and the other playback singer
       final langA = detectLanguage(artistA);
       final langB = detectLanguage(artistB);
-      final isIndicA = (langA != null && langA != 'english') ||
+      final isIndicA =
+          (langA != null && langA != 'english') ||
           isKnownIndicArtist(artistA) ||
           LyricsTransliterationService.isRomanizedTelugu(artistA);
-      final isIndicB = (langB != null && langB != 'english') ||
+      final isIndicB =
+          (langB != null && langB != 'english') ||
           isKnownIndicArtist(artistB) ||
           LyricsTransliterationService.isRomanizedTelugu(artistB);
       if (isIndicA && isIndicB) {

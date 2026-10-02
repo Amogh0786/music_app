@@ -10,6 +10,8 @@ import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/animated_equalizer.dart';
 import '../widgets/bug_report_button.dart';
 import 'profile_screen.dart';
+import 'album_screen.dart';
+import '../models/jio_album.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -33,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen>
   List<Video> _circadianMix = [];
   List<Video> _dailyMix1 = [];
   List<Video> _dailyMix2 = [];
+  List<JioAlbum> _trendingAlbums = [];
   CircadianContext? _circadianContext;
   List<DailyMixConfig> _dailyMixConfigs = [];
   bool _isLoadingCharts = true;
@@ -171,11 +174,24 @@ class _HomeScreenState extends State<HomeScreen>
         _prefs.getCachedHomeFeed('personalized'),
       ).where((v) => CanonicalSongDedup.isGenuineSong(v)).toList(),
     );
+    final cachedAlbumsJson = _prefs.getCachedHomeFeed('albums');
+    List<JioAlbum> cachedAlbums = [];
+    if (cachedAlbumsJson != null && cachedAlbumsJson.isNotEmpty) {
+      try {
+        final decoded = json.decode(cachedAlbumsJson) as List<dynamic>;
+        cachedAlbums = decoded
+            .whereType<Map<String, dynamic>>()
+            .map(JioAlbum.fromJson)
+            .where((a) => a.id.isNotEmpty && a.title.isNotEmpty)
+            .toList();
+      } catch (_) {}
+    }
 
     bool hadCache = false;
     if (cachedCircadian.isNotEmpty ||
         cachedMix1.isNotEmpty ||
-        cachedCharts.isNotEmpty) {
+        cachedCharts.isNotEmpty ||
+        cachedAlbums.isNotEmpty) {
       hadCache = true;
       if (mounted) {
         setState(() {
@@ -188,6 +204,7 @@ class _HomeScreenState extends State<HomeScreen>
           if (cachedPersonalized.isNotEmpty) {
             _personalizedMixes = cachedPersonalized;
           }
+          if (cachedAlbums.isNotEmpty) _trendingAlbums = cachedAlbums;
           _isLoadingCharts = false;
         });
       }
@@ -219,6 +236,10 @@ class _HomeScreenState extends State<HomeScreen>
       final futurePersonalized = _dailyMixConfigs.length > 2
           ? _loadRichDailyMix(_dailyMixConfigs[2])
           : _musicService.searchSongs('$primaryLang Mix');
+      final futureAlbums = _musicService.searchAlbums(
+        '$primaryLang Soundtracks',
+        limit: 12,
+      );
 
       final results = await Future.wait<dynamic>([
         futureCircadian,
@@ -228,6 +249,7 @@ class _HomeScreenState extends State<HomeScreen>
         futureTrending,
         futureNewReleases,
         futurePersonalized,
+        futureAlbums,
       ]);
 
       final circadian = CanonicalSongDedup.deduplicateList(
@@ -251,6 +273,16 @@ class _HomeScreenState extends State<HomeScreen>
       final personalized = CanonicalSongDedup.deduplicateList(
         results[6] as List<Video>,
       );
+      var albums = (results[7] as List<dynamic>).whereType<JioAlbum>().toList();
+      if (albums.length < 3) {
+        final fallbackAlbums = await _musicService.searchAlbums(
+          primaryLang,
+          limit: 12,
+        );
+        if (fallbackAlbums.isNotEmpty) {
+          albums = fallbackAlbums;
+        }
+      }
 
       _prefs.cacheHomeFeed('circadian', _serializeVideos(circadian));
       _prefs.cacheHomeFeed('daily_mix_1', _serializeVideos(mix1));
@@ -259,6 +291,12 @@ class _HomeScreenState extends State<HomeScreen>
       _prefs.cacheHomeFeed('trending', _serializeVideos(trending));
       _prefs.cacheHomeFeed('new_releases', _serializeVideos(newReleases));
       _prefs.cacheHomeFeed('personalized', _serializeVideos(personalized));
+      if (albums.isNotEmpty) {
+        _prefs.cacheHomeFeed(
+          'albums',
+          json.encode(albums.map((a) => a.toJson()).toList()),
+        );
+      }
 
       if (mounted) {
         setState(() {
@@ -269,6 +307,7 @@ class _HomeScreenState extends State<HomeScreen>
           _trendingNow = trending;
           _newReleases = newReleases;
           _personalizedMixes = personalized;
+          if (albums.isNotEmpty) _trendingAlbums = albums;
           _isLoadingCharts = false;
         });
       }
@@ -585,6 +624,12 @@ class _HomeScreenState extends State<HomeScreen>
                             _dailyMixConfigs[0].subtitle,
                           ),
                           _buildSlidingSongGrid(_dailyMix1),
+                          const SizedBox(height: 24),
+                        ],
+
+                        // BLOCKBUSTER SOUNDTRACKS & ALBUMS
+                        if (_trendingAlbums.isNotEmpty) ...[
+                          _buildAlbumsSection(),
                           const SizedBox(height: 24),
                         ],
 
@@ -1027,6 +1072,217 @@ class _HomeScreenState extends State<HomeScreen>
           _buildVerticalSongList(_moodSongs, isVibe: true),
         ],
       ],
+    );
+  }
+
+  Widget _buildAlbumsSection() {
+    if (_trendingAlbums.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(
+          'BLOCKBUSTER SOUNDTRACKS',
+          'Full Movie & Studio Albums',
+        ),
+        SizedBox(
+          height: 220,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            itemCount: _trendingAlbums.length,
+            itemBuilder: (context, index) {
+              final album = _trendingAlbums[index];
+              final isSingle = album.songCount <= 1;
+
+              return GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AlbumScreen(
+                        album: album,
+                        albumId: album.id,
+                        albumTitle: album.title,
+                        albumArtwork: album.artwork,
+                        albumArtist: album.artist,
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  width: 152,
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 4,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 152,
+                        height: 152,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.45),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              if (album.artwork.isNotEmpty)
+                                Image.network(
+                                  album.artwork,
+                                  fit: BoxFit.cover,
+                                  cacheWidth: 320,
+                                  cacheHeight: 320,
+                                  errorBuilder: (_, _, _) =>
+                                      _buildAlbumFallbackCover(album),
+                                )
+                              else
+                                _buildAlbumFallbackCover(album),
+                              // Song count pill badge
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.75),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: isSingle
+                                          ? Colors.white24
+                                          : const Color(
+                                              0xFF7C3AED,
+                                            ).withValues(alpha: 0.6),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    isSingle
+                                        ? 'Single'
+                                        : '${album.songCount} Songs',
+                                    style: TextStyle(
+                                      color: isSingle
+                                          ? Colors.white70
+                                          : const Color(0xFFA78BFA),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.2,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // Vinyl disc icon overlay
+                              Positioned(
+                                bottom: 8,
+                                right: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).primaryColor,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.4,
+                                        ),
+                                        blurRadius: 6,
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.album_rounded,
+                                    color: Colors.black,
+                                    size: 16,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        album.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        album.artist.isNotEmpty
+                            ? album.artist
+                            : (album.year.isNotEmpty
+                                  ? album.year
+                                  : 'Soundtrack'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.55),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAlbumFallbackCover(JioAlbum album) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF1F1B2C), Color(0xFF120E1E)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.album_rounded, color: Color(0xFFA78BFA), size: 40),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                album.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

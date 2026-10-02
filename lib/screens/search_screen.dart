@@ -45,6 +45,10 @@ class _SearchScreenState extends State<SearchScreen>
   int _currentPage = 1;
   String _currentQuery = '';
 
+  List<JioAlbum> _browseAlbums = [];
+  bool _isLoadingBrowseAlbums = false;
+  String _selectedAlbumBrowseLang = 'Telugu';
+
   final List<Map<String, dynamic>> _categories = [
     {
       'title': 'Bollywood Hits',
@@ -140,6 +144,10 @@ class _SearchScreenState extends State<SearchScreen>
         _loadMoreResults();
       }
     });
+    _selectedAlbumBrowseLang = _prefs.preferredLanguages.isNotEmpty
+        ? _prefs.preferredLanguages.first
+        : 'Telugu';
+    _loadBrowseAlbums(_selectedAlbumBrowseLang);
   }
 
   void _onPrefsChanged() {
@@ -827,7 +835,7 @@ class _SearchScreenState extends State<SearchScreen>
                           ),
                           const SizedBox(height: 14),
                         ],
-                        // Two Boxes Switcher: Categories and Artists
+                        // Three Boxes Switcher: Categories, Albums, Artists
                         _buildBrowseTabsHeader(context),
                         const SizedBox(height: 14),
                         // Swappable Grid with PageView matching MainScreen switching animation
@@ -840,6 +848,7 @@ class _SearchScreenState extends State<SearchScreen>
                             },
                             children: [
                               _buildCategoriesGrid(),
+                              _buildAlbumsBrowseGrid(),
                               _buildArtistsGrid(),
                             ],
                           ),
@@ -853,7 +862,7 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
-  /// Two Boxes Switcher: 'Categories' and 'Artists' with Apple-style smooth sliding indicator
+  /// Three Boxes Switcher: 'Categories', 'Albums', 'Artists' with Apple-style smooth sliding indicator
   Widget _buildBrowseTabsHeader(BuildContext context) {
     final primaryColor = Theme.of(context).primaryColor;
 
@@ -869,7 +878,7 @@ class _SearchScreenState extends State<SearchScreen>
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final boxWidth = constraints.maxWidth / 2;
+          final boxWidth = constraints.maxWidth / 3;
           return Stack(
             children: [
               // Fluid sliding highlight indicator pill with matching 320ms easeOutCubic curve
@@ -907,7 +916,7 @@ class _SearchScreenState extends State<SearchScreen>
                 ),
               ),
 
-              // The Two Interactive Selector Boxes
+              // The Three Interactive Selector Boxes
               Row(
                 children: [
                   Expanded(
@@ -921,9 +930,17 @@ class _SearchScreenState extends State<SearchScreen>
                   Expanded(
                     child: _buildSwitcherBox(
                       index: 1,
+                      title: 'Albums',
+                      icon: Icons.album_rounded,
+                      isActive: _browseTabIndex == 1,
+                    ),
+                  ),
+                  Expanded(
+                    child: _buildSwitcherBox(
+                      index: 2,
                       title: 'Artists',
                       icon: Icons.mic_external_on_rounded,
-                      isActive: _browseTabIndex == 1,
+                      isActive: _browseTabIndex == 2,
                     ),
                   ),
                 ],
@@ -965,17 +982,21 @@ class _SearchScreenState extends State<SearchScreen>
             children: [
               Icon(
                 icon,
-                size: 18,
+                size: 16,
                 color: isActive ? primaryColor : Colors.white60,
               ),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: TextStyle(
-                  color: isActive ? Colors.white : Colors.white60,
-                  fontSize: 14,
-                  fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
-                  letterSpacing: -0.2,
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isActive ? Colors.white : Colors.white60,
+                    fontSize: 13,
+                    fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+                    letterSpacing: -0.2,
+                  ),
                 ),
               ),
             ],
@@ -1298,7 +1319,184 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
-  // ─── Albums Grid ─────────────────────────────────────────────────────────────
+  Future<void> _loadBrowseAlbums(String lang) async {
+    if (!mounted) return;
+    setState(() => _isLoadingBrowseAlbums = true);
+    try {
+      var albums = await _musicService.searchAlbums(
+        '$lang Soundtracks',
+        limit: 24,
+      );
+      if (albums.length < 4) {
+        final fallback = await _musicService.searchAlbums(lang, limit: 24);
+        if (fallback.isNotEmpty) albums = fallback;
+      }
+      if (mounted) {
+        setState(() {
+          _browseAlbums = albums;
+          _isLoadingBrowseAlbums = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLoadingBrowseAlbums = false);
+      }
+    }
+  }
+
+  // ─── Albums Browse Tab Grid ───────────────────────────────────────────────
+  Widget _buildAlbumsBrowseGrid() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final crossAxisCount = width > 900 ? 5 : (width > 600 ? 4 : 2);
+
+        return ListView(
+          key: const PageStorageKey('albums_browse_grid_view'),
+          padding: const EdgeInsets.only(top: 4, bottom: 160),
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7C3AED).withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFF7C3AED).withValues(alpha: 0.35),
+                      width: 1,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.album_rounded,
+                    size: 16,
+                    color: Color(0xFFA78BFA),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Soundtracks & Albums',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      Text(
+                        'Explore full movie OSTs & studio albums',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Language selector chips
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  for (final lang in [
+                    'Telugu',
+                    'Hindi',
+                    'Tamil',
+                    'Kannada',
+                    'Malayalam',
+                    'Punjabi',
+                    'English',
+                  ])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(lang),
+                        selected: _selectedAlbumBrowseLang == lang,
+                        onSelected: (selected) {
+                          if (selected && _selectedAlbumBrowseLang != lang) {
+                            HapticFeedback.selectionClick();
+                            setState(() => _selectedAlbumBrowseLang = lang);
+                            _loadBrowseAlbums(lang);
+                          }
+                        },
+                        selectedColor: Theme.of(context).primaryColor,
+                        backgroundColor: const Color(0xFF161622),
+                        labelStyle: TextStyle(
+                          color: _selectedAlbumBrowseLang == lang
+                              ? Colors.black
+                              : Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        side: BorderSide(
+                          color: _selectedAlbumBrowseLang == lang
+                              ? Theme.of(context).primaryColor
+                              : Colors.white.withValues(alpha: 0.1),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            if (_isLoadingBrowseAlbums)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                ),
+              )
+            else if (_browseAlbums.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Center(
+                  child: Text(
+                    'No albums found for $_selectedAlbumBrowseLang',
+                    style: const TextStyle(color: Colors.white54),
+                  ),
+                ),
+              )
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  childAspectRatio: 0.72,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 14,
+                ),
+                itemCount: _browseAlbums.length,
+                itemBuilder: (context, i) {
+                  return _buildAlbumItemCard(
+                    _browseAlbums[i],
+                    heroPrefix: 'browse',
+                  );
+                },
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ─── Albums Search Results Grid ───────────────────────────────────────────
   Widget _buildAlbumsGrid() {
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 160),
@@ -1310,138 +1508,139 @@ class _SearchScreenState extends State<SearchScreen>
       ),
       itemCount: _albumResults.length,
       itemBuilder: (context, i) {
-        final album = _albumResults[i];
-        final isSingle = album.songCount <= 1;
-        return GestureDetector(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => AlbumScreen(
-                  album: album,
-                  albumId: album.id,
-                  albumTitle: album.title,
-                  albumArtwork: album.artwork,
-                  albumArtist: album.artist,
-                ),
-              ),
-            );
-          },
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF141420),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Album art with song count badge
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(15),
-                  ),
-                  child: Stack(
-                    children: [
-                      Hero(
-                        tag: 'album-art-${album.id}',
-                        child: album.artwork.isNotEmpty
-                            ? Image.network(
-                                album.artwork,
-                                width: double.infinity,
-                                height: 160,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, e2, st) =>
-                                    _buildFallbackAlbumCover(album),
-                              )
-                            : _buildFallbackAlbumCover(album),
-                      ),
-                      // Song count pill badge
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.72),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: isSingle
-                                  ? Colors.white24
-                                  : const Color(
-                                      0xFF7C3AED,
-                                    ).withValues(alpha: 0.5),
-                              width: 1,
-                            ),
-                          ),
-                          child: Text(
-                            isSingle ? 'Single' : '${album.songCount} Songs',
-                            style: TextStyle(
-                              color: isSingle
-                                  ? Colors.white70
-                                  : const Color(0xFFA78BFA),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Info
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        album.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          height: 1.25,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      if (album.artist.isNotEmpty)
-                        Text(
-                          album.artist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.48),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      if (album.year.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            album.year,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.3),
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
+        return _buildAlbumItemCard(_albumResults[i], heroPrefix: 'search');
+      },
+    );
+  }
+
+  Widget _buildAlbumItemCard(JioAlbum album, {required String heroPrefix}) {
+    final isSingle = album.songCount <= 1;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AlbumScreen(
+              album: album,
+              albumId: album.id,
+              albumTitle: album.title,
+              albumArtwork: album.artwork,
+              albumArtist: album.artist,
             ),
           ),
         );
       },
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF141420),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Album art with song count badge
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(15),
+              ),
+              child: Stack(
+                children: [
+                  Hero(
+                    tag: '$heroPrefix-art-${album.id}',
+                    child: album.artwork.isNotEmpty
+                        ? Image.network(
+                            album.artwork,
+                            width: double.infinity,
+                            height: 160,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, e2, st) =>
+                                _buildFallbackAlbumCover(album),
+                          )
+                        : _buildFallbackAlbumCover(album),
+                  ),
+                  // Song count pill badge
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.72),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isSingle
+                              ? Colors.white24
+                              : const Color(0xFF7C3AED).withValues(alpha: 0.5),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        isSingle ? 'Single' : '${album.songCount} Songs',
+                        style: TextStyle(
+                          color: isSingle
+                              ? Colors.white70
+                              : const Color(0xFFA78BFA),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Info
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    album.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      height: 1.25,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  if (album.artist.isNotEmpty)
+                    Text(
+                      album.artist,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.48),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  if (album.year.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        album.year,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.3),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
