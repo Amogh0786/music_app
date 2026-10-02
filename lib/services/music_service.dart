@@ -1993,6 +1993,133 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     return list;
   }
 
+  /// Fetches an optimized, pure JioSaavn Studio 320kbps catalog for Daily Mix.
+  /// Strictly guarantees 100% official studio tracks, 0 YouTube video noise,
+  /// 0 wedding/DJ noise, and 0 duplicate tracks.
+  Future<List<Video>> fetchJioDailyMix(
+    DailyMixConfig config, {
+    int limit = 35,
+  }) async {
+    final cleanQuery = config.query.trim();
+    if (cleanQuery.isEmpty) return [];
+
+    try {
+      final cleanedArtist = PreferencesService.extractSingleLeadArtist(
+        cleanQuery.replaceAll(
+          RegExp(
+            r'\b(hit\s+songs|songs|acoustic\s+chill|hits|chill|melodies)\b',
+            caseSensitive: false,
+          ),
+          '',
+        ),
+      );
+
+      final futures = <Future<List<Video>>>[];
+
+      // 1. Direct JioSaavn catalog search
+      futures.add(
+        http
+            .get(ApiConfig.jioSearchUri(cleanQuery, limit: limit, page: 1))
+            .timeout(const Duration(seconds: 6))
+            .then(
+              (res) => res.statusCode == 200
+                  ? _parseJioResults(res.body, query: cleanQuery)
+                  : <Video>[],
+            )
+            .catchError((_) => <Video>[]),
+      );
+
+      // 2. Artist-specific studio search if lead artist was resolved
+      if (cleanedArtist.isNotEmpty && cleanedArtist != cleanQuery) {
+        futures.add(
+          http
+              .get(
+                ApiConfig.jioSearchUri(
+                  '$cleanedArtist hits',
+                  limit: limit,
+                  page: 1,
+                ),
+              )
+              .timeout(const Duration(seconds: 6))
+              .then(
+                (res) => res.statusCode == 200
+                    ? _parseJioResults(res.body, query: cleanedArtist)
+                    : <Video>[],
+              )
+              .catchError((_) => <Video>[]),
+        );
+      }
+
+      // 3. JioSaavn Recommendations endpoint for seamless track variety
+      final recTarget = cleanedArtist.isNotEmpty ? cleanedArtist : cleanQuery;
+      futures.add(
+        http
+            .get(ApiConfig.jioRecommendationsUri(recTarget, limit: limit))
+            .timeout(const Duration(seconds: 6))
+            .then(
+              (res) => res.statusCode == 200
+                  ? _parseJioResults(res.body, query: recTarget)
+                  : <Video>[],
+            )
+            .catchError((_) => <Video>[]),
+      );
+
+      final resultsLists = await Future.wait(futures);
+
+      // Progressive deduplication across JioSaavn streams
+      final List<Video> combined = [];
+      for (final list in resultsLists) {
+        final genuine = list
+            .where((v) => CanonicalSongDedup.isGenuineSong(v))
+            .toList();
+        final deduped = CanonicalSongDedup.deduplicateList(combined, genuine);
+        combined.addAll(deduped);
+      }
+
+      // Fallback: If edge worker returned fewer than 10 tracks, query custom backend JioSaavn if available
+      if (combined.length < 10 &&
+          PreferencesService().customServerUrl.isNotEmpty) {
+        try {
+          final backendResp = await http
+              .get(ApiConfig.jioBackendSearchUri(cleanQuery, limit: limit))
+              .timeout(const Duration(seconds: 5))
+              .catchError((_) => http.Response('[]', 500));
+          if (backendResp.statusCode == 200) {
+            final fallbackList = _parseJioResults(
+              backendResp.body,
+              query: cleanQuery,
+            );
+            final genuineFallback = fallbackList
+                .where((v) => CanonicalSongDedup.isGenuineSong(v))
+                .toList();
+            final dedupedFallback = CanonicalSongDedup.deduplicateList(
+              combined,
+              genuineFallback,
+            );
+            combined.addAll(dedupedFallback);
+          }
+        } catch (_) {}
+      }
+
+      if (combined.isEmpty) {
+        return [];
+      }
+
+      // Final deduplication & artist distribution balancing
+      final dedupedFinal = CanonicalSongDedup.deduplicateList(combined);
+      final balanced = CanonicalSongDedup.balanceArtistDistribution(
+        dedupedFinal,
+      );
+      debugPrint(
+        '[Jio Daily Mix] Generated pristine mix with ${balanced.length} 320k tracks for "${config.title}"',
+      );
+      return balanced.take(limit).toList();
+    } catch (e) {
+      debugPrint('[Jio Daily Mix] Error generating mix: $e');
+      return [];
+    }
+  }
+
   /// 3-Tier Multi-Engine Search with JioSaavn Studio-First Priority:
   /// Fetches an expansive, multi-dimensional catalog (80-150+ tracks) for an artist across their entire career.
   /// Fans out parallel queries across vocal tracks, melody hits, mass blockbusters, regional classics, and YTM studio releases.
@@ -2031,12 +2158,21 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       final ytmFuture = YouTubeMusicClient().searchSongs(ytmQuery, limit: 30);
 
       final jioResultsLists = await Future.wait(jioFutures);
-      final ytmResults = await ytmFuture.catchError((_) => <Video>[]);
+      final rawYtm = await ytmFuture.catchError((_) => <Video>[]);
+      final ytmResults = rawYtm
+          .where((v) => CanonicalSongDedup.isGenuineSong(v))
+          .toList();
 
       // 3. Progressive deduplication across streams
       final List<Video> combined = [];
       for (final list in jioResultsLists) {
-        final deduped = CanonicalSongDedup.deduplicateList(combined, list);
+        final genuineJio = list
+            .where((v) => CanonicalSongDedup.isGenuineSong(v))
+            .toList();
+        final deduped = CanonicalSongDedup.deduplicateList(
+          combined,
+          genuineJio,
+        );
         combined.addAll(deduped);
       }
 
@@ -2046,10 +2182,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       );
       combined.addAll(dedupedYtm);
 
+      final finalDeduped = CanonicalSongDedup.deduplicateList(combined);
+
       debugPrint(
-        '[Artist Discography] Fetched ${combined.length} unique songs for "$clean" (page: $page)',
+        '[Artist Discography] Fetched ${finalDeduped.length} unique songs for "$clean" (page: $page)',
       );
-      return combined;
+      return finalDeduped;
     } catch (e) {
       debugPrint(
         '[Artist Discography] Error fetching discography for $clean: $e',
@@ -2195,8 +2333,16 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         } catch (_) {}
       }
 
-      // Await Tier 2 in parallel
-      final ytmResults = await ytmFuture.catchError((_) => <Video>[]);
+      // Deduplicate Tier 1 JioSaavn results against itself immediately
+      jioResults = CanonicalSongDedup.deduplicateList(
+        jioResults.where((v) => CanonicalSongDedup.isGenuineSong(v)).toList(),
+      );
+
+      // Await Tier 2 in parallel and filter genuine tracks
+      final rawYtm = await ytmFuture.catchError((_) => <Video>[]);
+      final ytmResults = rawYtm
+          .where((v) => CanonicalSongDedup.isGenuineSong(v))
+          .toList();
 
       // Fallback: If JioSaavn from edge worker returned fewer than 8 genuine tracks, query the custom backend if configured
       if (jioResults.length < 8 &&
@@ -2305,6 +2451,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   List<Video> _rankSearchResults(List<Video> songs, String rawQuery) {
     if (songs.isEmpty || rawQuery.trim().isEmpty) return songs;
 
+    // Filter genuine songs first and deduplicate pool via CanonicalSongDedup
+    final cleanPool = songs
+        .where((s) => CanonicalSongDedup.isGenuineSong(s))
+        .toList();
+    final dedupedSongs = CanonicalSongDedup.deduplicateList(cleanPool);
+
     final q = rawQuery.trim().toLowerCase();
     final cleanQ = CanonicalSongDedup.cleanTitle(rawQuery);
     final queryTokens = q
@@ -2313,25 +2465,19 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         .toList();
 
     final scored = <MapEntry<Video, double>>[];
-    final seenDeduplicationKeys = <String, Video>{};
+    final seenKeys = <String>{};
 
-    for (int i = 0; i < songs.length; i++) {
-      final song = songs[i];
+    for (int i = 0; i < dedupedSongs.length; i++) {
+      final song = dedupedSongs[i];
       final title = song.title.toLowerCase();
       final cleanT = CanonicalSongDedup.cleanTitle(song.title);
       final author = song.author.toLowerCase();
       final cleanA = CanonicalSongDedup.cleanArtist(song.author);
 
-      // Deduplicate near-identical tracks from the same movie/soundtrack (e.g. Mr. Perfect and Mr. Perfect (DSP Mix))
       final dedupKey = '$cleanT|$cleanA';
-      if (seenDeduplicationKeys.containsKey(dedupKey)) {
-        final existing = seenDeduplicationKeys[dedupKey]!;
-        if (song.title.length < existing.title.length) {
-          seenDeduplicationKeys[dedupKey] = song;
-        }
+      if (!seenKeys.add(dedupKey)) {
         continue;
       }
-      seenDeduplicationKeys[dedupKey] = song;
 
       double score = 0.0;
 
@@ -2378,7 +2524,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       score -= lengthPenalty;
 
       // 6. Preservation of source priority (JioSaavn 320k gets small base tie-breaker)
-      final sourceBonus = (songs.length - i) * 1.0;
+      final sourceBonus = (dedupedSongs.length - i) * 1.0;
       score += sourceBonus;
 
       scored.add(MapEntry(song, score));
@@ -4319,8 +4465,51 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       final libraryMatches = _getLibraryRecommendationsForSeed(seed);
       addTracks(libraryMatches, targetLang: seedLanguage);
 
-      // 2. Stage 2 (Primary Discovery): Universal Reverse YTM Seed Bridge + TasteMatrixScorer
-      if (progressiveQueue.length < 51) {
+      // 2. Stage 2 (Primary Studio Recommendations): Query JioSaavn Recommendations & Hits for Indic songs
+      if (progressiveQueue.length < 51 && seedLanguage != 'english') {
+        final cleanArtist = CanonicalSongDedup.cleanArtist(seed.author);
+        final leadArtist = PreferencesService.extractSingleLeadArtist(
+          cleanArtist,
+        );
+        final jioRecFutures = <Future<List<Video>>>[];
+
+        jioRecFutures.add(
+          http
+              .get(ApiConfig.jioRecommendationsUri(seed.title, limit: 30))
+              .timeout(const Duration(seconds: 5))
+              .then(
+                (res) => res.statusCode == 200
+                    ? _parseJioResults(res.body)
+                    : <Video>[],
+              )
+              .catchError((_) => <Video>[]),
+        );
+
+        if (leadArtist.isNotEmpty) {
+          final query = seedLanguage != null
+              ? '$leadArtist $seedLanguage hits'
+              : '$leadArtist hits';
+          jioRecFutures.add(
+            http
+                .get(ApiConfig.jioSearchUri(query, limit: 25))
+                .timeout(const Duration(seconds: 5))
+                .then(
+                  (res) => res.statusCode == 200
+                      ? _parseJioResults(res.body)
+                      : <Video>[],
+                )
+                .catchError((_) => <Video>[]),
+          );
+        }
+
+        final jioRecLists = await Future.wait(jioRecFutures);
+        for (final list in jioRecLists) {
+          addTracks(list, targetLang: seedLanguage);
+        }
+      }
+
+      // 3. Stage 3 (Secondary Discovery): Universal Reverse YTM Seed Bridge + TasteMatrixScorer
+      if (progressiveQueue.length < 40) {
         final radioTracks = await fetchRadioTracksForSong(
           seed,
           limit: 35,

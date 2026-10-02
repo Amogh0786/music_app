@@ -23,24 +23,28 @@ class CanonicalSongDedup {
     caseSensitive: false,
   );
 
-  // Non-music video noise patterns (speeches, interviews, launch events, cricket, sketches, jukeboxes, amateur covers, reels)
+  // Non-music video noise patterns (speeches, interviews, launch events, cricket, sketches, jukeboxes, amateur covers, reels, wedding rituals, DJ mashups)
   static final RegExp _nonMusicTitleNoise = RegExp(
     r'\b(speech|speech\s*@|press\s+meet|success\s+meet|launch\s+event|song\s+launch|audio\s+launch|'
     r'pre\s+release|trailer|teaser|glimpse|promo|first\s+look|motion\s+poster|title\s+reveal|'
     r'interview|talk\s+show|podcast|episode|review|reaction|reacting|behind\s+the\s+scenes|making\s+of|bts|'
-    r'dances?\s+to|dance\s+performance|dance\s+cover|dance\s+video|stage\s+performance|'
+    r'dances?\s+to|dance\s+performance|dance\s+cover|dance\s+video|stage\s+performance|performance\s+video|'
     r'status\s+video|whatsapp\s+status|cricket|ipl|match\s+highlights|trophy|shreyas\s+iyer|'
     r'full\s+movie|movie\s+scene|comedy\s+scene|action\s+scene|fight\s+scene|climax\s+scene|scenes|comedy\s+scenes|'
     r'ringtone|bgm\s+only|shorts|#shorts|shorts\s+video|reels?|tiktok|troll|parody|spoof|'
     r'jukebox|all\s+songs|audio\s+jukebox|video\s+jukebox|full\s+album|mega\s+jukebox|'
     r'slowed\s*(?:\+|\band\b)?\s*reverb|speed\s*up|sped\s*up|nightcore|8d\s+audio|bass\s+boosted|'
-    r'acoustic\s+cover|guitar\s+cover|piano\s+cover|vocal\s+cover|making\s+video|bloopers|deleted\s+scenes?|'
+    r'acoustic\s+cover|guitar\s+cover|piano\s+cover|flute\s+cover|violin\s+cover|vocal\s+cover|cover\s+song|cover\s+version|'
+    r'instrumental|karaoke|oye\s+lalii|'
+    r'varmala|vidhi|ceremony|wedding\s+music|shaadi|mehendi|sangeet|sarangi\s+tabla|mangal\s+sutra|kanyadaan|shehnai|band\s+baaja|dulhan|'
+    r'dj\s+\w+|dj\s+mix|dj\s+remix|mashup|mash\s+up|club\s+mix|remix|'
+    r'making\s+video|bloopers|deleted\s+scenes?|'
     r'exclusive\s+interview|success\s+celebrations?|song\s+teaser)\b',
     caseSensitive: false,
   );
 
   static final RegExp _nonMusicAuthorNoise = RegExp(
-    r'\b(media|news|tv|filmnagar|events|buzz|sports|daily|cinema\s+news|vlogs?|cricket|gaming|memes?|creations?|edits?)\b',
+    r'\b(media|news|tv|filmnagar|events|buzz|sports|daily|cinema\s+news|vlogs?|cricket|gaming|memes?|creations?|edits?|dj\s+\w+|remix\s+hub|wedding|ceremony|oye\s+lalii)\b',
     caseSensitive: false,
   );
 
@@ -148,22 +152,64 @@ class CanonicalSongDedup {
   static String cleanTitle(String raw) {
     if (raw.trim().isEmpty) return '';
 
-    // 1. Remove feat. / ft. suffixes
-    var s = raw.replaceAll(_featNoise, ' ');
+    // 0. Normalize unicode smart/curly quotes and dashes
+    var s = raw
+        .replaceAll('“', '"')
+        .replaceAll('”', '"')
+        .replaceAll('‘', "'")
+        .replaceAll('’', "'")
+        .replaceAll('–', '-')
+        .replaceAll('—', '-');
 
-    // 2. Remove bracketed text: (Official Video), [4K HDR], (From "Movie")
+    // 1. Remove feat. / ft. suffixes
+    s = s.replaceAll(_featNoise, ' ');
+
+    // 2. Remove bracketed text: (Official Video), [4K HDR], (From "Movie"), (From 'Leo')
     s = s.replaceAll(_bracketNoise, ' ');
 
-    // 3. Take primary section before common delimiters: | : – — / or " - "
-    final parts = s.split(RegExp(r'\s*[|:–—/]\s*|\s+-\s+'));
-    if (parts.isNotEmpty && parts.first.trim().isNotEmpty) {
-      s = parts.first;
+    // 3. Remove unbracketed movie attribution e.g. "From Movie", "- From 'Movie'"
+    s = s.replaceAll(
+      RegExp(r'\bfrom\s+["\x27]?[a-zA-Z0-9\s]+["\x27]?', caseSensitive: false),
+      ' ',
+    );
+
+    // 4. Split by common delimiters: | : / or " - "
+    final parts = s.split(RegExp(r'\s*[|:/]\s*|\s+-\s+'));
+    if (parts.isNotEmpty) {
+      if (parts.length >= 2) {
+        final p0 = parts[0].trim();
+        final p1 = parts[1].trim();
+        final p1Lower = p1.toLowerCase();
+        final p0Lower = p0.toLowerCase();
+        // Detect "Movie - Song Video" format (e.g. "LEO - Naa Ready Song Video")
+        final p1HasSongTag =
+            p1Lower.contains('song') ||
+            p1Lower.contains('video') ||
+            p1Lower.contains('lyric') ||
+            p1Lower.contains('audio') ||
+            p1Lower.contains('track') ||
+            p1Lower.contains('theme');
+        final p0HasSongTag =
+            p0Lower.contains('song') ||
+            p0Lower.contains('video') ||
+            p0Lower.contains('lyric') ||
+            p0Lower.contains('audio') ||
+            p0Lower.contains('track') ||
+            p0Lower.contains('theme');
+        if (p1HasSongTag && !p0HasSongTag && p1.length >= 3) {
+          s = p1;
+        } else if (p0.isNotEmpty) {
+          s = p0;
+        }
+      } else if (parts.first.trim().isNotEmpty) {
+        s = parts.first;
+      }
     }
 
-    // 4. Remove common video noise words
+    // 5. Remove common video noise words
     s = s.replaceAll(_videoNoiseWords, ' ');
 
-    // 5. Remove punctuation and collapse spaces
+    // 6. Remove punctuation and collapse spaces
     s = s.replaceAll(_punctuation, ' ').replaceAll(_whitespace, ' ').trim();
 
     return s.toLowerCase();
@@ -259,7 +305,7 @@ class CanonicalSongDedup {
 
   /// Strict audio validator.
   /// Rejects YouTube videos that are speeches, press meets, trailers, dance performances,
-  /// cricket highlights, teasers, or non-song media content.
+  /// cricket highlights, teasers, wedding rituals, DJ remixes, or non-song media content.
   static bool isGenuineSong(Video video) {
     final title = video.title;
     final author = video.author;
@@ -269,21 +315,31 @@ class CanonicalSongDedup {
       return false;
     }
 
-    // 2. Blacklist non-music channels unless the title explicitly states it's an official song
+    // 2. Blacklist DJ, wedding ritual, or ceremony channels
+    final authorLower = author.toLowerCase().trim();
+    if (authorLower.contains('varmala') ||
+        authorLower.contains('vidhi') ||
+        authorLower.contains('ceremony') ||
+        authorLower.contains('wedding') ||
+        authorLower.contains('remix hub') ||
+        authorLower.startsWith('dj ') ||
+        authorLower.contains(' dj ') ||
+        authorLower.endsWith(' dj')) {
+      return false;
+    }
+
+    // 3. Blacklist non-music channels (media, news, tv, cricket, etc.)
     if (_nonMusicAuthorNoise.hasMatch(author)) {
       final titleLower = title.toLowerCase();
       final hasSongIndicator =
-          titleLower.contains('full video song') ||
           titleLower.contains('official music video') ||
-          titleLower.contains('official song') ||
-          titleLower.contains('lyrical video') ||
-          titleLower.contains('lyric video');
+          titleLower.contains('official song');
       if (!hasSongIndicator) {
         return false;
       }
     }
 
-    // 3. Duration boundaries (authentic music tracks are 60s to 480s)
+    // 4. Duration boundaries (authentic music tracks are 60s to 480s)
     final duration = video.duration;
     if (duration != null) {
       final sec = duration.inSeconds;
@@ -625,6 +681,13 @@ class CanonicalSongDedup {
       final fullTokensA = _extractFullArtistTokens(artistA);
       final fullTokensB = _extractFullArtistTokens(artistB);
       if (fullTokensA.intersection(fullTokensB).isNotEmpty) return true;
+
+      // Fuzzy match artist tokens (e.g. 'heizenberg' vs 'heisenberg', 'anirudh' vs 'anirudh ravichander')
+      for (final ta in fullTokensA) {
+        for (final tb in fullTokensB) {
+          if (stringSimilarity(ta, tb) >= 0.80) return true;
+        }
+      }
 
       // In Indian cinema, one credit may list composer and the other playback singer
       final isIndicA =

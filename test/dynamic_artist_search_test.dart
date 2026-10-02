@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_app/services/preferences_service.dart';
 import 'package:music_app/services/dynamic_artist_service.dart';
+import 'package:music_app/services/music_service.dart';
 import 'package:music_app/widgets/artist_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -299,6 +301,65 @@ void main() {
         'Unknown Person 123',
       );
       expect(defaultLang, equals(['Telugu']));
+    });
+
+    test('rankSearchResults eliminates wedding/DJ noise and duplicates', () {
+      Video makeVideo(String id, String title, String author) => Video(
+        VideoId(id.padRight(11, '0')),
+        title,
+        author,
+        ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+        DateTime.now(),
+        '',
+        null,
+        '',
+        const Duration(minutes: 3, seconds: 30),
+        ThumbnailSet(id.padRight(11, '0')),
+        null,
+        Engagement(0, null, null),
+        false,
+      );
+
+      final songs = [
+        makeVideo('id1', 'Once Upon A Time', 'Anirudh Ravichander, Heisenberg'),
+        makeVideo('id2', 'Once Upon a Time', 'Anirudh Ravichander, Heizenberg'),
+        makeVideo(
+          'id3',
+          'Once Upon A Time (From "Vikram")',
+          'Heisenberg, Anirudh',
+        ),
+        makeVideo('id4', 'Varmala Vidhi', 'Wedding Music Channel'),
+        makeVideo('id5', 'Naatu Naatu (Instrumental)', 'Instrumental Channel'),
+        makeVideo('id6', 'Bas Tera Saath Chahiye', 'DJ Karan Bhaii, sonu roy'),
+        makeVideo(
+          'id7',
+          'Bloody Sweet (From "Leo")',
+          'Anirudh Ravichander, Siddharth Basrur',
+        ),
+        makeVideo(
+          'id8',
+          "Bloody Sweet (From 'Leo')",
+          'Siddharth Basrur, Anirudh Ravichander',
+        ),
+      ];
+
+      final ranked = MusicService().rankSearchResults(songs, 'Anirudh');
+
+      // Must strictly eliminate non-music / wedding / DJ noise
+      expect(ranked.any((s) => s.title.contains('Varmala')), isFalse);
+      expect(ranked.any((s) => s.title.contains('Instrumental')), isFalse);
+      expect(ranked.any((s) => s.title.contains('Bas Tera Saath')), isFalse);
+
+      // Must strictly deduplicate: exactly 1 Once Upon A Time and 1 Bloody Sweet
+      final onceUponCount = ranked
+          .where((s) => s.title.toLowerCase().contains('once upon a time'))
+          .length;
+      expect(onceUponCount, equals(1));
+
+      final bloodySweetCount = ranked
+          .where((s) => s.title.toLowerCase().contains('bloody sweet'))
+          .length;
+      expect(bloodySweetCount, equals(1));
     });
   });
 }

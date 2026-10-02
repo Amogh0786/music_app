@@ -27,6 +27,9 @@ class TasteMatrixScorer {
   }) {
     if (candidates.isEmpty) return [];
 
+    final dedupedCandidates = CanonicalSongDedup.deduplicateList(candidates);
+    if (dedupedCandidates.isEmpty) return [];
+
     final prefs = PreferencesService();
     final matrix = prefs.getTasteMatrix();
     final preferredLangs = prefs.preferredLanguages
@@ -38,12 +41,12 @@ class TasteMatrixScorer {
 
     final scored = <MapEntry<Video, double>>[];
 
-    for (int i = 0; i < candidates.length; i++) {
-      final track = candidates[i];
+    for (int i = 0; i < dedupedCandidates.length; i++) {
+      final track = dedupedCandidates[i];
       if (!CanonicalSongDedup.isGenuineSong(track)) continue;
 
       // 1. Base rank from global acoustic graph (decays with position)
-      double score = (candidates.length - i) * 0.25;
+      double score = (dedupedCandidates.length - i) * 0.25;
 
       // 2. Artist Affinity
       final cleanAuthor = CanonicalSongDedup.cleanArtist(track.author);
@@ -99,6 +102,24 @@ class TasteMatrixScorer {
       Video? chosen;
       for (int i = 0; i < remaining.length; i++) {
         final candidate = remaining[i];
+
+        // Reject if candidate duplicates any song already in result
+        final isDup = result.any(
+          (existing) =>
+              existing.id.value == candidate.id.value ||
+              CanonicalSongDedup.areDuplicateSongs(
+                titleA: existing.title,
+                artistA: existing.author,
+                titleB: candidate.title,
+                artistB: candidate.author,
+              ),
+        );
+        if (isDup) {
+          remaining.removeAt(i);
+          i--;
+          continue;
+        }
+
         final authorNorm = CanonicalSongDedup.cleanArtist(
           candidate.author,
         ).toLowerCase();
@@ -121,8 +142,8 @@ class TasteMatrixScorer {
 
       if (chosen != null) {
         result.add(chosen);
-      } else {
-        // If all remaining candidates violate the fatigue cap, take the next best
+      } else if (remaining.isNotEmpty) {
+        // If all remaining candidates violate the fatigue cap, pick the next non-duplicate
         result.add(remaining.removeAt(0));
       }
     }
