@@ -77,6 +77,39 @@ class ApiConfig {
     );
   }
 
+  /// Single-track JioSaavn resolver — returns original album artwork, streamUrl, and album name.
+  /// Used by the artwork enrichment pass to upgrade compilation covers to genuine album art.
+  static Uri jioSingleTrackUri(String title, {String? artist}) {
+    final customUrl = PreferencesService().cloudflareWorkerUrl;
+    final base = customUrl.isNotEmpty
+        ? (customUrl.endsWith('/')
+              ? customUrl.substring(0, customUrl.length - 1)
+              : customUrl)
+        : defaultCloudflareWorkerUrl;
+    final buffer = StringBuffer(
+      '$base/jio?title=${Uri.encodeComponent(title)}',
+    );
+    if (artist != null && artist.isNotEmpty) {
+      buffer.write('&artist=${Uri.encodeComponent(artist)}');
+    }
+    return Uri.parse(buffer.toString());
+  }
+
+  /// JioSaavn album search via Cloudflare Edge Worker.
+  /// Returns a list of album metadata objects (id, title, artist, artwork, year, songCount).
+  static Uri jioAlbumSearchUri(String query, {int limit = 12}) {
+    return Uri.parse(
+      '$cloudflareWorkerUrl/jio/albums?q=${Uri.encodeComponent(query)}&limit=$limit',
+    );
+  }
+
+  /// JioSaavn album detail — all songs with decrypted 320k stream URLs.
+  static Uri jioAlbumDetailUri(String albumId) {
+    return Uri.parse(
+      '$cloudflareWorkerUrl/jio/album?id=${Uri.encodeComponent(albumId)}',
+    );
+  }
+
   /// Recommendations via Cloudflare Edge Worker (falls back to search on edge or Render).
   static Uri jioRecommendationsUri(
     String query, {

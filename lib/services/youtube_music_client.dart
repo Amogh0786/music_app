@@ -56,18 +56,6 @@ class YouTubeMusicClient {
         debugPrint('[YTM] Edge search proxy failed: $e');
       }
 
-      // Web fallback: Try backend Render search
-      try {
-        final backendUri = ApiConfig.searchUri(query, limit: limit);
-        final resp = await http
-            .get(backendUri)
-            .timeout(const Duration(seconds: 5));
-        if (resp.statusCode == 200) {
-          final List<dynamic> list = json.decode(resp.body);
-          return _parseJsonTracks(list);
-        }
-      } catch (_) {}
-
       return [];
     }
 
@@ -202,15 +190,22 @@ class YouTubeMusicClient {
         if (vid == videoId && radioTracks.isNotEmpty) continue;
 
         final titleRuns = renderer['title']?['runs'] as List<dynamic>? ?? [];
-        final title = titleRuns.isNotEmpty
+        final rawTitle = titleRuns.isNotEmpty
             ? titleRuns[0]['text'] as String? ?? 'Unknown Title'
             : 'Unknown Title';
 
         final bylineRuns =
             renderer['longBylineText']?['runs'] as List<dynamic>? ?? [];
-        final author = bylineRuns.isNotEmpty
+        final rawAuthor = bylineRuns.isNotEmpty
             ? bylineRuns[0]['text'] as String? ?? 'Unknown Artist'
             : 'Unknown Artist';
+
+        final cleanA = CanonicalSongDedup.cleanArtist(rawAuthor);
+        final author = cleanA.isNotEmpty ? cleanA : rawAuthor;
+        final title = CanonicalSongDedup.sanitizeDisplayTitle(
+          rawTitle,
+          artist: author,
+        );
 
         final lengthText =
             renderer['lengthText']?['runs']?[0]?['text'] as String? ?? '';
@@ -259,7 +254,7 @@ class YouTubeMusicClient {
           flexColumns[0]['musicResponsiveListItemFlexColumnRenderer'];
       final titleRuns = titleColumn?['text']?['runs'] as List<dynamic>? ?? [];
       if (titleRuns.isEmpty) return null;
-      final title = titleRuns[0]['text'] as String? ?? 'Unknown Title';
+      final rawTitle = titleRuns[0]['text'] as String? ?? 'Unknown Title';
 
       // 2. VideoId & Navigation
       String? videoId;
@@ -275,7 +270,7 @@ class YouTubeMusicClient {
       if (videoId == null || videoId.isEmpty) return null;
 
       // 3. Artist & Duration
-      String author = 'Unknown Artist';
+      String rawAuthor = 'Unknown Artist';
       Duration? duration;
 
       if (flexColumns.length > 1) {
@@ -283,7 +278,7 @@ class YouTubeMusicClient {
             flexColumns[1]['musicResponsiveListItemFlexColumnRenderer'];
         final subRuns = subColumn?['text']?['runs'] as List<dynamic>? ?? [];
         if (subRuns.isNotEmpty) {
-          author = subRuns[0]['text'] as String? ?? 'Unknown Artist';
+          rawAuthor = subRuns[0]['text'] as String? ?? 'Unknown Artist';
         }
 
         // Duration is often the last text run
@@ -292,6 +287,13 @@ class YouTubeMusicClient {
           duration = _parseDuration(lastText);
         }
       }
+
+      final cleanA = CanonicalSongDedup.cleanArtist(rawAuthor);
+      final author = cleanA.isNotEmpty ? cleanA : rawAuthor;
+      final title = CanonicalSongDedup.sanitizeDisplayTitle(
+        rawTitle,
+        artist: author,
+      );
 
       return Video(
         VideoId(videoId),
@@ -335,15 +337,21 @@ class YouTubeMusicClient {
       if (item is! Map) continue;
       final vid = item['id'] as String?;
       if (vid == null || vid.isEmpty || vid == excludeId) continue;
-      final t = item['title'] as String? ?? 'Unknown Title';
-      final a = item['author'] as String? ?? 'Unknown Artist';
+      final rawTitle = item['title'] as String? ?? 'Unknown Title';
+      final rawAuthor = item['author'] as String? ?? 'Unknown Artist';
+      final cleanA = CanonicalSongDedup.cleanArtist(rawAuthor);
+      final author = cleanA.isNotEmpty ? cleanA : rawAuthor;
+      final t = CanonicalSongDedup.sanitizeDisplayTitle(
+        rawTitle,
+        artist: author,
+      );
       final durSec = item['duration'] != null
           ? int.tryParse(item['duration'].toString())
           : null;
       final track = Video(
         VideoId(vid),
         t,
-        a,
+        author,
         ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
         DateTime.now(),
         '',

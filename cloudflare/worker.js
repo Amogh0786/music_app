@@ -40,9 +40,9 @@ var require_crypto = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/core.js
+// node_modules/crypto-js/core.js
 var require_core = __commonJS({
-  "cloudflare/node_modules/crypto-js/core.js"(exports, module) {
+  "node_modules/crypto-js/core.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory();
@@ -648,9 +648,9 @@ var require_core = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/x64-core.js
+// node_modules/crypto-js/x64-core.js
 var require_x64_core = __commonJS({
-  "cloudflare/node_modules/crypto-js/x64-core.js"(exports, module) {
+  "node_modules/crypto-js/x64-core.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -905,9 +905,9 @@ var require_x64_core = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/lib-typedarrays.js
+// node_modules/crypto-js/lib-typedarrays.js
 var require_lib_typedarrays = __commonJS({
-  "cloudflare/node_modules/crypto-js/lib-typedarrays.js"(exports, module) {
+  "node_modules/crypto-js/lib-typedarrays.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -950,9 +950,9 @@ var require_lib_typedarrays = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/enc-utf16.js
+// node_modules/crypto-js/enc-utf16.js
 var require_enc_utf16 = __commonJS({
-  "cloudflare/node_modules/crypto-js/enc-utf16.js"(exports, module) {
+  "node_modules/crypto-js/enc-utf16.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -1068,9 +1068,9 @@ var require_enc_utf16 = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/enc-base64.js
+// node_modules/crypto-js/enc-base64.js
 var require_enc_base64 = __commonJS({
-  "cloudflare/node_modules/crypto-js/enc-base64.js"(exports, module) {
+  "node_modules/crypto-js/enc-base64.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -1176,9 +1176,9 @@ var require_enc_base64 = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/enc-base64url.js
+// node_modules/crypto-js/enc-base64url.js
 var require_enc_base64url = __commonJS({
-  "cloudflare/node_modules/crypto-js/enc-base64url.js"(exports, module) {
+  "node_modules/crypto-js/enc-base64url.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -1295,9 +1295,9 @@ var require_enc_base64url = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/md5.js
+// node_modules/crypto-js/md5.js
 var require_md5 = __commonJS({
-  "cloudflare/node_modules/crypto-js/md5.js"(exports, module) {
+  "node_modules/crypto-js/md5.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -1474,9 +1474,9 @@ var require_md5 = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/sha1.js
+// node_modules/crypto-js/sha1.js
 var require_sha1 = __commonJS({
-  "cloudflare/node_modules/crypto-js/sha1.js"(exports, module) {
+  "node_modules/crypto-js/sha1.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -1565,9 +1565,9 @@ var require_sha1 = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/sha256.js
+// node_modules/crypto-js/sha256.js
 var require_sha256 = __commonJS({
-  "cloudflare/node_modules/crypto-js/sha256.js"(exports, module) {
+  "node_modules/crypto-js/sha256.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -1686,9 +1686,9 @@ var require_sha256 = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/sha224.js
+// node_modules/crypto-js/sha224.js
 var require_sha224 = __commonJS({
-  "cloudflare/node_modules/crypto-js/sha224.js"(exports, module) {
+  "node_modules/crypto-js/sha224.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_sha256());
@@ -1731,9 +1731,9 @@ var require_sha224 = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/sha512.js
+// node_modules/crypto-js/sha512.js
 var require_sha512 = __commonJS({
-  "cloudflare/node_modules/crypto-js/sha512.js"(exports, module) {
+  "node_modules/crypto-js/sha512.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_x64_core());
@@ -2013,9 +2013,9 @@ var require_sha512 = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/sha384.js
+// node_modules/crypto-js/sha384.js
 var require_sha384 = __commonJS({
-  "cloudflare/node_modules/crypto-js/sha384.js"(exports, module) {
+  "node_modules/crypto-js/sha384.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_x64_core(), require_sha512());
@@ -2059,9 +2059,9 @@ var require_sha384 = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/sha3.js
+// node_modules/crypto-js/sha3.js
 var require_sha3 = __commonJS({
-  "cloudflare/node_modules/crypto-js/sha3.js"(exports, module) {
+  "node_modules/crypto-js/sha3.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_x64_core());
@@ -2261,9 +2261,9 @@ var require_sha3 = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/ripemd160.js
+// node_modules/crypto-js/ripemd160.js
 var require_ripemd160 = __commonJS({
-  "cloudflare/node_modules/crypto-js/ripemd160.js"(exports, module) {
+  "node_modules/crypto-js/ripemd160.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -2732,9 +2732,9 @@ var require_ripemd160 = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/hmac.js
+// node_modules/crypto-js/hmac.js
 var require_hmac = __commonJS({
-  "cloudflare/node_modules/crypto-js/hmac.js"(exports, module) {
+  "node_modules/crypto-js/hmac.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -2839,9 +2839,9 @@ var require_hmac = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/pbkdf2.js
+// node_modules/crypto-js/pbkdf2.js
 var require_pbkdf2 = __commonJS({
-  "cloudflare/node_modules/crypto-js/pbkdf2.js"(exports, module) {
+  "node_modules/crypto-js/pbkdf2.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_sha256(), require_hmac());
@@ -2937,9 +2937,9 @@ var require_pbkdf2 = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/evpkdf.js
+// node_modules/crypto-js/evpkdf.js
 var require_evpkdf = __commonJS({
-  "cloudflare/node_modules/crypto-js/evpkdf.js"(exports, module) {
+  "node_modules/crypto-js/evpkdf.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_sha1(), require_hmac());
@@ -3028,9 +3028,9 @@ var require_evpkdf = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/cipher-core.js
+// node_modules/crypto-js/cipher-core.js
 var require_cipher_core = __commonJS({
-  "cloudflare/node_modules/crypto-js/cipher-core.js"(exports, module) {
+  "node_modules/crypto-js/cipher-core.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_evpkdf());
@@ -3672,9 +3672,9 @@ var require_cipher_core = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/mode-cfb.js
+// node_modules/crypto-js/mode-cfb.js
 var require_mode_cfb = __commonJS({
-  "cloudflare/node_modules/crypto-js/mode-cfb.js"(exports, module) {
+  "node_modules/crypto-js/mode-cfb.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -3724,9 +3724,9 @@ var require_mode_cfb = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/mode-ctr.js
+// node_modules/crypto-js/mode-ctr.js
 var require_mode_ctr = __commonJS({
-  "cloudflare/node_modules/crypto-js/mode-ctr.js"(exports, module) {
+  "node_modules/crypto-js/mode-ctr.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -3764,9 +3764,9 @@ var require_mode_ctr = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/mode-ctr-gladman.js
+// node_modules/crypto-js/mode-ctr-gladman.js
 var require_mode_ctr_gladman = __commonJS({
-  "cloudflare/node_modules/crypto-js/mode-ctr-gladman.js"(exports, module) {
+  "node_modules/crypto-js/mode-ctr-gladman.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -3839,9 +3839,9 @@ var require_mode_ctr_gladman = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/mode-ofb.js
+// node_modules/crypto-js/mode-ofb.js
 var require_mode_ofb = __commonJS({
-  "cloudflare/node_modules/crypto-js/mode-ofb.js"(exports, module) {
+  "node_modules/crypto-js/mode-ofb.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -3877,9 +3877,9 @@ var require_mode_ofb = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/mode-ecb.js
+// node_modules/crypto-js/mode-ecb.js
 var require_mode_ecb = __commonJS({
-  "cloudflare/node_modules/crypto-js/mode-ecb.js"(exports, module) {
+  "node_modules/crypto-js/mode-ecb.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -3908,9 +3908,9 @@ var require_mode_ecb = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/pad-ansix923.js
+// node_modules/crypto-js/pad-ansix923.js
 var require_pad_ansix923 = __commonJS({
-  "cloudflare/node_modules/crypto-js/pad-ansix923.js"(exports, module) {
+  "node_modules/crypto-js/pad-ansix923.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -3940,9 +3940,9 @@ var require_pad_ansix923 = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/pad-iso10126.js
+// node_modules/crypto-js/pad-iso10126.js
 var require_pad_iso10126 = __commonJS({
-  "cloudflare/node_modules/crypto-js/pad-iso10126.js"(exports, module) {
+  "node_modules/crypto-js/pad-iso10126.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -3968,9 +3968,9 @@ var require_pad_iso10126 = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/pad-iso97971.js
+// node_modules/crypto-js/pad-iso97971.js
 var require_pad_iso97971 = __commonJS({
-  "cloudflare/node_modules/crypto-js/pad-iso97971.js"(exports, module) {
+  "node_modules/crypto-js/pad-iso97971.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -3995,9 +3995,9 @@ var require_pad_iso97971 = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/pad-zeropadding.js
+// node_modules/crypto-js/pad-zeropadding.js
 var require_pad_zeropadding = __commonJS({
-  "cloudflare/node_modules/crypto-js/pad-zeropadding.js"(exports, module) {
+  "node_modules/crypto-js/pad-zeropadding.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -4029,9 +4029,9 @@ var require_pad_zeropadding = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/pad-nopadding.js
+// node_modules/crypto-js/pad-nopadding.js
 var require_pad_nopadding = __commonJS({
-  "cloudflare/node_modules/crypto-js/pad-nopadding.js"(exports, module) {
+  "node_modules/crypto-js/pad-nopadding.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -4052,9 +4052,9 @@ var require_pad_nopadding = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/format-hex.js
+// node_modules/crypto-js/format-hex.js
 var require_format_hex = __commonJS({
-  "cloudflare/node_modules/crypto-js/format-hex.js"(exports, module) {
+  "node_modules/crypto-js/format-hex.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -4112,9 +4112,9 @@ var require_format_hex = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/aes.js
+// node_modules/crypto-js/aes.js
 var require_aes = __commonJS({
-  "cloudflare/node_modules/crypto-js/aes.js"(exports, module) {
+  "node_modules/crypto-js/aes.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_enc_base64(), require_md5(), require_evpkdf(), require_cipher_core());
@@ -4266,9 +4266,9 @@ var require_aes = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/tripledes.js
+// node_modules/crypto-js/tripledes.js
 var require_tripledes = __commonJS({
-  "cloudflare/node_modules/crypto-js/tripledes.js"(exports, module) {
+  "node_modules/crypto-js/tripledes.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_enc_base64(), require_md5(), require_evpkdf(), require_cipher_core());
@@ -5047,9 +5047,9 @@ var require_tripledes = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/rc4.js
+// node_modules/crypto-js/rc4.js
 var require_rc4 = __commonJS({
-  "cloudflare/node_modules/crypto-js/rc4.js"(exports, module) {
+  "node_modules/crypto-js/rc4.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_enc_base64(), require_md5(), require_evpkdf(), require_cipher_core());
@@ -5130,9 +5130,9 @@ var require_rc4 = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/rabbit.js
+// node_modules/crypto-js/rabbit.js
 var require_rabbit = __commonJS({
-  "cloudflare/node_modules/crypto-js/rabbit.js"(exports, module) {
+  "node_modules/crypto-js/rabbit.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_enc_base64(), require_md5(), require_evpkdf(), require_cipher_core());
@@ -5259,9 +5259,9 @@ var require_rabbit = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/rabbit-legacy.js
+// node_modules/crypto-js/rabbit-legacy.js
 var require_rabbit_legacy = __commonJS({
-  "cloudflare/node_modules/crypto-js/rabbit-legacy.js"(exports, module) {
+  "node_modules/crypto-js/rabbit-legacy.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_enc_base64(), require_md5(), require_evpkdf(), require_cipher_core());
@@ -5385,9 +5385,9 @@ var require_rabbit_legacy = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/blowfish.js
+// node_modules/crypto-js/blowfish.js
 var require_blowfish = __commonJS({
-  "cloudflare/node_modules/crypto-js/blowfish.js"(exports, module) {
+  "node_modules/crypto-js/blowfish.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_enc_base64(), require_md5(), require_evpkdf(), require_cipher_core());
@@ -6574,9 +6574,9 @@ var require_blowfish = __commonJS({
   }
 });
 
-// cloudflare/node_modules/crypto-js/index.js
+// node_modules/crypto-js/index.js
 var require_crypto_js = __commonJS({
-  "cloudflare/node_modules/crypto-js/index.js"(exports, module) {
+  "node_modules/crypto-js/index.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_x64_core(), require_lib_typedarrays(), require_enc_utf16(), require_enc_base64(), require_enc_base64url(), require_md5(), require_sha1(), require_sha256(), require_sha224(), require_sha512(), require_sha384(), require_sha3(), require_ripemd160(), require_hmac(), require_pbkdf2(), require_evpkdf(), require_cipher_core(), require_mode_cfb(), require_mode_ctr(), require_mode_ctr_gladman(), require_mode_ofb(), require_mode_ecb(), require_pad_ansix923(), require_pad_iso10126(), require_pad_iso97971(), require_pad_zeropadding(), require_pad_nopadding(), require_format_hex(), require_aes(), require_tripledes(), require_rc4(), require_rabbit(), require_rabbit_legacy(), require_blowfish());
@@ -6591,7 +6591,7 @@ var require_crypto_js = __commonJS({
   }
 });
 
-// cloudflare/worker_source.js
+// worker_source.js
 var import_crypto_js = __toESM(require_crypto_js(), 1);
 var CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -6836,9 +6836,384 @@ var worker_source_default = {
         });
       }
     }
+    if (url.pathname === "/jio/albums") {
+      const query = url.searchParams.get("q") || "";
+      const limit = Math.min(20, Math.max(1, parseInt(url.searchParams.get("limit") || "10")));
+      if (!query || query.trim().length < 1) {
+        return new Response(JSON.stringify([]), {
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS }
+        });
+      }
+      try {
+        const results = await searchJioAlbums(query.trim(), limit);
+        return new Response(JSON.stringify(results), {
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "public, max-age=7200",
+            ...CORS_HEADERS
+          }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify([]), {
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS }
+        });
+      }
+    }
+    if (url.pathname === "/jio/album") {
+      const albumId = url.searchParams.get("id") || "";
+      if (!albumId) {
+        return new Response(JSON.stringify({ error: "Missing album id" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS }
+        });
+      }
+      try {
+        const data = await fetchAlbumDetails(albumId);
+        return new Response(JSON.stringify(data), {
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "public, max-age=3600",
+            ...CORS_HEADERS
+          }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS }
+        });
+      }
+    }
     return new Response("Not Found", { status: 404, headers: CORS_HEADERS });
   }
 };
+function extractMovieName(str) {
+  if (!str) return null;
+  const m = str.match(
+    /(?:from\s+["']([^"']+)["']|from\s+([A-Za-z0-9\s]+?)(?:\)|\]|\s+trailer|\s+ost|\s*[-–—]|$))/i
+  );
+  if (m) {
+    const raw = (m[1] || m[2] || "").trim();
+    if (raw.length >= 2 && !/^(the|a|an|remix|lofi|official)$/i.test(raw)) {
+      return raw;
+    }
+  }
+  return null;
+}
+async function fetchMovieSoundtrackTracks(movieName, fallbackArt = "") {
+  const url = "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&api_version=4&ctx=android&n=35&p=1&q=" + encodeURIComponent(movieName);
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "SaavnAndroid/9.0.0",
+      "Accept": "application/json",
+      ...JIO_GEO_HEADERS
+    }
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const results = data.results || [];
+  const cleanMovie = movieName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const seenTitles = /* @__PURE__ */ new Set();
+  const songs = [];
+  let bestArtwork = fallbackArt ? fallbackArt.replace("http:", "https:") : "";
+  let primaryArtist = "";
+  let movieYear = "";
+  let movieLang = "";
+  const JUNK_SONG_RE = /\b(slowed|reverb|speed\s*up|sped\s*up|nightcore|karaoke|originally\s+performed|in\s+the\s+style\s+of|tribute|parody|spoof)\b/i;
+  for (const r of results) {
+    if (!r || !r.id) continue;
+    const mi = r.more_info || {};
+    const rawTitle = (r.title || r.song || "").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, "&").trim();
+    if (JUNK_SONG_RE.test(rawTitle)) continue;
+    const rawAlbum = (mi.album || r.album || "").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, "&").trim();
+    const cTitle = rawTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const cAlbum = rawAlbum.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const isFromMovie = new RegExp(`from.*?[\\s"'(]` + cleanMovie, "i").test(rawTitle) || cAlbum === cleanMovie || cAlbum.includes(cleanMovie);
+    if (isFromMovie) {
+      const baseTitle = rawTitle.replace(/\s*\(from.*?\)/i, "").replace(/\s*\[from.*?\]/i, "").trim();
+      const normBase = baseTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (!seenTitles.has(normBase) && normBase.length > 0) {
+        seenTitles.add(normBase);
+        let thumb = (r.image || "").replace("150x150", "500x500");
+        if (thumb.startsWith("http:")) thumb = thumb.replace("http:", "https:");
+        if (!bestArtwork && thumb && !thumb.includes("default_")) {
+          bestArtwork = thumb;
+        }
+        const artist = (mi.artistMap?.primary_artists || []).map((a) => a.name).join(", ") || r.subtitle || "Various Artists";
+        if (!primaryArtist && artist) primaryArtist = artist;
+        if (!movieYear && (mi.year || r.year)) movieYear = mi.year || r.year;
+        if (!movieLang && (mi.language || r.language)) movieLang = mi.language || r.language;
+        const encMedia = mi.encrypted_media_url || r.encrypted_media_url || "";
+        const streamUrl = decryptMediaUrl(encMedia);
+        songs.push({
+          id: String(r.id),
+          title: baseTitle,
+          author: artist,
+          album: movieName,
+          duration: parseInt(mi.duration || r.duration || "0", 10) || 0,
+          thumbnail: thumb || bestArtwork,
+          streamUrl,
+          trackNumber: songs.length + 1,
+          source: "jiosaavn",
+          bitrate: "320kbps"
+        });
+      }
+    }
+  }
+  if (songs.length === 0) return null;
+  return {
+    id: "movie_" + encodeURIComponent(movieName),
+    title: `${movieName} (Soundtrack)`,
+    artist: primaryArtist || "Original Motion Picture Soundtrack",
+    artwork: bestArtwork,
+    year: String(movieYear || (/* @__PURE__ */ new Date()).getFullYear()),
+    language: (movieLang || "telugu").toLowerCase(),
+    songCount: songs.length,
+    type: "album",
+    songs
+  };
+}
+async function searchJioAlbums(query, limit = 12) {
+  const url = "https://www.jiosaavn.com/api.php?__call=search.getAlbumResults&_format=json&_marker=0&api_version=4&ctx=web6dot0&n=35&p=1&q=" + encodeURIComponent(query);
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "SaavnAndroid/9.0.0",
+      "Accept": "application/json",
+      ...JIO_GEO_HEADERS
+    }
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const results = data.results || [];
+  const JUNK_ALBUM_RE = /\b(slowed|reverb|speed\s*up|sped\s*up|nightcore|karaoke|originally\s+performed|in\s+the\s+style\s+of|tribute\s+to|instrumental\s+cover|parody|spoof)\b/i;
+  const fullAlbums = [];
+  const singles = [];
+  for (const r of results) {
+    if (!r || !r.id) continue;
+    const mi = r.more_info || {};
+    const title = (r.title || "").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, "&").trim();
+    if (JUNK_ALBUM_RE.test(title)) continue;
+    let artwork = (r.image || "").replace("150x150", "500x500");
+    if (artwork.startsWith("http:")) artwork = artwork.replace("http:", "https:");
+    if (artwork.includes("default_") || artwork.includes("album-default") || !artwork.startsWith("http")) {
+      artwork = "";
+    }
+    const artistStr = (mi.music || r.subtitle || "").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, "&").trim();
+    const year = mi.year || r.year || "";
+    const songCount = parseInt(mi.song_count || "0", 10) || 0;
+    const language = (mi.language || r.language || "").toLowerCase();
+    const isDialogue = /\b(dialogue|dialogues|bgm\s+only)\b/i.test(title);
+    const albumObj = {
+      id: String(r.id),
+      title: title || "Unknown Album",
+      artist: artistStr || "Various Artists",
+      artwork,
+      year: String(year),
+      songCount,
+      language,
+      type: songCount > 1 ? "album" : "single",
+      isDialogue
+    };
+    if (songCount >= 2) {
+      fullAlbums.push(albumObj);
+    } else {
+      singles.push(albumObj);
+    }
+  }
+  const movieGroups = /* @__PURE__ */ new Map();
+  for (const s of singles) {
+    const movie = extractMovieName(s.title);
+    if (movie) {
+      const key = movie.toLowerCase();
+      if (!movieGroups.has(key)) {
+        movieGroups.set(key, {
+          movie,
+          count: 0,
+          bestArtwork: s.artwork,
+          artist: s.artist,
+          year: s.year,
+          language: s.language
+        });
+      }
+      const g = movieGroups.get(key);
+      g.count++;
+      if (!g.bestArtwork && s.artwork) g.bestArtwork = s.artwork;
+    }
+  }
+  const syntheticMovieSoundtracks = [];
+  for (const g of movieGroups.values()) {
+    const exists = fullAlbums.some(
+      (fa) => fa.title.toLowerCase().includes(g.movie.toLowerCase()) || g.movie.toLowerCase().includes(fa.title.toLowerCase())
+    );
+    if (!exists) {
+      syntheticMovieSoundtracks.push({
+        id: "movie_" + encodeURIComponent(g.movie),
+        title: `${g.movie} (Original Soundtrack)`,
+        artist: g.artist || "Original Motion Picture Soundtrack",
+        artwork: g.bestArtwork,
+        year: g.year,
+        songCount: Math.max(g.count, 5),
+        language: g.language,
+        type: "album",
+        isDialogue: false
+      });
+    }
+  }
+  fullAlbums.sort((a, b) => {
+    if (a.isDialogue !== b.isDialogue) return a.isDialogue ? 1 : -1;
+    return (b.songCount || 0) - (a.songCount || 0);
+  });
+  const combined = [...syntheticMovieSoundtracks, ...fullAlbums];
+  if (combined.length < limit) {
+    const remainingSingles = singles.filter((s) => !extractMovieName(s.title));
+    combined.push(...remainingSingles);
+  }
+  return combined.slice(0, limit);
+}
+async function fetchAlbumDetails(albumId) {
+  if (albumId.startsWith("movie_")) {
+    const movie = decodeURIComponent(albumId.replace("movie_", ""));
+    const soundtrack = await fetchMovieSoundtrackTracks(movie);
+    if (soundtrack) return soundtrack;
+  }
+  const url = "https://www.jiosaavn.com/api.php?__call=content.getAlbumDetails&_format=json&_marker=0&api_version=4&ctx=web6dot0&albumid=" + encodeURIComponent(albumId);
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "SaavnAndroid/9.0.0",
+      "Accept": "application/json",
+      ...JIO_GEO_HEADERS
+    }
+  });
+  if (!res.ok) throw new Error(`JioSaavn album fetch failed: ${res.status}`);
+  const data = await res.json();
+  const albumTitle = (data.title || data.name || "Unknown Album").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, "&").trim();
+  let cleanArtwork = (data.image || "").replace("150x150", "500x500");
+  if (cleanArtwork.startsWith("http:")) cleanArtwork = cleanArtwork.replace("http:", "https:");
+  if (cleanArtwork.includes("default_") || cleanArtwork.includes("album-default") || !cleanArtwork.startsWith("http")) {
+    cleanArtwork = "";
+  }
+  const artistStr = (data.primary_artists || data.music || data.subtitle || "").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, "&").trim();
+  const year = data.year || (data.more_info || {}).year || "";
+  const language = (data.language || (data.more_info || {}).language || "").toLowerCase();
+  let rawSongs = [];
+  if (Array.isArray(data.list) && data.list.length > 0) {
+    rawSongs = data.list;
+  } else if (Array.isArray(data.songs) && data.songs.length > 0) {
+    rawSongs = data.songs;
+  } else if (Array.isArray(data.modules?.songs?.data)) {
+    rawSongs = data.modules.songs.data;
+  }
+  const movieFromTitle = extractMovieName(albumTitle) || (rawSongs[0] ? extractMovieName(rawSongs[0].title || rawSongs[0].song || "") : null);
+  if (rawSongs.length <= 1 && movieFromTitle) {
+    try {
+      const enrichedMovie = await fetchMovieSoundtrackTracks(movieFromTitle, cleanArtwork);
+      if (enrichedMovie && enrichedMovie.songs.length > rawSongs.length) {
+        return enrichedMovie;
+      }
+    } catch (_) {
+    }
+  }
+  if (rawSongs.length === 0 && albumTitle && albumTitle !== "Unknown Album") {
+    try {
+      const cleanSearchTitle = albumTitle.replace(/\s*\(.*?\)/g, "").replace(/\s*\[.*?\]/g, "").replace(/[-–—]\s*(Original Soundtrack|OST|Telugu|Tamil|Hindi|Kannada|Malayalam).*/i, "").trim();
+      const fallbackTracks = await searchJioSaavn(cleanSearchTitle || albumTitle, 30);
+      const cleanLower = (cleanSearchTitle || albumTitle).toLowerCase();
+      const matching = fallbackTracks.filter(
+        (t) => t.album && t.album.toLowerCase().includes(cleanLower) || t.title.toLowerCase().includes(cleanLower) || cleanLower.includes(t.album.toLowerCase())
+      );
+      if (matching.length > 0) {
+        return {
+          id: String(albumId),
+          title: albumTitle,
+          artist: artistStr || matching[0].author || "Various Artists",
+          artwork: cleanArtwork || matching[0].thumbnail || "",
+          year: String(year),
+          language,
+          songCount: matching.length,
+          type: "album",
+          songs: matching.map((m, idx) => ({
+            id: String(m.id),
+            title: m.title,
+            author: m.author,
+            album: albumTitle,
+            duration: m.duration,
+            thumbnail: m.thumbnail || cleanArtwork,
+            streamUrl: m.streamUrl,
+            trackNumber: idx + 1,
+            source: "jiosaavn",
+            bitrate: "320kbps"
+          }))
+        };
+      }
+      const ytmFallback = await searchYtmSongs(albumTitle);
+      if (ytmFallback && ytmFallback.length > 0) {
+        return {
+          id: String(albumId),
+          title: albumTitle,
+          artist: artistStr || ytmFallback[0].author || "Various Artists",
+          artwork: cleanArtwork || ytmFallback[0].thumbnail || "",
+          year: String(year),
+          language,
+          songCount: ytmFallback.length,
+          type: "album",
+          songs: ytmFallback.map((y, idx) => ({
+            id: String(y.id),
+            title: y.title,
+            author: y.author,
+            album: albumTitle,
+            duration: y.duration,
+            thumbnail: y.thumbnail || cleanArtwork,
+            streamUrl: y.streamUrl || "",
+            trackNumber: idx + 1,
+            source: "youtube",
+            bitrate: "160kbps"
+          }))
+        };
+      }
+    } catch (_) {
+    }
+  }
+  const songs = rawSongs.filter((s) => s && s.id).map((s) => {
+    const mi = s.more_info || {};
+    const encMedia = mi.encrypted_media_url || s.encrypted_media_url || "";
+    const streamUrl = decryptMediaUrl(encMedia);
+    let thumb = (s.image || "").replace("150x150", "500x500");
+    if (thumb.startsWith("http:")) thumb = thumb.replace("http:", "https:");
+    if (thumb.includes("default_") || thumb.includes("album-default") || !thumb.startsWith("http")) {
+      thumb = cleanArtwork;
+    }
+    const title = (s.title || s.song || "").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, "&");
+    const primaryArtists = (mi.artistMap?.primary_artists || []).map((a) => a.name).join(", ");
+    const artist = (primaryArtists || s.subtitle || s.primary_artists || mi.music || "").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, "&");
+    const duration = parseInt(mi.duration || s.duration || "0", 10) || 0;
+    const trackNum = parseInt(mi.track_number || s.track_number || "0", 10) || 0;
+    return {
+      id: String(s.id),
+      title: title || "Unknown Title",
+      author: artist || artistStr || "Various Artists",
+      album: albumTitle,
+      duration,
+      thumbnail: thumb || cleanArtwork,
+      streamUrl,
+      trackNumber: trackNum,
+      source: "jiosaavn",
+      bitrate: "320kbps"
+    };
+  }).sort((a, b) => (a.trackNumber || 999) - (b.trackNumber || 999));
+  if (!cleanArtwork && songs.length > 0 && songs[0].thumbnail) {
+    cleanArtwork = songs[0].thumbnail;
+  }
+  return {
+    id: String(albumId),
+    title: albumTitle,
+    artist: artistStr || "Various Artists",
+    artwork: cleanArtwork,
+    year: String(year),
+    language,
+    songCount: songs.length,
+    type: songs.length > 1 ? "album" : "single",
+    songs
+  };
+}
 var UNICODE_SCRIPTS = {
   telugu: [3072, 3199],
   tamil: [2944, 3071],
@@ -7125,6 +7500,15 @@ var YTM_CONTEXT = {
     gl: "IN"
   }
 };
+var NON_MUSIC_TITLE_RE = /\b(speech|press\s+meet|launch\s+event|interview|talk\s+show|podcast|reaction|reacting|dance\s+cover|dance\s+video|stage\s+performance|performance\s+video|full\s+movie|movie\s+scene|comedy\s+scene|ringtone|bgm\s+only|#?shorts|reels?|tiktok|troll|parody|spoof|jukebox|all\s+songs|audio\s+jukebox|mega\s+jukebox|full\s+album|slowed[\s+]*(?:and|\+)?[\s+]*reverb|speed\s*up|sped\s*up|nightcore|8d\s+audio|bass\s+boosted|acoustic\s+cover|guitar\s+cover|piano\s+cover|violin\s+cover|cover\s+song|cover\s+version|cover\s+classics|female\s+cover|male\s+cover|karaoke|originally\s+performed|in\s+the\s+style\s+of|tribute\s+to|tribute\s+version|instrumental|tabata|power\s+music|workout|fitness\s+beats|gym\s+(?:music|mix|workout)|carnatic\s+mix|lo-?fi\s+mix|varmala|vidhi|ceremony|wedding\s+music|shaadi|mehendi|sangeet|dj\s+mix|dj\s+remix|mashup|mash\s+up|club\s+mix|oye\s+lalii|boostereo|shadow\s+tower|party\s+hits\s+band|the\s+hit\s+crew|the\s+covers|making\s+video|bloopers|teaser|trailer|glimpse|promo)\b/i;
+var NON_MUSIC_AUTHOR_RE = /\b(media|news|tv|filmnagar|events|buzz|sports|daily|vlogs?|cricket|gaming|memes?|dj\s+\w+|remix\s+hub|wedding|ceremony|oye\s+lalii|cover\s+classics|the\s+covers|the\s+hit\s+crew|party\s+hits\s+band|tabata|power\s+music|fitness\s+beats|workout|luxebeats|zzang|sweet\s+strings|boostereo|shadow\s+tower)\b/i;
+function isGenuineTrack(title, author, durationSec) {
+  if (!title) return false;
+  if (NON_MUSIC_TITLE_RE.test(title)) return false;
+  if (NON_MUSIC_AUTHOR_RE.test(author || "")) return false;
+  if (durationSec && (durationSec < 60 || durationSec > 600)) return false;
+  return true;
+}
 function parseDurationSec(str) {
   if (!str || typeof str !== "string") return 0;
   const parts = str.split(":").map((p) => parseInt(p, 10));
@@ -7164,6 +7548,7 @@ async function fetchYtmRadio(videoId, limit = 40) {
       const author = bylineRuns[0]?.text || "Unknown Artist";
       const lengthText = r.lengthText?.runs?.[0]?.text || "";
       const duration = parseDurationSec(lengthText) || 210;
+      if (!isGenuineTrack(title, author, duration)) continue;
       results.push({
         id: vid,
         title,
@@ -7184,44 +7569,54 @@ async function searchYtmSongs(query, limit = 20) {
       headers: YTM_HEADERS,
       body: JSON.stringify({
         context: YTM_CONTEXT,
-        query: query.trim(),
-        params: "Eg-KAQwIABAAGAEgASgAMABqChAMEAMQBBAJEAo%3D"
+        query: query.trim()
       })
     });
     if (!resp.ok) return [];
     const data = await resp.json();
     const contents = data?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
     const songs = [];
-    for (const section of contents) {
-      const items = section?.musicShelfRenderer?.contents || [];
+    const card = contents[0]?.musicCardShelfRenderer;
+    if (card) {
+      const subtitle = (card.subtitle?.runs?.map((r) => r.text).join("") || "").toLowerCase();
+      const vid = card.onTap?.watchEndpoint?.videoId;
+      const title = card.title?.runs?.[0]?.text || "";
+      const artistRun = card.subtitle?.runs?.find(
+        (r) => r.navigationEndpoint?.browseEndpoint?.browseId?.startsWith("UC")
+      );
+      const author = artistRun?.text || "Various Artists";
+      if (vid && title && !subtitle.includes("video") && !subtitle.includes("episode") && !subtitle.includes("podcast")) {
+        if (isGenuineTrack(title, author, 210)) {
+          songs.push({ id: vid, title, author, duration: 210 });
+        }
+      }
+    }
+    for (let i = 0; i < contents.length; i++) {
+      const section = contents[i];
+      const items = section?.itemSectionRenderer?.contents || section?.musicShelfRenderer?.contents || [];
       for (const item of items) {
         const renderer = item?.musicResponsiveListItemRenderer;
         if (!renderer) continue;
         const flexColumns = renderer.flexColumns || [];
-        if (!flexColumns.length) continue;
-        const titleColumn = flexColumns[0]?.musicResponsiveListItemFlexColumnRenderer;
-        const titleRuns = titleColumn?.text?.runs || [];
-        if (!titleRuns.length) continue;
+        if (flexColumns.length < 2) continue;
+        const subRuns = flexColumns[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
+        const itemType = (subRuns[0]?.text || "").toLowerCase();
+        if (itemType !== "song") continue;
+        const titleRuns = flexColumns[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
         const title = titleRuns[0]?.text || "Unknown Title";
-        let videoId = renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint?.videoId;
-        if (!videoId) {
-          videoId = titleRuns[0]?.navigationEndpoint?.watchEndpoint?.videoId;
-        }
+        let videoId = renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint?.videoId || renderer.onTap?.watchEndpoint?.videoId || titleRuns[0]?.navigationEndpoint?.watchEndpoint?.videoId;
         if (!videoId) continue;
-        let author = "Unknown Artist";
+        const artistRun = subRuns.find(
+          (r) => r.navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType === "MUSIC_PAGE_TYPE_ARTIST"
+        ) || subRuns[2];
+        const author = artistRun?.text || "Various Artists";
         let duration = 210;
-        if (flexColumns.length > 1) {
-          const subColumn = flexColumns[1]?.musicResponsiveListItemFlexColumnRenderer;
-          const subRuns = subColumn?.text?.runs || [];
-          if (subRuns.length) {
-            author = subRuns[0]?.text || "Unknown Artist";
-          }
-          if (subRuns.length > 2) {
-            const lastText = subRuns[subRuns.length - 1]?.text || "";
-            const parsed = parseDurationSec(lastText);
-            if (parsed) duration = parsed;
-          }
+        if (subRuns.length > 2) {
+          const lastText = subRuns[subRuns.length - 1]?.text || "";
+          const parsed = parseDurationSec(lastText);
+          if (parsed) duration = parsed;
         }
+        if (!isGenuineTrack(title, author, duration)) continue;
         songs.push({
           id: videoId,
           title,

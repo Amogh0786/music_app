@@ -23,7 +23,7 @@ class CanonicalSongDedup {
     caseSensitive: false,
   );
 
-  // Non-music video noise patterns (speeches, interviews, launch events, cricket, sketches, jukeboxes, amateur covers, reels, wedding rituals, DJ mashups)
+  // Non-music video noise patterns (speeches, interviews, launch events, cricket, sketches, jukeboxes, amateur covers, reels, wedding rituals, DJ mashups, workout/gym tracks)
   static final RegExp _nonMusicTitleNoise = RegExp(
     r'\b(speech|speech\s*@|press\s+meet|success\s+meet|launch\s+event|song\s+launch|audio\s+launch|'
     r'pre\s+release|trailer|teaser|glimpse|promo|first\s+look|motion\s+poster|title\s+reveal|'
@@ -34,8 +34,10 @@ class CanonicalSongDedup {
     r'ringtone|bgm\s+only|shorts|#shorts|shorts\s+video|reels?|tiktok|troll|parody|spoof|'
     r'jukebox|all\s+songs|audio\s+jukebox|video\s+jukebox|full\s+album|mega\s+jukebox|'
     r'slowed\s*(?:\+|\band\b)?\s*reverb|speed\s*up|sped\s*up|nightcore|8d\s+audio|bass\s+boosted|'
-    r'acoustic\s+cover|guitar\s+cover|piano\s+cover|flute\s+cover|violin\s+cover|vocal\s+cover|cover\s+song|cover\s+version|'
+    r'acoustic\s+cover|guitar\s+cover|piano\s+cover|flute\s+cover|violin\s+cover|vocal\s+cover|cover\s+song|cover\s+version|cover\s+classics|female\s+cover|male\s+cover|'
     r'instrumental|karaoke|oye\s+lalii|'
+    r'tabata|power\s+music|workout\s+(?:mix|music|version|track)?|fitness\s+beats|gym\s+(?:music|mix|workout)|'
+    r'carnatic\s+mix|lo-?fi\s+mix|'
     r'varmala|vidhi|ceremony|wedding\s+music|shaadi|mehendi|sangeet|sarangi\s+tabla|mangal\s+sutra|kanyadaan|shehnai|band\s+baaja|dulhan|'
     r'dj\s+\w+|dj\s+mix|dj\s+remix|mashup|mash\s+up|club\s+mix|remix|'
     r'making\s+video|bloopers|deleted\s+scenes?|'
@@ -44,7 +46,7 @@ class CanonicalSongDedup {
   );
 
   static final RegExp _nonMusicAuthorNoise = RegExp(
-    r'\b(media|news|tv|filmnagar|events|buzz|sports|daily|cinema\s+news|vlogs?|cricket|gaming|memes?|creations?|edits?|dj\s+\w+|remix\s+hub|wedding|ceremony|oye\s+lalii)\b',
+    r'\b(media|news|tv|filmnagar|events|buzz|sports|daily|cinema\s+news|vlogs?|cricket|gaming|memes?|creations?|edits?|dj\s+\w+|remix\s+hub|wedding|ceremony|oye\s+lalii|cover\s+classics|the\s+covers|the\s+hit\s+crew|party\s+hits\s+band|tabata|power\s+music|fitness\s+beats|workout|luxebeats|zzang|sweet\s+strings)\b',
     caseSensitive: false,
   );
 
@@ -146,6 +148,67 @@ class CanonicalSongDedup {
     }
 
     return result.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  /// Cleans raw YouTube and streaming titles for display in the UI,
+  /// stripping bracketed video tags (e.g. "[Official Video]", "(Official Music Video)"),
+  /// redundant artist prefixes (e.g. "Ed Sheeran - Shivers" -> "Shivers"),
+  /// and video metadata noise while preserving genuine song subtitle descriptors.
+  static String sanitizeDisplayTitle(String rawTitle, {String? artist}) {
+    if (rawTitle.trim().isEmpty) return '';
+    var s = rawTitle.trim();
+
+    // 1. Remove bracketed video / quality / lyrics tags
+    s = s.replaceAll(
+      RegExp(
+        r'\[\s*(?:official\s+(?:music\s+)?video|official\s+audio|official\s+lyric\s+video|lyric\s+video|visualizer|lyrics|hd|4k(?:\s+hdr)?|audio|video)\s*\]',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    s = s.replaceAll(
+      RegExp(
+        r'\(\s*(?:official\s+(?:music\s+)?video|official\s+audio|official\s+lyric\s+video|lyric\s+video|visualizer|lyrics|audio|video)\s*\)',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    // 2. Strip video suffix bars: e.g. "Song Name | Official Music Video" or "Song Name - Official Video"
+    s = s.replaceAll(
+      RegExp(
+        r'\s*(?:[|:–—/]|-\s*)\s*(?:official\s+(?:music\s+)?video|official\s+audio|official\s+lyric\s+video|lyric\s+video|lyrics|visualizer)\s*$',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    // 3. Strip redundant artist prefix if title starts with "Artist - Song"
+    if (artist != null && artist.trim().isNotEmpty) {
+      final cleanA = cleanArtist(artist);
+      final rawTrimmed = artist.trim();
+      if (rawTrimmed.isNotEmpty) {
+        final prefixPattern = RegExp(
+          r'^\s*' + RegExp.escape(rawTrimmed) + r'\s*[-–—:]\s*',
+          caseSensitive: false,
+        );
+        s = s.replaceAll(prefixPattern, '');
+      }
+      if (cleanA.isNotEmpty && cleanA.length >= 3) {
+        final cleanPrefixPattern = RegExp(
+          r'^\s*' + RegExp.escape(cleanA) + r'\s*[-–—:]\s*',
+          caseSensitive: false,
+        );
+        s = s.replaceAll(cleanPrefixPattern, '');
+      }
+    }
+
+    // 4. Deduplicate repeated tokens like (Acoustic) (Acoustic)
+    s = deduplicateRepeatedTokens(s);
+
+    // 5. Cleanup leftover multiple whitespace
+    s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return s.isNotEmpty ? s : rawTitle.trim();
   }
 
   /// Normalizes a song title to its canonical core name
@@ -442,9 +505,25 @@ class CanonicalSongDedup {
   }
 
   static final RegExp _commonEnglishWords = RegExp(
-    r'\b(?:the|of|and|in|to|a|is|that|for|you|it|with|on|as|are|at|be|this|have|from|or|one|had|by|word|but|not|what|all|were|we|when|your|can|said|there|use|an|each|which|she|do|how|their|if|will|up|other|about|out|many|then|them|these|so|some|her|would|make|like|him|into|time|has|look|two|more|write|go|see|number|no|way|could|people|my|than|first|water|been|call|who|oil|its|now|find|long|down|day|did|get|come|made|may|part|love|night|heart|tonight|girl|baby|never|forever|lights|star|dream|world|sun|rain|feel|away|home|life|eyes|sweet|mind|hold|dance|summer|kiss|die|fly|run|fall|again|sky|fire|magic|alone|together|perfect|shape|bad|habits|believer|blinding|closer|dynamite|senorita|stay|memories|peaches|industry|levitating|save|tears)\b',
+    r'\b(?:the|of|and|in|to|a|is|that|for|you|it|with|on|as|are|at|be|this|have|from|or|one|had|by|word|but|not|what|all|were|we|when|your|can|said|there|use|an|each|which|she|do|how|their|if|will|up|other|about|out|many|then|them|these|so|some|her|would|make|like|him|into|time|has|look|two|more|write|go|see|number|no|way|could|people|my|than|first|water|been|call|who|oil|its|now|find|long|down|day|did|get|come|made|may|part|love|night|heart|tonight|girl|baby|never|forever|lights|star|dream|world|sun|rain|feel|away|home|life|eyes|sweet|mind|hold|dance|summer|kiss|die|fly|run|fall|again|sky|fire|magic|alone|together|perfect|shape|bad|habits|believer|blinding|closer|dynamite|senorita|stay|memories|peaches|industry|levitating|save|tears|prayer|choir|sailor|deadpool|wolverine|ed|sheeran|bruno|mars|taylor|swift|billie|eilish|coldplay|dua|lipa|justin|bieber|eminem|drake|gigi|perez|weekend|pop|rock|soundtrack|version|remix|acoustic|original|hit|hits|song|tracks|queen|beatles|adele|rihanna|shakira|post|malone|maroon|chainsmokers|imagine|dragons|alan|walker|sia|charlie|puth)\b',
     caseSensitive: false,
   );
+
+  static final RegExp _indicArtistPattern = RegExp(
+    r'\b(anirudh|devi\s+sri\s+prasad|dsp|thaman|sid\s+sriram|mangli|arijit|shreya|keeravani|'
+    r'spb|balasubrahmanyam|chithra|yesudas|ram\s+miriyala|anurag\s+kulkarni|pritam|rahman|'
+    r'ar\s+rahman|vishal|shekhar|badshah|honey\s+singh|diljit|jass\s+manak|sidhu\s+moose|'
+    r'shankar\s+mahadevan|hariharan|karthik|armaan\s+malik|mickey\s+j\s+meyer|gopi\s+sundar|'
+    r'santosh\s+narayanan|yuvan|ilaiyaraaja|harris\s+jayaraj|dhee|santhosh|sushin\s+shyam|'
+    r'kasarla\s+shyam|jangi\s+reddy|penchal\s+das|bheems|vijay\s+prakash)\b',
+    caseSensitive: false,
+  );
+
+  /// Identifies known Indic playback singers and composers to prevent cross-genre contamination
+  static bool isKnownIndicArtist(String artist) {
+    if (artist.isEmpty) return false;
+    return _indicArtistPattern.hasMatch(artist.toLowerCase());
+  }
 
   /// Evaluates whether lyrics candidate matches the expected language, artist, duration, and context
   static int scoreLyricsCandidate({
@@ -572,10 +651,25 @@ class CanonicalSongDedup {
     return score;
   }
 
-  /// Verifies that candidate does not violate the seed track's language affinity
-  static bool isLanguageCompatible(String? seedLang, String candidateTitle) {
+  /// Verifies that candidate does not violate the seed track's language affinity.
+  /// If [seedLang] is 'english', strictly blocks tracks by known Indic artists or containing Indic script.
+  static bool isLanguageCompatible(
+    String? seedLang,
+    String candidateTitle, [
+    String? candidateArtist,
+  ]) {
     if (seedLang == null || seedLang.isEmpty) return true;
     final candLang = detectLanguage(candidateTitle);
+
+    if (seedLang == 'english') {
+      if (candLang != null && candLang != 'english') return false;
+      if (candidateArtist != null && isKnownIndicArtist(candidateArtist)) {
+        return false;
+      }
+      if (detectScript(candidateTitle) != null) return false;
+      return true;
+    }
+
     if (candLang == null) return true; // neutral / unlabelled
     return candLang == seedLang;
   }
@@ -690,11 +784,13 @@ class CanonicalSongDedup {
       }
 
       // In Indian cinema, one credit may list composer and the other playback singer
-      final isIndicA =
-          detectLanguage(artistA) != null ||
+      final langA = detectLanguage(artistA);
+      final langB = detectLanguage(artistB);
+      final isIndicA = (langA != null && langA != 'english') ||
+          isKnownIndicArtist(artistA) ||
           LyricsTransliterationService.isRomanizedTelugu(artistA);
-      final isIndicB =
-          detectLanguage(artistB) != null ||
+      final isIndicB = (langB != null && langB != 'english') ||
+          isKnownIndicArtist(artistB) ||
           LyricsTransliterationService.isRomanizedTelugu(artistB);
       if (isIndicA && isIndicB) {
         return true;
