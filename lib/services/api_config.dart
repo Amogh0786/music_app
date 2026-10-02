@@ -107,7 +107,44 @@ class ApiConfig {
     );
   }
 
+  /// Google YouTube Music radio automix via Cloudflare Edge Worker (< 150ms latency, zero cold start).
   static Uri radioUri(
+    String videoId, {
+    int limit = 30,
+    String? title,
+    String? artist,
+  }) {
+    final customUrl = PreferencesService().customServerUrl;
+    final base = customUrl.isNotEmpty
+        ? (customUrl.endsWith('/')
+              ? customUrl.substring(0, customUrl.length - 1)
+              : customUrl)
+        : cloudflareWorkerUrl;
+    final buffer = StringBuffer('$base/ytm/radio?v=$videoId&limit=$limit');
+    if (title != null && title.isNotEmpty) {
+      buffer.write('&title=${Uri.encodeComponent(title)}');
+    }
+    if (artist != null && artist.isNotEmpty) {
+      buffer.write('&artist=${Uri.encodeComponent(artist)}');
+    }
+    return Uri.parse(buffer.toString());
+  }
+
+  /// Cloudflare Edge Worker fallback for YouTube Music official song search (0ms cold start, CORS bypassed).
+  static Uri ytmSearchUri(String query, {int limit = 20}) {
+    final customUrl = PreferencesService().customServerUrl;
+    final base = customUrl.isNotEmpty
+        ? (customUrl.endsWith('/')
+              ? customUrl.substring(0, customUrl.length - 1)
+              : customUrl)
+        : cloudflareWorkerUrl;
+    return Uri.parse(
+      '$base/ytm/search?q=${Uri.encodeComponent(query)}&limit=$limit',
+    );
+  }
+
+  /// Secondary Render cloud backend radio fallback.
+  static Uri renderRadioUri(
     String videoId, {
     int limit = 30,
     String? title,

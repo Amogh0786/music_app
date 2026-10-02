@@ -246,6 +246,60 @@ export default {
       }
     }
 
+    // 6. YouTube Music Radio Automix: /ytm/radio?v=...&limit=40 (and alias /radio?v=...)
+    if (url.pathname === '/ytm/radio' || url.pathname === '/radio') {
+      const videoId = url.searchParams.get('v') || '';
+      const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') || '30')));
+
+      if (!videoId) {
+        return new Response(JSON.stringify([]), {
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        });
+      }
+
+      try {
+        const results = await fetchYtmRadio(videoId, limit);
+        return new Response(JSON.stringify(results), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=3600',
+            ...CORS_HEADERS,
+          },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify([]), {
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        });
+      }
+    }
+
+    // 7. YouTube Music Studio Search: /ytm/search?q=...&limit=20
+    if (url.pathname === '/ytm/search') {
+      const query = url.searchParams.get('q') || '';
+      const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') || '20')));
+
+      if (!query || query.trim().length < 1) {
+        return new Response(JSON.stringify([]), {
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        });
+      }
+
+      try {
+        const results = await searchYtmSongs(query.trim(), limit);
+        return new Response(JSON.stringify(results), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=3600',
+            ...CORS_HEADERS,
+          },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify([]), {
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        });
+      }
+    }
+
     return new Response('Not Found', { status: 404, headers: CORS_HEADERS });
   },
 };
@@ -604,4 +658,174 @@ async function resolveSingleTrack(rawTitle, rawArtist) {
     };
   }
   return null;
+}
+
+/**
+ * YouTube Music InnerTube Edge Bridge
+ */
+const YTM_HEADERS = {
+  'Content-Type': 'application/json',
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Origin': 'https://music.youtube.com',
+  'Referer': 'https://music.youtube.com/',
+};
+
+const YTM_CONTEXT = {
+  client: {
+    clientName: 'WEB_REMIX',
+    clientVersion: '1.20240101.01.00',
+    hl: 'en',
+    gl: 'IN',
+  },
+};
+
+function parseDurationSec(str) {
+  if (!str || typeof str !== 'string') return 0;
+  const parts = str.split(':').map((p) => parseInt(p, 10));
+  if (parts.some((n) => isNaN(n))) return 0;
+  if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  } else if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  return 0;
+}
+
+async function fetchYtmRadio(videoId, limit = 40) {
+  try {
+    const resp = await fetch('https://music.youtube.com/youtubei/v1/next', {
+      method: 'POST',
+      headers: YTM_HEADERS,
+      body: JSON.stringify({
+        context: YTM_CONTEXT,
+        videoId: videoId,
+        playlistId: `RDAMVM${videoId}`,
+      }),
+    });
+
+    if (!resp.ok) return [];
+
+    const data = await resp.json();
+    const tabs =
+      data?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer
+        ?.watchNextTabbedResultsRenderer?.tabs || [];
+    if (!tabs.length) return [];
+
+    const items =
+      tabs[0]?.tabRenderer?.content?.musicQueueRenderer?.content
+        ?.playlistPanelRenderer?.contents || [];
+    const results = [];
+
+    for (const it of items) {
+      const r = it?.playlistPanelVideoRenderer;
+      if (!r) continue;
+      const vid = r.videoId;
+      if (!vid || vid === videoId) continue;
+
+      const titleRuns = r.title?.runs || [];
+      const title = titleRuns[0]?.text || 'Unknown Title';
+
+      const bylineRuns = r.longBylineText?.runs || [];
+      const author = bylineRuns[0]?.text || 'Unknown Artist';
+
+      const lengthText = r.lengthText?.runs?.[0]?.text || '';
+      const duration = parseDurationSec(lengthText) || 210;
+
+      results.push({
+        id: vid,
+        title: title,
+        author: author,
+        duration: duration,
+      });
+
+      if (results.length >= limit) break;
+    }
+
+    return results;
+  } catch (e) {
+    return [];
+  }
+}
+
+async function searchYtmSongs(query, limit = 20) {
+  try {
+    const resp = await fetch('https://music.youtube.com/youtubei/v1/search', {
+      method: 'POST',
+      headers: YTM_HEADERS,
+      body: JSON.stringify({
+        context: YTM_CONTEXT,
+        query: query.trim(),
+        params: 'Eg-KAQwIABAAGAEgASgAMABqChAMEAMQBBAJEAo%3D',
+      }),
+    });
+
+    if (!resp.ok) return [];
+
+    const data = await resp.json();
+    const contents =
+      data?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer
+        ?.content?.sectionListRenderer?.contents || [];
+    const songs = [];
+
+    for (const section of contents) {
+      const items = section?.musicShelfRenderer?.contents || [];
+      for (const item of items) {
+        const renderer = item?.musicResponsiveListItemRenderer;
+        if (!renderer) continue;
+
+        const flexColumns = renderer.flexColumns || [];
+        if (!flexColumns.length) continue;
+
+        // Title
+        const titleColumn =
+          flexColumns[0]?.musicResponsiveListItemFlexColumnRenderer;
+        const titleRuns = titleColumn?.text?.runs || [];
+        if (!titleRuns.length) continue;
+        const title = titleRuns[0]?.text || 'Unknown Title';
+
+        // VideoId
+        let videoId =
+          renderer.overlay?.musicItemThumbnailOverlayRenderer?.content
+            ?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint
+            ?.videoId;
+        if (!videoId) {
+          videoId = titleRuns[0]?.navigationEndpoint?.watchEndpoint?.videoId;
+        }
+        if (!videoId) continue;
+
+        // Author & Duration
+        let author = 'Unknown Artist';
+        let duration = 210;
+
+        if (flexColumns.length > 1) {
+          const subColumn =
+            flexColumns[1]?.musicResponsiveListItemFlexColumnRenderer;
+          const subRuns = subColumn?.text?.runs || [];
+          if (subRuns.length) {
+            author = subRuns[0]?.text || 'Unknown Artist';
+          }
+          if (subRuns.length > 2) {
+            const lastText = subRuns[subRuns.length - 1]?.text || '';
+            const parsed = parseDurationSec(lastText);
+            if (parsed) duration = parsed;
+          }
+        }
+
+        songs.push({
+          id: videoId,
+          title: title,
+          author: author,
+          duration: duration,
+        });
+
+        if (songs.length >= limit) break;
+      }
+      if (songs.length >= limit) break;
+    }
+
+    return songs;
+  } catch (e) {
+    return [];
+  }
 }

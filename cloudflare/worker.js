@@ -40,9 +40,9 @@ var require_crypto = __commonJS({
   }
 });
 
-// node_modules/crypto-js/core.js
+// cloudflare/node_modules/crypto-js/core.js
 var require_core = __commonJS({
-  "node_modules/crypto-js/core.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/core.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory();
@@ -648,9 +648,9 @@ var require_core = __commonJS({
   }
 });
 
-// node_modules/crypto-js/x64-core.js
+// cloudflare/node_modules/crypto-js/x64-core.js
 var require_x64_core = __commonJS({
-  "node_modules/crypto-js/x64-core.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/x64-core.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -905,9 +905,9 @@ var require_x64_core = __commonJS({
   }
 });
 
-// node_modules/crypto-js/lib-typedarrays.js
+// cloudflare/node_modules/crypto-js/lib-typedarrays.js
 var require_lib_typedarrays = __commonJS({
-  "node_modules/crypto-js/lib-typedarrays.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/lib-typedarrays.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -950,9 +950,9 @@ var require_lib_typedarrays = __commonJS({
   }
 });
 
-// node_modules/crypto-js/enc-utf16.js
+// cloudflare/node_modules/crypto-js/enc-utf16.js
 var require_enc_utf16 = __commonJS({
-  "node_modules/crypto-js/enc-utf16.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/enc-utf16.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -1068,9 +1068,9 @@ var require_enc_utf16 = __commonJS({
   }
 });
 
-// node_modules/crypto-js/enc-base64.js
+// cloudflare/node_modules/crypto-js/enc-base64.js
 var require_enc_base64 = __commonJS({
-  "node_modules/crypto-js/enc-base64.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/enc-base64.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -1176,9 +1176,9 @@ var require_enc_base64 = __commonJS({
   }
 });
 
-// node_modules/crypto-js/enc-base64url.js
+// cloudflare/node_modules/crypto-js/enc-base64url.js
 var require_enc_base64url = __commonJS({
-  "node_modules/crypto-js/enc-base64url.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/enc-base64url.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -1295,9 +1295,9 @@ var require_enc_base64url = __commonJS({
   }
 });
 
-// node_modules/crypto-js/md5.js
+// cloudflare/node_modules/crypto-js/md5.js
 var require_md5 = __commonJS({
-  "node_modules/crypto-js/md5.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/md5.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -1474,9 +1474,9 @@ var require_md5 = __commonJS({
   }
 });
 
-// node_modules/crypto-js/sha1.js
+// cloudflare/node_modules/crypto-js/sha1.js
 var require_sha1 = __commonJS({
-  "node_modules/crypto-js/sha1.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/sha1.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -1565,9 +1565,9 @@ var require_sha1 = __commonJS({
   }
 });
 
-// node_modules/crypto-js/sha256.js
+// cloudflare/node_modules/crypto-js/sha256.js
 var require_sha256 = __commonJS({
-  "node_modules/crypto-js/sha256.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/sha256.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -1686,9 +1686,9 @@ var require_sha256 = __commonJS({
   }
 });
 
-// node_modules/crypto-js/sha224.js
+// cloudflare/node_modules/crypto-js/sha224.js
 var require_sha224 = __commonJS({
-  "node_modules/crypto-js/sha224.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/sha224.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_sha256());
@@ -1731,9 +1731,9 @@ var require_sha224 = __commonJS({
   }
 });
 
-// node_modules/crypto-js/sha512.js
+// cloudflare/node_modules/crypto-js/sha512.js
 var require_sha512 = __commonJS({
-  "node_modules/crypto-js/sha512.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/sha512.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_x64_core());
@@ -2013,9 +2013,9 @@ var require_sha512 = __commonJS({
   }
 });
 
-// node_modules/crypto-js/sha384.js
+// cloudflare/node_modules/crypto-js/sha384.js
 var require_sha384 = __commonJS({
-  "node_modules/crypto-js/sha384.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/sha384.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_x64_core(), require_sha512());
@@ -2059,9 +2059,9 @@ var require_sha384 = __commonJS({
   }
 });
 
-// node_modules/crypto-js/sha3.js
+// cloudflare/node_modules/crypto-js/sha3.js
 var require_sha3 = __commonJS({
-  "node_modules/crypto-js/sha3.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/sha3.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_x64_core());
@@ -2261,9 +2261,9 @@ var require_sha3 = __commonJS({
   }
 });
 
-// node_modules/crypto-js/ripemd160.js
+// cloudflare/node_modules/crypto-js/ripemd160.js
 var require_ripemd160 = __commonJS({
-  "node_modules/crypto-js/ripemd160.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/ripemd160.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -2732,9 +2732,9 @@ var require_ripemd160 = __commonJS({
   }
 });
 
-// node_modules/crypto-js/hmac.js
+// cloudflare/node_modules/crypto-js/hmac.js
 var require_hmac = __commonJS({
-  "node_modules/crypto-js/hmac.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/hmac.js"(exports, module) {
     (function(root, factory) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core());
@@ -2839,9 +2839,9 @@ var require_hmac = __commonJS({
   }
 });
 
-// node_modules/crypto-js/pbkdf2.js
+// cloudflare/node_modules/crypto-js/pbkdf2.js
 var require_pbkdf2 = __commonJS({
-  "node_modules/crypto-js/pbkdf2.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/pbkdf2.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_sha256(), require_hmac());
@@ -2937,9 +2937,9 @@ var require_pbkdf2 = __commonJS({
   }
 });
 
-// node_modules/crypto-js/evpkdf.js
+// cloudflare/node_modules/crypto-js/evpkdf.js
 var require_evpkdf = __commonJS({
-  "node_modules/crypto-js/evpkdf.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/evpkdf.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_sha1(), require_hmac());
@@ -3028,9 +3028,9 @@ var require_evpkdf = __commonJS({
   }
 });
 
-// node_modules/crypto-js/cipher-core.js
+// cloudflare/node_modules/crypto-js/cipher-core.js
 var require_cipher_core = __commonJS({
-  "node_modules/crypto-js/cipher-core.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/cipher-core.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_evpkdf());
@@ -3672,9 +3672,9 @@ var require_cipher_core = __commonJS({
   }
 });
 
-// node_modules/crypto-js/mode-cfb.js
+// cloudflare/node_modules/crypto-js/mode-cfb.js
 var require_mode_cfb = __commonJS({
-  "node_modules/crypto-js/mode-cfb.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/mode-cfb.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -3724,9 +3724,9 @@ var require_mode_cfb = __commonJS({
   }
 });
 
-// node_modules/crypto-js/mode-ctr.js
+// cloudflare/node_modules/crypto-js/mode-ctr.js
 var require_mode_ctr = __commonJS({
-  "node_modules/crypto-js/mode-ctr.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/mode-ctr.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -3764,9 +3764,9 @@ var require_mode_ctr = __commonJS({
   }
 });
 
-// node_modules/crypto-js/mode-ctr-gladman.js
+// cloudflare/node_modules/crypto-js/mode-ctr-gladman.js
 var require_mode_ctr_gladman = __commonJS({
-  "node_modules/crypto-js/mode-ctr-gladman.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/mode-ctr-gladman.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -3839,9 +3839,9 @@ var require_mode_ctr_gladman = __commonJS({
   }
 });
 
-// node_modules/crypto-js/mode-ofb.js
+// cloudflare/node_modules/crypto-js/mode-ofb.js
 var require_mode_ofb = __commonJS({
-  "node_modules/crypto-js/mode-ofb.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/mode-ofb.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -3877,9 +3877,9 @@ var require_mode_ofb = __commonJS({
   }
 });
 
-// node_modules/crypto-js/mode-ecb.js
+// cloudflare/node_modules/crypto-js/mode-ecb.js
 var require_mode_ecb = __commonJS({
-  "node_modules/crypto-js/mode-ecb.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/mode-ecb.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -3908,9 +3908,9 @@ var require_mode_ecb = __commonJS({
   }
 });
 
-// node_modules/crypto-js/pad-ansix923.js
+// cloudflare/node_modules/crypto-js/pad-ansix923.js
 var require_pad_ansix923 = __commonJS({
-  "node_modules/crypto-js/pad-ansix923.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/pad-ansix923.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -3940,9 +3940,9 @@ var require_pad_ansix923 = __commonJS({
   }
 });
 
-// node_modules/crypto-js/pad-iso10126.js
+// cloudflare/node_modules/crypto-js/pad-iso10126.js
 var require_pad_iso10126 = __commonJS({
-  "node_modules/crypto-js/pad-iso10126.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/pad-iso10126.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -3968,9 +3968,9 @@ var require_pad_iso10126 = __commonJS({
   }
 });
 
-// node_modules/crypto-js/pad-iso97971.js
+// cloudflare/node_modules/crypto-js/pad-iso97971.js
 var require_pad_iso97971 = __commonJS({
-  "node_modules/crypto-js/pad-iso97971.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/pad-iso97971.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -3995,9 +3995,9 @@ var require_pad_iso97971 = __commonJS({
   }
 });
 
-// node_modules/crypto-js/pad-zeropadding.js
+// cloudflare/node_modules/crypto-js/pad-zeropadding.js
 var require_pad_zeropadding = __commonJS({
-  "node_modules/crypto-js/pad-zeropadding.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/pad-zeropadding.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -4029,9 +4029,9 @@ var require_pad_zeropadding = __commonJS({
   }
 });
 
-// node_modules/crypto-js/pad-nopadding.js
+// cloudflare/node_modules/crypto-js/pad-nopadding.js
 var require_pad_nopadding = __commonJS({
-  "node_modules/crypto-js/pad-nopadding.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/pad-nopadding.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -4052,9 +4052,9 @@ var require_pad_nopadding = __commonJS({
   }
 });
 
-// node_modules/crypto-js/format-hex.js
+// cloudflare/node_modules/crypto-js/format-hex.js
 var require_format_hex = __commonJS({
-  "node_modules/crypto-js/format-hex.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/format-hex.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_cipher_core());
@@ -4112,9 +4112,9 @@ var require_format_hex = __commonJS({
   }
 });
 
-// node_modules/crypto-js/aes.js
+// cloudflare/node_modules/crypto-js/aes.js
 var require_aes = __commonJS({
-  "node_modules/crypto-js/aes.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/aes.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_enc_base64(), require_md5(), require_evpkdf(), require_cipher_core());
@@ -4266,9 +4266,9 @@ var require_aes = __commonJS({
   }
 });
 
-// node_modules/crypto-js/tripledes.js
+// cloudflare/node_modules/crypto-js/tripledes.js
 var require_tripledes = __commonJS({
-  "node_modules/crypto-js/tripledes.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/tripledes.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_enc_base64(), require_md5(), require_evpkdf(), require_cipher_core());
@@ -5047,9 +5047,9 @@ var require_tripledes = __commonJS({
   }
 });
 
-// node_modules/crypto-js/rc4.js
+// cloudflare/node_modules/crypto-js/rc4.js
 var require_rc4 = __commonJS({
-  "node_modules/crypto-js/rc4.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/rc4.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_enc_base64(), require_md5(), require_evpkdf(), require_cipher_core());
@@ -5130,9 +5130,9 @@ var require_rc4 = __commonJS({
   }
 });
 
-// node_modules/crypto-js/rabbit.js
+// cloudflare/node_modules/crypto-js/rabbit.js
 var require_rabbit = __commonJS({
-  "node_modules/crypto-js/rabbit.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/rabbit.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_enc_base64(), require_md5(), require_evpkdf(), require_cipher_core());
@@ -5259,9 +5259,9 @@ var require_rabbit = __commonJS({
   }
 });
 
-// node_modules/crypto-js/rabbit-legacy.js
+// cloudflare/node_modules/crypto-js/rabbit-legacy.js
 var require_rabbit_legacy = __commonJS({
-  "node_modules/crypto-js/rabbit-legacy.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/rabbit-legacy.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_enc_base64(), require_md5(), require_evpkdf(), require_cipher_core());
@@ -5385,9 +5385,9 @@ var require_rabbit_legacy = __commonJS({
   }
 });
 
-// node_modules/crypto-js/blowfish.js
+// cloudflare/node_modules/crypto-js/blowfish.js
 var require_blowfish = __commonJS({
-  "node_modules/crypto-js/blowfish.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/blowfish.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_enc_base64(), require_md5(), require_evpkdf(), require_cipher_core());
@@ -6574,9 +6574,9 @@ var require_blowfish = __commonJS({
   }
 });
 
-// node_modules/crypto-js/index.js
+// cloudflare/node_modules/crypto-js/index.js
 var require_crypto_js = __commonJS({
-  "node_modules/crypto-js/index.js"(exports, module) {
+  "cloudflare/node_modules/crypto-js/index.js"(exports, module) {
     (function(root, factory, undef) {
       if (typeof exports === "object") {
         module.exports = exports = factory(require_core(), require_x64_core(), require_lib_typedarrays(), require_enc_utf16(), require_enc_base64(), require_enc_base64url(), require_md5(), require_sha1(), require_sha256(), require_sha224(), require_sha512(), require_sha384(), require_sha3(), require_ripemd160(), require_hmac(), require_pbkdf2(), require_evpkdf(), require_cipher_core(), require_mode_cfb(), require_mode_ctr(), require_mode_ctr_gladman(), require_mode_ofb(), require_mode_ecb(), require_pad_ansix923(), require_pad_iso10126(), require_pad_iso97971(), require_pad_zeropadding(), require_pad_nopadding(), require_format_hex(), require_aes(), require_tripledes(), require_rc4(), require_rabbit(), require_rabbit_legacy(), require_blowfish());
@@ -6591,7 +6591,7 @@ var require_crypto_js = __commonJS({
   }
 });
 
-// worker_source.js
+// cloudflare/worker_source.js
 var import_crypto_js = __toESM(require_crypto_js(), 1);
 var CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -6788,6 +6788,52 @@ var worker_source_default = {
           JSON.stringify({ status: "error", message: err.message || "Lyrics fetch error" }),
           { status: 500, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
         );
+      }
+    }
+    if (url.pathname === "/ytm/radio" || url.pathname === "/radio") {
+      const videoId = url.searchParams.get("v") || "";
+      const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get("limit") || "30")));
+      if (!videoId) {
+        return new Response(JSON.stringify([]), {
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS }
+        });
+      }
+      try {
+        const results = await fetchYtmRadio(videoId, limit);
+        return new Response(JSON.stringify(results), {
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "public, max-age=3600",
+            ...CORS_HEADERS
+          }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify([]), {
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS }
+        });
+      }
+    }
+    if (url.pathname === "/ytm/search") {
+      const query = url.searchParams.get("q") || "";
+      const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get("limit") || "20")));
+      if (!query || query.trim().length < 1) {
+        return new Response(JSON.stringify([]), {
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS }
+        });
+      }
+      try {
+        const results = await searchYtmSongs(query.trim(), limit);
+        return new Response(JSON.stringify(results), {
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "public, max-age=3600",
+            ...CORS_HEADERS
+          }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify([]), {
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS }
+        });
       }
     }
     return new Response("Not Found", { status: 404, headers: CORS_HEADERS });
@@ -7064,6 +7110,132 @@ async function resolveSingleTrack(rawTitle, rawArtist) {
     };
   }
   return null;
+}
+var YTM_HEADERS = {
+  "Content-Type": "application/json",
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+  "Origin": "https://music.youtube.com",
+  "Referer": "https://music.youtube.com/"
+};
+var YTM_CONTEXT = {
+  client: {
+    clientName: "WEB_REMIX",
+    clientVersion: "1.20240101.01.00",
+    hl: "en",
+    gl: "IN"
+  }
+};
+function parseDurationSec(str) {
+  if (!str || typeof str !== "string") return 0;
+  const parts = str.split(":").map((p) => parseInt(p, 10));
+  if (parts.some((n) => isNaN(n))) return 0;
+  if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  } else if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  return 0;
+}
+async function fetchYtmRadio(videoId, limit = 40) {
+  try {
+    const resp = await fetch("https://music.youtube.com/youtubei/v1/next", {
+      method: "POST",
+      headers: YTM_HEADERS,
+      body: JSON.stringify({
+        context: YTM_CONTEXT,
+        videoId,
+        playlistId: `RDAMVM${videoId}`
+      })
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    const tabs = data?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs || [];
+    if (!tabs.length) return [];
+    const items = tabs[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer?.contents || [];
+    const results = [];
+    for (const it of items) {
+      const r = it?.playlistPanelVideoRenderer;
+      if (!r) continue;
+      const vid = r.videoId;
+      if (!vid || vid === videoId) continue;
+      const titleRuns = r.title?.runs || [];
+      const title = titleRuns[0]?.text || "Unknown Title";
+      const bylineRuns = r.longBylineText?.runs || [];
+      const author = bylineRuns[0]?.text || "Unknown Artist";
+      const lengthText = r.lengthText?.runs?.[0]?.text || "";
+      const duration = parseDurationSec(lengthText) || 210;
+      results.push({
+        id: vid,
+        title,
+        author,
+        duration
+      });
+      if (results.length >= limit) break;
+    }
+    return results;
+  } catch (e) {
+    return [];
+  }
+}
+async function searchYtmSongs(query, limit = 20) {
+  try {
+    const resp = await fetch("https://music.youtube.com/youtubei/v1/search", {
+      method: "POST",
+      headers: YTM_HEADERS,
+      body: JSON.stringify({
+        context: YTM_CONTEXT,
+        query: query.trim(),
+        params: "Eg-KAQwIABAAGAEgASgAMABqChAMEAMQBBAJEAo%3D"
+      })
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    const contents = data?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+    const songs = [];
+    for (const section of contents) {
+      const items = section?.musicShelfRenderer?.contents || [];
+      for (const item of items) {
+        const renderer = item?.musicResponsiveListItemRenderer;
+        if (!renderer) continue;
+        const flexColumns = renderer.flexColumns || [];
+        if (!flexColumns.length) continue;
+        const titleColumn = flexColumns[0]?.musicResponsiveListItemFlexColumnRenderer;
+        const titleRuns = titleColumn?.text?.runs || [];
+        if (!titleRuns.length) continue;
+        const title = titleRuns[0]?.text || "Unknown Title";
+        let videoId = renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint?.videoId;
+        if (!videoId) {
+          videoId = titleRuns[0]?.navigationEndpoint?.watchEndpoint?.videoId;
+        }
+        if (!videoId) continue;
+        let author = "Unknown Artist";
+        let duration = 210;
+        if (flexColumns.length > 1) {
+          const subColumn = flexColumns[1]?.musicResponsiveListItemFlexColumnRenderer;
+          const subRuns = subColumn?.text?.runs || [];
+          if (subRuns.length) {
+            author = subRuns[0]?.text || "Unknown Artist";
+          }
+          if (subRuns.length > 2) {
+            const lastText = subRuns[subRuns.length - 1]?.text || "";
+            const parsed = parseDurationSec(lastText);
+            if (parsed) duration = parsed;
+          }
+        }
+        songs.push({
+          id: videoId,
+          title,
+          author,
+          duration
+        });
+        if (songs.length >= limit) break;
+      }
+      if (songs.length >= limit) break;
+    }
+    return songs;
+  } catch (e) {
+    return [];
+  }
 }
 export {
   worker_source_default as default
