@@ -101,5 +101,28 @@ void main() {
         expect(topList.first.value, greaterThan(topList[1].value));
       },
     );
+
+    test(
+      'getDailyMixConfigs blacklists non-artist noise like Ravi Varma or Remix',
+      () async {
+        // Simulate playback with non-artist noise
+        await prefs.recordSongPlay('Ravi Varma', 'Ravi Varmake Andani');
+        await prefs.recordSongPlay('DJ Remix Hub', 'Mashup Track');
+        await prefs.recordSongPlay('Anirudh Ravichander', 'Leo Song');
+
+        final configs = prefs.getDailyMixConfigs();
+        expect(configs.length, greaterThanOrEqualTo(2));
+
+        for (final cfg in configs) {
+          expect(cfg.title.toLowerCase().contains('ravi varma'), isFalse);
+          expect(cfg.subtitle.toLowerCase().contains('ravi varma'), isFalse);
+          expect(cfg.query.toLowerCase().contains('ravi varma'), isFalse);
+          expect(cfg.subtitle.toLowerCase().contains('remix'), isFalse);
+        }
+
+        // Mix 1 should feature authentic artist
+        expect(configs[0].subtitle, contains('Anirudh Ravichander'));
+      },
+    );
   });
 }

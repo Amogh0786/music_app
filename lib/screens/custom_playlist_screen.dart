@@ -1305,6 +1305,21 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
               const SliverToBoxAdapter(child: SizedBox(height: 36)),
             ],
           ),
+          // Floating MiniPlayer visible over playlist content when a song is playing
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: AnimatedBuilder(
+              animation: MusicService(),
+              builder: (context, _) {
+                if (MusicService().currentSong == null) {
+                  return const SizedBox.shrink();
+                }
+                return const MiniPlayer();
+              },
+            ),
+          ),
         ],
       ),
     );

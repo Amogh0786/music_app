@@ -175,6 +175,19 @@ void showSongOptionsBottomSheet(
                 },
               ),
 
+            // Action 0b: Start Song Radio
+            _buildActionTile(
+              icon: Icons.auto_awesome_rounded,
+              iconColor: const Color(0xFF6C5CE7),
+              title: 'Start Song Radio',
+              subtitle: '50 smart tracks based on this song',
+              onTap: () {
+                Navigator.pop(ctx);
+                musicService.startSongRadio(song);
+                _showToast(context, 'Starting radio for "${song.title}"');
+              },
+            ),
+
             // Action 1: Play Next
             _buildActionTile(
               icon: Icons.playlist_play_rounded,

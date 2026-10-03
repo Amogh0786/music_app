@@ -588,7 +588,7 @@ class PreferencesService extends ChangeNotifier {
     }
   }
 
-  static String _extractSingleLeadArtist(String raw) {
+  static String extractSingleLeadArtist(String raw) {
     if (raw.trim().isEmpty) return '';
     final resolved = _resolveCanonicalArtists(raw, '');
     if (resolved.isNotEmpty) {
@@ -856,20 +856,81 @@ class PreferencesService extends ChangeNotifier {
   onEqualizerChanged;
 
   List<DailyMixConfig> getDailyMixConfigs() {
-    final top = getTopArtists(limit: 5);
+    final top = getTopArtists(limit: 10);
     final primaryLang = _preferredLanguages.isNotEmpty
         ? _preferredLanguages.first
         : 'Telugu';
-    final rawArtist1 = top.isNotEmpty
-        ? top[0]
-        : (primaryLang == 'Telugu' ? 'Sid Sriram' : 'Arijit Singh');
-    final rawArtist2 = top.length > 1
-        ? top[1]
-        : (primaryLang == 'Telugu' ? 'Anirudh Ravichander' : 'Pritam');
 
-    // Guarantee that artist1 and artist2 are single, primary, clean artist names
-    final artist1 = _extractSingleLeadArtist(rawArtist1);
-    final artist2 = _extractSingleLeadArtist(rawArtist2);
+    // Curated iconic artist fallbacks by language
+    final List<String> languageDefaults;
+    switch (primaryLang.toLowerCase()) {
+      case 'tamil':
+        languageDefaults = [
+          'Anirudh Ravichander',
+          'A.R. Rahman',
+          'Yuvan Shankar Raja',
+        ];
+        break;
+      case 'hindi':
+        languageDefaults = ['Arijit Singh', 'Pritam', 'Shreya Ghoshal'];
+        break;
+      case 'punjabi':
+        languageDefaults = ['Diljit Dosanjh', 'B Praak', 'Karan Aujla'];
+        break;
+      case 'malayalam':
+        languageDefaults = ['K.S. Chithra', 'Sushin Shyam', 'K.J. Yesudas'];
+        break;
+      case 'kannada':
+        languageDefaults = ['Sanjith Hegde', 'Vijay Prakash', 'Arjun Janya'];
+        break;
+      case 'english':
+        languageDefaults = ['The Weeknd', 'Taylor Swift', 'Ed Sheeran'];
+        break;
+      case 'telugu':
+      default:
+        languageDefaults = [
+          'Sid Sriram',
+          'Anirudh Ravichander',
+          'Devi Sri Prasad',
+        ];
+        break;
+    }
+
+    final validArtists = <String>[];
+    for (final raw in top) {
+      final a = extractSingleLeadArtist(raw);
+      if (a.isEmpty || a.length < 3) continue;
+      final lower = a.toLowerCase();
+      // Blacklist non-artist phrases, title fragments, or noise words
+      if (lower.contains('ravi varma') ||
+          lower.contains('remix') ||
+          lower.contains('mashup') ||
+          lower.contains('melody') ||
+          lower.contains('instrumental') ||
+          lower.contains('theme') ||
+          lower.contains('songs') ||
+          lower.contains('hits') ||
+          lower.contains('music') ||
+          lower.contains('audio') ||
+          lower.contains('channel') ||
+          lower.contains('unknown')) {
+        continue;
+      }
+      if (!validArtists.contains(a)) {
+        validArtists.add(a);
+      }
+    }
+
+    for (final def in languageDefaults) {
+      if (!validArtists.contains(def)) {
+        validArtists.add(def);
+      }
+    }
+
+    final artist1 = validArtists[0];
+    final artist2 = validArtists.length > 1
+        ? validArtists[1]
+        : languageDefaults[1];
 
     return [
       DailyMixConfig(
