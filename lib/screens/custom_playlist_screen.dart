@@ -297,7 +297,9 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                         isSpotifyImport: PreferencesService()
                             .isSpotifyImportedPlaylist(widget.playlistId),
                         customTrigger: Container(
-                          padding: const EdgeInsets.all(8),
+                          width: 38,
+                          height: 38,
+                          alignment: Alignment.center,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.10),
                             shape: BoxShape.circle,
@@ -419,6 +421,18 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                             artistItem.name,
                           );
 
+                          final activeTextColor = isSelected
+                              ? (ThemeData.estimateBrightnessForColor(
+                                          themeColor,
+                                        ) ==
+                                        Brightness.dark
+                                    ? Colors.white
+                                    : Colors.black)
+                              : Colors.white.withValues(alpha: 0.85);
+                          final activeIconColor = isSelected
+                              ? activeTextColor
+                              : Colors.white60;
+
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: FilterChip(
@@ -426,16 +440,12 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                               avatar: Icon(
                                 Icons.person_rounded,
                                 size: 14,
-                                color: isSelected
-                                    ? Colors.black
-                                    : Colors.white60,
+                                color: activeIconColor,
                               ),
                               label: Text(
                                 '${artistItem.name} (${artistItem.count})',
                                 style: TextStyle(
-                                  color: isSelected
-                                      ? Colors.black
-                                      : Colors.white.withValues(alpha: 0.85),
+                                  color: activeTextColor,
                                   fontWeight: isSelected
                                       ? FontWeight.bold
                                       : FontWeight.w500,
@@ -1254,6 +1264,11 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                                         size: 20,
                                       ),
                                       tooltip: 'Song options',
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 36,
+                                        minHeight: 40,
+                                      ),
                                       onPressed: () {
                                         HapticFeedback.lightImpact();
                                         showPlaylistSongOptionsBottomSheet(
@@ -1271,15 +1286,14 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                                     ),
                                     ReorderableDragStartListener(
                                       index: index,
-                                      child: const Padding(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 8,
-                                        ),
-                                        child: Icon(
+                                      child: Container(
+                                        width: 36,
+                                        height: 40,
+                                        alignment: Alignment.center,
+                                        child: const Icon(
                                           Icons.drag_handle_rounded,
                                           color: Colors.white38,
-                                          size: 22,
+                                          size: 20,
                                         ),
                                       ),
                                     ),

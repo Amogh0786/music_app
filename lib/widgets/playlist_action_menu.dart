@@ -155,8 +155,150 @@ class PlaylistActionMenu extends StatelessWidget {
     );
   }
 
+  void _handleAction(BuildContext context, String action) {
+    HapticFeedback.lightImpact();
+    switch (action) {
+      case 'rename':
+        if (onRename != null) {
+          onRename!();
+        } else {
+          showRenameDialog(
+            context,
+            playlistId: playlistId,
+            currentName: playlistName,
+            onRenamed: onRenamed,
+          );
+        }
+        break;
+      case 'toggle_source':
+        onToggleSource?.call();
+        break;
+      case 'delete':
+        if (onDelete != null) {
+          onDelete!();
+        } else {
+          showDeleteDialog(
+            context,
+            playlistId: playlistId,
+            playlistName: playlistName,
+            closeScreenOnDelete: closeScreenOnDelete,
+            onDeleted: onDeleted,
+          );
+        }
+        break;
+    }
+  }
+
+  List<PopupMenuEntry<String>> _buildMenuItems(
+    BuildContext context,
+  ) => <PopupMenuEntry<String>>[
+    const PopupMenuItem<String>(
+      value: 'rename',
+      height: 44,
+      child: Row(
+        children: [
+          Icon(Icons.edit_outlined, color: Colors.white70, size: 18),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Rename',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+    if (onToggleSource != null) ...[
+      const PopupMenuDivider(height: 1),
+      PopupMenuItem<String>(
+        value: 'toggle_source',
+        height: 44,
+        child: Row(
+          children: [
+            Icon(
+              isSpotifyImport
+                  ? Icons.person_outline_rounded
+                  : Icons.sync_alt_rounded,
+              color: isSpotifyImport ? Colors.white70 : const Color(0xFF1DB954),
+              size: 18,
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                isSpotifyImport ? 'Set as Personal' : 'Set as Spotify',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: isSpotifyImport
+                      ? Colors.white
+                      : const Color(0xFF1DB954),
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ],
+    const PopupMenuDivider(height: 1),
+    const PopupMenuItem<String>(
+      value: 'delete',
+      height: 44,
+      child: Row(
+        children: [
+          Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Delete',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.redAccent,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
+    final menu = customTrigger != null
+        ? PopupMenuButton<String>(
+            tooltip: 'More options',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            offset: const Offset(0, 40),
+            onSelected: (action) => _handleAction(context, action),
+            itemBuilder: _buildMenuItems,
+            child: customTrigger,
+          )
+        : PopupMenuButton<String>(
+            tooltip: 'More options',
+            icon: Icon(
+              Icons.more_vert_rounded,
+              color: iconColor ?? Colors.white54,
+              size: iconSize,
+            ),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            splashRadius: 20,
+            offset: const Offset(0, 40),
+            onSelected: (action) => _handleAction(context, action),
+            itemBuilder: _buildMenuItems,
+          );
+
     return Theme(
       data: Theme.of(context).copyWith(
         dividerColor: Colors.white.withValues(alpha: 0.08),
@@ -172,137 +314,7 @@ class PlaylistActionMenu extends StatelessWidget {
           ),
         ),
       ),
-      child: PopupMenuButton<String>(
-        tooltip: 'More options',
-        icon:
-            customTrigger ??
-            Icon(
-              Icons.more_vert_rounded,
-              color: iconColor ?? Colors.white54,
-              size: iconSize,
-            ),
-        splashRadius: 20,
-        offset: const Offset(0, 40),
-        onSelected: (action) {
-          HapticFeedback.lightImpact();
-          switch (action) {
-            case 'rename':
-              if (onRename != null) {
-                onRename!();
-              } else {
-                showRenameDialog(
-                  context,
-                  playlistId: playlistId,
-                  currentName: playlistName,
-                  onRenamed: onRenamed,
-                );
-              }
-              break;
-            case 'toggle_source':
-              onToggleSource?.call();
-              break;
-            case 'delete':
-              if (onDelete != null) {
-                onDelete!();
-              } else {
-                showDeleteDialog(
-                  context,
-                  playlistId: playlistId,
-                  playlistName: playlistName,
-                  closeScreenOnDelete: closeScreenOnDelete,
-                  onDeleted: onDeleted,
-                );
-              }
-              break;
-          }
-        },
-        itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-          const PopupMenuItem<String>(
-            value: 'rename',
-            height: 44,
-            child: Row(
-              children: [
-                Icon(Icons.edit_outlined, color: Colors.white70, size: 18),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Rename',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (onToggleSource != null) ...[
-            const PopupMenuDivider(height: 1),
-            PopupMenuItem<String>(
-              value: 'toggle_source',
-              height: 44,
-              child: Row(
-                children: [
-                  Icon(
-                    isSpotifyImport
-                        ? Icons.person_outline_rounded
-                        : Icons.sync_alt_rounded,
-                    color: isSpotifyImport
-                        ? Colors.white70
-                        : const Color(0xFF1DB954),
-                    size: 18,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      isSpotifyImport ? 'Set as Personal' : 'Set as Spotify',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: isSpotifyImport
-                            ? Colors.white
-                            : const Color(0xFF1DB954),
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          const PopupMenuDivider(height: 1),
-          const PopupMenuItem<String>(
-            value: 'delete',
-            height: 44,
-            child: Row(
-              children: [
-                Icon(
-                  Icons.delete_outline_rounded,
-                  color: Colors.redAccent,
-                  size: 18,
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Delete',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.redAccent,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+      child: menu,
     );
   }
 }

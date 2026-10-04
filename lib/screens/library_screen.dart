@@ -1217,6 +1217,11 @@ class _LibraryScreenState extends State<LibraryScreen>
                       size: 36,
                     ),
                     tooltip: 'Play playlist',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 40,
+                      minHeight: 40,
+                    ),
                     onPressed: songs.isEmpty
                         ? null
                         : () {
@@ -1224,6 +1229,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                             _musicService.playCustomPlaylist(id, 0);
                           },
                   ),
+                  const SizedBox(width: 4),
                   PlaylistActionMenu(
                     key: ValueKey('playlist_more_$id'),
                     playlistId: id,
@@ -2144,6 +2150,11 @@ class _LibraryScreenState extends State<LibraryScreen>
                               size: 36,
                             ),
                             tooltip: 'Play playlist',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 40,
+                              minHeight: 40,
+                            ),
                             onPressed: songs.isEmpty
                                 ? null
                                 : () {
@@ -2151,6 +2162,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                                     _musicService.playCustomPlaylist(id, 0);
                                   },
                           ),
+                          const SizedBox(width: 4),
                           PlaylistActionMenu(
                             key: ValueKey('spotify_playlist_more_$id'),
                             playlistId: id,
