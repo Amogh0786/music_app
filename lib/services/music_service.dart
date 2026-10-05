@@ -113,6 +113,11 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _initAudioPlayer();
     if (!kIsWeb) {
       _initAudioSession();
+      WidgetUpdateService().initWidgetActionHandler(
+        onToggleShuffle: toggleShuffle,
+        onToggleRepeat: toggleRepeat,
+        onPlayPlaylist: playPlaylistFromWidget,
+      );
     }
     loadDownloadedSongs();
     WidgetsBinding.instance.addObserver(this);
@@ -886,6 +891,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         player.positionStream.listen((pos) {
           if (identical(player, _activePlayer)) {
             _positionBroadcaster.add(pos);
+            _syncWidgetPlayback();
           }
         });
         player.durationStream.listen((dur) {
@@ -5731,15 +5737,113 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _standbyBufferedTrackId = id;
   }
 
+  List<Map<String, String>> _getWidgetTopPlaylists() {
+    final prefs = PreferencesService();
+    final topArtist = prefs.mostPlayedArtist;
+    final primaryArtist = topArtist.isNotEmpty ? topArtist : 'Trending Hits';
+
+    final List<Map<String, String>> result = [
+      {'id': 'daily_mix', 'title': 'Daily\nMix', 'query': primaryArtist},
+      {'id': 'favorites', 'title': 'Favorites', 'query': 'favorites'},
+      {'id': 'most_played', 'title': 'Most\nPlayed', 'query': 'most_played'},
+      {'id': 'history', 'title': 'History\nReplay', 'query': 'history'},
+    ];
+
+    if (_customPlaylists.isNotEmpty) {
+      final cp = _customPlaylists.first;
+      final cpName = (cp['name'] as String?) ?? 'My Mix';
+      final formattedName = cpName.length > 8 && !cpName.contains('\n')
+          ? cpName.replaceAll(' ', '\n')
+          : cpName;
+      result.add({
+        'id': 'custom_0',
+        'title': formattedName,
+        'query': 'custom_0',
+      });
+    } else {
+      result.add({
+        'id': 'chill_vibes',
+        'title': 'Chill\nVibes',
+        'query': 'Acoustic Pop Melodies',
+      });
+    }
+
+    return result;
+  }
+
+  Future<void> playPlaylistFromWidget(
+    int index,
+    String id,
+    String query,
+  ) async {
+    try {
+      switch (id) {
+        case 'favorites':
+          if (_likedSongs.isNotEmpty) {
+            await playLikedSong(_likedSongs.first);
+          }
+          break;
+        case 'most_played':
+          final mostPlayed = PreferencesService().mostPlayedSongs;
+          if (mostPlayed.isNotEmpty) {
+            await playMostPlayedSong(mostPlayed.first);
+          }
+          break;
+        case 'history':
+          final history = PreferencesService().listeningHistory;
+          if (history.isNotEmpty) {
+            await playHistorySong(history.first);
+          }
+          break;
+        case 'custom_0':
+          if (_customPlaylists.isNotEmpty) {
+            final cp = _customPlaylists.first;
+            final playlistId = (cp['id'] as String?) ?? '';
+            if (playlistId.isNotEmpty) {
+              await playCustomPlaylist(playlistId, 0);
+            }
+          }
+          break;
+        default:
+          final tracks = await searchSongs(
+            query.isNotEmpty ? query : 'Top Hits',
+          );
+          if (tracks.isNotEmpty) {
+            await playPlaylist(tracks, 0);
+          }
+          break;
+      }
+    } catch (e) {
+      debugPrint('[WidgetUpdateService] Error launching playlist: $e');
+    }
+  }
+
   void _syncWidgetPlayback() {
     if (kIsWeb) return;
     final song = _currentSong;
+    final palette = AlbumColorDeriver.getPalette(
+      song,
+      fallbackDominant: _dominantColor,
+      fallbackVibrant: _vibrantColor,
+      fallbackDarkVibrant: _darkVibrantColor,
+    );
+
     WidgetUpdateService().updateWidget(
-      title: song?.title ?? 'DilSe Music',
-      artist: song?.author ?? 'Tap to play',
+      title: song != null
+          ? CanonicalSongDedup.cleanTitle(song.title)
+          : 'DilSe Music',
+      artist: song != null
+          ? CanonicalSongDedup.cleanArtist(song.author)
+          : 'Tap to play',
       isPlaying: isPlaying,
       artworkPath: song != null ? _artworkMap[song.id.value] : null,
       trackId: song?.id.value,
+      dominantColor: palette.dominant.toARGB32(),
+      position: position,
+      duration: duration,
+      isShuffle: _isShuffle,
+      isRepeat: _loopMode != LoopMode.off,
+      topPlaylists: _getWidgetTopPlaylists(),
     );
   }
   // ────────────────────────────────────────────────────────────────────────────

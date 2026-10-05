@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,7 +23,7 @@ void main() {
     });
 
     test(
-      'updateWidget saves playback state to SharedPreferences and invokes native channel',
+      'updateWidget saves playback state, dominant color, and progress to SharedPreferences and invokes native channel',
       () async {
         debugDefaultTargetPlatformOverride = TargetPlatform.android;
 
@@ -33,16 +34,39 @@ void main() {
           isPlaying: true,
           artworkPath: '/data/user/0/com.example.music_app/cache/artwork.jpg',
           trackId: 'track_123',
+          dominantColor: 0xFFFF5722,
+          position: const Duration(minutes: 1, seconds: 24),
+          duration: const Duration(minutes: 3, seconds: 45),
+          isShuffle: true,
+          isRepeat: false,
+          topPlaylists: [
+            {'id': 'daily_mix', 'title': 'Daily\nMix', 'query': 'Keeravaani'},
+            {'id': 'favorites', 'title': 'Favorites', 'query': 'favorites'},
+          ],
         );
 
         final prefs = await SharedPreferences.getInstance();
         expect(prefs.getString('widget_title'), equals('Naatu Naatu'));
         expect(prefs.getString('widget_artist'), equals('MM Keeravaani'));
         expect(prefs.getBool('widget_is_playing'), isTrue);
+        expect(prefs.getBool('widget_is_shuffle'), isTrue);
+        expect(prefs.getBool('widget_is_repeat'), isFalse);
         expect(
           prefs.getString('widget_artwork_path'),
           equals('/data/user/0/com.example.music_app/cache/artwork.jpg'),
         );
+        expect(prefs.getInt('widget_dominant_color'), equals(0xFFFF5722));
+        expect(prefs.getInt('widget_position_ms'), equals(84000));
+        expect(prefs.getInt('widget_duration_ms'), equals(225000));
+        expect(prefs.getString('widget_position_text'), equals('1:24'));
+        expect(prefs.getString('widget_duration_text'), equals('3:45'));
+
+        final rawPlaylists = prefs.getString('widget_top_playlists_json');
+        expect(rawPlaylists, isNotNull);
+        final decoded = json.decode(rawPlaylists!) as List;
+        expect(decoded.length, equals(2));
+        expect(decoded.first['id'], equals('daily_mix'));
+
         expect(channelCalls.length, equals(1));
         expect(channelCalls.first.method, equals('updateWidget'));
 
@@ -82,6 +106,69 @@ void main() {
           trackId: 'same_id',
         );
         expect(channelCalls.length, equals(2));
+
+        debugDefaultTargetPlatformOverride = null;
+      },
+    );
+
+    test(
+      'initWidgetActionHandler handles incoming shuffle, repeat, and playlist actions',
+      () async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+        bool shuffleToggled = false;
+        bool repeatToggled = false;
+        String? playedPlaylistId;
+
+        final service = WidgetUpdateService();
+        service.initWidgetActionHandler(
+          onToggleShuffle: () => shuffleToggled = true,
+          onToggleRepeat: () => repeatToggled = true,
+          onPlayPlaylist: (index, id, query) async {
+            playedPlaylistId = id;
+          },
+        );
+
+        // Simulate native incoming calls
+        final binding = TestDefaultBinaryMessengerBinding.instance;
+        final codec = const StandardMethodCodec();
+
+        // 1. Toggle Shuffle
+        final byteDataShuffle = codec.encodeMethodCall(
+          const MethodCall('toggleShuffle'),
+        );
+        await binding.defaultBinaryMessenger.handlePlatformMessage(
+          'com.example.music_app/widget',
+          byteDataShuffle,
+          (ByteData? reply) {},
+        );
+        expect(shuffleToggled, isTrue);
+
+        // 2. Toggle Repeat
+        final byteDataRepeat = codec.encodeMethodCall(
+          const MethodCall('toggleRepeat'),
+        );
+        await binding.defaultBinaryMessenger.handlePlatformMessage(
+          'com.example.music_app/widget',
+          byteDataRepeat,
+          (ByteData? reply) {},
+        );
+        expect(repeatToggled, isTrue);
+
+        // 3. Play Playlist
+        final byteDataPlaylist = codec.encodeMethodCall(
+          const MethodCall('playPlaylist', {
+            'index': 1,
+            'id': 'favorites',
+            'query': 'favorites',
+          }),
+        );
+        await binding.defaultBinaryMessenger.handlePlatformMessage(
+          'com.example.music_app/widget',
+          byteDataPlaylist,
+          (ByteData? reply) {},
+        );
+        expect(playedPlaylistId, equals('favorites'));
 
         debugDefaultTargetPlatformOverride = null;
       },
