@@ -365,30 +365,39 @@ class _MiniPlayerState extends State<MiniPlayer> {
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    child: StreamBuilder<Duration>(
-                      stream: _musicService.positionStream,
-                      builder: (context, snapshot) {
-                        final position = snapshot.data ?? Duration.zero;
-                        final duration =
-                            _musicService.duration ?? Duration.zero;
-                        double progress = 0.0;
-                        if (duration.inMilliseconds > 0) {
-                          progress =
-                              (position.inMilliseconds /
-                                      duration.inMilliseconds)
-                                  .clamp(0.0, 1.0);
-                        }
+                    child: StreamBuilder<Duration?>(
+                      stream: _musicService.durationStream,
+                      initialData: _musicService.duration,
+                      builder: (context, durSnapshot) {
+                        return StreamBuilder<Duration>(
+                          stream: _musicService.positionStream,
+                          initialData: _musicService.position,
+                          builder: (context, snapshot) {
+                            final position = snapshot.data ?? Duration.zero;
+                            final duration =
+                                durSnapshot.data ??
+                                _musicService.duration ??
+                                Duration.zero;
+                            double progress = 0.0;
+                            if (duration.inMilliseconds > 0) {
+                              progress =
+                                  (position.inMilliseconds /
+                                          duration.inMilliseconds)
+                                      .clamp(0.0, 1.0);
+                            }
 
-                        return FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: progress,
-                          child: Container(
-                            height: 2.5,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.85),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
+                            return FractionallySizedBox(
+                              alignment: Alignment.centerLeft,
+                              widthFactor: progress,
+                              child: Container(
+                                height: 2.5,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            );
+                          },
                         );
                       },
                     ),

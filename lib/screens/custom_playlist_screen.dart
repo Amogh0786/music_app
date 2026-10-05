@@ -107,8 +107,15 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
 
   String _formatDuration(Duration? d) {
     if (d == null) return '';
-    final minutes = d.inMinutes;
-    final seconds = (d.inSeconds % 60).toString().padLeft(2, '0');
+    final nonNegative = d.isNegative ? Duration.zero : d;
+    final hours = nonNegative.inHours;
+    final minutes = nonNegative.inMinutes.remainder(60);
+    final seconds = (nonNegative.inSeconds.remainder(
+      60,
+    )).toString().padLeft(2, '0');
+    if (hours > 0) {
+      return '$hours:${minutes.toString().padLeft(2, '0')}:$seconds';
+    }
     return '$minutes:$seconds';
   }
 
