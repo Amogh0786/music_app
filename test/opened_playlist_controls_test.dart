@@ -214,7 +214,7 @@ void main() {
   );
 
   testWidgets(
-    'Screen-level mini-player policy hides mini-player in opened playlist and restores it upon leaving',
+    'Screen-level mini-player policy allows mini-player in opened playlist',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1280, 800);
       tester.view.devicePixelRatio = 1.0;
@@ -261,11 +261,8 @@ void main() {
       await tester.tap(find.text('Open Playlist'));
       await tester.pumpAndSettle();
 
-      // 3. MiniPlayer policy is now hidden while playlist screen is active
-      expect(MiniPlayer.isVisible.value, isFalse);
-
-      // On CustomPlaylistScreen, no on-stage MiniPlayer is visible
-      expect(find.byType(MiniPlayer), findsNothing);
+      // 3. MiniPlayer policy remains visible while playlist screen is active
+      expect(MiniPlayer.isVisible.value, isTrue);
 
       // Verify opened playlist screen has play button intact
       expect(find.widgetWithText(ElevatedButton, 'Play'), findsOneWidget);
@@ -274,7 +271,7 @@ void main() {
       await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
       await tester.pumpAndSettle();
 
-      // 5. Leaving playlist screen restores normal mini-player visibility
+      // 5. Leaving playlist screen preserves normal mini-player visibility
       expect(MiniPlayer.isVisible.value, isTrue);
       expect(find.byType(MiniPlayer), findsOneWidget);
       expect(find.text('Open Playlist'), findsOneWidget);

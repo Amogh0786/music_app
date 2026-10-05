@@ -32,13 +32,11 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
   @override
   void initState() {
     super.initState();
-    MiniPlayer.hide();
     _musicService.addListener(_onServiceChanged);
   }
 
   @override
   void dispose() {
-    MiniPlayer.show();
     _musicService.removeListener(_onServiceChanged);
     _debounceTimer?.cancel();
     _searchController.dispose();
@@ -1322,8 +1320,12 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                   ),
               ],
 
-              // Bottom spacing
-              const SliverToBoxAdapter(child: SizedBox(height: 36)),
+              // Bottom spacing: dynamic clearance for floating MiniPlayer
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: _musicService.currentSong != null ? 96 : 40,
+                ),
+              ),
             ],
           ),
           // Floating MiniPlayer visible over playlist content when a song is playing
