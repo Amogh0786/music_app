@@ -13,6 +13,7 @@ import '../services/preferences_service.dart';
 import '../services/notification_permission_service.dart';
 import '../services/update_service.dart';
 import '../services/spotify_import_service.dart';
+import '../services/data_snapshot_service.dart';
 import '../widgets/responsive_wrapper.dart';
 
 class MainScreen extends StatefulWidget {
@@ -39,11 +40,41 @@ class _MainScreenState extends State<MainScreen> {
     MusicService().addListener(_onMusicServiceChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        _checkAutoRestore();
         _checkFirstTimeNamePrompt();
         NotificationPermissionService.promptIfNeeded(context);
         _checkAutoAppUpdate();
       }
     });
+  }
+
+  Future<void> _checkAutoRestore() async {
+    try {
+      final restored = await DataSnapshotService().autoRestoreIfEmpty();
+      if (restored && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.restore_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Welcome back! Restored your playlists & library from backup snapshot.',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Color(0xFF1DB954),
+            duration: Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[MainScreen] Auto restore check error: $e');
+    }
   }
 
   Future<void> _checkAutoAppUpdate() async {
