@@ -902,6 +902,388 @@ class DynamicArtistService {
     return [primary];
   }
 
+  /// Returns a curated 6–7 line biographical profile of the artist.
+  /// Falls back to an intelligent dynamic editorial profile if not in the curated registry.
+  String getArtistBio(String artistName) {
+    final clean = artistName.trim();
+    if (clean.isEmpty) return '';
+    final matched = findArtist(clean);
+    final canonicalName = matched?.name ?? clean;
+    final norm = PlaylistArtistFilter.normalize(canonicalName);
+
+    final curated = _artistBiographies[norm];
+    if (curated != null && curated.isNotEmpty) {
+      return curated;
+    }
+
+    // Dynamic intelligent editorial fallback (6–7 lines)
+    final genre = matched?.genre ?? 'Contemporary & Playback Music';
+    final lang = matched?.language ?? 'Multi-lingual';
+    final badge = matched?.badge ?? 'FEATURED ARTIST';
+    final films = getFilmography(canonicalName);
+    final filmHighlight = films.isNotEmpty
+        ? ' Notable soundtracks and albums include ${films.take(4).join(', ')}.'
+        : '';
+
+    return '$canonicalName is an acclaimed musical artist recognized for exceptional contributions to the $lang music landscape. '
+        'Celebrated under the badge of $badge, their repertoire spans $genre, resonating with listeners across regional and global music communities. '
+        'Their distinctive style brings rich acoustic arrangements, expressive vocal performances, and genre-blending compositions.$filmHighlight '
+        'With a rapidly growing discography and multiple streaming favorites available on DilSe, their sound continues to captivate music enthusiasts. '
+        'Explore their complete catalog of original master recordings, film collaborations, and chart-topping hits above.';
+  }
+
+  /// Curated 6–7 line biographies for top composers, directors, and vocalists.
+  static const Map<String, String> _artistBiographies = {
+    // --- Telugu ---
+    'devi sri prasad':
+        'Devi Sri Prasad (DSP) is a National Award-winning Indian composer, lyricist, and singer who revolutionized commercial South Indian cinema with his high-energy mass rhythms, dynamic brass sections, and evergreen romantic melodies. '
+        'Debuting with Devi (1999), he rose to nationwide acclaim across Telugu and Tamil cinema with landmark soundtracks like Arya, Varsham, Bommarillu, Jalsa, and Rangasthalam. '
+        'His monumental score for the global blockbuster franchise Pushpa: The Rise and Pushpa 2: The Rule earned him the National Film Award for Best Music Direction. '
+        'Over a career spanning more than two decades and over 100 films, DSP has accumulated numerous Filmfare and SIIMA trophies. '
+        'A consummate live performer, he is as renowned for his electrifying stadium concerts as he is for his genre-defining dance hooks. '
+        'His versatile catalog remains an enduring cornerstone of contemporary South Indian pop culture.',
+    'dsp':
+        'Devi Sri Prasad (DSP) is a National Award-winning Indian composer, lyricist, and singer who revolutionized commercial South Indian cinema with his high-energy mass rhythms, dynamic brass sections, and evergreen romantic melodies. '
+        'Debuting with Devi (1999), he rose to nationwide acclaim across Telugu and Tamil cinema with landmark soundtracks like Arya, Varsham, Bommarillu, Jalsa, and Rangasthalam. '
+        'His monumental score for the global blockbuster franchise Pushpa: The Rise and Pushpa 2: The Rule earned him the National Film Award for Best Music Direction. '
+        'Over a career spanning more than two decades and over 100 films, DSP has accumulated numerous Filmfare and SIIMA trophies. '
+        'A consummate live performer, he is as renowned for his electrifying stadium concerts as he is for his genre-defining dance hooks. '
+        'His versatile catalog remains an enduring cornerstone of contemporary South Indian pop culture.',
+    'thaman s':
+        'Thaman S is an acclaimed Indian music composer and drummer who reshaped the sonic identity of contemporary Telugu and Tamil cinema through thumping EDM basslines, live orchestral brass, and viral mass anthems. '
+        'Beginning his musical journey as a rhythmist under legendary directors, his breakthrough with Kick and Dookudu established him as a premier hitmaker. '
+        'His epochal soundtrack for Ala Vaikunthapurramuloo shattered digital streaming records globally, earning him the prestigious National Film Award for Best Music Direction. '
+        'Thaman\'s high-octane background scores in films like Sarrainodu, Akhanda, and Bheemla Nayak are celebrated for their visceral theatrical energy. '
+        'Blending traditional Indian percussion with cutting-edge electronic synthesizers, he consistently delivers chart-topping singles. '
+        'He stands as one of the most prolific and technically adept music producers in Indian cinema.',
+    'thaman':
+        'Thaman S is an acclaimed Indian music composer and drummer who reshaped the sonic identity of contemporary Telugu and Tamil cinema through thumping EDM basslines, live orchestral brass, and viral mass anthems. '
+        'Beginning his musical journey as a rhythmist under legendary directors, his breakthrough with Kick and Dookudu established him as a premier hitmaker. '
+        'His epochal soundtrack for Ala Vaikunthapurramuloo shattered digital streaming records globally, earning him the prestigious National Film Award for Best Music Direction. '
+        'Thaman\'s high-octane background scores in films like Sarrainodu, Akhanda, and Bheemla Nayak are celebrated for their visceral theatrical energy. '
+        'Blending traditional Indian percussion with cutting-edge electronic synthesizers, he consistently delivers chart-topping singles. '
+        'He stands as one of the most prolific and technically adept music producers in Indian cinema.',
+    'sid sriram':
+        'Sid Sriram is an Indian-American singer, songwriter, and composer who seamlessly bridges the intricate worlds of South Indian Carnatic classical music with modern R&B, soul, and contemporary film playback. '
+        'Raised in California and an alumnus of Berklee College of Music, he was introduced to Indian cinema by A.R. Rahman with the breakthrough song \'Adiye\' from Kadal. '
+        'His deeply emotive vocal timbre and improvisational gamakas propelled him to superstardom with viral anthems like \'Inkem Inkem\', \'Samajavaragamana\', \'Srivalli\', and \'Kannaana Kanney\'. '
+        'Beyond film playback, Sid has released critically acclaimed independent albums and performed at premier international festivals including Coachella. '
+        'His unique ability to infuse spiritual classical nuances into urban pop ballads has redefined the sound of modern Indian romantic music. '
+        'He remains one of the most sought-after vocalists across South Asian music.',
+    'anurag kulkarni':
+        'Anurag Kulkarni is a celebrated Indian playback singer acclaimed for his resonant vocal power, emotional depth, and versatility across Telugu cinema. '
+        'Rising to fame as the winner of Super Singer season 8, he swiftly transitioned into mainstream cinema with standout performances that captured hearts across the Telugu states. '
+        'His soul-stirring rendition of \'Asha Pasham\' from Care of Kancharapalem and festive mega-hits like \'Ramuloo Ramulaa\' and \'Pilla Raa\' showcased his extraordinary dynamic range. '
+        'Frequently collaborating with top composers including Thaman S, Devi Sri Prasad, and Mickey J Meyer, Anurag brings authenticity to rural folk as effortlessly as modern urban melodies. '
+        'He has won multiple Filmfare and SIIMA awards for his evocative playback singing. '
+        'His distinct baritone voice continues to define heartfelt contemporary cinema.',
+    'ram miriyala':
+        'Ram Miriyala is a trailblazing Telugu indie musician, composer, and playback singer celebrated for his grassroots folk-rock aesthetic, candid storytelling, and vibrant vocal delivery. '
+        'First capturing public imagination as the lead vocalist of ChowRaasta, his viral independent tracks like \'Oorellipota Mama\' and \'Maya\' struck a deep chord with youth across Telangana and Andhra Pradesh. '
+        'His transition into mainstream film music produced unstoppable viral chartbusters, notably \'Chitti\' from Jathi Ratnalu, \'Tillu Anna DJ Pedithe\', and \'Dhoom Dhaam\' from Dasara. '
+        'Ram\'s signature sound marries earthy rural folk cadence with acoustic indie guitars and infectious rhythmic bounce. '
+        'He represents a new generation of self-made regional artists revitalizing local dialects and indie culture. '
+        'His energetic tracks remain instant crowd favorites across concerts and streaming charts.',
+    'mm keeravaani':
+        'M.M. Keeravaani is an Academy Award and Golden Globe-winning maestro, classical composer, and playback singer who stands as a titan of Indian cinema. '
+        'Over an illustrious career spanning three decades and more than 200 films, he has composed timeless scores in Telugu, Hindi, Tamil, and Malayalam. '
+        'His legendary partnership with visionary filmmaker S.S. Rajamouli yielded cinematic landmarks including Magadheera, Eega, the Baahubali duology, and RRR. '
+        'The viral global phenomenon \'Naatu Naatu\' made history by winning the Oscar for Best Original Song, elevating Indian film music onto the highest international stage. '
+        'Keeravaani\'s compositions are distinguished by rich classical counterpoint, dramatic orchestral storytelling, and profound devotional serenity. '
+        'He is a recipient of the Padma Shri and multiple National Film Awards.',
+    'keeravani':
+        'M.M. Keeravaani is an Academy Award and Golden Globe-winning maestro, classical composer, and playback singer who stands as a titan of Indian cinema. '
+        'Over an illustrious career spanning three decades and more than 200 films, he has composed timeless scores in Telugu, Hindi, Tamil, and Malayalam. '
+        'His legendary partnership with visionary filmmaker S.S. Rajamouli yielded cinematic landmarks including Magadheera, Eega, the Baahubali duology, and RRR. '
+        'The viral global phenomenon \'Naatu Naatu\' made history by winning the Oscar for Best Original Song, elevating Indian film music onto the highest international stage. '
+        'Keeravaani\'s compositions are distinguished by rich classical counterpoint, dramatic orchestral storytelling, and profound devotional serenity. '
+        'He is a recipient of the Padma Shri and multiple National Film Awards.',
+    'mickey j meyer':
+        'Mickey J Meyer is an acclaimed Indian music composer known for introducing a fresh, breezy, and youthful acoustic soundscape to contemporary Telugu cinema. '
+        'A graduate of the prestigious Trinity College of Music in London, he established his signature style with lush piano chords, string arrangements, and acoustic guitar textures. '
+        'His breakthrough soundtracks for Happy Days and Kotha Bangaru Lokam became cultural touchstones for an entire generation of college students. '
+        'He continued his artistic triumph with celebrated scores like Leader, SVSC, A Aa, and the biographical epic Mahanati, earning multiple Filmfare Awards. '
+        'Mickey\'s music is marked by gentle melodies, clean orchestral harmonies, and deeply nostalgic emotional undertones. '
+        'He remains one of the most respected purveyors of melodic cinema in South India.',
+    'sp balasubrahmanyam':
+        'Sripathi Panditaradhyula Balasubrahmanyam (SPB) was a legendary Indian playback singer, composer, and actor whose peerless career spanned over five decades with more than 40,000 recorded songs across 16 languages. '
+        'Recipient of six National Film Awards, the Padma Shri, Padma Bhushan, and Padma Vibhushan, SPB was the definitive voice for generations of icons across Indian cinema. '
+        'Renowned for his astonishing breath control, impeccable diction, and infectious expressive joy, he collaborated with maestros from Ilaiyaraaja to A.R. Rahman. '
+        'His historic recordings in Sankarabharanam, Saagara Sangamam, Ek Duuje Ke Liye, and Keladi Kanmani remain gold standards in world vocal music. '
+        'SPB\'s profound musicality, warmth, and generous spirit made him a revered cultural ambassador. '
+        'His timeless catalog lives on as an enduring cornerstone of Indian musical heritage.',
+    'spb':
+        'Sripathi Panditaradhyula Balasubrahmanyam (SPB) was a legendary Indian playback singer, composer, and actor whose peerless career spanned over five decades with more than 40,000 recorded songs across 16 languages. '
+        'Recipient of six National Film Awards, the Padma Shri, Padma Bhushan, and Padma Vibhushan, SPB was the definitive voice for generations of icons across Indian cinema. '
+        'Renowned for his astonishing breath control, impeccable diction, and infectious expressive joy, he collaborated with maestros from Ilaiyaraaja to A.R. Rahman. '
+        'His historic recordings in Sankarabharanam, Saagara Sangamam, Ek Duuje Ke Liye, and Keladi Kanmani remain gold standards in world vocal music. '
+        'SPB\'s profound musicality, warmth, and generous spirit made him a revered cultural ambassador. '
+        'His timeless catalog lives on as an enduring cornerstone of Indian musical heritage.',
+    'ks chithra':
+        'Krishnan Nair Shantakumari Chithra, revered across the subcontinent as the \'Nightingale of South India\' and \'Chinna Kuyil\', is a six-time National Film Award-winning playback singer and Carnatic exponent. '
+        'With an extraordinary legacy of over 25,000 recorded songs across Indian and foreign languages, her crystal-pure voice has graced cinema for four decades. '
+        'Her historic collaborations with Ilaiyaraaja, A.R. Rahman, and M.M. Keeravaani produced timeless classics across Malayalam, Tamil, Telugu, Kannada, and Hindi. '
+        'Honored with the Padma Bhushan and Padma Shri, Chithra\'s pitch-perfect precision and emotional nuance remain unmatched. '
+        'From delicate classical ragas to soaring cinematic ballads, she traverses musical boundaries with effortless grace. '
+        'She is universally celebrated as one of India\'s greatest living vocal treasures.',
+    'chithra':
+        'Krishnan Nair Shantakumari Chithra, revered across the subcontinent as the \'Nightingale of South India\' and \'Chinna Kuyil\', is a six-time National Film Award-winning playback singer and Carnatic exponent. '
+        'With an extraordinary legacy of over 25,000 recorded songs across Indian and foreign languages, her crystal-pure voice has graced cinema for four decades. '
+        'Her historic collaborations with Ilaiyaraaja, A.R. Rahman, and M.M. Keeravaani produced timeless classics across Malayalam, Tamil, Telugu, Kannada, and Hindi. '
+        'Honored with the Padma Bhushan and Padma Shri, Chithra\'s pitch-perfect precision and emotional nuance remain unmatched. '
+        'From delicate classical ragas to soaring cinematic ballads, she traverses musical boundaries with effortless grace. '
+        'She is universally celebrated as one of India\'s greatest living vocal treasures.',
+    'mangli':
+        'Mangli (Satyavathi Rathod) is a dynamic Indian playback singer, television presenter, and cultural icon renowned for her spirited Banjara and Telangana folk anthems. '
+        'With electrifying vocals and charismatic energy, she popularized traditional folk celebrations through viral Bathukamma and Bonalu festival tracks. '
+        'In mainstream cinema, her hits including \'Saranga Dariya\' from Love Story, \'Ramuloo Ramulaa\', and \'Jwala Reddy\' achieved hundreds of millions of streams, celebrating rural roots on the global stage. '
+        'Her authentic rustic cadences and fearless stage performances have made her a household name in Telugu culture. '
+        'Mangli stands as a pioneering vocal force connecting heritage folk music with modern cinematic pop.',
+    'sunitha':
+        'Sunitha Upadrashta is an acclaimed Indian playback singer, dubbing artist, and television host celebrated for her velvety melodious voice and classical finesse in Telugu cinema. '
+        'Winner of nine state Nandi Awards and two Filmfare Awards, Sunitha has voiced hundreds of iconic romantic songs and lent her voice to leading heroines across three decades. '
+        'Her crystal-clear pronunciation and expressive emotional cadence make her one of the most respected vocalists in South India. '
+        'From evergreen duets to serene devotional albums, her vocal warmth resonates deeply across generations of music lovers. '
+        'She continues to be an inspiring mentor and classical icon in the South Indian music fraternity.',
+    'karthik':
+        'Karthik is a versatile Indian playback singer and composer celebrated for his silky vocal texture, effortless high register, and romantic chartbusters across Tamil, Telugu, and Malayalam cinema. '
+        'Mentored by A.R. Rahman, Karthik has performed thousands of memorable songs under legendary composers like Harris Jayaraj, Ilaiyaraaja, and Yuvan Shankar Raja, winning several Filmfare and state awards. '
+        'His voice became the definitive soundtrack for college romance in films like Orange, Happy Days, Kotha Bangaru Lokam, and Ghajini. '
+        'With a smooth, contemporary vocal style and impeccable melodic phrasing, he bridges acoustic pop with soulful film melodies. '
+        'His songs remain perpetual favorites on streaming and radio channels.',
+    'haricharan':
+        'Haricharan is an Indian playback singer and Carnatic classical musician who has contributed extensively to Tamil, Telugu, and Malayalam film music. '
+        'Trained under stalwart classical masters, he made his film debut in Kaadhal (2004) under Joshua Sridhar with multiple hit songs, instantly receiving critical praise. '
+        'He has since delivered monumental tracks for A.R. Rahman, Santhosh Narayanan, and Harris Jayaraj, notably \'Unakkenna Venum Sollu\' from Yennai Arindhaal. '
+        'His rich timbre, expressive microtonal nuances, and effortless classical ornamentation make him a standout interpreter of emotional ballads. '
+        'Haricharan regularly performs worldwide in prestigious Carnatic concerts and multi-genre live tours.',
+
+    // --- Tamil ---
+    'anirudh ravichander':
+        'Anirudh Ravichander is a powerhouse Indian composer, singer, and producer widely celebrated as the rockstar of modern South Indian and Hindi cinema. '
+        'Bursting onto the international scene with the viral phenomenon \'Why This Kolaveri Di\', he revolutionized film soundtracks with cutting-edge EDM, trap beats, and soaring rock guitars. '
+        'His phenomenal discography features historic blockbusters including Master, Vikram, Jailer, Leo, Jawan, and Devara, regularly generating billions of streams. '
+        'Anirudh\'s distinctive fusion of infectious electronic hooks, stadium-scale crowd vocals, and atmospheric background scores commands a massive youth following. '
+        'Renowned for high-energy stadium tours and unmatched chart domination, he defines the contemporary commercial sound. '
+        'He stands as one of the most influential and bankable music directors in India today.',
+    'anirudh':
+        'Anirudh Ravichander is a powerhouse Indian composer, singer, and producer widely celebrated as the rockstar of modern South Indian and Hindi cinema. '
+        'Bursting onto the international scene with the viral phenomenon \'Why This Kolaveri Di\', he revolutionized film soundtracks with cutting-edge EDM, trap beats, and soaring rock guitars. '
+        'His phenomenal discography features historic blockbusters including Master, Vikram, Jailer, Leo, Jawan, and Devara, regularly generating billions of streams. '
+        'Anirudh\'s distinctive fusion of infectious electronic hooks, stadium-scale crowd vocals, and atmospheric background scores commands a massive youth following. '
+        'Renowned for high-energy stadium tours and unmatched chart domination, he defines the contemporary commercial sound. '
+        'He stands as one of the most influential and bankable music directors in India today.',
+    'ar rahman':
+        'Allahrakha Rahman, universally revered as the \'Mozart of Madras\', is a two-time Academy Award, two-time Grammy Award, and six-time National Film Award-winning maestro and cultural icon. '
+        'Since his groundbreaking debut in Roja (1992), Rahman transformed Indian cinema by pioneering the fusion of Eastern classical traditions with electronic synthesizers and Western symphonic palettes. '
+        'His illustrious catalog features epochal soundtracks including Bombay, Dil Se.., Lagaan, Slumdog Millionaire, Rockstar, and Ponniyin Selvan. '
+        'Honored with the Padma Bhushan, Rahman\'s spiritual Sufi compositions and sonic innovations reshaped world music. '
+        'A visionary orchestrator and producer, he continually pushes acoustic frontiers while fostering global cross-cultural collaborations. '
+        'He remains one of the world\'s all-time greatest and most celebrated cinematic composers.',
+    'a r rahman':
+        'Allahrakha Rahman, universally revered as the \'Mozart of Madras\', is a two-time Academy Award, two-time Grammy Award, and six-time National Film Award-winning maestro and cultural icon. '
+        'Since his groundbreaking debut in Roja (1992), Rahman transformed Indian cinema by pioneering the fusion of Eastern classical traditions with electronic synthesizers and Western symphonic palettes. '
+        'His illustrious catalog features epochal soundtracks including Bombay, Dil Se.., Lagaan, Slumdog Millionaire, Rockstar, and Ponniyin Selvan. '
+        'Honored with the Padma Bhushan, Rahman\'s spiritual Sufi compositions and sonic innovations reshaped world music. '
+        'A visionary orchestrator and producer, he continually pushes acoustic frontiers while fostering global cross-cultural collaborations. '
+        'He remains one of the world\'s all-time greatest and most celebrated cinematic composers.',
+    'sai abhyankkar':
+        'Sai Abhyankkar is a sensationally talented Indian indie singer, composer, and multi-instrumentalist who emerged as a Gen-Z pop prodigy. '
+        'His viral breakout hits \'Katchi Sera\' and \'Aasa Kooda\' shattered records across streaming platforms and social media, blending contemporary Afrobeat rhythms, jazz chords, and Tamil melodies. '
+        'Hailing from a celebrated musical lineage, his organic blend of infectious grooves and effortless falsetto singing captivates millions of young listeners. '
+        'With slick vocal delivery and inventive musicality, he has swiftly become one of the most exciting young creative forces in South Indian music. '
+        'He represents the vanguard of independent music making unprecedented waves in mainstream Indian popular culture.',
+    'yuvan shankar raja':
+        'Yuvan Shankar Raja, fondly hailed as the \'King of BGM\' and youth icon, is a versatile Indian composer and singer in Tamil cinema. '
+        'The younger son of maestro Ilaiyaraaja, Yuvan carved his own distinct legacy by pioneering hip-hop, electronic synth-pop, and melancholic lo-fi vibes in South Indian film music. '
+        'Soundtracks like 7G Rainbow Colony, Pudhupettai, Paiyaa, Mankatha, and Super Deluxe established his reputation for unforgettable background scores and moody, heartfelt tracks. '
+        'A multi-instrumentalist with an instinct for evocative melodies, his music captures youthful longing and urban angst like few others. '
+        'Yuvan\'s raw vocal delivery and atmospheric soundscapes enjoy a passionate, generational cult following. '
+        'He stands as one of Tamil cinema\'s most beloved and inventive musical mavericks.',
+    'santhosh narayanan':
+        'Santhosh Narayanan is an innovative Indian music composer and producer celebrated for his raw, boundary-pushing acoustic sound, rustic folk arrangements, and avant-garde cinematic storytelling. '
+        'Debuting with Attakathi (2012), he quickly established a reputation for spotlighting indigenous folk percussion, raw street instruments, and independent voices. '
+        'His standout soundtracks include Pizza, Madras, Kabali, Kaala, Karnan, Sarpatta Parambarai, and the pan-Indian sci-fi epic Kalki 2898 AD. '
+        'Santhosh deftly blends traditional Gaana and Oppari roots with international jazz, blues, and symphonic brass. '
+        'His unconventional arrangements and organic sound engineering have earned him widespread critical and commercial acclaim. '
+        'He is recognized as one of the most creatively fearless composers in modern Indian cinema.',
+    'harris jayaraj':
+        'Harris Jayaraj is a celebrated Indian music director renowned for his cosmopolitan pop aesthetics, breezy romantic melodies, and innovative synth programming in Tamil and Telugu cinema. '
+        'Debuting with Minnale (2001), he delivered an instant golden streak of iconic albums including Kaakha Kaakha, Ghajini, Anniyan, Vettaiyaadu Vilaiyaadu, and Orange. '
+        'Known for blending slick Western pop rhythms, acoustic nylon guitars, and jazz chords with catchy vocalise hooks, his sound became the quintessential romance soundtrack of the 2000s. '
+        'He has won multiple Filmfare Awards South and state film accolades for his trendsetting musical production. '
+        'Harris\'s ability to craft timeless, headphone-friendly audio mixes commands enduring nostalgic devotion. '
+        'His melodies remain evergreen fixtures on streaming playlists across South India.',
+    'ilaiyaraaja':
+        'Ilaiyaraaja, venerated as \'Isaignani\' (the Musical Genius), is an Indian composer, orchestrator, and multi-instrumentalist who stands among the greatest musical minds in history. '
+        'Having composed over 7,000 songs and scored more than 1,000 films across five decades, he pioneered the synthesis of authentic Tamil folk idioms with Western classical counterpoint. '
+        'Recipient of five National Film Awards and the Padma Vibhushan, he was the first Asian composer to write a full symphony for the Royal Philharmonic Orchestra. '
+        'His breathtaking scores for Nayakan, Thalapathi, Geethanjali, and Sagarasangamam are studied globally for their harmonic genius. '
+        'His music defined the emotional fabric of multiple generations across South India. '
+        'He remains a monumental figure whose orchestral mastery is celebrated worldwide.',
+    'gv prakash kumar':
+        'G.V. Prakash Kumar is an acclaimed Indian music composer, playback singer, and actor in Tamil cinema. '
+        'Making his debut at age 19 with Veyil, he established a stellar career with critical masterworks such as Aadukalam, Mayakkam Enna, Asuran, and Soorarai Pottru, for which he won the National Film Award for Best Music Direction. '
+        'Nephew to A.R. Rahman, G.V. Prakash has developed his own unmistakable musical vocabulary characterized by acoustic warmth, earthy rural folk, and infectious urban hooks. '
+        'As a playback singer and actor, he maintains a high-energy creative output with chartbusters across Tamil and Telugu. '
+        'He continues to be one of the most prolific and creatively versatile artists in South India.',
+
+    // --- Hindi / Bollywood ---
+    'arijit singh':
+        'Arijit Singh is a multiple National Film Award-winning Indian playback singer and composer, widely celebrated as the definitive voice of modern Indian romance and soul. '
+        'Following his epochal breakthrough with \'Tum Hi Ho\' from Aashiqui 2, his raw, melancholic, and deeply resonant timbre came to dominate Indian cinema and digital streaming charts. '
+        'Trained rigorously in Indian classical music, he effortlessly infuses complex vocal nuances into contemporary pop, indie folk, and rock ballads. '
+        'He is consistently ranked as the most-streamed Indian artist globally, with an unprecedented catalog of beloved songs across Hindi and Bengali. '
+        'Renowned for his grounded humility and captivating live acoustic performances, Arijit continues to inspire a new generation of musicians. '
+        'His emotive vocal artistry has defined the soundtrack of contemporary Indian youth.',
+    'pritam':
+        'Pritam Chakraborty is a prolific Bollywood composer and music producer responsible for defining the commercial sound of modern Indian cinema for over two decades. '
+        'With an unmatched track record of chart-topping soundtracks from Dhoom, Jab We Met, Love Aaj Kal, Yeh Jawaani Hai Deewani, Ae Dil Hai Mushkil, to Brahmāstra, he is the undisputed architect of Bollywood pop. '
+        'Pritam\'s sound is characterized by infectious melodic hooks, driving pop-rock percussion, and soulful Sufi influences. '
+        'Winner of multiple National Film Awards and Filmfare trophies, his studio JAM8 has mentored numerous rising singers and composers. '
+        'His songs are permanent fixtures in Indian celebrations, parties, and romantic playlists.',
+    'shreya ghoshal':
+        'Shreya Ghoshal is a five-time National Film Award-winning playback singer universally hailed as the melody queen of modern Indian music. '
+        'Making an extraordinary debut at age sixteen in Sanjay Leela Bhansali\'s Devdas, she immediately captured nationwide acclaim with her sweet, pristine vocal timbre. '
+        'Her prolific repertoire spans more than twenty languages, delivering iconic chartbusters in Hindi, Telugu, Tamil, Bengali, and Malayalam. '
+        'With classical training and effortless mastery across semi-classical, romantic, and pop genres, Shreya is the definitive female playback voice of the 21st century. '
+        'Recipient of numerous Filmfare trophies, she holds the distinction of being honored with an official \'Shreya Ghoshal Day\' in the United States. '
+        'Her expressive emotional nuance and pitch perfection continue to mesmerize millions of listeners worldwide.',
+    'badshah':
+        'Badshah is a prominent Indian rapper, singer, and music producer who revolutionized modern Desi hip-hop and commercial club culture. '
+        'Breaking streaming records with global party anthems like \'DJ Waley Babu\', \'Genda Phool\', \'Jugnu\', and \'Kala Chashma\', his high-energy hooks and urban beats define contemporary Indian party music. '
+        'Recognized on international charts and collaborating with global stars like J Balvin, Badshah bridged Indian rap with mainstream pop. '
+        'With billions of streams across YouTube and Spotify, he has shaped contemporary commercial dance music. '
+        'His infectious rhythmic production and sharp lyrical punchlines remain unmatched in Indian pop.',
+    'atif aslam':
+        'Atif Aslam is a celebrated Pakistani playback singer and songwriter whose distinctive vocal belt, raspy romantic timbre, and Sufi rock ballads captivated audiences across South Asia. '
+        'Emerging with the rock band Jal and his breakthrough hit \'Aadat\', he transitioned into Bollywood with an extraordinary streak of romantic anthems including \'Woh Lamhe\', \'Tere Bin\', \'Pehli Nazar Mein\', and \'Dil Diyan Gallan\'. '
+        'His effortless vocal projection and emotive passion made him one of the most beloved romantic voices in modern cinema. '
+        'Honored with the Tamgha-e-Imtiaz, Atif has performed in sold-out arenas across the globe. '
+        'His timeless ballads continue to command massive international streaming numbers.',
+    'sonu nigam':
+        'Sonu Nigam is revered as one of the finest and most versatile vocalists in Indian musical history, celebrated as the \'Lord of Chords\'. '
+        'With an illustrious career spanning three decades, multiple National Film Awards, and the prestigious Padma Shri, he has recorded thousands of songs in over a dozen languages. '
+        'His mastery across romantic melodies, patriotic anthems, ghazals, and bhajans in films like Kal Ho Naa Ho, Border, and Deewana is peerless. '
+        'Trained in the classical tradition, his extraordinary pitch perfection, breath control, and expressive range remain a benchmark for playback singing. '
+        'He is globally respected as a living legend of Indian vocal arts.',
+    'shankar mahadevan':
+        'Shankar Mahadevan is a four-time National Film Award-winning singer, composer, and part of the iconic Shankar-Ehsaan-Loy trio. '
+        'Shooting to fame with the groundbreaking non-stop track \'Breathless\', he possesses a virtuoso voice capable of bridging classical Hindustani and Carnatic music with modern jazz and pop. '
+        'As a composer, he has scored landmark films including Dil Chahta Hai, Kal Ho Naa Ho, Taare Zameen Par, and Bhaag Milkha Bhaag. '
+        'Honored with the Padma Shri, his energetic vocal presence and classical improvisations inspire musicians worldwide. '
+        'He stands as a monumental bridge between classical traditions and modern Indian film music.',
+    'armaan malik':
+        'Armaan Malik is an acclaimed Indian singer, songwriter, and actor known as the \'Prince of Romance\' for his velvety pop ballads and crossover singles. '
+        'Trained in Indian classical music, he quickly rose to stardom with romantic hits like \'Bol Do Na Zara\', \'Main Hoon Hero Tera\', and \'Butta Bomma\' in Telugu. '
+        'The youngest Indian singer to win two MTV Europe Music Awards, Armaan has successfully crossed over into English pop with singles like \'Control\' and \'You\'. '
+        'His clean vocal tone, modern phrasing, and multilingual versatility have earned him millions of passionate fans globally. '
+        'He represents the forefront of modern Indian artists achieving genuine international recognition.',
+    'neha kakkar':
+        'Neha Kakkar is one of India\'s most popular playback singers, renowned for her peppy dance anthems, infectious energy, and party hits. '
+        'Rising from Indian Idol to become a streaming powerhouse, she has delivered chartbusters like \'Aankh Marey\', \'Dilbar\', \'Garmi\', and \'Kar Gayi Chull\'. '
+        'Her vibrant personality and distinctive vocal texture have made her one of the most followed Indian musicians on social media. '
+        'Winner of numerous music awards, she has dominated Bollywood party tracks for nearly a decade. '
+        'Her high-energy club numbers are staples across celebrations and weddings worldwide.',
+    'jubin nautiyal':
+        'Jubin Nautiyal is an Indian playback singer celebrated for his rich, soothing voice and soul-stirring romantic and devotional ballads. '
+        'His breakout hits including \'Raataan Lambiyan\' from Shershaah, \'Lut Gaye\', \'Tum Hi Aana\', and \'Kuch Toh Bata Zindagi\' achieved record-breaking digital streaming numbers. '
+        'Trained in Western classical guitar and Indian classical vocals, Jubin brings an acoustic warmth and quiet emotional intimacy to his tracks. '
+        'Winner of the IIFA Award for Best Male Playback Singer, he is a leading voice in modern Bollywood romance. '
+        'His comforting melodies remain enduring favorites across global streaming audiences.',
+
+    // --- Punjabi ---
+    'diljit dosanjh':
+        'Diljit Dosanjh is an international superstar, singer, and actor who brought Punjabi music to the global center stage. '
+        'Making history as the first Punjabi artist to perform at Coachella, Diljit\'s magnetic stage presence and vocal power have garnered an enormous worldwide fanbase. '
+        'His blockbuster albums G.O.A.T., MoonChild Era, and Ghost blend traditional Punjabi tumbi and dhol rhythms with modern trap and R&B production. '
+        'Alongside his record-breaking musical career, he has earned critical acclaim as a leading actor in Punjabi and Hindi cinema. '
+        'His sold-out global arena tours and chart-topping singles continue to break cultural and linguistic barriers. '
+        'He is universally recognized as the foremost ambassador of modern Punjabi pop culture.',
+    'karan aujla':
+        'Karan Aujla is a leading singer, songwriter, and rapper in contemporary Punjabi music, renowned for his razor-sharp lyricism, hard-hitting trap beats, and viral international hits. '
+        'With chart-topping albums like Bacthatha and Making Memories, he became the first Punjabi artist to win a Juno Award in Canada. '
+        'His viral mega-hits including \'Tauba Tauba\' and \'Softly\' dominated global streaming charts and social media reels. '
+        'Aujla\'s signature blend of folk Punjabi cadence with Western hip-hop production has redefined commercial Punjabi music. '
+        'He stands at the pinnacle of the modern Punjabi music renaissance.',
+    'sidhu moose wala':
+        'Sidhu Moose Wala was a legendary Punjabi rapper, singer, and songwriter who became a global icon for modern Punjabi music and street poetry. '
+        'Known for his fearless, raw lyricism, hard-hitting boom-bap hip-hop beats, and pride in rural roots, he revolutionized the Punjabi music industry with albums like PBX 1 and Moosetape. '
+        'His profound influence transcended borders, charting on the Billboard Canadian Albums and UK Asian Music charts. '
+        'Sidhu gave voice to youth culture, authenticity, and self-determination with an unforgettable vocal presence. '
+        'His timeless tracks continue to resonate as an iconic cultural legacy worldwide.',
+    'ap dhillon':
+        'AP Dhillon is an Indo-Canadian singer, rapper, and record producer whose fusion of Punjabi vocals with 80s synthwave, trap, and R&B sparked a global cultural phenomenon. '
+        'Alongside his Run-Up Records team, his era-defining tracks like \'Brown Munde\', \'Excuses\', \'Insane\', and \'Dil Nu\' achieved hundreds of millions of streams. '
+        'Selling out arenas in North America, the UK, and India, Dhillon created a sleek, aesthetic sound that bridged South Asian youth culture with Western diaspora music. '
+        'His genre-bending production continues to inspire contemporary urban music.',
+    'guru randhawa':
+        'Guru Randhawa is a high-profile Indian singer, songwriter, and music composer known for his infectious, upbeat Punjabi pop anthems. '
+        'His chartbusters like \'High Rated Gabru\', \'Lahore\', \'Suit Suit\', and \'Ban Ja Rani\' made him one of the most viewed Indian artists on YouTube. '
+        'He was among the first Indian artists to collaborate with international stars like Pitbull on \'Slowly Slowly\'. '
+        'With catchy hooks, energetic dance beats, and a charming vocal style, Guru remains a dominant force in modern Indian pop.',
+
+    // --- Malayalam ---
+    'sushin shyam':
+        'Sushin Shyam is an award-winning Indian music composer, producer, and instrumentalist who spearheads the contemporary sound revolution in Malayalam cinema. '
+        'Starting his career as a keyboardist and bassist with the thrash metal band The Down Troddence, he brought an innovative indie sensibility to film music. '
+        'His distinctive scores for Kumbalangi Nights, Minnal Murali, Romancham, Manjummel Boys, and Aavesham captivated audiences across India. '
+        'Winning the Kerala State Film Award for Best Music Director, Sushin combines electronic synthwave, acoustic folk, and atmospheric ambient textures. '
+        'His infectious hooks and minimalist storytelling have made him one of the most exciting young composers in Indian cinema. '
+        'He continues to set new sonic standards with every release.',
+    'kj yesudas':
+        'Kattassery Joseph Yesudas is revered as the \'Celestial Singer\' (Gandharva Gaayakan), standing as a monumental institution of Indian classical and playback music. '
+        'In a peerless career spanning over six decades, he has recorded more than 50,000 songs across Malayalam, Tamil, Telugu, Hindi, Kannada, and other languages. '
+        'Recipient of a record eight National Film Awards, the Padma Shri, Padma Bhushan, and Padma Vibhushan, his voice possesses divine clarity, classical perfection, and emotional depth. '
+        'His timeless film recordings and devotional hymns are woven into the cultural identity of South India. '
+        'He is universally honored as one of the greatest singers in human history.',
+    'hesham abdul wahab':
+        'Hesham Abdul Wahab is an Indian music director, music producer, and playback singer who achieved widespread acclaim with the superhit Malayalam film Hridayam. '
+        'Trained in audio engineering and Middle Eastern music, he blends acoustic guitars, violins, and choral melodies with modern indie pop. '
+        'Winning the Kerala State Film Award for Best Music Director, Hesham expanded into Telugu cinema with celebrated scores like Kushi and Hi Nanna. '
+        'His deeply romantic melodies and lush organic orchestration have made him one of the most sought-after composers in contemporary South Indian cinema.',
+
+    // --- Global / English ---
+    'the weeknd':
+        'Abel Tesfaye, known globally as The Weeknd, is a Canadian singer, songwriter, and record producer celebrated for his genre-defining dark R&B, synth-pop, and cinematic concept albums. '
+        'Rising to fame with his enigmatic mixtapes Trilogy, he achieved global megastardom with historic chartbusters like \'Can\'t Feel My Face\', \'Starboy\', and \'Blinding Lights\'. '
+        'His magnum opus album After Hours broke all-time streaming records, with \'Blinding Lights\' becoming the number-one Billboard Hot 100 song of all time. '
+        'Trained in the falsetto tradition of pop royalty, his music explores themes of nocturnal escapism and emotional vulnerability. '
+        'Winner of multiple Grammy Awards and headliner of the Super Bowl LV halftime show, he is one of the best-selling artists in music history. '
+        'His visionary sound continues to shape the vanguard of global pop music.',
+    'taylor swift':
+        'Taylor Swift is a global cultural phenomenon and 14-time Grammy-winning singer-songwriter celebrated for her narrative songwriting, versatile genre shifts, and unprecedented industry impact. '
+        'Evolving from a country prodigy to an international pop titan, she has released historic albums including 1989, Folklore, Midnights, and The Tortoise Poets Department. '
+        'Her record-breaking Eras Tour became the highest-grossing concert tour in history, redefining live music performance on a stadium scale. '
+        'With an exceptional gift for lyricism and autobiographical storytelling, Taylor has connected with millions of devoted fans across multiple generations. '
+        'She is the first artist in history to win the Grammy for Album of the Year four times. '
+        'Her enduring artistic autonomy and musical catalog stand as a towering achievement in modern popular culture.',
+    'ed sheeran':
+        'Ed Sheeran is an acclaimed English singer-songwriter celebrated for his soulful acoustic ballads, loop-pedal live performances, and record-shattering global pop anthems. '
+        'Rising from humble open mic circuits to selling out world stadiums, albums like +, x, ÷, and = produced iconic global hits such as \'Shape of You\', \'Perfect\', and \'Thinking Out Loud\'. '
+        'Winner of four Grammy Awards and numerous Brit Awards, he is one of the world\'s best-selling music artists. '
+        'His relatable songwriting, melodic craftsmanship, and effortless blending of pop, folk, and hip-hop resonate with diverse audiences worldwide. '
+        'He remains one of the most prolific and beloved songwriters of the modern era.',
+    'dua lipa':
+        'Dua Lipa is an English and Albanian singer-songwriter renowned for her distinctive mezzo-soprano vocal tone and disco-infused dance-pop anthems. '
+        'After garnering critical praise with her self-titled debut, her blockbuster sophomore album Future Nostalgia became an international sensation with global hits like \'Don\'t Start Now\' and \'Levitating\'. '
+        'Winner of three Grammy Awards and seven Brit Awards, she revitalized modern pop with 80s nostalgia, funk basslines, and chic visual aesthetics. '
+        'Her commanding stage presence and chart-topping collaborations have solidified her standing as a global pop icon. '
+        'She continues to dominate international radio and streaming charts.',
+    'billie eilish':
+        'Billie Eilish is an American singer-songwriter who revolutionized modern pop music with her intimate whisper-vocals, dark minimalist production, and deeply introspective lyricism. '
+        'Collaborating with her brother Finneas, her debut album When We All Fall Asleep, Where Do We Go? swept the top four Grammy categories in a historic single night. '
+        'She followed with critical masterworks Happier Than Ever and Hit Me Hard and Soft, alongside winning two Academy Awards for Best Original Song. '
+        'Her fearless sonic experimentation and atmospheric arrangements have inspired an entire generation of indie and pop artists. '
+        'She stands as one of the most authentic and influential creative voices in contemporary music.',
+    'bruno mars':
+        'Bruno Mars is an American singer, songwriter, multi-instrumentalist, and showman celebrated for his retro funk, soulful pop ballads, and magnetic stage presence. '
+        'With a glittering career that includes 15 Grammy Awards and multiple Billboard number-one singles like \'Just the Way You Are\', \'Locked Out of Heaven\', \'Uptown Funk\', and \'24K Magic\', he is a master of throwback R&B and showmanship. '
+        'His duo project Silk Sonic alongside Anderson .Paak earned widespread critical acclaim for reviving vintage 70s soul. '
+        'Known for electrifying live performances with The Hooligans, Mars effortlessly channels the spirit of legendary musical entertainers. '
+        'He remains one of the most complete and versatile musical artists of his generation.',
+  };
+
   /// Curated filmographies and iconic album catalogs for legendary music directors, composers, and singers.
   /// Unlocks hundreds of film soundtrack songs that plain keyword searches miss due to singer/composer metadata splitting.
   static const Map<String, List<String>> _artistFilmographies = {

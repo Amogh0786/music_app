@@ -32,6 +32,7 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
   late final ArtistItem? _artistItem;
   late final List<String> _languages;
   late final List<String> _filmography;
+  late final String _bioText;
 
   final List<String> _eraOptions = const [
     'All Eras',
@@ -62,6 +63,7 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
 
     _languages = ['All', ..._artistService.getArtistLanguages(_canonicalName)];
     _filmography = _artistService.getFilmography(_canonicalName);
+    _bioText = _artistService.getArtistBio(_canonicalName);
 
     _searchController.addListener(() {
       setState(() {
@@ -946,7 +948,7 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
                       childCount: 8,
                     ),
                   )
-                else if (filtered.isEmpty)
+                else if (filtered.isEmpty) ...[
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
@@ -987,8 +989,19 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
                         ),
                       ),
                     ),
-                  )
-                else ...[
+                  ),
+                  if (_bioText.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: _AboutArtistSection(
+                        artistName: _canonicalName,
+                        artistItem: _artistItem,
+                        bioText: _bioText,
+                        themeColor: themeColor,
+                        soundtracksCount: _filmography.length,
+                        totalLoadedCount: _allSongs.length,
+                      ),
+                    ),
+                ] else ...[
                   SliverList(
                     delegate: SliverChildBuilderDelegate((context, index) {
                       final song = filtered[index];
@@ -1072,6 +1085,18 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
                       );
                     }, childCount: filtered.length),
                   ),
+                  // 8. About Artist Section (Rich 6–7 lines biography)
+                  if (_bioText.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: _AboutArtistSection(
+                        artistName: _canonicalName,
+                        artistItem: _artistItem,
+                        bioText: _bioText,
+                        themeColor: themeColor,
+                        soundtracksCount: _filmography.length,
+                        totalLoadedCount: _allSongs.length,
+                      ),
+                    ),
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.only(top: 20, bottom: 160),
@@ -1171,6 +1196,231 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
     return Container(
       color: const Color(0xFF1E1E2C),
       child: const Icon(Icons.person_rounded, size: 52, color: Colors.white54),
+    );
+  }
+}
+
+/// Dedicated "About Artist" section presenting a rich 6–7 line editorial biography,
+/// verified badges, and quick-attribute chips when scrolling down the profile.
+class _AboutArtistSection extends StatelessWidget {
+  final String artistName;
+  final ArtistItem? artistItem;
+  final String bioText;
+  final Color themeColor;
+  final int soundtracksCount;
+  final int totalLoadedCount;
+
+  const _AboutArtistSection({
+    required this.artistName,
+    required this.artistItem,
+    required this.bioText,
+    required this.themeColor,
+    required this.soundtracksCount,
+    required this.totalLoadedCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF13131F),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.09),
+            width: 1,
+          ),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              themeColor.withValues(alpha: 0.12),
+              const Color(0xFF141422),
+              const Color(0xFF0F0F18),
+            ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.45),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Row: Avatar, Title & Verified Badge
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: themeColor.withValues(alpha: 0.5),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: ClipOval(
+                    child: artistItem != null && artistItem!.imageUrl.isNotEmpty
+                        ? Image.network(
+                            artistItem!.imageUrl,
+                            fit: BoxFit.cover,
+                            cacheWidth: 90,
+                            cacheHeight: 90,
+                            errorBuilder: (_, _, _) => Icon(
+                              Icons.person_rounded,
+                              color: themeColor,
+                              size: 22,
+                            ),
+                          )
+                        : Icon(
+                            Icons.person_rounded,
+                            color: themeColor,
+                            size: 22,
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'ABOUT THE ARTIST',
+                        style: TextStyle(
+                          color: themeColor,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        artistName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.12),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.verified_rounded, size: 14, color: themeColor),
+                      const SizedBox(width: 4),
+                      const Text(
+                        'Verified',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Editorial Bio: 6-7 lines
+            Text(
+              bioText,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.88),
+                fontSize: 13.5,
+                height: 1.6,
+                letterSpacing: 0.15,
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Metadata chips
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if (artistItem?.genre != null && artistItem!.genre.isNotEmpty)
+                  _buildChip(
+                    icon: Icons.music_note_rounded,
+                    label: artistItem!.genre,
+                    color: themeColor,
+                  ),
+                if (artistItem?.language != null &&
+                    artistItem!.language.isNotEmpty)
+                  _buildChip(
+                    icon: Icons.language_rounded,
+                    label: '${artistItem!.language} Repertoire',
+                    color: Colors.white70,
+                  ),
+                if (soundtracksCount > 0)
+                  _buildChip(
+                    icon: Icons.movie_outlined,
+                    label: '$soundtracksCount Soundtracks',
+                    color: Colors.white70,
+                  ),
+                if (totalLoadedCount > 0)
+                  _buildChip(
+                    icon: Icons.queue_music_rounded,
+                    label: '$totalLoadedCount+ Tracks on DilSe',
+                    color: Colors.white70,
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.8),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -40,11 +40,11 @@ void main() {
 
       expect(tester.takeException(), isNull);
       // Hero Header
-      expect(find.text('Devi Sri Prasad'), findsOneWidget);
+      expect(find.text('Devi Sri Prasad'), findsWidgets);
       expect(find.text('TOP ARTIST'), findsOneWidget);
       expect(
         find.text('Tollywood • High Energy Dance & Melodies'),
-        findsOneWidget,
+        findsWidgets,
       );
 
       // Actions
@@ -161,7 +161,58 @@ void main() {
         ),
       );
       expect(tester.takeException(), isNull);
-      expect(find.text('Devi Sri Prasad'), findsOneWidget);
+      expect(find.text('Devi Sri Prasad'), findsWidgets);
+    },
+  );
+
+  test(
+    'DynamicArtistService returns rich 6-7 line curated bio and dynamic fallback',
+    () {
+      final service = DynamicArtistService();
+      final dspBio = service.getArtistBio('Devi Sri Prasad');
+      expect(dspBio, contains('National Award-winning'));
+      expect(dspBio, contains('Pushpa'));
+      expect(dspBio.length, greaterThan(300));
+
+      final thamanBio = service.getArtistBio('Thaman S');
+      expect(thamanBio, contains('Ala Vaikunthapurramuloo'));
+
+      final fallbackBio = service.getArtistBio('Unknown Indie Artist');
+      expect(fallbackBio, contains('Unknown Indie Artist'));
+      expect(fallbackBio, contains('DilSe'));
+      expect(fallbackBio.length, greaterThan(200));
+    },
+  );
+
+  testWidgets(
+    'ArtistProfileScreen renders About Artist section with verified badge, 6-7 line bio, and tags',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: ArtistProfileScreen(
+            artist: testArtist,
+            artistName: 'Devi Sri Prasad',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Scroll down to reveal About Artist section
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
+      await tester.pump();
+
+      expect(find.text('ABOUT THE ARTIST'), findsOneWidget);
+      expect(find.text('Verified'), findsOneWidget);
+      expect(
+        find.textContaining('National Award-winning Indian composer'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Telugu Repertoire'), findsOneWidget);
     },
   );
 }
