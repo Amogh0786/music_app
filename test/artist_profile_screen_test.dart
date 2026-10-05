@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_app/screens/artist_profile_screen.dart';
+import 'package:music_app/screens/library_screen.dart';
 import 'package:music_app/services/dynamic_artist_service.dart';
 import 'package:music_app/services/preferences_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -213,6 +214,100 @@ void main() {
         findsOneWidget,
       );
       expect(find.textContaining('Telugu Repertoire'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'ArtistProfileScreen follow button toggles between Follow and Followed with smooth animation and updates PreferencesService without polluting daily mixes',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final prefs = PreferencesService();
+      expect(prefs.isArtistFollowed('Devi Sri Prasad'), isFalse);
+      expect(prefs.followedArtists, isEmpty);
+
+      final initialDailyMixes = prefs.getDailyMixConfigs();
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: ArtistProfileScreen(
+            artist: testArtist,
+            artistName: 'Devi Sri Prasad',
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Find the squircle follow button
+      final followBtn = find.byKey(
+        const ValueKey('artist_profile_follow_button'),
+      );
+      expect(followBtn, findsOneWidget);
+      expect(find.text('Follow'), findsOneWidget);
+      expect(find.text('Followed'), findsNothing);
+
+      // Tap Follow
+      await tester.tap(followBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300)); // Finish animation
+
+      expect(find.text('Followed'), findsOneWidget);
+      expect(find.text('Follow'), findsNothing);
+      expect(prefs.isArtistFollowed('Devi Sri Prasad'), isTrue);
+      expect(prefs.followedArtists, contains('Devi Sri Prasad'));
+
+      // Strict Guardrail: Followed artist must NOT affect daily mixes
+      final dailyMixesAfterFollow = prefs.getDailyMixConfigs();
+      expect(dailyMixesAfterFollow.length, equals(initialDailyMixes.length));
+      for (int i = 0; i < initialDailyMixes.length; i++) {
+        expect(
+          dailyMixesAfterFollow[i].title,
+          equals(initialDailyMixes[i].title),
+        );
+        expect(
+          dailyMixesAfterFollow[i].query,
+          equals(initialDailyMixes[i].query),
+        );
+      }
+
+      // Tap again to Unfollow
+      await tester.tap(followBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Follow'), findsOneWidget);
+      expect(find.text('Followed'), findsNothing);
+      expect(prefs.isArtistFollowed('Devi Sri Prasad'), isFalse);
+      expect(prefs.followedArtists, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'LibraryScreen renders Artists tab and displays followed artists',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final prefs = PreferencesService();
+      await prefs.toggleFollowArtist('Devi Sri Prasad');
+
+      await tester.pumpWidget(const MaterialApp(home: LibraryScreen()));
+      await tester.pump();
+
+      // Verify Artists tab is present
+      expect(find.text('Artists'), findsOneWidget);
+
+      // Tap on Artists tab
+      await tester.tap(find.text('Artists'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('1 Followed Artist'), findsOneWidget);
+      expect(find.text('Devi Sri Prasad'), findsOneWidget);
+      expect(find.text('Following'), findsOneWidget);
     },
   );
 }

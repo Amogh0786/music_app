@@ -4,6 +4,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
 import '../services/dynamic_artist_service.dart';
 import '../services/canonical_song_dedup.dart';
+import '../services/preferences_service.dart';
 import '../widgets/responsive_wrapper.dart';
 import '../widgets/animated_equalizer.dart';
 import '../widgets/song_options_bottom_sheet.dart';
@@ -25,6 +26,7 @@ class ArtistProfileScreen extends StatefulWidget {
 class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
   final MusicService _musicService = MusicService();
   final DynamicArtistService _artistService = DynamicArtistService();
+  final PreferencesService _prefs = PreferencesService();
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
 
@@ -73,6 +75,7 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
 
     _scrollController.addListener(_onScroll);
     _musicService.addListener(_onMusicServiceChanged);
+    _prefs.addListener(_onPrefsChanged);
 
     _loadInitialDiscography();
   }
@@ -82,10 +85,15 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
     _scrollController.dispose();
     _searchController.dispose();
     _musicService.removeListener(_onMusicServiceChanged);
+    _prefs.removeListener(_onPrefsChanged);
     super.dispose();
   }
 
   void _onMusicServiceChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onPrefsChanged() {
     if (mounted) setState(() {});
   }
 
@@ -258,6 +266,7 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final themeColor = Theme.of(context).primaryColor;
+    final isFollowed = _prefs.isArtistFollowed(_canonicalName);
     final filtered = _filteredSongs;
 
     return Scaffold(
@@ -272,7 +281,7 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
                 // 1. Hero AppBar with Artist Avatar & Back Action
                 SliverAppBar(
                   backgroundColor: const Color(0xFF0B0B0F),
-                  expandedHeight: 280.0,
+                  expandedHeight: 310.0,
                   pinned: true,
                   elevation: 0,
                   leading: IconButton(
@@ -365,7 +374,20 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
                                   textAlign: TextAlign.center,
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 8),
+                              // Squircle Follow Button
+                              _FollowButton(
+                                key: const ValueKey(
+                                  'artist_profile_follow_button',
+                                ),
+                                isFollowed: isFollowed,
+                                themeColor: themeColor,
+                                onTap: () {
+                                  HapticFeedback.mediumImpact();
+                                  _prefs.toggleFollowArtist(_canonicalName);
+                                },
+                              ),
+                              const SizedBox(height: 6),
                               // Tagline & Badge
                               Padding(
                                 padding: const EdgeInsets.symmetric(
@@ -1420,6 +1442,97 @@ class _AboutArtistSection extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Squircle Follow Button with smooth morphing animation between 'Follow' and 'Followed'.
+class _FollowButton extends StatelessWidget {
+  final bool isFollowed;
+  final VoidCallback onTap;
+  final Color themeColor;
+
+  const _FollowButton({
+    super.key,
+    required this.isFollowed,
+    required this.onTap,
+    required this.themeColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        splashColor: themeColor.withValues(alpha: 0.25),
+        highlightColor: themeColor.withValues(alpha: 0.12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeInOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+          decoration: BoxDecoration(
+            color: isFollowed
+                ? themeColor
+                : Colors.white.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isFollowed
+                  ? themeColor
+                  : Colors.white.withValues(alpha: 0.28),
+              width: 1.2,
+            ),
+            boxShadow: isFollowed
+                ? [
+                    BoxShadow(
+                      color: themeColor.withValues(alpha: 0.45),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : const [],
+          ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 240),
+            switchInCurve: Curves.easeOutBack,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(
+                    begin: 0.85,
+                    end: 1.0,
+                  ).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            child: Row(
+              key: ValueKey<bool>(isFollowed),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isFollowed ? Icons.check_rounded : Icons.add_rounded,
+                  color: Colors.white,
+                  size: 15,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  isFollowed ? 'Followed' : 'Follow',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
