@@ -138,6 +138,11 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   AndroidEqualizer? _equalizerA;
   AndroidEqualizer? _equalizerB;
 
+  // Concurrency & Gapless Dual-Deck State
+  int _activePlaySessionToken = 0;
+  String? _standbyBufferedTrackId;
+  bool _isPrebufferingStandby = false;
+
   final StreamController<Duration> _positionBroadcaster =
       StreamController<Duration>.broadcast();
   final StreamController<Duration?> _durationBroadcaster =
@@ -1003,6 +1008,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   void _cancelActiveFade() {
     _fadeSession++;
     _isCrossfading = false;
+    _standbyBufferedTrackId = null;
     try {
       _standbyPlayer.stop();
       _standbyPlayer.setVolume(1.0);
@@ -1143,6 +1149,23 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     await _fadeVolume(from: 0.0, to: 1.0, duration: duration);
   }
 
+  Video? _getNextTrackCandidate() {
+    if (_playlist.isEmpty) return null;
+    if (_isShuffle && _playlist.length > 1) {
+      if (_shuffleHistoryPointer + 1 < _shuffleHistory.length) {
+        final nextIdx = _shuffleHistory[_shuffleHistoryPointer + 1];
+        if (nextIdx >= 0 && nextIdx < _playlist.length) {
+          return _playlist[nextIdx];
+        }
+      }
+    } else if (_currentIndex + 1 < _playlist.length) {
+      return _playlist[_currentIndex + 1];
+    } else if (_loopMode == LoopMode.all && _playlist.isNotEmpty) {
+      return _playlist[0];
+    }
+    return null;
+  }
+
   void _checkContinuousPlaybackPrewarm(Duration pos) {
     if (_isCrossfading ||
         _isTransitioning ||
@@ -1153,32 +1176,28 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
     if (_loopMode == LoopMode.one) return;
     final dur = duration;
-    if (dur == null || dur.inSeconds <= 20) return;
+    if (dur == null || dur.inSeconds <= 15) return;
 
     final remaining = dur - pos;
-    // Prewarm next track 10 to 15 seconds before song ends regardless of crossfade setting
-    if (remaining <= const Duration(seconds: 15) &&
-        remaining > const Duration(seconds: 5)) {
-      Video? nextTrack;
-      if (_isShuffle && _playlist.length > 1) {
-        if (_shuffleHistoryPointer + 1 < _shuffleHistory.length) {
-          final nextIdx = _shuffleHistory[_shuffleHistoryPointer + 1];
-          if (nextIdx >= 0 && nextIdx < _playlist.length) {
-            nextTrack = _playlist[nextIdx];
-          }
-        }
-      } else if (_currentIndex + 1 < _playlist.length) {
-        nextTrack = _playlist[_currentIndex + 1];
-      } else if (_loopMode == LoopMode.all && _playlist.isNotEmpty) {
-        nextTrack = _playlist[0];
-      }
+    final nextTrack = _getNextTrackCandidate();
+    if (nextTrack == null) return;
 
-      if (nextTrack != null) {
-        final trackId = nextTrack.id.value;
-        if (_webStreamUrls[trackId] == null ||
-            _webStreamUrls[trackId]!.isEmpty) {
-          _prewarmSingleTrack(nextTrack);
-        }
+    // 1. Proactive URL resolution at T-25s to T-5s
+    if (remaining <= const Duration(seconds: 25) &&
+        remaining > const Duration(seconds: 3)) {
+      final trackId = nextTrack.id.value;
+      if (_webStreamUrls[trackId] == null || _webStreamUrls[trackId]!.isEmpty) {
+        _prewarmSingleTrack(nextTrack);
+      }
+    }
+
+    // 2. Proactive Audio Frame Pre-Buffering on Standby Deck at T-15s to T-2s
+    if (!kIsWeb &&
+        remaining <= const Duration(seconds: 15) &&
+        remaining > const Duration(seconds: 2)) {
+      if (_standbyBufferedTrackId != nextTrack.id.value &&
+          !_isPrebufferingStandby) {
+        _primeStandbyDeckForNextTrack(nextTrack);
       }
     }
   }
@@ -1821,7 +1840,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             );
 
             if (isMatch) {
-              _webStreamUrls[trackId] = itemStream;
+              final activeQualityPreset = PreferencesService().audioQuality;
+              final adaptedStream = adaptJioSaavnBitrate(
+                itemStream,
+                activeQualityPreset,
+              );
+              _webStreamUrls[trackId] = adaptedStream;
               if (itemThumb.isNotEmpty && !_artworkMap.containsKey(trackId)) {
                 _artworkMap[trackId] = itemThumb;
               }
@@ -1841,6 +1865,56 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         }
       }
     } catch (_) {}
+  }
+
+  /// Primes and pre-buffers the incoming track directly onto the standby deck.
+  /// When this track is subsequently requested, the engine can execute an instant 0ms handoff.
+  Future<void> _primeStandbyDeckForNextTrack(Video nextTrack) async {
+    if (kIsWeb) return;
+    final trackId = nextTrack.id.value;
+    if (_standbyBufferedTrackId == trackId || _isPrebufferingStandby) return;
+
+    final token = _activePlaySessionToken;
+    _isPrebufferingStandby = true;
+
+    try {
+      if (_webStreamUrls[trackId] == null || _webStreamUrls[trackId]!.isEmpty) {
+        await _prewarmSingleTrack(nextTrack);
+      }
+      if (token != _activePlaySessionToken) return;
+
+      final streamUrl = _webStreamUrls[trackId];
+      if (streamUrl != null && streamUrl.isNotEmpty) {
+        final mediaItem = MediaItem(
+          id: trackId,
+          album: 'DilSe',
+          title: nextTrack.title,
+          artist: nextTrack.author,
+          artUri: Uri.tryParse(getHdThumbnail(trackId)),
+          duration: nextTrack.duration,
+        );
+
+        final AudioSource source = streamUrl.contains('googlevideo.com')
+            ? AudioSource.uri(
+                Uri.parse(streamUrl),
+                headers: _ytHeaders,
+                tag: mediaItem,
+              )
+            : AudioSource.uri(Uri.parse(streamUrl), tag: mediaItem);
+
+        await _standbyPlayer.setAudioSource(source, preload: true);
+        if (token == _activePlaySessionToken) {
+          _standbyBufferedTrackId = trackId;
+          debugPrint(
+            '[Gapless] Deck B primed & pre-buffered for "${nextTrack.title}"',
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[Gapless] Standby pre-buffering silent fail: $e');
+    } finally {
+      _isPrebufferingStandby = false;
+    }
   }
 
   Future<void> playLikedSong(Map<String, String> songData) async {
@@ -3610,6 +3684,8 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     bool updateQueue = true,
     bool isCrossfade = false,
   }) async {
+    final int sessionToken = ++_activePlaySessionToken;
+
     _savedPosition = null;
     _savedDuration = null;
     _positionBroadcaster.add(Duration.zero);
@@ -3617,6 +3693,102 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       _durationBroadcaster.add(song.duration);
     }
 
+    // ⚡ Check if standby deck already has this exact song pre-buffered
+    final bool isPrebufferedOnStandby =
+        !kIsWeb && _standbyBufferedTrackId == song.id.value;
+
+    if (isPrebufferedOnStandby) {
+      debugPrint('[Gapless] ⚡ Instant 0ms Standby Handoff: "${song.title}"');
+      _standbyBufferedTrackId = null;
+
+      _isLoading = false;
+      _isCrossfading = false;
+      _hasRepeatedOnce = false;
+
+      if (!_isNavigatingHistory &&
+          _currentSong != null &&
+          _currentSong!.id.value != song.id.value) {
+        _sessionPlayedHistory.add(_currentSong!);
+        if (_sessionPlayedHistory.length > 50) {
+          _sessionPlayedHistory.removeAt(0);
+        }
+      }
+      _currentSong = song;
+
+      if (updateQueue) {
+        final existingIndex = _playlist.indexWhere(
+          (item) => item.id == song.id,
+        );
+        if (existingIndex != -1) {
+          _currentIndex = existingIndex;
+        } else {
+          _playlist = [song];
+          _currentIndex = 0;
+          _seedPlaylistArtists = [];
+          _playlistArtistRecommendationOffset = 0;
+          _generate50SongProgressiveQueue(song);
+        }
+      }
+      notifyListeners();
+
+      final mediaItem = MediaItem(
+        id: song.id.value,
+        album: 'DilSe',
+        title: song.title,
+        artist: song.author,
+        artUri: Uri.tryParse(getHdThumbnail(song.id.value)),
+        duration: song.duration,
+      );
+      if (!kIsWeb && audioHandler != null) {
+        audioHandler!.changeMediaItem(mediaItem);
+        audioHandler!.notifyLoading(isLoading: false);
+      }
+
+      if (isCrossfade) {
+        await _startDualDeckCrossfade();
+      } else {
+        final outgoingPlayer = _activePlayer;
+        final incomingPlayer = _standbyPlayer;
+        _activePlayer = incomingPlayer;
+        _standbyPlayer = outgoingPlayer;
+
+        if (audioHandler is DilSeAudioHandler) {
+          (audioHandler as DilSeAudioHandler).bindPlayer(_activePlayer);
+        }
+
+        try {
+          await outgoingPlayer.stop();
+        } catch (_) {}
+
+        unawaited(
+          incomingPlayer.play().catchError((e) {
+            debugPrint('[Gapless] Error starting incoming player: $e');
+          }),
+        );
+      }
+
+      _syncWidgetPlayback();
+      persistPlaybackSession(force: true);
+
+      _extractPalette(song.id.value);
+      fetchLyrics(song);
+      PreferencesService().recordSongPlay(song.author, song.title);
+      PreferencesService().addToListeningHistory({
+        'id': song.id.value,
+        'title': song.title,
+        'author': song.author,
+        'thumbnail': getHdThumbnail(song.id.value),
+        'playedAt': DateTime.now().toIso8601String(),
+      });
+
+      _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
+      _preloadUpcomingTracks();
+      _checkAndPreloadNextQueue();
+      return;
+    }
+
+    // Normal or rapid-skip path: flush standby if it held a different track
+    _standbyBufferedTrackId = null;
     if (!isCrossfade) {
       _cancelActiveFade();
       if (kIsWeb && WebPlayerBridge.isPlaying) {
@@ -3711,7 +3883,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             final jioResp = await http
                 .get(uri)
                 .timeout(const Duration(seconds: 4));
-            if (_currentSong?.id.value != song.id.value) return false;
+            if (_currentSong?.id.value != song.id.value ||
+                sessionToken != _activePlaySessionToken) {
+              return false;
+            }
             if (jioResp.statusCode == 200) {
               final List<dynamic> list = json.decode(jioResp.body);
               for (final item in list) {
@@ -3757,6 +3932,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           // 2. If edge didn't match, fallback to custom backend if configured
           if (!matched &&
               _currentSong?.id.value == song.id.value &&
+              sessionToken == _activePlaySessionToken &&
               PreferencesService().customServerUrl.isNotEmpty) {
             await tryResolveFromUri(ApiConfig.jioBackendSearchUri(q, limit: 5));
           }
@@ -4187,7 +4363,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         }
       }
 
-      if (_currentSong?.id.value != song.id.value) return;
+      if (_currentSong?.id.value != song.id.value ||
+          sessionToken != _activePlaySessionToken) {
+        return;
+      }
 
       if (!playbackSourceSet) {
         debugPrint(
@@ -4199,6 +4378,8 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         return;
       }
 
+      if (sessionToken != _activePlaySessionToken) return;
+
       debugPrint('[Play] Starting playback…');
       if (!kIsWeb && isCrossfade) {
         await _startDualDeckCrossfade();
@@ -4208,6 +4389,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           playAction: () async => await targetPlayer.play(),
         );
       }
+      if (sessionToken != _activePlaySessionToken) return;
       _isLoading = false;
       notifyListeners();
       persistPlaybackSession(force: true);
@@ -4228,7 +4410,8 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
       debugPrint('[Play] Error playing song: $e\n$st');
     } finally {
-      if (_currentSong?.id.value == song.id.value) {
+      if (_currentSong?.id.value == song.id.value &&
+          sessionToken == _activePlaySessionToken) {
         _isLoading = false;
         notifyListeners();
       }
@@ -5531,7 +5714,21 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _currentIndex = 0;
     _savedPosition = null;
     _savedDuration = null;
+    _activePlaySessionToken = 0;
+    _standbyBufferedTrackId = null;
+    _isPrebufferingStandby = false;
     _lastSessionSaveTime = DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  @visibleForTesting
+  int get activePlaySessionToken => _activePlaySessionToken;
+
+  @visibleForTesting
+  String? get standbyBufferedTrackId => _standbyBufferedTrackId;
+
+  @visibleForTesting
+  void setStandbyBufferedTrackIdForTesting(String? id) {
+    _standbyBufferedTrackId = id;
   }
 
   void _syncWidgetPlayback() {
