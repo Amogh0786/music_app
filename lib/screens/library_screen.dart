@@ -8,6 +8,8 @@ import 'spotify_import_screen.dart';
 import 'custom_playlist_screen.dart';
 import 'artist_profile_screen.dart';
 import '../services/dynamic_artist_service.dart';
+import '../services/device_audio_service.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../widgets/animated_equalizer.dart';
 
 class LibraryScreen extends StatefulWidget {
@@ -21,6 +23,9 @@ class _LibraryScreenState extends State<LibraryScreen>
     with AutomaticKeepAliveClientMixin {
   final MusicService _musicService = MusicService();
   final PreferencesService _prefs = PreferencesService();
+  final DeviceAudioService _deviceAudio = DeviceAudioService();
+  final TextEditingController _deviceSearchController = TextEditingController();
+  String _deviceSearchFilter = '';
 
   @override
   bool get wantKeepAlive => true;
@@ -33,6 +38,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     super.initState();
     _musicService.addListener(_onStateChanged);
     _prefs.addListener(_onStateChanged);
+    _deviceAudio.addListener(_onStateChanged);
     _lastDownloadedCount = _musicService.downloadedSongs.length;
     _calculateStorageUsage();
   }
@@ -41,6 +47,8 @@ class _LibraryScreenState extends State<LibraryScreen>
   void dispose() {
     _musicService.removeListener(_onStateChanged);
     _prefs.removeListener(_onStateChanged);
+    _deviceAudio.removeListener(_onStateChanged);
+    _deviceSearchController.dispose();
     super.dispose();
   }
 
@@ -90,12 +98,13 @@ class _LibraryScreenState extends State<LibraryScreen>
   Widget build(BuildContext context) {
     super.build(context);
     final downloaded = _musicService.downloadedSongs;
+    final deviceSongs = _deviceAudio.deviceSongs;
     final liked = _musicService.likedSongs;
     final history = _prefs.listeningHistory;
     final followedArtists = _prefs.followedArtists;
 
     return DefaultTabController(
-      length: 5,
+      length: 6,
       child: Scaffold(
         backgroundColor: const Color(0xFF0B0B0F),
         appBar: AppBar(
@@ -165,6 +174,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 tabs: [
                   _buildPillTab('Downloaded', downloaded.length),
+                  _buildPillTab('Device Audio', deviceSongs.length),
                   _buildPillTab('Liked', liked.length),
                   _buildPillTab(
                     'Playlists',
@@ -373,7 +383,10 @@ class _LibraryScreenState extends State<LibraryScreen>
                     },
                   ),
 
-            // TAB 2: LIKED SONGS
+            // TAB 2: DEVICE AUDIO
+            _buildDeviceAudioTab(deviceSongs),
+
+            // TAB 3: LIKED SONGS
             liked.isEmpty
                 ? _buildEmptyState(
                     icon: Icons.favorite_border_rounded,
@@ -1022,6 +1035,834 @@ class _LibraryScreenState extends State<LibraryScreen>
                       );
                     },
                   ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeviceAudioTab(List<Map<String, String>> deviceSongs) {
+    if (_deviceAudio.isScanning) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 42,
+                height: 42,
+                child: CircularProgressIndicator(
+                  color: Color(0xFF1DB954),
+                  strokeWidth: 3,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Scanning Storage...',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _deviceAudio.scanStatusMessage,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: 13,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (deviceSongs.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.audio_file_rounded,
+        title: 'No device songs indexed',
+        subtitle:
+            'Scan device storage or pick audio files (MP3, FLAC, M4A, WAV, AAC, OPUS) from your phone to listen offline with lossless quality.',
+        action: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ElevatedButton.icon(
+              icon: const Icon(Icons.manage_search_rounded, size: 18),
+              label: const Text(
+                'Scan Device Storage',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1DB954),
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+              onPressed: () async {
+                HapticFeedback.mediumImpact();
+                final messenger = ScaffoldMessenger.of(context);
+                final count = await _deviceAudio.scanDeviceStorage();
+                if (!mounted) return;
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      count > 0
+                          ? 'Found $count device tracks!'
+                          : _deviceAudio.scanStatusMessage,
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              icon: const Icon(
+                Icons.folder_open_rounded,
+                size: 18,
+                color: Colors.white70,
+              ),
+              label: const Text(
+                'Pick Audio Files / Folders',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
+              ),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                _showPickOptionsSheet();
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
+    final query = _deviceSearchFilter.trim().toLowerCase();
+    final filteredSongs = query.isEmpty
+        ? deviceSongs
+        : deviceSongs.where((s) {
+            final t = (s['title'] ?? '').toLowerCase();
+            final a = (s['author'] ?? '').toLowerCase();
+            final al = (s['album'] ?? '').toLowerCase();
+            return t.contains(query) || a.contains(query) || al.contains(query);
+          }).toList();
+
+    int totalBytes = 0;
+    for (final s in deviceSongs) {
+      totalBytes += int.tryParse(s['fileSize'] ?? '0') ?? 0;
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 160, top: 12),
+      itemCount: filteredSongs.length + 2,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildActionHeader(
+                count: filteredSongs.length,
+                onPlayAll: () {
+                  HapticFeedback.lightImpact();
+                  if (filteredSongs.isNotEmpty) {
+                    _musicService.playDeviceSong(
+                      filteredSongs.first,
+                      queue: filteredSongs,
+                      startIndex: 0,
+                    );
+                  }
+                },
+                onShuffle: () {
+                  HapticFeedback.lightImpact();
+                  if (filteredSongs.isNotEmpty) {
+                    _musicService.toggleShuffle();
+                    _musicService.playDeviceSong(
+                      filteredSongs.first,
+                      queue: filteredSongs,
+                      startIndex: 0,
+                    );
+                  }
+                },
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.12),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: TextField(
+                          controller: _deviceSearchController,
+                          onChanged: (val) {
+                            setState(() {
+                              _deviceSearchFilter = val;
+                            });
+                          },
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                          ),
+                          decoration: InputDecoration(
+                            hintText:
+                                'Filter ${deviceSongs.length} local tracks...',
+                            hintStyle: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.35),
+                              fontSize: 13,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.search_rounded,
+                              color: Colors.white54,
+                              size: 18,
+                            ),
+                            suffixIcon: _deviceSearchFilter.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(
+                                      Icons.close_rounded,
+                                      color: Colors.white54,
+                                      size: 16,
+                                    ),
+                                    onPressed: () {
+                                      _deviceSearchController.clear();
+                                      setState(() {
+                                        _deviceSearchFilter = '';
+                                      });
+                                    },
+                                  )
+                                : null,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 10,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.refresh_rounded,
+                        color: Colors.white70,
+                        size: 20,
+                      ),
+                      tooltip: 'Rescan Device',
+                      onPressed: () async {
+                        HapticFeedback.mediumImpact();
+                        final messenger = ScaffoldMessenger.of(context);
+                        final count = await _deviceAudio.scanDeviceStorage();
+                        if (!mounted) return;
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              count > 0
+                                  ? 'Found $count new tracks!'
+                                  : _deviceAudio.scanStatusMessage,
+                            ),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.add_rounded,
+                        color: Colors.white70,
+                        size: 22,
+                      ),
+                      tooltip: 'Add Audio Files',
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        _showPickOptionsSheet();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              if (totalBytes > 0)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 4,
+                  ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Storage Used: ${_formatBytes(totalBytes)} • ${deviceSongs.length} local files',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.45),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        }
+
+        if (index == 1 && filteredSongs.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.all(40),
+            child: Center(
+              child: Text(
+                'No local tracks matching "$_deviceSearchFilter"',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          );
+        }
+
+        if (filteredSongs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final song = filteredSongs[index - 1];
+        final songId = song['id'] ?? '';
+        final isCurrent = _musicService.currentSong?.id.value == songId;
+        final fileSize = int.tryParse(song['fileSize'] ?? '0') ?? 0;
+        final format = song['format'] ?? 'AUDIO';
+
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 4,
+          ),
+          leading: _buildDeviceArtwork(song['thumbnail'], isCurrent),
+          title: Text(
+            song['title'] ?? 'Unknown Track',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              fontSize: 14.5,
+              letterSpacing: -0.2,
+            ),
+          ),
+          subtitle: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  song['author'] ?? 'Device Audio',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 12.5,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 5,
+                  vertical: 1.5,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1DB954).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text(
+                  format,
+                  style: const TextStyle(
+                    color: Color(0xFF1DB954),
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (fileSize > 0) ...[
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 1.5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white12,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: Text(
+                    _formatBytes(fileSize),
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          trailing: IconButton(
+            icon: const Icon(
+              Icons.more_vert_rounded,
+              color: Colors.white54,
+              size: 20,
+            ),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              _showDeviceSongOptions(song);
+            },
+          ),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            _musicService.playDeviceSong(
+              song,
+              queue: filteredSongs,
+              startIndex: index - 1,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDeviceArtwork(String? thumbUrl, bool isCurrent) {
+    Widget image;
+    if (thumbUrl != null && thumbUrl.startsWith('file://')) {
+      final filePath = thumbUrl.replaceFirst('file://', '');
+      final file = File(filePath);
+      if (file.existsSync()) {
+        image = Image.file(
+          file,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _defaultDeviceArt(),
+        );
+      } else {
+        image = _defaultDeviceArt();
+      }
+    } else if (thumbUrl != null && thumbUrl.startsWith('http')) {
+      image = Image.network(
+        thumbUrl,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _defaultDeviceArt(),
+      );
+    } else {
+      image = _defaultDeviceArt();
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox(
+        width: 52,
+        height: 52,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            image,
+            if (isCurrent)
+              Container(
+                color: Colors.black54,
+                child: Center(
+                  child: AnimatedEqualizer(
+                    isPlaying: _musicService.isPlaying,
+                    size: 22,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _defaultDeviceArt() {
+    return Container(
+      color: const Color(0xFF1E1E28),
+      child: const Icon(
+        Icons.audio_file_rounded,
+        color: Colors.white54,
+        size: 26,
+      ),
+    );
+  }
+
+  void _showPickOptionsSheet() {
+    final messenger = ScaffoldMessenger.of(context);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A24),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Import Device Music',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 17,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ListTile(
+                leading: const Icon(
+                  Icons.file_copy_rounded,
+                  color: Color(0xFF1DB954),
+                ),
+                title: const Text(
+                  'Pick Audio Files',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: Text(
+                  'Select MP3, FLAC, M4A, WAV, AAC from device storage',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 12,
+                  ),
+                ),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final count = await _deviceAudio.pickAudioFiles();
+                  if (!mounted || count <= 0) return;
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Added $count audio tracks!'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.folder_open_rounded,
+                  color: Colors.amberAccent,
+                ),
+                title: const Text(
+                  'Select Music Folder',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: Text(
+                  'Recursively index all songs in a selected directory',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 12,
+                  ),
+                ),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final count = await _deviceAudio.pickDirectory();
+                  if (!mounted || count <= 0) return;
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Imported $count songs from folder!'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.phone_android_rounded,
+                  color: Colors.lightBlueAccent,
+                ),
+                title: const Text(
+                  'Auto-Scan Device Storage',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: Text(
+                  'Scans standard Music and Download directories',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 12,
+                  ),
+                ),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final count = await _deviceAudio.scanDeviceStorage();
+                  if (!mounted) return;
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        count > 0
+                            ? 'Found $count device tracks!'
+                            : _deviceAudio.scanStatusMessage,
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showDeviceSongOptions(Map<String, String> song) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A24),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: _buildDeviceArtwork(song['thumbnail'], false),
+                title: Text(
+                  song['title'] ?? 'Unknown Track',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                subtitle: Text(
+                  song['author'] ?? 'Device Audio',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const Divider(color: Colors.white12),
+              ListTile(
+                leading: const Icon(
+                  Icons.playlist_add_rounded,
+                  color: Colors.white70,
+                ),
+                title: const Text(
+                  'Add to Custom Playlist',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showAddToPlaylistSheet(song);
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.info_outline_rounded,
+                  color: Colors.white70,
+                ),
+                title: const Text(
+                  'File Information',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showFileInfoDialog(song);
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: Colors.redAccent,
+                ),
+                title: const Text(
+                  'Remove from Library',
+                  style: TextStyle(color: Colors.redAccent),
+                ),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _deviceAudio.removeSong(song['id'] ?? '');
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showFileInfoDialog(Map<String, String> song) {
+    final size = int.tryParse(song['fileSize'] ?? '0') ?? 0;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E28),
+        title: const Text(
+          'Track Details',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildInfoRow('Title', song['title'] ?? ''),
+            _buildInfoRow('Artist', song['author'] ?? ''),
+            _buildInfoRow('Album', song['album'] ?? ''),
+            _buildInfoRow('Format', song['format'] ?? ''),
+            _buildInfoRow('File Size', _formatBytes(size)),
+            _buildInfoRow('Path', song['localPath'] ?? ''),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close', style: TextStyle(color: Colors.white70)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.5),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 1),
+          Text(
+            value,
+            style: const TextStyle(color: Colors.white, fontSize: 13),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddToPlaylistSheet(Map<String, String> song) {
+    final playlists = _musicService.customPlaylists;
+    if (playlists.isEmpty) {
+      _showCreatePlaylistDialog();
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E28),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Add to Playlist',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            ...playlists.map(
+              (p) => ListTile(
+                leading: const Icon(
+                  Icons.playlist_play_rounded,
+                  color: Colors.white70,
+                ),
+                title: Text(
+                  (p['name'] as String?) ?? 'Playlist',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  final video = Video(
+                    VideoId(
+                      song['id'] ??
+                          DeviceAudioService.generateLocalId(
+                            song['localPath'] ?? '',
+                          ),
+                    ),
+                    song['title'] ?? 'Unknown',
+                    song['author'] ?? 'Device Audio',
+                    ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+                    DateTime.now(),
+                    '',
+                    null,
+                    '',
+                    null,
+                    ThumbnailSet(song['id'] ?? ''),
+                    null,
+                    Engagement(0, null, null),
+                    false,
+                  );
+                  final pId = (p['id'] as String?) ?? '';
+                  if (pId.isNotEmpty) {
+                    _musicService.addSongToPlaylist(pId, video);
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Added to ${p['name']}'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ),
           ],
         ),
       ),

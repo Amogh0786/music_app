@@ -24,6 +24,7 @@ import 'widget_update_service.dart';
 import 'dynamic_artist_service.dart';
 import 'taste_matrix_scorer.dart';
 import '../models/jio_album.dart';
+import 'device_audio_service.dart';
 
 enum SearchSuggestionType { artist, song, album, history, query }
 
@@ -120,6 +121,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       );
     }
     loadDownloadedSongs();
+    _deviceAudioService.loadDeviceSongs();
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -164,6 +166,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   bool _hasRepeatedOnce = false;
   List<Map<String, String>> _likedSongs = [];
   List<Map<String, dynamic>> _customPlaylists = [];
+  final DeviceAudioService _deviceAudioService = DeviceAudioService();
+
+  DeviceAudioService get deviceAudioService => _deviceAudioService;
+  List<Map<String, String>> get deviceSongs => _deviceAudioService.deviceSongs;
 
   // Bidirectional Shuffle History Stack
   final List<int> _shuffleHistory = [];
@@ -650,6 +656,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         _artworkMap[videoId] = s['thumbnail']!;
         return s['thumbnail']!;
       }
+    }
+    // Check device storage songs
+    final deviceSong = _instance._deviceAudioService.getSongById(videoId);
+    if (deviceSong != null && (deviceSong['thumbnail']?.isNotEmpty ?? false)) {
+      _artworkMap[videoId] = deviceSong['thumbnail']!;
+      return deviceSong['thumbnail']!;
     }
     // Check listening history
     for (final s in PreferencesService().listeningHistory) {
@@ -1884,6 +1896,40 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _isPrebufferingStandby = true;
 
     try {
+      if (!kIsWeb) {
+        final downloadedItem = _downloadedSongs.firstWhere(
+          (item) => item['id'] == trackId,
+          orElse: () => {},
+        );
+        final localItem = downloadedItem.isNotEmpty
+            ? downloadedItem
+            : (_deviceAudioService.getSongById(trackId) ?? {});
+        if (localItem.isNotEmpty && localItem['localPath'] != null) {
+          final localFile = File(localItem['localPath']!);
+          if (localFile.existsSync()) {
+            final mediaItem = MediaItem(
+              id: trackId,
+              album: localItem['album'] ?? 'DilSe',
+              title: nextTrack.title,
+              artist: nextTrack.author,
+              artUri: Uri.tryParse(getHdThumbnail(trackId)),
+              duration: nextTrack.duration,
+            );
+            await _standbyPlayer.setAudioSource(
+              AudioSource.uri(Uri.file(localFile.path), tag: mediaItem),
+              preload: true,
+            );
+            if (token == _activePlaySessionToken) {
+              _standbyBufferedTrackId = trackId;
+              debugPrint(
+                '[Gapless] Deck B primed & pre-buffered for local track "${nextTrack.title}"',
+              );
+            }
+            return;
+          }
+        }
+      }
+
       if (_webStreamUrls[trackId] == null || _webStreamUrls[trackId]!.isEmpty) {
         await _prewarmSingleTrack(nextTrack);
       }
@@ -3947,19 +3993,23 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     try {
-      // 1. If this song is downloaded locally, play directly from disk (mobile only)
+      // 1. If this song is downloaded locally or located on device storage, play directly from disk (mobile only)
       if (!kIsWeb) {
         final downloadedItem = _downloadedSongs.firstWhere(
           (item) => item['id'] == song.id.value,
           orElse: () => {},
         );
+        final deviceItem = downloadedItem.isEmpty
+            ? _deviceAudioService.getSongById(song.id.value)
+            : null;
+        final localItem = downloadedItem.isNotEmpty
+            ? downloadedItem
+            : (deviceItem ?? {});
 
-        if (downloadedItem.isNotEmpty && downloadedItem['localPath'] != null) {
-          final localFile = File(downloadedItem['localPath']!);
+        if (localItem.isNotEmpty && localItem['localPath'] != null) {
+          final localFile = File(localItem['localPath']!);
           if (await localFile.exists()) {
-            debugPrint(
-              '[Play] Playing locally downloaded file: ${localFile.path}',
-            );
+            debugPrint('[Play] Playing local file: ${localFile.path}');
             await targetPlayer.setAudioSource(
               AudioSource.uri(Uri.file(localFile.path), tag: mediaItem),
             );
@@ -3971,10 +4021,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
                 playAction: () async => await targetPlayer.play(),
               );
             }
-            _activeStreamInfo = const ActiveStreamInfo(
-              format: 'Offline Audio',
+            _activeStreamInfo = ActiveStreamInfo(
+              format: localItem['format'] ?? 'Offline Audio',
               qualityLabel: 'Original Quality',
-              source: 'Local Storage',
+              source: downloadedItem.isNotEmpty
+                  ? 'Local Storage'
+                  : 'Device Storage',
               isHd: true,
             );
             _isLoading = false;
@@ -5260,6 +5312,68 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _currentIndex = _downloadedSongs.indexWhere(
       (item) => item['id'] == songData['id'],
     );
+    if (_currentIndex == -1) _currentIndex = 0;
+    if (_playlist.isNotEmpty) {
+      await playSong(_playlist[_currentIndex], updateQueue: false);
+    }
+  }
+
+  Future<void> playDeviceSong(
+    Map<String, String> songData, {
+    List<Map<String, String>>? queue,
+    int? startIndex,
+  }) async {
+    final songs = queue ?? _deviceAudioService.deviceSongs;
+    if (songs.isEmpty) return;
+
+    _isLoading = true;
+
+    for (final item in songs) {
+      final id = item['id'];
+      final thumb = item['thumbnail'];
+      if (id != null && id.isNotEmpty && thumb != null && thumb.isNotEmpty) {
+        _artworkMap[id] = thumb;
+      }
+    }
+
+    VideoId safeLocalVideoId(String rawId) {
+      try {
+        return VideoId(rawId);
+      } catch (_) {
+        final padded = '${rawId}___________'.substring(0, 11);
+        try {
+          return VideoId(padded);
+        } catch (_) {
+          return VideoId('00000000000');
+        }
+      }
+    }
+
+    _playlist = songs
+        .map(
+          (item) => Video(
+            safeLocalVideoId(
+              item['id'] ??
+                  DeviceAudioService.generateLocalId(item['localPath'] ?? ''),
+            ),
+            item['title'] ?? 'Unknown Title',
+            item['author'] ?? 'Unknown Artist',
+            ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+            DateTime.now(),
+            '',
+            null,
+            '',
+            null,
+            ThumbnailSet(item['id'] ?? ''),
+            null,
+            Engagement(0, null, null),
+            false,
+          ),
+        )
+        .toList();
+
+    _currentIndex =
+        startIndex ?? songs.indexWhere((item) => item['id'] == songData['id']);
     if (_currentIndex == -1) _currentIndex = 0;
     if (_playlist.isNotEmpty) {
       await playSong(_playlist[_currentIndex], updateQueue: false);
