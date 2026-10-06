@@ -13,6 +13,7 @@ import '../widgets/artist_card.dart';
 import '../widgets/animated_equalizer.dart';
 import 'artist_profile_screen.dart';
 import 'album_screen.dart';
+import '../widgets/dilse_scrollbar.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -33,6 +34,7 @@ class _SearchScreenState extends State<SearchScreen>
   bool get wantKeepAlive => true;
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _albumsScrollController = ScrollController();
   List<Video> _searchResults = [];
   List<JioAlbum> _albumResults = [];
   int _searchTabIndex = 0; // 0 = Songs, 1 = Albums
@@ -189,6 +191,7 @@ class _SearchScreenState extends State<SearchScreen>
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _scrollController.dispose();
+    _albumsScrollController.dispose();
     _browsePageController.dispose();
     super.dispose();
   }
@@ -462,225 +465,233 @@ class _SearchScreenState extends State<SearchScreen>
                                   _albumResults.isNotEmpty &&
                                   !_isArtistSearchActive
                               ? _buildAlbumsGrid()
-                              : ListView.builder(
+                              : DilSeScrollbar(
                                   controller: _scrollController,
-                                  padding: const EdgeInsets.only(bottom: 160),
-                                  itemCount:
-                                      _searchResults.length +
-                                      (_isArtistSearchActive ? 1 : 0) +
-                                      (_isLoadingMore ? 1 : 0),
-                                  itemBuilder: (context, index) {
-                                    final int headerOffset =
-                                        _isArtistSearchActive ? 1 : 0;
-                                    if (_isArtistSearchActive && index == 0) {
-                                      return Container(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          16,
-                                          8,
-                                          16,
-                                          12,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.library_music_rounded,
-                                              color: Color(0xFF1DB954),
-                                              size: 18,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: Text(
-                                                '${_searchResults.length} Tracks • Discography',
-                                                style: const TextStyle(
-                                                  color: Colors.white70,
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w600,
-                                                  letterSpacing: 0.2,
+                                  bottomPadding: 90.0,
+                                  child: ListView.builder(
+                                    controller: _scrollController,
+                                    padding: const EdgeInsets.only(bottom: 160),
+                                    itemCount:
+                                        _searchResults.length +
+                                        (_isArtistSearchActive ? 1 : 0) +
+                                        (_isLoadingMore ? 1 : 0),
+                                    itemBuilder: (context, index) {
+                                      final int headerOffset =
+                                          _isArtistSearchActive ? 1 : 0;
+                                      if (_isArtistSearchActive && index == 0) {
+                                        return Container(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            16,
+                                            8,
+                                            16,
+                                            12,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              const Icon(
+                                                Icons.library_music_rounded,
+                                                color: Color(0xFF1DB954),
+                                                size: 18,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  '${_searchResults.length} Tracks • Discography',
+                                                  style: const TextStyle(
+                                                    color: Colors.white70,
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w600,
+                                                    letterSpacing: 0.2,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                            InkWell(
-                                              onTap: () {
-                                                HapticFeedback.lightImpact();
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        ArtistProfileScreen(
-                                                          artistName:
-                                                              _searchController
-                                                                  .text
-                                                                  .trim(),
-                                                        ),
-                                                  ),
-                                                );
-                                              },
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              child: Padding(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 4,
+                                              InkWell(
+                                                onTap: () {
+                                                  HapticFeedback.lightImpact();
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (_) =>
+                                                          ArtistProfileScreen(
+                                                            artistName:
+                                                                _searchController
+                                                                    .text
+                                                                    .trim(),
+                                                          ),
                                                     ),
-                                                child: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    Text(
-                                                      'Filters',
-                                                      style: TextStyle(
+                                                  );
+                                                },
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                child: Padding(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4,
+                                                      ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Text(
+                                                        'Filters',
+                                                        style: TextStyle(
+                                                          color: Theme.of(
+                                                            context,
+                                                          ).primaryColor,
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 2),
+                                                      Icon(
+                                                        Icons
+                                                            .arrow_forward_ios_rounded,
+                                                        size: 10,
                                                         color: Theme.of(
                                                           context,
                                                         ).primaryColor,
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.w700,
                                                       ),
-                                                    ),
-                                                    const SizedBox(width: 2),
-                                                    Icon(
-                                                      Icons
-                                                          .arrow_forward_ios_rounded,
-                                                      size: 10,
-                                                      color: Theme.of(
-                                                        context,
-                                                      ).primaryColor,
-                                                    ),
-                                                  ],
+                                                    ],
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                            if (_isLoadingMore) ...[
-                                              const SizedBox(width: 8),
-                                              const SizedBox(
-                                                width: 14,
-                                                height: 14,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                      color: Color(0xFF1DB954),
-                                                    ),
-                                              ),
+                                              if (_isLoadingMore) ...[
+                                                const SizedBox(width: 8),
+                                                const SizedBox(
+                                                  width: 14,
+                                                  height: 14,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        color: Color(
+                                                          0xFF1DB954,
+                                                        ),
+                                                      ),
+                                                ),
+                                              ],
                                             ],
+                                          ),
+                                        );
+                                      }
+
+                                      final songIndex = index - headerOffset;
+                                      if (songIndex == _searchResults.length) {
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 16,
+                                          ),
+                                          child: Center(
+                                            child: CircularProgressIndicator(
+                                              color: Theme.of(
+                                                context,
+                                              ).primaryColor,
+                                              strokeWidth: 2.5,
+                                            ),
+                                          ),
+                                        );
+                                      }
+
+                                      final video = _searchResults[songIndex];
+                                      final hdThumbnail =
+                                          MusicService.getHdThumbnail(
+                                            video.id.value,
+                                          );
+                                      final isCurrentSong =
+                                          _musicService.currentSong?.id.value ==
+                                          video.id.value;
+
+                                      return ListTile(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              vertical: 4,
+                                            ),
+                                        leading: ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          child: Image.network(
+                                            hdThumbnail,
+                                            width: 52,
+                                            height: 52,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, _, _) =>
+                                                Image.network(
+                                                  video.thumbnails.lowResUrl,
+                                                  width: 52,
+                                                  height: 52,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                          ),
+                                        ),
+                                        title: Text(
+                                          video.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: isCurrentSong
+                                                ? Theme.of(context).primaryColor
+                                                : Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          video.author,
+                                          maxLines: 1,
+                                          style: TextStyle(
+                                            color: isCurrentSong
+                                                ? Theme.of(context).primaryColor
+                                                      .withValues(alpha: 0.8)
+                                                : Colors.grey[400],
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (isCurrentSong)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  right: 8,
+                                                ),
+                                                child: AnimatedEqualizer(
+                                                  isPlaying:
+                                                      _musicService.isPlaying,
+                                                  barCount: 3,
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).primaryColor,
+                                                  size: 16,
+                                                ),
+                                              ),
+                                            IconButton(
+                                              icon: const Icon(
+                                                Icons.more_horiz,
+                                                color: Colors.white54,
+                                              ),
+                                              onPressed: () =>
+                                                  showSongOptionsBottomSheet(
+                                                    context,
+                                                    video,
+                                                  ),
+                                            ),
                                           ],
                                         ),
+                                        onTap: () {
+                                          if (_isArtistSearchActive) {
+                                            _musicService.playPlaylist(
+                                              _searchResults,
+                                              songIndex,
+                                            );
+                                          } else {
+                                            _musicService.startSongRadio(video);
+                                          }
+                                        },
                                       );
-                                    }
-
-                                    final songIndex = index - headerOffset;
-                                    if (songIndex == _searchResults.length) {
-                                      return Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 16,
-                                        ),
-                                        child: Center(
-                                          child: CircularProgressIndicator(
-                                            color: Theme.of(
-                                              context,
-                                            ).primaryColor,
-                                            strokeWidth: 2.5,
-                                          ),
-                                        ),
-                                      );
-                                    }
-
-                                    final video = _searchResults[songIndex];
-                                    final hdThumbnail =
-                                        MusicService.getHdThumbnail(
-                                          video.id.value,
-                                        );
-                                    final isCurrentSong =
-                                        _musicService.currentSong?.id.value ==
-                                        video.id.value;
-
-                                    return ListTile(
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                            vertical: 4,
-                                          ),
-                                      leading: ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Image.network(
-                                          hdThumbnail,
-                                          width: 52,
-                                          height: 52,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, _, _) =>
-                                              Image.network(
-                                                video.thumbnails.lowResUrl,
-                                                width: 52,
-                                                height: 52,
-                                                fit: BoxFit.cover,
-                                              ),
-                                        ),
-                                      ),
-                                      title: Text(
-                                        video.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: isCurrentSong
-                                              ? Theme.of(context).primaryColor
-                                              : Colors.white,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      subtitle: Text(
-                                        video.author,
-                                        maxLines: 1,
-                                        style: TextStyle(
-                                          color: isCurrentSong
-                                              ? Theme.of(context).primaryColor
-                                                    .withValues(alpha: 0.8)
-                                              : Colors.grey[400],
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                      trailing: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (isCurrentSong)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                right: 8,
-                                              ),
-                                              child: AnimatedEqualizer(
-                                                isPlaying:
-                                                    _musicService.isPlaying,
-                                                barCount: 3,
-                                                color: Theme.of(
-                                                  context,
-                                                ).primaryColor,
-                                                size: 16,
-                                              ),
-                                            ),
-                                          IconButton(
-                                            icon: const Icon(
-                                              Icons.more_horiz,
-                                              color: Colors.white54,
-                                            ),
-                                            onPressed: () =>
-                                                showSongOptionsBottomSheet(
-                                                  context,
-                                                  video,
-                                                ),
-                                          ),
-                                        ],
-                                      ),
-                                      onTap: () {
-                                        if (_isArtistSearchActive) {
-                                          _musicService.playPlaylist(
-                                            _searchResults,
-                                            songIndex,
-                                          );
-                                        } else {
-                                          _musicService.startSongRadio(video);
-                                        }
-                                      },
-                                    );
-                                  },
+                                    },
+                                  ),
                                 ),
                         ),
                       ],
@@ -1498,18 +1509,23 @@ class _SearchScreenState extends State<SearchScreen>
 
   // ─── Albums Search Results Grid ───────────────────────────────────────────
   Widget _buildAlbumsGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 160),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 0.72,
+    return DilSeScrollbar(
+      controller: _albumsScrollController,
+      bottomPadding: 90.0,
+      child: GridView.builder(
+        controller: _albumsScrollController,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 160),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
+          childAspectRatio: 0.72,
+        ),
+        itemCount: _albumResults.length,
+        itemBuilder: (context, i) {
+          return _buildAlbumItemCard(_albumResults[i], heroPrefix: 'search');
+        },
       ),
-      itemCount: _albumResults.length,
-      itemBuilder: (context, i) {
-        return _buildAlbumItemCard(_albumResults[i], heroPrefix: 'search');
-      },
     );
   }
 

@@ -11,6 +11,7 @@ import '../services/dynamic_artist_service.dart';
 import '../services/device_audio_service.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../widgets/animated_equalizer.dart';
+import '../widgets/dilse_scrollbar.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -25,6 +26,12 @@ class _LibraryScreenState extends State<LibraryScreen>
   final PreferencesService _prefs = PreferencesService();
   final DeviceAudioService _deviceAudio = DeviceAudioService();
   final TextEditingController _deviceSearchController = TextEditingController();
+  final ScrollController _downloadedScrollController = ScrollController();
+  final ScrollController _deviceScrollController = ScrollController();
+  final ScrollController _likedScrollController = ScrollController();
+  final ScrollController _playlistsScrollController = ScrollController();
+  final ScrollController _artistsScrollController = ScrollController();
+  final ScrollController _historyScrollController = ScrollController();
   String _deviceSearchFilter = '';
 
   @override
@@ -49,6 +56,12 @@ class _LibraryScreenState extends State<LibraryScreen>
     _prefs.removeListener(_onStateChanged);
     _deviceAudio.removeListener(_onStateChanged);
     _deviceSearchController.dispose();
+    _downloadedScrollController.dispose();
+    _deviceScrollController.dispose();
+    _likedScrollController.dispose();
+    _playlistsScrollController.dispose();
+    _artistsScrollController.dispose();
+    _historyScrollController.dispose();
     super.dispose();
   }
 
@@ -197,190 +210,199 @@ class _LibraryScreenState extends State<LibraryScreen>
                     subtitle:
                         'Tap the download icon while playing any song to listen offline without internet.',
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 160, top: 12),
-                    itemCount: downloaded.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return _buildActionHeader(
-                          count: downloaded.length,
-                          onPlayAll: () {
-                            HapticFeedback.lightImpact();
-                            _musicService.playDownloadedSong(downloaded.first);
-                          },
-                          onShuffle: () {
-                            HapticFeedback.lightImpact();
-                            _musicService.toggleShuffle();
-                            _musicService.playDownloadedSong(downloaded.first);
-                          },
-                        );
-                      }
+                : DilSeScrollbar(
+                    controller: _downloadedScrollController,
+                    bottomPadding: 90.0,
+                    child: ListView.builder(
+                      controller: _downloadedScrollController,
+                      padding: const EdgeInsets.only(bottom: 160, top: 12),
+                      itemCount: downloaded.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          return _buildActionHeader(
+                            count: downloaded.length,
+                            onPlayAll: () {
+                              HapticFeedback.lightImpact();
+                              _musicService.playDownloadedSong(
+                                downloaded.first,
+                              );
+                            },
+                            onShuffle: () {
+                              HapticFeedback.lightImpact();
+                              _musicService.toggleShuffle();
+                              _musicService.playDownloadedSong(
+                                downloaded.first,
+                              );
+                            },
+                          );
+                        }
 
-                      final song = downloaded[index - 1];
-                      final songId = song['id'] ?? '';
-                      final sizeBytes = _songFileSizes[songId] ?? 0;
-                      final sizeFormatted = _formatBytes(sizeBytes);
-                      final isCurrent =
-                          _musicService.currentSong?.id.value == songId;
+                        final song = downloaded[index - 1];
+                        final songId = song['id'] ?? '';
+                        final sizeBytes = _songFileSizes[songId] ?? 0;
+                        final sizeFormatted = _formatBytes(sizeBytes);
+                        final isCurrent =
+                            _musicService.currentSong?.id.value == songId;
 
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 4,
-                        ),
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: SizedBox(
-                            width: 52,
-                            height: 52,
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                Image.network(
-                                  song['thumbnail'] ?? '',
-                                  cacheWidth: 120,
-                                  cacheHeight: 120,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => Container(
-                                    color: const Color(0xFF1E1E28),
-                                    child: const Icon(
-                                      Icons.music_note,
-                                      color: Colors.white54,
-                                    ),
-                                  ),
-                                ),
-                                if (isCurrent)
-                                  Container(
-                                    color: Colors.black54,
-                                    child: Center(
-                                      child: AnimatedEqualizer(
-                                        isPlaying: _musicService.isPlaying,
-                                        size: 22,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
                           ),
-                        ),
-                        title: Text(
-                          song['title'] ?? 'Unknown',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            fontSize: 14.5,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                        subtitle: Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                song['author'] ?? 'Unknown Artist',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.6),
-                                  fontSize: 12.5,
-                                ),
-                              ),
-                            ),
-                            if (sizeBytes > 0) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 1.5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white12,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  sizeFormatted,
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: SizedBox(
+                              width: 52,
+                              height: 52,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Image.network(
+                                    song['thumbnail'] ?? '',
+                                    cacheWidth: 120,
+                                    cacheHeight: 120,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) => Container(
+                                      color: const Color(0xFF1E1E28),
+                                      child: const Icon(
+                                        Icons.music_note,
+                                        color: Colors.white54,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.offline_pin_rounded,
-                              color: Color(0xFF1DB954),
-                              size: 20,
-                            ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.delete_outline_rounded,
-                                color: Colors.white38,
-                                size: 20,
-                              ),
-                              onPressed: () async {
-                                HapticFeedback.mediumImpact();
-                                final confirm = await showDialog<bool>(
-                                  context: context,
-                                  builder: (ctx) => AlertDialog(
-                                    backgroundColor: const Color(0xFF1E1E28),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    title: const Text(
-                                      'Delete Download?',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    content: Text(
-                                      'Remove "${song['title']}" from offline storage?',
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                      ),
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(ctx, false),
-                                        child: const Text('Cancel'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(ctx, true),
-                                        child: const Text(
-                                          'Delete',
-                                          style: TextStyle(
-                                            color: Colors.redAccent,
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                  if (isCurrent)
+                                    Container(
+                                      color: Colors.black54,
+                                      child: Center(
+                                        child: AnimatedEqualizer(
+                                          isPlaying: _musicService.isPlaying,
+                                          size: 22,
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                );
-                                if (confirm == true) {
-                                  await _musicService.deleteDownloadedSong(
-                                    song['id']!,
-                                  );
-                                }
-                              },
+                                    ),
+                                ],
+                              ),
                             ),
-                          ],
-                        ),
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          _musicService.playDownloadedSong(song);
-                        },
-                      );
-                    },
+                          ),
+                          title: Text(
+                            song['title'] ?? 'Unknown',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              fontSize: 14.5,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          subtitle: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  song['author'] ?? 'Unknown Artist',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.6),
+                                    fontSize: 12.5,
+                                  ),
+                                ),
+                              ),
+                              if (sizeBytes > 0) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 1.5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white12,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    sizeFormatted,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.offline_pin_rounded,
+                                color: Color(0xFF1DB954),
+                                size: 20,
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline_rounded,
+                                  color: Colors.white38,
+                                  size: 20,
+                                ),
+                                onPressed: () async {
+                                  HapticFeedback.mediumImpact();
+                                  final confirm = await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      backgroundColor: const Color(0xFF1E1E28),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      title: const Text(
+                                        'Delete Download?',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      content: Text(
+                                        'Remove "${song['title']}" from offline storage?',
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(ctx, false),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(ctx, true),
+                                          child: const Text(
+                                            'Delete',
+                                            style: TextStyle(
+                                              color: Colors.redAccent,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirm == true) {
+                                    await _musicService.deleteDownloadedSong(
+                                      song['id']!,
+                                    );
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            _musicService.playDownloadedSong(song);
+                          },
+                        );
+                      },
+                    ),
                   ),
 
             // TAB 2: DEVICE AUDIO
@@ -394,106 +416,111 @@ class _LibraryScreenState extends State<LibraryScreen>
                     subtitle:
                         'Tap the heart icon while playing any song to save it in your favorites collection.',
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 160, top: 12),
-                    itemCount: liked.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return _buildActionHeader(
-                          count: liked.length,
-                          onPlayAll: () {
-                            HapticFeedback.lightImpact();
-                            _musicService.playLikedSong(liked.first);
-                          },
-                          onShuffle: () {
-                            HapticFeedback.lightImpact();
-                            _musicService.toggleShuffle();
-                            _musicService.playLikedSong(liked.first);
-                          },
-                        );
-                      }
+                : DilSeScrollbar(
+                    controller: _likedScrollController,
+                    bottomPadding: 90.0,
+                    child: ListView.builder(
+                      controller: _likedScrollController,
+                      padding: const EdgeInsets.only(bottom: 160, top: 12),
+                      itemCount: liked.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          return _buildActionHeader(
+                            count: liked.length,
+                            onPlayAll: () {
+                              HapticFeedback.lightImpact();
+                              _musicService.playLikedSong(liked.first);
+                            },
+                            onShuffle: () {
+                              HapticFeedback.lightImpact();
+                              _musicService.toggleShuffle();
+                              _musicService.playLikedSong(liked.first);
+                            },
+                          );
+                        }
 
-                      final song = liked[index - 1];
-                      final songId = song['id'] ?? '';
-                      final isCurrent =
-                          _musicService.currentSong?.id.value == songId;
+                        final song = liked[index - 1];
+                        final songId = song['id'] ?? '';
+                        final isCurrent =
+                            _musicService.currentSong?.id.value == songId;
 
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 4,
-                        ),
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: SizedBox(
-                            width: 52,
-                            height: 52,
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                Image.network(
-                                  song['thumbnail'] ?? '',
-                                  fit: BoxFit.cover,
-                                  cacheWidth: 120,
-                                  cacheHeight: 120,
-                                  errorBuilder: (_, _, _) => Container(
-                                    color: const Color(0xFF1E1E28),
-                                    child: const Icon(
-                                      Icons.music_note,
-                                      color: Colors.white54,
-                                    ),
-                                  ),
-                                ),
-                                if (isCurrent)
-                                  Container(
-                                    color: Colors.black54,
-                                    child: Center(
-                                      child: AnimatedEqualizer(
-                                        isPlaying: _musicService.isPlaying,
-                                        size: 22,
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
+                          ),
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: SizedBox(
+                              width: 52,
+                              height: 52,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Image.network(
+                                    song['thumbnail'] ?? '',
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 120,
+                                    cacheHeight: 120,
+                                    errorBuilder: (_, _, _) => Container(
+                                      color: const Color(0xFF1E1E28),
+                                      child: const Icon(
+                                        Icons.music_note,
+                                        color: Colors.white54,
                                       ),
                                     ),
                                   ),
-                              ],
+                                  if (isCurrent)
+                                    Container(
+                                      color: Colors.black54,
+                                      child: Center(
+                                        child: AnimatedEqualizer(
+                                          isPlaying: _musicService.isPlaying,
+                                          size: 22,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        title: Text(
-                          song['title'] ?? '',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            fontSize: 14.5,
-                            letterSpacing: -0.2,
+                          title: Text(
+                            song['title'] ?? '',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              fontSize: 14.5,
+                              letterSpacing: -0.2,
+                            ),
                           ),
-                        ),
-                        subtitle: Text(
-                          song['author'] ?? '',
-                          maxLines: 1,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.6),
-                            fontSize: 12.5,
+                          subtitle: Text(
+                            song['author'] ?? '',
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 12.5,
+                            ),
                           ),
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(
-                            Icons.favorite_rounded,
-                            color: Color(0xFFFA2D48),
-                            size: 22,
+                          trailing: IconButton(
+                            icon: const Icon(
+                              Icons.favorite_rounded,
+                              color: Color(0xFFFA2D48),
+                              size: 22,
+                            ),
+                            onPressed: () {
+                              HapticFeedback.selectionClick();
+                              _musicService.removeLikedSong(song['id'] ?? '');
+                            },
                           ),
-                          onPressed: () {
-                            HapticFeedback.selectionClick();
-                            _musicService.removeLikedSong(song['id'] ?? '');
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            _musicService.playLikedSong(song);
                           },
-                        ),
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          _musicService.playLikedSong(song);
-                        },
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
 
             // TAB 3: PLAYLISTS
@@ -548,189 +575,197 @@ class _LibraryScreenState extends State<LibraryScreen>
                       ],
                     ),
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 160, top: 12),
-                    itemCount: _musicService.customPlaylists.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                '${_musicService.customPlaylists.length} Playlists',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Row(
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.add_circle_outline_rounded,
-                                      color: Colors.white70,
-                                      size: 20,
-                                    ),
-                                    tooltip: 'New Playlist',
-                                    onPressed: _showCreatePlaylistDialog,
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.queue_music_rounded,
-                                      color: Color(0xFF1DB954),
-                                      size: 20,
-                                    ),
-                                    tooltip: 'Import from Spotify',
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              const SpotifyImportScreen(),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-
-                      final playlist = _musicService.customPlaylists[index - 1];
-                      final name =
-                          (playlist['name'] as String?) ?? 'Unknown Playlist';
-                      final songs = List<Map<String, dynamic>>.from(
-                        playlist['songs'] ?? [],
-                      );
-                      final id = (playlist['id'] as String?) ?? '';
-                      final firstThumbnail = songs.isNotEmpty
-                          ? songs.first['thumbnail'] as String?
-                          : null;
-
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 6,
-                        ),
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Container(
-                            width: 52,
-                            height: 52,
-                            decoration: BoxDecoration(
-                              color: _prefs.themeColor.withValues(alpha: 0.16),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.08),
-                                width: 1,
-                              ),
-                              borderRadius: BorderRadius.circular(10),
+                : DilSeScrollbar(
+                    controller: _playlistsScrollController,
+                    bottomPadding: 90.0,
+                    child: ListView.builder(
+                      controller: _playlistsScrollController,
+                      padding: const EdgeInsets.only(bottom: 160, top: 12),
+                      itemCount: _musicService.customPlaylists.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
                             ),
-                            child:
-                                firstThumbnail != null &&
-                                    firstThumbnail.isNotEmpty
-                                ? Image.network(
-                                    firstThumbnail,
-                                    fit: BoxFit.cover,
-                                    cacheWidth: 120,
-                                    cacheHeight: 120,
-                                    errorBuilder: (_, _, _) => Icon(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '${_musicService.customPlaylists.length} Playlists',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Row(
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.add_circle_outline_rounded,
+                                        color: Colors.white70,
+                                        size: 20,
+                                      ),
+                                      tooltip: 'New Playlist',
+                                      onPressed: _showCreatePlaylistDialog,
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.queue_music_rounded,
+                                        color: Color(0xFF1DB954),
+                                        size: 20,
+                                      ),
+                                      tooltip: 'Import from Spotify',
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                const SpotifyImportScreen(),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        final playlist =
+                            _musicService.customPlaylists[index - 1];
+                        final name =
+                            (playlist['name'] as String?) ?? 'Unknown Playlist';
+                        final songs = List<Map<String, dynamic>>.from(
+                          playlist['songs'] ?? [],
+                        );
+                        final id = (playlist['id'] as String?) ?? '';
+                        final firstThumbnail = songs.isNotEmpty
+                            ? songs.first['thumbnail'] as String?
+                            : null;
+
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 6,
+                          ),
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              width: 52,
+                              height: 52,
+                              decoration: BoxDecoration(
+                                color: _prefs.themeColor.withValues(
+                                  alpha: 0.16,
+                                ),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.08),
+                                  width: 1,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child:
+                                  firstThumbnail != null &&
+                                      firstThumbnail.isNotEmpty
+                                  ? Image.network(
+                                      firstThumbnail,
+                                      fit: BoxFit.cover,
+                                      cacheWidth: 120,
+                                      cacheHeight: 120,
+                                      errorBuilder: (_, _, _) => Icon(
+                                        Icons.queue_music_rounded,
+                                        color: _prefs.themeColor.withValues(
+                                          alpha: 0.85,
+                                        ),
+                                        size: 26,
+                                      ),
+                                    )
+                                  : Icon(
                                       Icons.queue_music_rounded,
                                       color: _prefs.themeColor.withValues(
                                         alpha: 0.85,
                                       ),
                                       size: 26,
                                     ),
-                                  )
-                                : Icon(
-                                    Icons.queue_music_rounded,
-                                    color: _prefs.themeColor.withValues(
-                                      alpha: 0.85,
-                                    ),
-                                    size: 26,
-                                  ),
-                          ),
-                        ),
-                        title: Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            fontSize: 15,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                        subtitle: Text(
-                          '${songs.length} tracks',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.6),
-                            fontSize: 13,
-                          ),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(
-                                Icons.edit_outlined,
-                                color: Colors.white54,
-                                size: 20,
-                              ),
-                              tooltip: 'Rename playlist',
-                              onPressed: () {
-                                HapticFeedback.lightImpact();
-                                _showRenamePlaylistDialog(id, name);
-                              },
                             ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                color: Colors.white54,
-                                size: 22,
-                              ),
-                              tooltip: 'Delete playlist',
-                              onPressed: () {
-                                HapticFeedback.lightImpact();
-                                _showDeletePlaylistDialog(id, name);
-                              },
+                          ),
+                          title: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              fontSize: 15,
+                              letterSpacing: -0.2,
                             ),
-                            const SizedBox(width: 4),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.play_circle_fill_rounded,
-                                color: Colors.white,
-                                size: 36,
+                          ),
+                          subtitle: Text(
+                            '${songs.length} tracks',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 13,
+                            ),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.edit_outlined,
+                                  color: Colors.white54,
+                                  size: 20,
+                                ),
+                                tooltip: 'Rename playlist',
+                                onPressed: () {
+                                  HapticFeedback.lightImpact();
+                                  _showRenamePlaylistDialog(id, name);
+                                },
                               ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.white54,
+                                  size: 22,
+                                ),
+                                tooltip: 'Delete playlist',
+                                onPressed: () {
+                                  HapticFeedback.lightImpact();
+                                  _showDeletePlaylistDialog(id, name);
+                                },
+                              ),
+                              const SizedBox(width: 4),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.play_circle_fill_rounded,
+                                  color: Colors.white,
+                                  size: 36,
+                                ),
 
-                              onPressed: songs.isEmpty
-                                  ? null
-                                  : () {
-                                      HapticFeedback.lightImpact();
-                                      _musicService.playCustomPlaylist(id, 0);
-                                    },
-                            ),
-                          ],
-                        ),
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  CustomPlaylistScreen(playlistId: id),
-                            ),
-                          );
-                        },
-                      );
-                    },
+                                onPressed: songs.isEmpty
+                                    ? null
+                                    : () {
+                                        HapticFeedback.lightImpact();
+                                        _musicService.playCustomPlaylist(id, 0);
+                                      },
+                              ),
+                            ],
+                          ),
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    CustomPlaylistScreen(playlistId: id),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
                   ),
 
             // TAB 4: FOLLOWED ARTISTS
@@ -741,169 +776,176 @@ class _LibraryScreenState extends State<LibraryScreen>
                     subtitle:
                         'Tap the Follow button on any artist profile to keep track of their releases and albums here.',
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 160, top: 12),
-                    itemCount: followedArtists.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                '${followedArtists.length} ${followedArtists.length == 1 ? 'Followed Artist' : 'Followed Artists'}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: -0.2,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-
-                      final artistName = followedArtists[index - 1];
-                      final artistItem = DynamicArtistService().findArtist(
-                        artistName,
-                      );
-
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 4,
-                        ),
-                        leading: Container(
-                          width: 52,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.18),
-                              width: 1.2,
+                : DilSeScrollbar(
+                    controller: _artistsScrollController,
+                    bottomPadding: 90.0,
+                    child: ListView.builder(
+                      controller: _artistsScrollController,
+                      padding: const EdgeInsets.only(bottom: 160, top: 12),
+                      itemCount: followedArtists.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.35),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: ClipOval(
-                            child:
-                                artistItem != null &&
-                                    artistItem.imageUrl.isNotEmpty
-                                ? Image.network(
-                                    artistItem.imageUrl,
-                                    fit: BoxFit.cover,
-                                    cacheWidth: 120,
-                                    cacheHeight: 120,
-                                    errorBuilder: (_, _, _) =>
-                                        _buildArtistAvatarFallback(artistName),
-                                  )
-                                : _buildArtistAvatarFallback(artistName),
-                          ),
-                        ),
-                        title: Text(
-                          artistItem?.name ?? artistName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            fontSize: 15,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                        subtitle: Row(
-                          children: [
-                            if (artistItem != null &&
-                                artistItem.badge.isNotEmpty) ...[
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 5,
-                                  vertical: 1.5,
-                                ),
-                                margin: const EdgeInsets.only(right: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  artistItem.badge,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '${followedArtists.length} ${followedArtists.length == 1 ? 'Followed Artist' : 'Followed Artists'}',
                                   style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        final artistName = followedArtists[index - 1];
+                        final artistItem = DynamicArtistService().findArtist(
+                          artistName,
+                        );
+
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
+                          ),
+                          leading: Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.18),
+                                width: 1.2,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.35),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: ClipOval(
+                              child:
+                                  artistItem != null &&
+                                      artistItem.imageUrl.isNotEmpty
+                                  ? Image.network(
+                                      artistItem.imageUrl,
+                                      fit: BoxFit.cover,
+                                      cacheWidth: 120,
+                                      cacheHeight: 120,
+                                      errorBuilder: (_, _, _) =>
+                                          _buildArtistAvatarFallback(
+                                            artistName,
+                                          ),
+                                    )
+                                  : _buildArtistAvatarFallback(artistName),
+                            ),
+                          ),
+                          title: Text(
+                            artistItem?.name ?? artistName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              fontSize: 15,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          subtitle: Row(
+                            children: [
+                              if (artistItem != null &&
+                                  artistItem.badge.isNotEmpty) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5,
+                                    vertical: 1.5,
+                                  ),
+                                  margin: const EdgeInsets.only(right: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    artistItem.badge,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              Flexible(
+                                child: Text(
+                                  artistItem?.genre ?? 'Followed Artist',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.55),
+                                    fontSize: 12.5,
                                   ),
                                 ),
                               ),
                             ],
-                            Flexible(
-                              child: Text(
-                                artistItem?.genre ?? 'Followed Artist',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.55),
-                                  fontSize: 12.5,
-                                ),
+                          ),
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.15),
+                                width: 0.8,
                               ),
                             ),
-                          ],
-                        ),
-                        trailing: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.15),
-                              width: 0.8,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Icon(
-                                Icons.check_rounded,
-                                size: 12,
-                                color: Colors.white70,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                'Following',
-                                style: TextStyle(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(
+                                  Icons.check_rounded,
+                                  size: 12,
                                   color: Colors.white70,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Following',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => ArtistProfileScreen(
+                                  artist: artistItem,
+                                  artistName: artistItem?.name ?? artistName,
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => ArtistProfileScreen(
-                                artist: artistItem,
-                                artistName: artistItem?.name ?? artistName,
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    },
+                            );
+                          },
+                        );
+                      },
+                    ),
                   ),
 
             // TAB 5: LISTENING HISTORY
@@ -914,126 +956,131 @@ class _LibraryScreenState extends State<LibraryScreen>
                     subtitle:
                         'Songs you stream will automatically appear here for quick replay.',
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 160, top: 12),
-                    itemCount: history.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                '${history.length} Recently Played',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: -0.2,
-                                ),
-                              ),
-                              TextButton.icon(
-                                icon: const Icon(
-                                  Icons.delete_sweep_rounded,
-                                  size: 16,
-                                  color: Colors.white54,
-                                ),
-                                label: const Text(
-                                  'Clear',
-                                  style: TextStyle(
-                                    color: Colors.white54,
-                                    fontSize: 13,
+                : DilSeScrollbar(
+                    controller: _historyScrollController,
+                    bottomPadding: 90.0,
+                    child: ListView.builder(
+                      controller: _historyScrollController,
+                      padding: const EdgeInsets.only(bottom: 160, top: 12),
+                      itemCount: history.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '${history.length} Recently Played',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: -0.2,
                                   ),
                                 ),
-                                onPressed: () {
-                                  HapticFeedback.lightImpact();
-                                  _prefs.clearListeningHistory();
-                                },
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-
-                      final song = history[index - 1];
-                      final songId = song['id'] ?? '';
-                      final isCurrent =
-                          _musicService.currentSong?.id.value == songId;
-
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 4,
-                        ),
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: SizedBox(
-                            width: 52,
-                            height: 52,
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                Image.network(
-                                  song['thumbnail'] ?? '',
-                                  fit: BoxFit.cover,
-                                  cacheWidth: 120,
-                                  cacheHeight: 120,
-                                  errorBuilder: (_, _, _) => Container(
-                                    color: const Color(0xFF1E1E28),
-                                    child: const Icon(
-                                      Icons.music_note,
+                                TextButton.icon(
+                                  icon: const Icon(
+                                    Icons.delete_sweep_rounded,
+                                    size: 16,
+                                    color: Colors.white54,
+                                  ),
+                                  label: const Text(
+                                    'Clear',
+                                    style: TextStyle(
                                       color: Colors.white54,
+                                      fontSize: 13,
                                     ),
                                   ),
+                                  onPressed: () {
+                                    HapticFeedback.lightImpact();
+                                    _prefs.clearListeningHistory();
+                                  },
                                 ),
-                                if (isCurrent)
-                                  Container(
-                                    color: Colors.black54,
-                                    child: Center(
-                                      child: AnimatedEqualizer(
-                                        isPlaying: _musicService.isPlaying,
-                                        size: 22,
+                              ],
+                            ),
+                          );
+                        }
+
+                        final song = history[index - 1];
+                        final songId = song['id'] ?? '';
+                        final isCurrent =
+                            _musicService.currentSong?.id.value == songId;
+
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
+                          ),
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: SizedBox(
+                              width: 52,
+                              height: 52,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Image.network(
+                                    song['thumbnail'] ?? '',
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 120,
+                                    cacheHeight: 120,
+                                    errorBuilder: (_, _, _) => Container(
+                                      color: const Color(0xFF1E1E28),
+                                      child: const Icon(
+                                        Icons.music_note,
+                                        color: Colors.white54,
                                       ),
                                     ),
                                   ),
-                              ],
+                                  if (isCurrent)
+                                    Container(
+                                      color: Colors.black54,
+                                      child: Center(
+                                        child: AnimatedEqualizer(
+                                          isPlaying: _musicService.isPlaying,
+                                          size: 22,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        title: Text(
-                          song['title'] ?? 'Unknown Track',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            fontSize: 14.5,
-                            letterSpacing: -0.2,
+                          title: Text(
+                            song['title'] ?? 'Unknown Track',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              fontSize: 14.5,
+                              letterSpacing: -0.2,
+                            ),
                           ),
-                        ),
-                        subtitle: Text(
-                          song['author'] ?? 'Unknown Artist',
-                          maxLines: 1,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.6),
-                            fontSize: 12.5,
+                          subtitle: Text(
+                            song['author'] ?? 'Unknown Artist',
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 12.5,
+                            ),
                           ),
-                        ),
-                        trailing: const Icon(
-                          Icons.play_circle_fill_rounded,
-                          color: Colors.white38,
-                          size: 24,
-                        ),
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          _musicService.playHistorySong(song);
-                        },
-                      );
-                    },
+                          trailing: const Icon(
+                            Icons.play_circle_fill_rounded,
+                            color: Colors.white38,
+                            size: 24,
+                          ),
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            _musicService.playHistorySong(song);
+                          },
+                        );
+                      },
+                    ),
                   ),
           ],
         ),
@@ -1174,282 +1221,287 @@ class _LibraryScreenState extends State<LibraryScreen>
       totalBytes += int.tryParse(s['fileSize'] ?? '0') ?? 0;
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 160, top: 12),
-      itemCount: filteredSongs.length + 2,
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildActionHeader(
-                count: filteredSongs.length,
-                onPlayAll: () {
-                  HapticFeedback.lightImpact();
-                  if (filteredSongs.isNotEmpty) {
-                    _musicService.playDeviceSong(
-                      filteredSongs.first,
-                      queue: filteredSongs,
-                      startIndex: 0,
-                    );
-                  }
-                },
-                onShuffle: () {
-                  HapticFeedback.lightImpact();
-                  if (filteredSongs.isNotEmpty) {
-                    _musicService.toggleShuffle();
-                    _musicService.playDeviceSong(
-                      filteredSongs.first,
-                      queue: filteredSongs,
-                      startIndex: 0,
-                    );
-                  }
-                },
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 6,
+    return DilSeScrollbar(
+      controller: _deviceScrollController,
+      bottomPadding: 90.0,
+      child: ListView.builder(
+        controller: _deviceScrollController,
+        padding: const EdgeInsets.only(bottom: 160, top: 12),
+        itemCount: filteredSongs.length + 2,
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildActionHeader(
+                  count: filteredSongs.length,
+                  onPlayAll: () {
+                    HapticFeedback.lightImpact();
+                    if (filteredSongs.isNotEmpty) {
+                      _musicService.playDeviceSong(
+                        filteredSongs.first,
+                        queue: filteredSongs,
+                        startIndex: 0,
+                      );
+                    }
+                  },
+                  onShuffle: () {
+                    HapticFeedback.lightImpact();
+                    if (filteredSongs.isNotEmpty) {
+                      _musicService.toggleShuffle();
+                      _musicService.playDeviceSong(
+                        filteredSongs.first,
+                        queue: filteredSongs,
+                        startIndex: 0,
+                      );
+                    }
+                  },
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.12),
-                            width: 0.8,
-                          ),
-                        ),
-                        child: TextField(
-                          controller: _deviceSearchController,
-                          onChanged: (val) {
-                            setState(() {
-                              _deviceSearchFilter = val;
-                            });
-                          },
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                          ),
-                          decoration: InputDecoration(
-                            hintText:
-                                'Filter ${deviceSongs.length} local tracks...',
-                            hintStyle: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.35),
-                              fontSize: 13,
-                            ),
-                            prefixIcon: const Icon(
-                              Icons.search_rounded,
-                              color: Colors.white54,
-                              size: 18,
-                            ),
-                            suffixIcon: _deviceSearchFilter.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(
-                                      Icons.close_rounded,
-                                      color: Colors.white54,
-                                      size: 16,
-                                    ),
-                                    onPressed: () {
-                                      _deviceSearchController.clear();
-                                      setState(() {
-                                        _deviceSearchFilter = '';
-                                      });
-                                    },
-                                  )
-                                : null,
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 10,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.refresh_rounded,
-                        color: Colors.white70,
-                        size: 20,
-                      ),
-                      tooltip: 'Rescan Device',
-                      onPressed: () async {
-                        HapticFeedback.mediumImpact();
-                        final messenger = ScaffoldMessenger.of(context);
-                        final count = await _deviceAudio.scanDeviceStorage();
-                        if (!mounted) return;
-                        messenger.showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              count > 0
-                                  ? 'Found $count new tracks!'
-                                  : _deviceAudio.scanStatusMessage,
-                            ),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.add_rounded,
-                        color: Colors.white70,
-                        size: 22,
-                      ),
-                      tooltip: 'Add Audio Files',
-                      onPressed: () {
-                        HapticFeedback.lightImpact();
-                        _showPickOptionsSheet();
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              if (totalBytes > 0)
                 Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 4,
+                    horizontal: 16,
+                    vertical: 6,
                   ),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Storage Used: ${_formatBytes(totalBytes)} • ${deviceSongs.length} local files',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.45),
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w500,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.12),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: TextField(
+                            controller: _deviceSearchController,
+                            onChanged: (val) {
+                              setState(() {
+                                _deviceSearchFilter = val;
+                              });
+                            },
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                            ),
+                            decoration: InputDecoration(
+                              hintText:
+                                  'Filter ${deviceSongs.length} local tracks...',
+                              hintStyle: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.35),
+                                fontSize: 13,
+                              ),
+                              prefixIcon: const Icon(
+                                Icons.search_rounded,
+                                color: Colors.white54,
+                                size: 18,
+                              ),
+                              suffixIcon: _deviceSearchFilter.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(
+                                        Icons.close_rounded,
+                                        color: Colors.white54,
+                                        size: 16,
+                                      ),
+                                      onPressed: () {
+                                        _deviceSearchController.clear();
+                                        setState(() {
+                                          _deviceSearchFilter = '';
+                                        });
+                                      },
+                                    )
+                                  : null,
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 10,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.refresh_rounded,
+                          color: Colors.white70,
+                          size: 20,
+                        ),
+                        tooltip: 'Rescan Device',
+                        onPressed: () async {
+                          HapticFeedback.mediumImpact();
+                          final messenger = ScaffoldMessenger.of(context);
+                          final count = await _deviceAudio.scanDeviceStorage();
+                          if (!mounted) return;
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                count > 0
+                                    ? 'Found $count new tracks!'
+                                    : _deviceAudio.scanStatusMessage,
+                              ),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.add_rounded,
+                          color: Colors.white70,
+                          size: 22,
+                        ),
+                        tooltip: 'Add Audio Files',
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          _showPickOptionsSheet();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                if (totalBytes > 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 4,
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Storage Used: ${_formatBytes(totalBytes)} • ${deviceSongs.length} local files',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.45),
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
-                ),
-            ],
-          );
-        }
+              ],
+            );
+          }
 
-        if (index == 1 && filteredSongs.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.all(40),
-            child: Center(
-              child: Text(
-                'No local tracks matching "$_deviceSearchFilter"',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          );
-        }
-
-        if (filteredSongs.isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        final song = filteredSongs[index - 1];
-        final songId = song['id'] ?? '';
-        final isCurrent = _musicService.currentSong?.id.value == songId;
-        final fileSize = int.tryParse(song['fileSize'] ?? '0') ?? 0;
-        final format = song['format'] ?? 'AUDIO';
-
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          leading: _buildDeviceArtwork(song['thumbnail'], isCurrent),
-          title: Text(
-            song['title'] ?? 'Unknown Track',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-              fontSize: 14.5,
-              letterSpacing: -0.2,
-            ),
-          ),
-          subtitle: Row(
-            children: [
-              Flexible(
+          if (index == 1 && filteredSongs.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.all(40),
+              child: Center(
                 child: Text(
-                  song['author'] ?? 'Device Audio',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  'No local tracks matching "$_deviceSearchFilter"',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontSize: 12.5,
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 14,
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 5,
-                  vertical: 1.5,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1DB954).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                child: Text(
-                  format,
-                  style: const TextStyle(
-                    color: Color(0xFF1DB954),
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w700,
+            );
+          }
+
+          if (filteredSongs.isEmpty) {
+            return const SizedBox.shrink();
+          }
+
+          final song = filteredSongs[index - 1];
+          final songId = song['id'] ?? '';
+          final isCurrent = _musicService.currentSong?.id.value == songId;
+          final fileSize = int.tryParse(song['fileSize'] ?? '0') ?? 0;
+          final format = song['format'] ?? 'AUDIO';
+
+          return ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
+            leading: _buildDeviceArtwork(song['thumbnail'], isCurrent),
+            title: Text(
+              song['title'] ?? 'Unknown Track',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                fontSize: 14.5,
+                letterSpacing: -0.2,
+              ),
+            ),
+            subtitle: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    song['author'] ?? 'Device Audio',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 12.5,
+                    ),
                   ),
                 ),
-              ),
-              if (fileSize > 0) ...[
-                const SizedBox(width: 4),
+                const SizedBox(width: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 5,
                     vertical: 1.5,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white12,
+                    color: const Color(0xFF1DB954).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(5),
                   ),
                   child: Text(
-                    _formatBytes(fileSize),
+                    format,
                     style: const TextStyle(
-                      color: Colors.white70,
+                      color: Color(0xFF1DB954),
                       fontSize: 9.5,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
+                if (fileSize > 0) ...[
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1.5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white12,
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Text(
+                      _formatBytes(fileSize),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ],
-            ],
-          ),
-          trailing: IconButton(
-            icon: const Icon(
-              Icons.more_vert_rounded,
-              color: Colors.white54,
-              size: 20,
             ),
-            onPressed: () {
+            trailing: IconButton(
+              icon: const Icon(
+                Icons.more_vert_rounded,
+                color: Colors.white54,
+                size: 20,
+              ),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                _showDeviceSongOptions(song);
+              },
+            ),
+            onTap: () {
               HapticFeedback.lightImpact();
-              _showDeviceSongOptions(song);
+              _musicService.playDeviceSong(
+                song,
+                queue: filteredSongs,
+                startIndex: index - 1,
+              );
             },
-          ),
-          onTap: () {
-            HapticFeedback.lightImpact();
-            _musicService.playDeviceSong(
-              song,
-              queue: filteredSongs,
-              startIndex: index - 1,
-            );
-          },
-        );
-      },
+          );
+        },
+      ),
     );
   }
 

@@ -10,6 +10,7 @@ import '../widgets/animated_equalizer.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/shimmer_loading.dart';
 import '../widgets/mini_player.dart';
+import '../widgets/dilse_scrollbar.dart';
 
 /// Dedicated Artist Profile & Discography Screen with deep multi-language,
 /// movie range, and filmography filters.
@@ -275,622 +276,525 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
         children: [
           ResponsiveWrapper(
             maxWidth: 860,
-            child: CustomScrollView(
+            child: DilSeScrollbar(
               controller: _scrollController,
-              slivers: [
-                // 1. Hero AppBar with Artist Avatar & Back Action
-                SliverAppBar(
-                  backgroundColor: const Color(0xFF0B0B0F),
-                  expandedHeight: 310.0,
-                  pinned: true,
-                  elevation: 0,
-                  leading: IconButton(
-                    icon: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        shape: BoxShape.circle,
+              bottomPadding: 90.0,
+              child: CustomScrollView(
+                controller: _scrollController,
+                slivers: [
+                  // 1. Hero AppBar with Artist Avatar & Back Action
+                  SliverAppBar(
+                    backgroundColor: const Color(0xFF0B0B0F),
+                    expandedHeight: 310.0,
+                    pinned: true,
+                    elevation: 0,
+                    leading: IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white,
-                        size: 18,
-                      ),
+                      onPressed: () => Navigator.pop(context),
                     ),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  flexibleSpace: FlexibleSpaceBar(
-                    background: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        // Ambient gradient background derived from artist portrait
-                        Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                themeColor.withValues(alpha: 0.35),
-                                const Color(0xFF141420),
-                                const Color(0xFF0B0B0F),
+                    flexibleSpace: FlexibleSpaceBar(
+                      background: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          // Ambient gradient background derived from artist portrait
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  themeColor.withValues(alpha: 0.35),
+                                  const Color(0xFF141420),
+                                  const Color(0xFF0B0B0F),
+                                ],
+                              ),
+                            ),
+                          ),
+                          SafeArea(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const SizedBox(height: 12),
+                                // High-Resolution Artist Circle Avatar
+                                Container(
+                                  width: 104,
+                                  height: 104,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.25,
+                                      ),
+                                      width: 2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: themeColor.withValues(
+                                          alpha: 0.4,
+                                        ),
+                                        blurRadius: 28,
+                                        offset: const Offset(0, 8),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipOval(
+                                    child:
+                                        _artistItem != null &&
+                                            _artistItem.imageUrl.isNotEmpty
+                                        ? Image.network(
+                                            _artistItem.imageUrl,
+                                            fit: BoxFit.cover,
+                                            cacheWidth: 240,
+                                            cacheHeight: 240,
+                                            errorBuilder: (_, _, _) =>
+                                                _buildAvatarFallback(),
+                                          )
+                                        : _buildAvatarFallback(),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                // Artist Canonical Name
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                  ),
+                                  child: Text(
+                                    _canonicalName,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.4,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                // Squircle Follow Button
+                                _FollowButton(
+                                  key: const ValueKey(
+                                    'artist_profile_follow_button',
+                                  ),
+                                  isFollowed: isFollowed,
+                                  themeColor: themeColor,
+                                  onTap: () {
+                                    HapticFeedback.mediumImpact();
+                                    _prefs.toggleFollowArtist(_canonicalName);
+                                  },
+                                ),
+                                const SizedBox(height: 6),
+                                // Tagline & Badge
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (_artistItem != null &&
+                                          _artistItem.badge.isNotEmpty) ...[
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: themeColor.withValues(
+                                              alpha: 0.2,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
+                                            border: Border.all(
+                                              color: themeColor.withValues(
+                                                alpha: 0.5,
+                                              ),
+                                              width: 0.8,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            _artistItem.badge,
+                                            style: TextStyle(
+                                              color: themeColor,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                      ],
+                                      Flexible(
+                                        child: Text(
+                                          _artistItem?.genre ??
+                                              'Official Discography',
+                                          style: TextStyle(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.65,
+                                            ),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
                           ),
-                        ),
-                        SafeArea(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const SizedBox(height: 12),
-                              // High-Resolution Artist Circle Avatar
-                              Container(
-                                width: 104,
-                                height: 104,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.25),
-                                    width: 2,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: themeColor.withValues(alpha: 0.4),
-                                      blurRadius: 28,
-                                      offset: const Offset(0, 8),
-                                    ),
-                                  ],
-                                ),
-                                child: ClipOval(
-                                  child:
-                                      _artistItem != null &&
-                                          _artistItem.imageUrl.isNotEmpty
-                                      ? Image.network(
-                                          _artistItem.imageUrl,
-                                          fit: BoxFit.cover,
-                                          cacheWidth: 240,
-                                          cacheHeight: 240,
-                                          errorBuilder: (_, _, _) =>
-                                              _buildAvatarFallback(),
-                                        )
-                                      : _buildAvatarFallback(),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              // Artist Canonical Name
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                ),
-                                child: Text(
-                                  _canonicalName,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.4,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              // Squircle Follow Button
-                              _FollowButton(
-                                key: const ValueKey(
-                                  'artist_profile_follow_button',
-                                ),
-                                isFollowed: isFollowed,
-                                themeColor: themeColor,
-                                onTap: () {
-                                  HapticFeedback.mediumImpact();
-                                  _prefs.toggleFollowArtist(_canonicalName);
-                                },
-                              ),
-                              const SizedBox(height: 6),
-                              // Tagline & Badge
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (_artistItem != null &&
-                                        _artistItem.badge.isNotEmpty) ...[
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: themeColor.withValues(
-                                            alpha: 0.2,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            6,
-                                          ),
-                                          border: Border.all(
-                                            color: themeColor.withValues(
-                                              alpha: 0.5,
-                                            ),
-                                            width: 0.8,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          _artistItem.badge,
-                                          style: TextStyle(
-                                            color: themeColor,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: 0.5,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                    ],
-                                    Flexible(
-                                      child: Text(
-                                        _artistItem?.genre ??
-                                            'Official Discography',
-                                        style: TextStyle(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.65,
-                                          ),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
 
-                // 2. Action Deck: Play All & Shuffle Buttons
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                    child: Row(
-                      children: [
-                        // Play All Primary Button
-                        Expanded(
-                          child: ElevatedButton.icon(
+                  // 2. Action Deck: Play All & Shuffle Buttons
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                      child: Row(
+                        children: [
+                          // Play All Primary Button
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: filtered.isEmpty
+                                  ? null
+                                  : () {
+                                      HapticFeedback.mediumImpact();
+                                      _musicService.playPlaylist(filtered, 0);
+                                    },
+                              icon: const Icon(
+                                Icons.play_arrow_rounded,
+                                size: 24,
+                              ),
+                              label: Text(
+                                'Play All (${filtered.length})',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: themeColor,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                elevation: 4,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          // Shuffle Button
+                          ElevatedButton.icon(
                             onPressed: filtered.isEmpty
                                 ? null
                                 : () {
                                     HapticFeedback.mediumImpact();
-                                    _musicService.playPlaylist(filtered, 0);
+                                    final shuffled = List<Video>.from(filtered)
+                                      ..shuffle();
+                                    _musicService.playPlaylist(shuffled, 0);
                                   },
-                            icon: const Icon(
-                              Icons.play_arrow_rounded,
-                              size: 24,
-                            ),
-                            label: Text(
-                              'Play All (${filtered.length})',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
+                            icon: const Icon(Icons.shuffle_rounded, size: 20),
+                            label: const Text(
+                              'Shuffle',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: themeColor,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              backgroundColor: const Color(0xFF1E1E2C),
+                              foregroundColor: Colors.white70,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
-                              ),
-                              elevation: 4,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        // Shuffle Button
-                        ElevatedButton.icon(
-                          onPressed: filtered.isEmpty
-                              ? null
-                              : () {
-                                  HapticFeedback.mediumImpact();
-                                  final shuffled = List<Video>.from(filtered)
-                                    ..shuffle();
-                                  _musicService.playPlaylist(shuffled, 0);
-                                },
-                          icon: const Icon(Icons.shuffle_rounded, size: 20),
-                          label: const Text(
-                            'Shuffle',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1E1E2C),
-                            foregroundColor: Colors.white70,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              side: BorderSide(
-                                color: Colors.white.withValues(alpha: 0.12),
+                                side: BorderSide(
+                                  color: Colors.white.withValues(alpha: 0.12),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Smart Artist Radio Button
-                        ElevatedButton.icon(
-                          onPressed: filtered.isEmpty
-                              ? null
-                              : () async {
-                                  HapticFeedback.mediumImpact();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'Starting ${widget.artistName} Smart Radio…',
+                          const SizedBox(width: 8),
+                          // Smart Artist Radio Button
+                          ElevatedButton.icon(
+                            onPressed: filtered.isEmpty
+                                ? null
+                                : () async {
+                                    HapticFeedback.mediumImpact();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Starting ${widget.artistName} Smart Radio…',
+                                        ),
+                                        duration: const Duration(seconds: 2),
+                                        backgroundColor: themeColor.withValues(
+                                          alpha: 0.9,
+                                        ),
                                       ),
-                                      duration: const Duration(seconds: 2),
-                                      backgroundColor: themeColor.withValues(
-                                        alpha: 0.9,
-                                      ),
-                                    ),
-                                  );
-                                  final topSong = filtered.first;
-                                  final radioTracks = await _musicService
-                                      .fetchRadioTracksForSong(
+                                    );
+                                    final topSong = filtered.first;
+                                    final radioTracks = await _musicService
+                                        .fetchRadioTracksForSong(
+                                          topSong,
+                                          limit: 40,
+                                        );
+                                    if (radioTracks.isNotEmpty) {
+                                      _musicService.playPlaylist([
                                         topSong,
-                                        limit: 40,
-                                      );
-                                  if (radioTracks.isNotEmpty) {
-                                    _musicService.playPlaylist([
-                                      topSong,
-                                      ...radioTracks,
-                                    ], 0);
-                                  } else {
-                                    _musicService.playPlaylist(filtered, 0);
-                                  }
-                                },
-                          icon: const Icon(
-                            Icons.auto_awesome_rounded,
-                            size: 18,
-                          ),
-                          label: const Text(
-                            'Radio',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                                        ...radioTracks,
+                                      ], 0);
+                                    } else {
+                                      _musicService.playPlaylist(filtered, 0);
+                                    }
+                                  },
+                            icon: const Icon(
+                              Icons.auto_awesome_rounded,
+                              size: 18,
                             ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1E1E2C),
-                            foregroundColor: themeColor,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              side: BorderSide(
-                                color: themeColor.withValues(alpha: 0.45),
-                                width: 1.2,
+                            label: const Text(
+                              'Radio',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                            elevation: 2,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF1E1E2C),
+                              foregroundColor: themeColor,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                side: BorderSide(
+                                  color: themeColor.withValues(alpha: 0.45),
+                                  width: 1.2,
+                                ),
+                              ),
+                              elevation: 2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // 3. In-Artist Live Search Bar
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                      child: Container(
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF161622),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.08),
                           ),
                         ),
+                        child: TextField(
+                          controller: _searchController,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13.5,
+                          ),
+                          decoration: InputDecoration(
+                            hintText:
+                                'Search within $_canonicalName\'s tracks...',
+                            hintStyle: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.35),
+                              fontSize: 13,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.search_rounded,
+                              color: Colors.white54,
+                              size: 20,
+                            ),
+                            suffixIcon: _inArtistQuery.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(
+                                      Icons.clear_rounded,
+                                      color: Colors.white54,
+                                      size: 16,
+                                    ),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                    },
+                                  )
+                                : null,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 11,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // 4. Language Filter Strip
+                  SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            'LANGUAGE',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.45),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        SizedBox(
+                          height: 34,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: _languages.length,
+                            itemBuilder: (context, index) {
+                              final lang = _languages[index];
+                              final isSelected = _selectedLanguage == lang;
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: ChoiceChip(
+                                  label: Text(lang),
+                                  selected: isSelected,
+                                  onSelected: (val) {
+                                    HapticFeedback.selectionClick();
+                                    setState(() {
+                                      _selectedLanguage = lang;
+                                    });
+                                  },
+                                  selectedColor: themeColor,
+                                  backgroundColor: const Color(0xFF171724),
+                                  labelStyle: TextStyle(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Colors.white70,
+                                    fontSize: 12,
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.w500,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    side: BorderSide(
+                                      color: isSelected
+                                          ? themeColor
+                                          : Colors.white.withValues(
+                                              alpha: 0.08,
+                                            ),
+                                    ),
+                                  ),
+                                  showCheckmark: false,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 14),
                       ],
                     ),
                   ),
-                ),
 
-                // 3. In-Artist Live Search Bar
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                    child: Container(
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF161622),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.08),
-                        ),
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13.5,
-                        ),
-                        decoration: InputDecoration(
-                          hintText:
-                              'Search within $_canonicalName\'s tracks...',
-                          hintStyle: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.35),
-                            fontSize: 13,
-                          ),
-                          prefixIcon: const Icon(
-                            Icons.search_rounded,
-                            color: Colors.white54,
-                            size: 20,
-                          ),
-                          suffixIcon: _inArtistQuery.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(
-                                    Icons.clear_rounded,
-                                    color: Colors.white54,
-                                    size: 16,
-                                  ),
-                                  onPressed: () {
-                                    _searchController.clear();
+                  // 5. Movie & Era Range Filter Strip
+                  SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'MOVIE & ERA RANGE',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.45),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                              if (_selectedMovie != null)
+                                GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedMovie = null;
+                                    });
                                   },
-                                )
-                              : null,
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 11,
+                                  child: Text(
+                                    'Clear Movie',
+                                    style: TextStyle(
+                                      color: themeColor,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // 4. Language Filter Strip
-                SliverToBoxAdapter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          'LANGUAGE',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.45),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      SizedBox(
-                        height: 34,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: _languages.length,
-                          itemBuilder: (context, index) {
-                            final lang = _languages[index];
-                            final isSelected = _selectedLanguage == lang;
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ChoiceChip(
-                                label: Text(lang),
-                                selected: isSelected,
-                                onSelected: (val) {
-                                  HapticFeedback.selectionClick();
-                                  setState(() {
-                                    _selectedLanguage = lang;
-                                  });
-                                },
-                                selectedColor: themeColor,
-                                backgroundColor: const Color(0xFF171724),
-                                labelStyle: TextStyle(
-                                  color: isSelected
-                                      ? Colors.white
-                                      : Colors.white70,
-                                  fontSize: 12,
-                                  fontWeight: isSelected
-                                      ? FontWeight.bold
-                                      : FontWeight.w500,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  side: BorderSide(
-                                    color: isSelected
-                                        ? themeColor
-                                        : Colors.white.withValues(alpha: 0.08),
-                                  ),
-                                ),
-                                showCheckmark: false,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                    ],
-                  ),
-                ),
-
-                // 5. Movie & Era Range Filter Strip
-                SliverToBoxAdapter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'MOVIE & ERA RANGE',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.45),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                            if (_selectedMovie != null)
-                              GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _selectedMovie = null;
-                                  });
-                                },
-                                child: Text(
-                                  'Clear Movie',
-                                  style: TextStyle(
-                                    color: themeColor,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      // Era Chips Row
-                      SizedBox(
-                        height: 32,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: _eraOptions.length,
-                          itemBuilder: (context, index) {
-                            final era = _eraOptions[index];
-                            final isSelected = _selectedEra == era;
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ChoiceChip(
-                                label: Text(era),
-                                selected: isSelected,
-                                onSelected: (val) {
-                                  HapticFeedback.selectionClick();
-                                  setState(() {
-                                    _selectedEra = era;
-                                  });
-                                },
-                                selectedColor: const Color(0xFF26263C),
-                                backgroundColor: const Color(0xFF14141E),
-                                labelStyle: TextStyle(
-                                  color: isSelected
-                                      ? themeColor
-                                      : Colors.white60,
-                                  fontSize: 11.5,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  side: BorderSide(
-                                    color: isSelected
-                                        ? themeColor.withValues(alpha: 0.6)
-                                        : Colors.white.withValues(alpha: 0.06),
-                                  ),
-                                ),
-                                showCheckmark: false,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      // Movie Chips Row (from curated filmography)
-                      if (_filmography.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        // Era Chips Row
                         SizedBox(
                           height: 32,
                           child: ListView.builder(
                             scrollDirection: Axis.horizontal,
                             padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: _filmography.length + 1,
+                            itemCount: _eraOptions.length,
                             itemBuilder: (context, index) {
-                              if (index == 0) {
-                                final isAll = _selectedMovie == null;
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: ChoiceChip(
-                                    label: const Text('All Movies'),
-                                    selected: isAll,
-                                    onSelected: (_) {
-                                      HapticFeedback.selectionClick();
-                                      setState(() {
-                                        _selectedMovie = null;
-                                      });
-                                    },
-                                    selectedColor: const Color(0xFF26263C),
-                                    backgroundColor: const Color(0xFF14141E),
-                                    labelStyle: TextStyle(
-                                      color: isAll
-                                          ? themeColor
-                                          : Colors.white60,
-                                      fontSize: 11.5,
-                                      fontWeight: isAll
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                      side: BorderSide(
-                                        color: isAll
-                                            ? themeColor.withValues(alpha: 0.6)
-                                            : Colors.white.withValues(
-                                                alpha: 0.06,
-                                              ),
-                                      ),
-                                    ),
-                                    showCheckmark: false,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                    ),
-                                  ),
-                                );
-                              }
-
-                              final movie = _filmography[index - 1];
-                              final isSelected = _selectedMovie == movie;
+                              final era = _eraOptions[index];
+                              final isSelected = _selectedEra == era;
                               return Padding(
                                 padding: const EdgeInsets.only(right: 8),
                                 child: ChoiceChip(
-                                  label: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(
-                                        Icons.movie_outlined,
-                                        size: 13,
-                                        color: Colors.white54,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(movie),
-                                    ],
-                                  ),
+                                  label: Text(era),
                                   selected: isSelected,
-                                  onSelected: (_) {
+                                  onSelected: (val) {
                                     HapticFeedback.selectionClick();
                                     setState(() {
-                                      _selectedMovie = isSelected
-                                          ? null
-                                          : movie;
+                                      _selectedEra = era;
                                     });
                                   },
-                                  selectedColor: themeColor.withValues(
-                                    alpha: 0.25,
-                                  ),
+                                  selectedColor: const Color(0xFF26263C),
                                   backgroundColor: const Color(0xFF14141E),
                                   labelStyle: TextStyle(
                                     color: isSelected
-                                        ? Colors.white
-                                        : Colors.white70,
+                                        ? themeColor
+                                        : Colors.white60,
                                     fontSize: 11.5,
                                     fontWeight: isSelected
                                         ? FontWeight.w700
@@ -900,9 +804,9 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
                                     borderRadius: BorderRadius.circular(14),
                                     side: BorderSide(
                                       color: isSelected
-                                          ? themeColor
+                                          ? themeColor.withValues(alpha: 0.6)
                                           : Colors.white.withValues(
-                                              alpha: 0.08,
+                                              alpha: 0.06,
                                             ),
                                     ),
                                   ),
@@ -915,283 +819,400 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
                             },
                           ),
                         ),
-                        const SizedBox(height: 12),
-                      ],
-                    ],
-                  ),
-                ),
+                        const SizedBox(height: 8),
+                        // Movie Chips Row (from curated filmography)
+                        if (_filmography.isNotEmpty) ...[
+                          SizedBox(
+                            height: 32,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              itemCount: _filmography.length + 1,
+                              itemBuilder: (context, index) {
+                                if (index == 0) {
+                                  final isAll = _selectedMovie == null;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: ChoiceChip(
+                                      label: const Text('All Movies'),
+                                      selected: isAll,
+                                      onSelected: (_) {
+                                        HapticFeedback.selectionClick();
+                                        setState(() {
+                                          _selectedMovie = null;
+                                        });
+                                      },
+                                      selectedColor: const Color(0xFF26263C),
+                                      backgroundColor: const Color(0xFF14141E),
+                                      labelStyle: TextStyle(
+                                        color: isAll
+                                            ? themeColor
+                                            : Colors.white60,
+                                        fontSize: 11.5,
+                                        fontWeight: isAll
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                        side: BorderSide(
+                                          color: isAll
+                                              ? themeColor.withValues(
+                                                  alpha: 0.6,
+                                                )
+                                              : Colors.white.withValues(
+                                                  alpha: 0.06,
+                                                ),
+                                        ),
+                                      ),
+                                      showCheckmark: false,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                      ),
+                                    ),
+                                  );
+                                }
 
-                // 6. Header Status Row
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
-                    child: Row(
-                      children: [
-                        Text(
-                          '${filtered.length} Tracks',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                        if (_selectedMovie != null) ...[
-                          const SizedBox(width: 6),
-                          Text(
-                            '• $_selectedMovie',
-                            style: TextStyle(
-                              color: themeColor,
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
+                                final movie = _filmography[index - 1];
+                                final isSelected = _selectedMovie == movie;
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: ChoiceChip(
+                                    label: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.movie_outlined,
+                                          size: 13,
+                                          color: Colors.white54,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(movie),
+                                      ],
+                                    ),
+                                    selected: isSelected,
+                                    onSelected: (_) {
+                                      HapticFeedback.selectionClick();
+                                      setState(() {
+                                        _selectedMovie = isSelected
+                                            ? null
+                                            : movie;
+                                      });
+                                    },
+                                    selectedColor: themeColor.withValues(
+                                      alpha: 0.25,
+                                    ),
+                                    backgroundColor: const Color(0xFF14141E),
+                                    labelStyle: TextStyle(
+                                      color: isSelected
+                                          ? Colors.white
+                                          : Colors.white70,
+                                      fontSize: 11.5,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      side: BorderSide(
+                                        color: isSelected
+                                            ? themeColor
+                                            : Colors.white.withValues(
+                                                alpha: 0.08,
+                                              ),
+                                      ),
+                                    ),
+                                    showCheckmark: false,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           ),
+                          const SizedBox(height: 12),
                         ],
-                        const Spacer(),
-                        if (_isLoadingMore)
-                          const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Color(0xFF1DB954),
-                            ),
-                          ),
                       ],
                     ),
                   ),
-                ),
 
-                // 7. Song List Virtualized Slivers
-                if (_isLoading)
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) => const ShimmerSongRow(),
-                      childCount: 8,
-                    ),
-                  )
-                else if (filtered.isEmpty) ...[
+                  // 6. Header Status Row
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 48,
-                      ),
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.filter_alt_off_rounded,
-                              size: 48,
-                              color: Colors.white.withValues(alpha: 0.3),
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+                      child: Row(
+                        children: [
+                          Text(
+                            '${filtered.length} Tracks',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
                             ),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'No songs match the selected filters',
+                          ),
+                          if (_selectedMovie != null) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              '• $_selectedMovie',
                               style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
+                                color: themeColor,
+                                fontSize: 12.5,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            const SizedBox(height: 12),
-                            TextButton(
-                              onPressed: () {
-                                setState(() {
-                                  _selectedLanguage = 'All';
-                                  _selectedMovie = null;
-                                  _selectedEra = 'All Eras';
-                                  _searchController.clear();
-                                });
-                              },
-                              child: const Text('Reset All Filters'),
-                            ),
                           ],
-                        ),
+                          const Spacer(),
+                          if (_isLoadingMore)
+                            const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFF1DB954),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
-                  if (_bioText.isNotEmpty)
+
+                  // 7. Song List Virtualized Slivers
+                  if (_isLoading)
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => const ShimmerSongRow(),
+                        childCount: 8,
+                      ),
+                    )
+                  else if (filtered.isEmpty) ...[
                     SliverToBoxAdapter(
-                      child: _AboutArtistSection(
-                        artistName: _canonicalName,
-                        artistItem: _artistItem,
-                        bioText: _bioText,
-                        themeColor: themeColor,
-                        soundtracksCount: _filmography.length,
-                        totalLoadedCount: _allSongs.length,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 48,
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.filter_alt_off_rounded,
+                                size: 48,
+                                color: Colors.white.withValues(alpha: 0.3),
+                              ),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'No songs match the selected filters',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedLanguage = 'All';
+                                    _selectedMovie = null;
+                                    _selectedEra = 'All Eras';
+                                    _searchController.clear();
+                                  });
+                                },
+                                child: const Text('Reset All Filters'),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                ] else ...[
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final song = filtered[index];
-                      final isCurrentSong =
-                          _musicService.currentSong?.id.value == song.id.value;
-                      final hdThumbnail = MusicService.getHdThumbnail(
-                        song.id.value,
-                      );
-
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 2,
+                    if (_bioText.isNotEmpty)
+                      SliverToBoxAdapter(
+                        child: _AboutArtistSection(
+                          artistName: _canonicalName,
+                          artistItem: _artistItem,
+                          bioText: _bioText,
+                          themeColor: themeColor,
+                          soundtracksCount: _filmography.length,
+                          totalLoadedCount: _allSongs.length,
                         ),
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Image.network(
-                            hdThumbnail,
-                            width: 50,
-                            height: 50,
-                            fit: BoxFit.cover,
-                            cacheWidth: 120,
-                            cacheHeight: 120,
-                            errorBuilder: (_, _, _) => Image.network(
-                              song.thumbnails.lowResUrl,
+                      ),
+                  ] else ...[
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        final song = filtered[index];
+                        final isCurrentSong =
+                            _musicService.currentSong?.id.value ==
+                            song.id.value;
+                        final hdThumbnail = MusicService.getHdThumbnail(
+                          song.id.value,
+                        );
+
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 2,
+                          ),
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.network(
+                              hdThumbnail,
                               width: 50,
                               height: 50,
                               fit: BoxFit.cover,
                               cacheWidth: 120,
                               cacheHeight: 120,
+                              errorBuilder: (_, _, _) => Image.network(
+                                song.thumbnails.lowResUrl,
+                                width: 50,
+                                height: 50,
+                                fit: BoxFit.cover,
+                                cacheWidth: 120,
+                                cacheHeight: 120,
+                              ),
                             ),
                           ),
-                        ),
-                        title: Text(
-                          song.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: isCurrentSong ? themeColor : Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
+                          title: Text(
+                            song.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isCurrentSong ? themeColor : Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
                           ),
-                        ),
-                        subtitle: Text(
-                          song.author,
-                          maxLines: 1,
-                          style: TextStyle(
-                            color: isCurrentSong
-                                ? themeColor.withValues(alpha: 0.8)
-                                : Colors.grey[400],
-                            fontSize: 12,
+                          subtitle: Text(
+                            song.author,
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: isCurrentSong
+                                  ? themeColor.withValues(alpha: 0.8)
+                                  : Colors.grey[400],
+                              fontSize: 12,
+                            ),
                           ),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (isCurrentSong)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: AnimatedEqualizer(
-                                  isPlaying: _musicService.isPlaying,
-                                  barCount: 3,
-                                  color: themeColor,
-                                  size: 16,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isCurrentSong)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: AnimatedEqualizer(
+                                    isPlaying: _musicService.isPlaying,
+                                    barCount: 3,
+                                    color: themeColor,
+                                    size: 16,
+                                  ),
                                 ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.more_horiz,
+                                  color: Colors.white54,
+                                ),
+                                onPressed: () =>
+                                    showSongOptionsBottomSheet(context, song),
                               ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.more_horiz,
-                                color: Colors.white54,
-                              ),
-                              onPressed: () =>
-                                  showSongOptionsBottomSheet(context, song),
-                            ),
-                          ],
-                        ),
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          _musicService.playPlaylist(filtered, index);
-                        },
-                      );
-                    }, childCount: filtered.length),
-                  ),
-                  // 8. About Artist Section (Rich 6–7 lines biography)
-                  if (_bioText.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: _AboutArtistSection(
-                        artistName: _canonicalName,
-                        artistItem: _artistItem,
-                        bioText: _bioText,
-                        themeColor: themeColor,
-                        soundtracksCount: _filmography.length,
-                        totalLoadedCount: _allSongs.length,
-                      ),
+                            ],
+                          ),
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            _musicService.playPlaylist(filtered, index);
+                          },
+                        );
+                      }, childCount: filtered.length),
                     ),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 20, bottom: 160),
-                      child: Center(
-                        child: _isLoadingMore
-                            ? Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        themeColor,
+                    // 8. About Artist Section (Rich 6–7 lines biography)
+                    if (_bioText.isNotEmpty)
+                      SliverToBoxAdapter(
+                        child: _AboutArtistSection(
+                          artistName: _canonicalName,
+                          artistItem: _artistItem,
+                          bioText: _bioText,
+                          themeColor: themeColor,
+                          soundtracksCount: _filmography.length,
+                          totalLoadedCount: _allSongs.length,
+                        ),
+                      ),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 20, bottom: 160),
+                        child: Center(
+                          child: _isLoadingMore
+                              ? Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              themeColor,
+                                            ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  const Text(
-                                    'Loading more tracks from discography...',
-                                    style: TextStyle(
-                                      color: Colors.white60,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
+                                    const SizedBox(height: 10),
+                                    const Text(
+                                      'Loading more tracks from discography...',
+                                      style: TextStyle(
+                                        color: Colors.white60,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : _hasMore
+                              ? OutlinedButton.icon(
+                                  onPressed: _loadMoreDiscography,
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: themeColor,
+                                    side: BorderSide(
+                                      color: themeColor.withValues(alpha: 0.5),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 22,
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(24),
                                     ),
                                   ),
-                                ],
-                              )
-                            : _hasMore
-                            ? OutlinedButton.icon(
-                                onPressed: _loadMoreDiscography,
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: themeColor,
-                                  side: BorderSide(
-                                    color: themeColor.withValues(alpha: 0.5),
+                                  icon: const Icon(
+                                    Icons.expand_more_rounded,
+                                    size: 18,
                                   ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 22,
-                                    vertical: 12,
+                                  label: Text(
+                                    'Load More Tracks (${_allSongs.length} loaded)',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(24),
-                                  ),
-                                ),
-                                icon: const Icon(
-                                  Icons.expand_more_rounded,
-                                  size: 18,
-                                ),
-                                label: Text(
-                                  'Load More Tracks (${_allSongs.length} loaded)',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
+                                )
+                              : Text(
+                                  filtered.length >= 30
+                                      ? '• Complete Discography Loaded (${filtered.length} songs) •'
+                                      : '',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.35),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: 0.5,
                                   ),
                                 ),
-                              )
-                            : Text(
-                                filtered.length >= 30
-                                    ? '• Complete Discography Loaded (${filtered.length} songs) •'
-                                    : '',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.35),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
           // Floating MiniPlayer visible over artist content when a song is playing
