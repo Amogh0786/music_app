@@ -25,6 +25,7 @@ import 'dynamic_artist_service.dart';
 import 'taste_matrix_scorer.dart';
 import '../models/jio_album.dart';
 import 'device_audio_service.dart';
+import 'database_service.dart';
 
 enum SearchSuggestionType { artist, song, album, history, query }
 
@@ -3894,6 +3895,15 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         'thumbnail': getHdThumbnail(song.id.value),
         'playedAt': DateTime.now().toIso8601String(),
       });
+      if (!kIsWeb) {
+        DatabaseService().recordPlay(
+          songId: song.id.value,
+          title: song.title,
+          artist: song.author,
+          artworkUrl: getHdThumbnail(song.id.value),
+          durationSeconds: song.duration?.inSeconds,
+        );
+      }
 
       _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
       _preloadUpcomingTracks();
@@ -3979,6 +3989,15 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       'thumbnail': getHdThumbnail(song.id.value),
       'playedAt': DateTime.now().toIso8601String(),
     });
+    if (!kIsWeb) {
+      DatabaseService().recordPlay(
+        songId: song.id.value,
+        title: song.title,
+        artist: song.author,
+        artworkUrl: getHdThumbnail(song.id.value),
+        durationSeconds: song.duration?.inSeconds,
+      );
+    }
 
     final activeFormatPref = PreferencesService().audioFormat;
     final activeQualityPreset = PreferencesService().audioQuality;

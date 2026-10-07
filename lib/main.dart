@@ -1,3 +1,4 @@
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'services/audio_handler.dart';
@@ -28,36 +29,62 @@ class MusicApp extends StatelessWidget {
       animation: PreferencesService(),
       builder: (context, child) {
         final prefs = PreferencesService();
-        return MaterialApp(
-          title: 'DilSe',
-          debugShowCheckedModeBanner: false,
-          theme: ThemeData(
-            brightness: Brightness.dark,
-            scaffoldBackgroundColor: const Color(0xFF121212),
-            primaryColor: prefs.themeColor,
-            bottomNavigationBarTheme: BottomNavigationBarThemeData(
-              backgroundColor: Colors.black,
-              selectedItemColor: prefs.themeColor,
-              unselectedItemColor: Colors.white54,
-            ),
-            appBarTheme: const AppBarTheme(
-              backgroundColor: Color(0xFF121212),
-              elevation: 0,
-            ),
-            useMaterial3: true,
-          ),
-          navigatorKey: BugReportService.instance.rootNavKey,
-          builder: (context, child) {
-            final appChild = child ?? const SizedBox.shrink();
-            if (kIsWeb) {
-              return appChild;
+        return DynamicColorBuilder(
+          builder: (lightDynamic, darkDynamic) {
+            Color? dynamicPrimary;
+            if (darkDynamic != null) {
+              try {
+                final dynamicVal = (darkDynamic as dynamic).primary;
+                if (dynamicVal is Color) {
+                  dynamicPrimary = dynamicVal;
+                } else if (dynamicVal != null) {
+                  dynamicPrimary = Color(dynamicVal.value as int);
+                }
+              } catch (_) {}
             }
-            return RepaintBoundary(
-              key: BugReportService.instance.repaintBoundaryKey,
-              child: appChild,
+
+            final effectiveThemeColor =
+                (prefs.themeColor == const Color(0xFFFA2D48) &&
+                    dynamicPrimary != null)
+                ? dynamicPrimary
+                : prefs.themeColor;
+
+            return MaterialApp(
+              title: 'DilSe',
+              debugShowCheckedModeBanner: false,
+              theme: ThemeData(
+                brightness: Brightness.dark,
+                scaffoldBackgroundColor: const Color(0xFF121212),
+                primaryColor: effectiveThemeColor,
+                colorScheme: ColorScheme.dark(
+                  primary: effectiveThemeColor,
+                  surface: const Color(0xFF121212),
+                ),
+                bottomNavigationBarTheme: BottomNavigationBarThemeData(
+                  backgroundColor: Colors.black,
+                  selectedItemColor: effectiveThemeColor,
+                  unselectedItemColor: Colors.white54,
+                ),
+                appBarTheme: const AppBarTheme(
+                  backgroundColor: Color(0xFF121212),
+                  elevation: 0,
+                ),
+                useMaterial3: true,
+              ),
+              navigatorKey: BugReportService.instance.rootNavKey,
+              builder: (context, child) {
+                final appChild = child ?? const SizedBox.shrink();
+                if (kIsWeb) {
+                  return appChild;
+                }
+                return RepaintBoundary(
+                  key: BugReportService.instance.repaintBoundaryKey,
+                  child: appChild,
+                );
+              },
+              home: const IntroSplashScreen(),
             );
           },
-          home: const IntroSplashScreen(),
         );
       },
     );

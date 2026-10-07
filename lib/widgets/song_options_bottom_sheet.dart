@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
+import 'dilse_image.dart';
 
 /// Shows an Apple Music / Spotify-inspired frosted glass options sheet for a song.
 void showSongOptionsBottomSheet(BuildContext context, Video song) {
@@ -43,25 +44,12 @@ void showSongOptionsBottomSheet(BuildContext context, Video song) {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
-                  ClipRRect(
+                  DilSeImage(
+                    imageUrl: hdThumbnail,
+                    width: 52,
+                    height: 52,
                     borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      hdThumbnail,
-                      width: 52,
-                      height: 52,
-                      fit: BoxFit.cover,
-                      cacheWidth: 120,
-                      cacheHeight: 120,
-                      errorBuilder: (_, _, _) => Container(
-                        width: 52,
-                        height: 52,
-                        color: const Color(0xFF1E1E28),
-                        child: const Icon(
-                          Icons.music_note,
-                          color: Colors.white54,
-                        ),
-                      ),
-                    ),
+                    fit: BoxFit.cover,
                   ),
                   const SizedBox(width: 14),
                   Expanded(
