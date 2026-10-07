@@ -57,4 +57,26 @@ class DilSeCapsuleData {
     required this.generatedAt,
     required this.hasEnoughData,
   });
+
+  factory DilSeCapsuleData.empty() => DilSeCapsuleData(
+    totalMinutes: 0,
+    totalStreams: 0,
+    uniqueArtistsCount: 0,
+    topArtists: const [],
+    topTracks: const [],
+    personaTitle: 'The Curious Pioneer',
+    personaDescription:
+        'Your musical story on DilSe is just beginning. Every stream you play is crafting your unique acoustic DNA.',
+    personaEmoji: '🌱',
+    topLanguages: const ['Hindi', 'Telugu', 'Tamil', 'English'],
+    peakTimeDescription: 'Open Horizons',
+    vibeScores: const {
+      'Energy': 0.74,
+      'Dance': 0.68,
+      'Acoustic': 0.58,
+      'Valence': 0.70,
+    },
+    generatedAt: DateTime.now(),
+    hasEnoughData: false,
+  );
 }
