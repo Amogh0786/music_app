@@ -367,6 +367,14 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         song.title,
         song.author,
       );
+      final isTargetFeatured = CanonicalSongDedup.isFeaturedTrack(
+        song.title,
+        song.author,
+      );
+      final targetFeaturedArtist = CanonicalSongDedup.extractFeaturedArtist(
+        song.title,
+        song.author,
+      );
       final cleanTitle = (songCtx['title'] as String?)?.isNotEmpty == true
           ? songCtx['title'] as String
           : _cleanSongTitle(song.title);
@@ -520,6 +528,58 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             }
           } catch (_) {}
         }());
+
+        // 7. Explicit query for featured artist lyrics
+        if (isTargetFeatured &&
+            targetFeaturedArtist != null &&
+            targetFeaturedArtist.isNotEmpty) {
+          queries.add(() async {
+            try {
+              final urlFeat = Uri.parse(
+                'https://lrclib.net/api/search?q=${Uri.encodeComponent("$cleanTitle feat $targetFeaturedArtist")}',
+              );
+              final res = await http
+                  .get(urlFeat, headers: safeHeaders)
+                  .timeout(const Duration(seconds: 4));
+              if (res.statusCode == 200) {
+                final list = json.decode(res.body);
+                if (list is List) candidatePool.addAll(list);
+              }
+            } catch (_) {}
+          }());
+
+          queries.add(() async {
+            try {
+              final urlTrackFeat = Uri.parse(
+                'https://lrclib.net/api/search?track_name=${Uri.encodeComponent("$cleanTitle (feat. $targetFeaturedArtist)")}',
+              );
+              final res = await http
+                  .get(urlTrackFeat, headers: safeHeaders)
+                  .timeout(const Duration(seconds: 4));
+              if (res.statusCode == 200) {
+                final list = json.decode(res.body);
+                if (list is List) candidatePool.addAll(list);
+              }
+            } catch (_) {}
+          }());
+
+          if (cleanArtist.isNotEmpty) {
+            queries.add(() async {
+              try {
+                final urlCombo = Uri.parse(
+                  'https://lrclib.net/api/search?q=${Uri.encodeComponent("$cleanTitle $cleanArtist $targetFeaturedArtist")}',
+                );
+                final res = await http
+                    .get(urlCombo, headers: safeHeaders)
+                    .timeout(const Duration(seconds: 4));
+                if (res.statusCode == 200) {
+                  final list = json.decode(res.body);
+                  if (list is List) candidatePool.addAll(list);
+                }
+              } catch (_) {}
+            }());
+          }
+        }
       }
 
       await Future.wait(queries);
@@ -550,6 +610,8 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           targetDuration: durationSec,
           candidate: map,
           contextKeywords: contextKeywords,
+          isTargetFeatured: isTargetFeatured,
+          targetFeaturedArtist: targetFeaturedArtist,
         );
 
         if (score > bestScore) {
