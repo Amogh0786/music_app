@@ -15,6 +15,7 @@ import '../services/update_service.dart';
 import '../services/spotify_import_service.dart';
 import '../services/data_snapshot_service.dart';
 import '../widgets/responsive_wrapper.dart';
+import '../layouts/desktop_app_shell.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -156,49 +157,51 @@ class _MainScreenState extends State<MainScreen> {
       },
       child: Scaffold(
         backgroundColor: const Color(0xFF0B0B0F),
-        body: ResponsiveWrapper(
-          child: Stack(
-            children: [
-              PageView(
-                controller: _pageController,
-                physics: const ClampingScrollPhysics(),
-                onPageChanged: (index) {
-                  setState(() => _selectedIndex = index);
-                },
-                children: [
-                  const HomeScreen(),
-                  SearchScreen(
-                    key: _searchScreenKey,
-                    isActive: _selectedIndex == 1,
-                  ),
-                  const LibraryScreen(),
-                ],
-              ),
-              // Floating Mini Player & Floating Glass Dock stacked at the bottom
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+        body: DesktopAppShell(
+          mobileBody: ResponsiveWrapper(
+            child: Stack(
+              children: [
+                PageView(
+                  controller: _pageController,
+                  physics: const ClampingScrollPhysics(),
+                  onPageChanged: (index) {
+                    setState(() => _selectedIndex = index);
+                  },
                   children: [
-                    const _BackgroundImportBanner(),
-                    const MiniPlayer(),
-                    FloatingNavDock(
-                      selectedIndex: _selectedIndex,
-                      onTabSelected: (index) {
-                        setState(() => _selectedIndex = index);
-                        _pageController.animateToPage(
-                          index,
-                          duration: const Duration(milliseconds: 320),
-                          curve: Curves.easeOutCubic,
-                        );
-                      },
+                    const HomeScreen(),
+                    SearchScreen(
+                      key: _searchScreenKey,
+                      isActive: _selectedIndex == 1,
                     ),
+                    const LibraryScreen(),
                   ],
                 ),
-              ),
-            ],
+                // Floating Mini Player & Floating Glass Dock stacked at the bottom
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const _BackgroundImportBanner(),
+                      const MiniPlayer(),
+                      FloatingNavDock(
+                        selectedIndex: _selectedIndex,
+                        onTabSelected: (index) {
+                          setState(() => _selectedIndex = index);
+                          _pageController.animateToPage(
+                            index,
+                            duration: const Duration(milliseconds: 320),
+                            curve: Curves.easeOutCubic,
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
