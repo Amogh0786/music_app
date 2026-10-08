@@ -1,70 +1,109 @@
-# DilSe Music — Lead Architect Instructions & Core Governance
+# DilSe Music — Lead Architect Instructions & Master Governance
 
-This workspace operates under the architectural governance documented in `DILSE_ARCHITECTURAL_SPECIFICATION.md` (v3.8.0+22 @ commit `e95af07`) and `.agents/rules/`.
-
----
-
-## 1. Mandatory Operational Standards & Persona
-1. **Engineering Persona**: Lead Software Architect & Repository Owner. Dense, technically precise, 0 conversational filler.
-2. **Quality Gate (Mandatory on Every Step)**:
-   - `dart format lib/ test/` must yield 0 changed files.
-   - `flutter analyze lib/` must yield 0 errors, 0 warnings, 0 infos.
-   - `flutter test` must pass 100% of tests across the entire test suite (currently 219/219).
-3. **Branch & Remote Parity**:
-   - `origin/main` $\leftrightarrow$ `upstream/main` $\leftrightarrow$ `origin/Feat/Tejas_Updates`.
-   - Clean platform registrants (`git checkout -- linux/ macos/ windows/`) after build/test runs.
+This workspace operates under the **Architectural Immutability + UI Transformation Master Directive** and `DILSE_ARCHITECTURAL_SPECIFICATION.md` (v3.8.0+22 @ commit `e95af07`).
 
 ---
 
-## 2. 4-Phase Development Workflow
+## 1. Prime Directive: Presentation Freedom vs. Architectural Immutability
 
-Every new feature, bug fix, or refactor must strictly adhere to the 4-Phase Boundary:
-
-### Phase 1: Idea Exploration & Technical Feasibility
-- Evaluate proposed features against the **Core Tenets**: Zero server-side bandwidth, 100% FOSS, zero telemetry, full offline capability, and fail-safe stream cascade.
-- Map requirements to existing services (`MusicService`, `TasteMatrixScorer`, `CanonicalSongDedup`, `DeviceAudioService`, `DataSnapshotService`, `DynamicArtistService`).
-- Determine cross-platform impact (Android Native, Desktop/Web PWA, Android Widget IPC).
-
-### Phase 2: Design Consensus & User Approval
-- Formulate high-level design specification with component responsibilities and data flow.
-- No unsolicited structural commits or disruptive refactors without explicit consensus.
-
-### Phase 3: Concrete Technical Specification & Line-Level Diff Review
-- Produce explicit file targets, method signatures, state additions, and line-level diff reviews.
-- Verify backward compatibility with persisted user state (`SharedPreferences`, custom playlist JSON, downloaded tracks).
-
-### Phase 4: Implementation, Verification & Quality Gate
-- Implement changes cleanly with atomic, modular code.
-- Execute the Verification Quality Gate:
-  1. `dart format lib/ test/`
-  2. `flutter analyze lib/`
-  3. `flutter test`
-- Discard transient platform files and checkpoint repository state.
+```text
+┌────────────────────────────────────────────────────────────────────┐
+│ ZONE A — PRESENTATION (FULL AUTHORITY)                             │
+│ Flutter widgets, layouts, animations, desktop shell, sidebars,     │
+│ panels, cards, navigation, interaction, styling, design tokens.    │
+└───────────────────────────────┬────────────────────────────────────┘
+                                │ PUBLIC CONTRACTS ONLY
+                                ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ ZONE B — APPLICATION SERVICES (CONTROLLED)                         │
+│ Existing service interfaces, state abstractions, navigation models. │
+└───────────────────────────────┬────────────────────────────────────┘
+                                │
+                                ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ ZONE C — CORE ENGINE (ARCHITECTURALLY IMMUTABLE)                   │
+│ MusicService, _playerA, _playerB, dual-deck crossfade, stream      │
+│ resolution cascade, queue semantics, persistence, lyrics engine.  │
+└───────────────────────────────┬────────────────────────────────────┘
+                                │
+                                ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ ZONE D — INFRASTRUCTURE (STRICTLY PROTECTED)                       │
+│ Cloudflare Edge Worker, JioSaavn CDN, YouTubeExplode, InnerTube,   │
+│ background audio services, platform audio drivers.                 │
+└────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## 3. Core Architectural Guardrails & Invariants
+## 2. Six Absolute Architectural Invariants
 
-1. **Audio Stream Cascade**:
-   $$\text{JioSaavn 320k AAC} \longrightarrow \text{Format 18 MP4 AAC} \longrightarrow \text{WebM Opus 251} \longrightarrow \text{AudioOnly 140} \longrightarrow \text{YTM InnerTube}$$
-   - Never proxy raw audio streams through owned cloud servers.
-   - Dual-deck crossfade (`_playerA`, `_playerB`) must always release ExoPlayer hardware decoders on completion (`setAudioSource(null)`).
-   - Track completion watchdog must enforce an 8-second VBR drift tolerance to prevent crossfade mutex deadlock.
+1. **Rule #1: Audio Engine Immutability**  
+   - Never rewrite `MusicService`, `_playerA`, `_playerB`, active/standby deck swapping, equal-power crossfade mathematics, or stream cascades to make UI code easier.
+   - Never introduce UI-driven audio timers, duplicate playback clocks, or direct player backdoors.
+   - The UI must *consume* the audio engine; the UI must *never become* the audio engine.
 
-2. **Deduplication & Search Integrity**:
-   - Every candidate and search result must pass through `CanonicalSongDedup`.
-   - Unicode diacritics normalization, noise token stripping, and Levenshtein similarity ($\ge 0.82$).
-   - Never allow karaoke, covers, or tribute tracks to overwrite studio masters or user playlists.
+2. **Rule #2: Cloudflare Edge Immutability**  
+   - Cloudflare Worker endpoints (`dilse-edge-stream.workers.dev`), DES-ECB stream decryption, and direct CDN streaming are protected infrastructure boundaries.
+   - Never introduce a new backend or proxy audio through custom servers.
 
-3. **Recommendation & Daily Mix**:
-   - All recommendation scoring runs on-device via `TasteMatrixScorer`.
-   - Enforce the **Artist Fatigue Filter**: Max 2 songs per artist in any sliding window of 4 tracks.
-   - Pre-warm JioSaavn 320k URLs and enrich 1:1 square artwork ahead of playback.
+3. **Rule #3: YouTube Engine Immutability**  
+   - YouTube fallback cascade (Format 18 $\to$ Opus 251 $\to$ AudioOnly 140 $\to$ InnerTube) is protected.
+   - Never replace `YoutubeExplode` or move YouTube stream resolution into widgets.
 
-4. **Web / PWA Dual Engine**:
-   - Primary: HTML5 `<audio>` direct from JioSaavn CDN (enables iOS Safari lock-screen background play).
-   - Secondary Safety Net: Hidden YouTube iframe with Cloudflare `/stream?v=` CORS proxy fallback on Error 150.
+4. **Rule #4: Data & Identity Integrity**  
+   - `CanonicalSongDedup` is the single source of truth for song identification.
+   - Never create secondary song IDs or replace canonical matching with presentation strings.
 
-5. **Data Protection & Version Rollback**:
-   - Multi-tier snapshot backup (`DataSnapshotService`) guarding playlists, likes, and settings.
-   - Zero-loss recovery during app upgrades or rollbacks.
+5. **Rule #5: Single Source of Truth**  
+   - Never duplicate playback, queue, position, library, or playlist state. UI state is strictly permitted for presentation concerns only (`sidebarWidth`, `isCollapsed`, `hoverIndex`, `contextTab`).
+
+6. **Rule #6: No Backdoors**  
+   - Widgets must interact exclusively through existing public service abstractions.
+
+---
+
+## 3. Mandatory Architecture Change Ledger
+
+Every phase and task must maintain the **Architecture Change Ledger**:
+
+```text
+ARCHITECTURE CHANGE LEDGER
+File:
+Change:
+Reason:
+Layer: (Zone A / Zone B / Zone C / Zone D)
+Existing abstraction reused:
+Audio impact: NONE
+Cloudflare impact: NONE
+YouTube impact: NONE
+Persistence impact: NONE
+Mobile impact:
+Web impact:
+Lifecycle impact:
+Tests affected:
+New dependency: NONE
+Architectural approval required: NO
+```
+
+### Architectural Touch Intercept Protocol:
+If a task ever proposes modifying protected files:
+- `lib/services/music_service.dart`
+- `lib/services/api_config.dart`
+- `lib/services/audio_handler.dart`
+- `web/dilse_web_player.js`
+- `lib/services/canonical_song_dedup.dart`
+- `lib/services/data_snapshot_service.dart`
+
+The agent **MUST STOP IMPLEMENTATION**, explain why, prove that a presentation-only solution is impossible, and request explicit user approval before writing any code.
+
+---
+
+## 4. Verification Quality Gate (Mandatory on Every Step)
+
+```bash
+dart format lib/ test/       # Must yield 0 changed files
+flutter analyze lib/         # Must yield 0 errors, 0 warnings, 0 infos
+flutter test                 # Must pass 100% of tests (currently 219/219)
+git checkout -- linux/ macos/ windows/ # Clean transient platform files
+```
