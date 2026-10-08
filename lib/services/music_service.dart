@@ -904,10 +904,24 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       });
       WebPlayerBridge.onNext.listen((_) => nextSong());
       WebPlayerBridge.onPrevious.listen((_) => previousSong());
-      WebPlayerBridge.stateStream.listen((_) => notifyListeners());
+      WebPlayerBridge.stateStream.listen((state) {
+        if (state == 'playing') {
+          _consecutivePlaybackFailures = 0;
+        }
+        notifyListeners();
+      });
       WebPlayerBridge.onError.listen((code) async {
         debugPrint('[WebPlayer] Error $code encountered. Handling recovery…');
         _isLoading = false;
+        _consecutivePlaybackFailures++;
+        if (_consecutivePlaybackFailures >= 3) {
+          debugPrint(
+            '[WebPlayer] Circuit breaker tripped after $_consecutivePlaybackFailures failures. Halting auto-skip.',
+          );
+          _showToast('Playback error. Tap play to retry.');
+          notifyListeners();
+          return;
+        }
         _showToast('Playback error: Skipping to next track');
         notifyListeners();
         await Future.delayed(const Duration(milliseconds: 500));
@@ -5103,6 +5117,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   bool get isDownloading => _isDownloading;
 
   Future<void> loadDownloadedSongs() async {
+    if (kIsWeb) return;
     try {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/downloads.json');
@@ -5120,6 +5135,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<bool> downloadSong(Video song) async {
+    if (kIsWeb) return false;
     _isDownloading = true;
     notifyListeners();
 
@@ -5243,6 +5259,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> deleteDownloadedSong(String videoId) async {
+    if (kIsWeb) return;
     try {
       final item = _downloadedSongs.firstWhere(
         (s) => s['id'] == videoId,
