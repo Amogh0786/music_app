@@ -10,6 +10,7 @@ import '../services/notification_permission_service.dart';
 import '../services/bug_report_service.dart';
 import '../widgets/interactive_update_dialog.dart';
 import '../widgets/equalizer_bottom_sheet.dart';
+import '../widgets/previous_versions_sheet.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -1451,6 +1452,36 @@ class _SettingsScreenState extends State<SettingsScreen>
                           color: Colors.white30,
                         ),
                   onTap: _isCheckingUpdate ? null : _handleCheckForUpdates,
+                ),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.cyanAccent.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.history_rounded,
+                      color: Colors.cyanAccent,
+                      size: 20,
+                    ),
+                  ),
+                  title: const Text(
+                    'Previous Versions',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Install or rollback to any GitHub release',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                  ),
+                  trailing: const Icon(
+                    Icons.chevron_right_rounded,
+                    color: Colors.white30,
+                  ),
+                  onTap: () => PreviousVersionsSheet.show(context),
                 ),
                 SwitchListTile(
                   title: const Text(

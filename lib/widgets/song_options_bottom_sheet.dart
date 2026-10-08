@@ -2,10 +2,70 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
-import 'dilse_image.dart';
+import '../screens/artist_profile_screen.dart';
+import '../services/preferences_service.dart';
+
+/// Converts a song Map representation into a youtube_explode Video instance
+/// for seamless interop across existing song action sheets.
+Video songMapToVideo(Map<String, dynamic> songMap) {
+  final id = (songMap['id'] as String?) ?? '';
+  final durationMs = (songMap['durationMs'] as int?) ?? 0;
+  final cleanId = id.isNotEmpty ? id : '00000000000';
+  final safeId = cleanId.length >= 11
+      ? cleanId.substring(0, 11)
+      : cleanId.padRight(11, '0');
+
+  return Video(
+    VideoId(safeId),
+    (songMap['title'] as String?) ?? 'Unknown Title',
+    (songMap['author'] as String?) ?? 'Unknown Artist',
+    ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+    DateTime.now(),
+    '',
+    null,
+    '',
+    durationMs > 0 ? Duration(milliseconds: durationMs) : null,
+    ThumbnailSet(safeId),
+    null,
+    Engagement(0, null, null),
+    false,
+  );
+}
+
+/// Convenience method to open the options bottom sheet for a playlist song Map.
+void showPlaylistSongOptionsBottomSheet(
+  BuildContext context, {
+  required Map<String, dynamic> songMap,
+  required String playlistId,
+  VoidCallback? onPlayNow,
+  VoidCallback? onRemoved,
+}) {
+  final video = songMapToVideo(songMap);
+  final thumb = (songMap['thumbnail'] as String?) ?? '';
+  final songId = (songMap['id'] as String?) ?? '';
+
+  showSongOptionsBottomSheet(
+    context,
+    video,
+    currentPlaylistId: playlistId,
+    customThumbnail: thumb,
+    onPlayNow: onPlayNow,
+    onRemoveFromPlaylist: () {
+      MusicService().removeSongFromPlaylist(playlistId, songId);
+      onRemoved?.call();
+    },
+  );
+}
 
 /// Shows an Apple Music / Spotify-inspired frosted glass options sheet for a song.
-void showSongOptionsBottomSheet(BuildContext context, Video song) {
+void showSongOptionsBottomSheet(
+  BuildContext context,
+  Video song, {
+  String? currentPlaylistId,
+  VoidCallback? onRemoveFromPlaylist,
+  VoidCallback? onPlayNow,
+  String? customThumbnail,
+}) {
   HapticFeedback.lightImpact();
   final musicService = MusicService();
 
@@ -16,7 +76,10 @@ void showSongOptionsBottomSheet(BuildContext context, Video song) {
     builder: (ctx) {
       final isLiked = musicService.isLiked(song.id.value);
       final isDownloaded = musicService.isDownloaded(song.id.value);
-      final hdThumbnail = MusicService.getHdThumbnail(song.id.value);
+      final hdThumbnail =
+          (customThumbnail != null && customThumbnail.isNotEmpty)
+          ? customThumbnail
+          : MusicService.getHdThumbnail(song.id.value);
 
       return Container(
         padding: const EdgeInsets.only(top: 12, bottom: 28),
@@ -25,180 +88,249 @@ void showSongOptionsBottomSheet(BuildContext context, Video song) {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Pill Handle
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Pill Handle
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            // Song Header Info
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  DilSeImage(
-                    imageUrl: hdThumbnail,
-                    width: 52,
-                    height: 52,
-                    borderRadius: BorderRadius.circular(10),
-                    fit: BoxFit.cover,
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          song.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.2,
+              // Song Header Info
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(
+                        hdThumbnail,
+                        width: 52,
+                        height: 52,
+                        fit: BoxFit.cover,
+                        cacheWidth: 120,
+                        cacheHeight: 120,
+                        errorBuilder: (_, _, _) => Container(
+                          width: 52,
+                          height: 52,
+                          color: const Color(0xFF1E1E28),
+                          child: const Icon(
+                            Icons.music_note,
+                            color: Colors.white54,
                           ),
                         ),
-                        const SizedBox(height: 3),
-                        Text(
-                          song.author,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.6),
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            song.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            song.author,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
 
-            const SizedBox(height: 16),
-            const Divider(color: Colors.white10, height: 1),
-            const SizedBox(height: 6),
+              const SizedBox(height: 16),
+              const Divider(color: Colors.white10, height: 1),
+              const SizedBox(height: 6),
 
-            // Action 0: Start Song Radio
-            _buildActionTile(
-              icon: Icons.auto_awesome_rounded,
-              iconColor: const Color(0xFF6C5CE7),
-              title: 'Start Song Radio',
-              subtitle: '50 smart tracks based on this song',
-              onTap: () {
-                Navigator.pop(ctx);
-                musicService.startSongRadio(song);
-                _showToast(context, 'Starting radio for "${song.title}"');
-              },
-            ),
+              // Action 0: Play immediately (when provided)
+              if (onPlayNow != null)
+                _buildActionTile(
+                  icon: Icons.play_arrow_rounded,
+                  title: 'Play',
+                  subtitle: 'Play this song now',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    onPlayNow();
+                  },
+                ),
 
-            // Action 1: Play Next
-            _buildActionTile(
-              icon: Icons.playlist_play_rounded,
-              title: 'Play Next',
-              subtitle: 'Add to the top of your queue',
-              onTap: () {
-                Navigator.pop(ctx);
-                musicService.playNext(song);
-                _showToast(context, 'Playing next: "${song.title}"');
-              },
-            ),
+              // Action 0a: View Artist Profile
+              _buildActionTile(
+                icon: Icons.person_rounded,
+                iconColor: const Color(0xFF1DB954),
+                title: 'View Artist Profile',
+                subtitle: 'Explore full discography for ${song.author}',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ArtistProfileScreen(artistName: song.author),
+                    ),
+                  );
+                },
+              ),
 
-            // Action 2: Add to Queue
-            _buildActionTile(
-              icon: Icons.queue_music_rounded,
-              title: 'Add to Queue',
-              subtitle: 'Play after currently queued songs',
-              onTap: () {
-                Navigator.pop(ctx);
-                musicService.addToQueue(song);
-                _showToast(context, 'Added to queue: "${song.title}"');
-              },
-            ),
+              // Action 0b: Start Song Radio
+              _buildActionTile(
+                icon: Icons.auto_awesome_rounded,
+                iconColor: const Color(0xFF6C5CE7),
+                title: 'Start Song Radio',
+                subtitle: '50 smart tracks based on this song',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  musicService.startSongRadio(song);
+                  _showToast(context, 'Starting radio for "${song.title}"');
+                },
+              ),
 
-            // Action 3: Add to Playlist
-            _buildActionTile(
-              icon: Icons.playlist_add_rounded,
-              title: 'Add to Playlist',
-              subtitle: 'Save to your personal playlists',
-              onTap: () {
-                Navigator.pop(ctx);
-                showAddToPlaylistSheet(context, song);
-              },
-            ),
+              // Action 1: Play Next
+              _buildActionTile(
+                icon: Icons.playlist_play_rounded,
+                title: 'Play Next',
+                subtitle: 'Add to the top of your queue',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  musicService.playNext(song);
+                  _showToast(context, 'Playing next: "${song.title}"');
+                },
+              ),
 
-            // Action 4: Like / Favorite
-            _buildActionTile(
-              icon: isLiked
-                  ? Icons.favorite_rounded
-                  : Icons.favorite_border_rounded,
-              iconColor: isLiked ? const Color(0xFFFA2D48) : Colors.white,
-              title: isLiked ? 'Remove from Liked' : 'Like Song',
-              subtitle: isLiked
-                  ? 'Saved in your favorites'
-                  : 'Add to your Liked collection',
-              onTap: () {
-                Navigator.pop(ctx);
-                musicService.toggleLike(song);
-                _showToast(
-                  context,
-                  isLiked ? 'Removed from Liked' : 'Added to Liked Songs ❤️',
-                );
-              },
-            ),
+              // Action 2: Add to Queue
+              _buildActionTile(
+                icon: Icons.queue_music_rounded,
+                title: 'Add to Queue',
+                subtitle: 'Play after currently queued songs',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  musicService.addToQueue(song);
+                  _showToast(context, 'Added to queue: "${song.title}"');
+                },
+              ),
 
-            // Action 5: Download Offline
-            _buildActionTile(
-              icon: isDownloaded
-                  ? Icons.download_done_rounded
-                  : Icons.download_rounded,
-              iconColor: isDownloaded ? const Color(0xFF1DB954) : Colors.white,
-              title: isDownloaded ? 'Downloaded' : 'Download for Offline',
-              subtitle: isDownloaded
-                  ? 'Available without internet'
-                  : 'Save audio file locally',
-              onTap: () async {
-                Navigator.pop(ctx);
-                if (isDownloaded) {
-                  _showToast(context, 'Song is already downloaded offline');
-                } else {
-                  _showToast(context, 'Starting download...');
-                  final success = await musicService.downloadSong(song);
-                  if (context.mounted) {
-                    _showToast(
-                      context,
-                      success ? 'Download complete!' : 'Download failed.',
-                    );
+              // Action 3: Add to Playlist
+              _buildActionTile(
+                icon: Icons.playlist_add_rounded,
+                title: 'Add to Playlist',
+                subtitle: 'Save to your personal playlists',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showAddToPlaylistSheet(context, song);
+                },
+              ),
+
+              // Action 4: Like / Favorite
+              _buildActionTile(
+                icon: isLiked
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+                iconColor: isLiked ? const Color(0xFFFA2D48) : Colors.white,
+                title: isLiked ? 'Remove from Liked' : 'Like Song',
+                subtitle: isLiked
+                    ? 'Saved in your favorites'
+                    : 'Add to your Liked collection',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  musicService.toggleLike(song);
+                  _showToast(
+                    context,
+                    isLiked ? 'Removed from Liked' : 'Added to Liked Songs ❤️',
+                  );
+                },
+              ),
+
+              // Action: Remove from Playlist (when in playlist context)
+              if (currentPlaylistId != null || onRemoveFromPlaylist != null)
+                _buildActionTile(
+                  icon: Icons.playlist_remove_rounded,
+                  iconColor: Colors.redAccent,
+                  title: 'Remove from Playlist',
+                  subtitle: 'Remove from this playlist only',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    if (onRemoveFromPlaylist != null) {
+                      onRemoveFromPlaylist();
+                    } else if (currentPlaylistId != null) {
+                      musicService.removeSongFromPlaylist(
+                        currentPlaylistId,
+                        song.id.value,
+                      );
+                    }
+                    _showToast(context, 'Removed from playlist');
+                  },
+                ),
+
+              // Action 5: Download Offline
+              _buildActionTile(
+                icon: isDownloaded
+                    ? Icons.download_done_rounded
+                    : Icons.download_rounded,
+                iconColor: isDownloaded
+                    ? const Color(0xFF1DB954)
+                    : Colors.white,
+                title: isDownloaded ? 'Downloaded' : 'Download for Offline',
+                subtitle: isDownloaded
+                    ? 'Available without internet'
+                    : 'Save audio file locally',
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  if (isDownloaded) {
+                    _showToast(context, 'Song is already downloaded offline');
+                  } else {
+                    _showToast(context, 'Starting download...');
+                    final success = await musicService.downloadSong(song);
+                    if (context.mounted) {
+                      _showToast(
+                        context,
+                        success ? 'Download complete!' : 'Download failed.',
+                      );
+                    }
                   }
-                }
-              },
-            ),
+                },
+              ),
 
-            // Action 6: Share Song
-            _buildActionTile(
-              icon: Icons.share_rounded,
-              title: 'Share Song',
-              subtitle: 'Copy link or song details',
-              onTap: () {
-                Navigator.pop(ctx);
-                Clipboard.setData(
-                  ClipboardData(
-                    text: '${song.title} - ${song.author}\n${song.url}',
-                  ),
-                );
-                _showToast(context, 'Song link copied to clipboard!');
-              },
-            ),
-          ],
+              // Action 6: Share Song
+              _buildActionTile(
+                icon: Icons.share_rounded,
+                title: 'Share Song',
+                subtitle: 'Copy link or song details',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Clipboard.setData(
+                    ClipboardData(
+                      text: '${song.title} - ${song.author}\n${song.url}',
+                    ),
+                  );
+                  _showToast(context, 'Song link copied to clipboard!');
+                },
+              ),
+            ],
+          ),
         ),
       );
     },
@@ -212,36 +344,39 @@ Widget _buildActionTile({
   required String subtitle,
   required VoidCallback onTap,
 }) {
-  return ListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-    leading: Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(10),
+  return Material(
+    color: Colors.transparent,
+    child: ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: iconColor, size: 22),
       ),
-      child: Icon(icon, color: iconColor, size: 22),
-    ),
-    title: Text(
-      title,
-      style: const TextStyle(
-        color: Colors.white,
-        fontWeight: FontWeight.w600,
-        fontSize: 14.5,
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
+          fontSize: 14.5,
+        ),
       ),
-    ),
-    subtitle: Text(
-      subtitle,
-      style: TextStyle(
-        color: Colors.white.withValues(alpha: 0.5),
-        fontSize: 12,
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.5),
+          fontSize: 12,
+        ),
       ),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
     ),
-    onTap: () {
-      HapticFeedback.lightImpact();
-      onTap();
-    },
   );
 }
 
@@ -390,7 +525,13 @@ void _showNewPlaylistPrompt(BuildContext context, Video song) {
           onPressed: () {
             final name = controller.text.trim();
             if (name.isNotEmpty) {
-              final newId = MusicService().createPlaylist(name);
+              final newId = MusicService().createPlaylist(
+                name,
+                isSpotify: false,
+                source: 'custom',
+              );
+              PreferencesService().registerManualPlaylistId(newId);
+              PreferencesService().unregisterSpotifyPlaylistId(newId);
               MusicService().addSongToPlaylist(newId, song);
               Navigator.pop(ctx);
               _showToast(context, 'Created "$name" and added song!');
