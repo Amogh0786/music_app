@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../screens/home_screen.dart';
 import '../widgets/desktop/desktop_resize_divider.dart';
+import '../widgets/desktop/desktop_now_playing_bar.dart';
 import 'desktop_layout_state.dart';
 
 /// Spotify-grade 3-Column Desktop Application Shell.
@@ -82,9 +83,7 @@ class DesktopAppShell extends StatelessWidget {
               // 3. Bottom Edge-to-Edge Player Deck (90px)
               const SizedBox(
                 height: 90.0,
-                child: RepaintBoundary(
-                  child: DesktopNowPlayingBarPlaceholder(),
-                ),
+                child: RepaintBoundary(child: DesktopNowPlayingBar()),
               ),
             ],
           ),
