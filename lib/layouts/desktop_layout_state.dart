@@ -3,12 +3,24 @@ import 'package:flutter/foundation.dart';
 /// Contextual tabs available in the Right-hand Desktop Context Panel.
 enum DesktopContextTab { nowPlaying, lyrics, queue, chords }
 
+/// Central Viewport tabs available in the Desktop Shell.
+enum DesktopNavTab { home, search, library }
+
 /// Lightweight, primitive ValueNotifier state holder for the Spotify-grade Desktop Shell.
 ///
 /// Designed to avoid heavy state packages or root-level rebuilds.
 /// Individual layout regions subscribe ONLY to the ValueNotifiers they care about.
 class DesktopLayoutState {
   DesktopLayoutState._();
+
+  /// Active central viewport navigation tab.
+  static final ValueNotifier<DesktopNavTab> activeNavTab =
+      ValueNotifier<DesktopNavTab>(DesktopNavTab.home);
+
+  /// Global search query from the top navigation bar.
+  static final ValueNotifier<String> globalSearchQuery = ValueNotifier<String>(
+    '',
+  );
 
   /// Width of the resizable left library sidebar (clamped between 72.0 and 398.0).
   static final ValueNotifier<double> leftSidebarWidth = ValueNotifier<double>(
@@ -64,5 +76,10 @@ class DesktopLayoutState {
     if (!isRightPanelVisible.value) {
       isRightPanelVisible.value = true;
     }
+  }
+
+  /// Sets the active central viewport navigation tab.
+  static void setNavTab(DesktopNavTab tab) {
+    activeNavTab.value = tab;
   }
 }

@@ -157,12 +157,12 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
           _buildCompactNavIcon(
             icon: Icons.home_filled,
             label: 'Home',
-            onTap: () {},
+            onTap: () => DesktopLayoutState.setNavTab(DesktopNavTab.home),
           ),
           _buildCompactNavIcon(
             icon: Icons.search_rounded,
             label: 'Search',
-            onTap: () {},
+            onTap: () => DesktopLayoutState.setNavTab(DesktopNavTab.search),
           ),
           _buildCompactNavIcon(
             icon: Icons.library_music_rounded,
@@ -309,22 +309,29 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
               width: 1.0,
             ),
           ),
-          child: Column(
-            children: [
-              _buildNavRow(
-                icon: Icons.home_filled,
-                title: 'Home',
-                isActive: true,
-                onTap: () {},
-              ),
-              const SizedBox(height: 6.0),
-              _buildNavRow(
-                icon: Icons.search_rounded,
-                title: 'Search',
-                isActive: false,
-                onTap: () {},
-              ),
-            ],
+          child: ValueListenableBuilder<DesktopNavTab>(
+            valueListenable: DesktopLayoutState.activeNavTab,
+            builder: (context, activeTab, _) {
+              return Column(
+                children: [
+                  _buildNavRow(
+                    icon: Icons.home_filled,
+                    title: 'Home',
+                    isActive: activeTab == DesktopNavTab.home,
+                    onTap: () =>
+                        DesktopLayoutState.setNavTab(DesktopNavTab.home),
+                  ),
+                  const SizedBox(height: 6.0),
+                  _buildNavRow(
+                    icon: Icons.search_rounded,
+                    title: 'Search',
+                    isActive: activeTab == DesktopNavTab.search,
+                    onTap: () =>
+                        DesktopLayoutState.setNavTab(DesktopNavTab.search),
+                  ),
+                ],
+              );
+            },
           ),
         ),
 

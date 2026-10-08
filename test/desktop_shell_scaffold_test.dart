@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:music_app/layouts/desktop_app_shell.dart';
 import 'package:music_app/layouts/desktop_layout_state.dart';
 import 'package:music_app/widgets/desktop/desktop_resize_divider.dart';
+import 'package:music_app/widgets/desktop/desktop_top_nav_bar.dart';
 
 void main() {
   group('DesktopLayoutState Unit Tests', () {
@@ -62,7 +63,7 @@ void main() {
       );
 
       expect(find.text('Mobile Body Content'), findsOneWidget);
-      expect(find.byType(DesktopTopNavBarPlaceholder), findsNothing);
+      expect(find.byType(DesktopTopNavBar), findsNothing);
     });
   });
 }

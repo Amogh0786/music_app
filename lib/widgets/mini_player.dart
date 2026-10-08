@@ -102,6 +102,10 @@ class _MiniPlayerState extends State<MiniPlayer> {
       return const SizedBox.shrink();
     }
 
+    if (kIsWeb && MediaQuery.sizeOf(context).width >= 1024) {
+      return const SizedBox.shrink();
+    }
+
     final song = _musicService.currentSong;
     final isPlaying = _musicService.isPlaying;
     final processingState = _musicService.audioPlayer.processingState;
