@@ -54,3 +54,6 @@ node_modules/
 
 # Nested clone
 /music_app/
+
+# Local runtime data
+custom_playlists.json

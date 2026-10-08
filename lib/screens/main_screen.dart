@@ -13,6 +13,7 @@ import '../services/preferences_service.dart';
 import '../services/notification_permission_service.dart';
 import '../services/update_service.dart';
 import '../services/spotify_import_service.dart';
+import '../services/data_snapshot_service.dart';
 import '../widgets/responsive_wrapper.dart';
 
 class MainScreen extends StatefulWidget {
@@ -25,12 +26,8 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   late final PageController _pageController;
-
-  final List<Widget> _screens = const [
-    HomeScreen(),
-    SearchScreen(),
-    LibraryScreen(),
-  ];
+  final GlobalKey<SearchScreenState> _searchScreenKey =
+      GlobalKey<SearchScreenState>();
 
   @override
   void initState() {
@@ -39,11 +36,41 @@ class _MainScreenState extends State<MainScreen> {
     MusicService().addListener(_onMusicServiceChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        _checkAutoRestore();
         _checkFirstTimeNamePrompt();
         NotificationPermissionService.promptIfNeeded(context);
         _checkAutoAppUpdate();
       }
     });
+  }
+
+  Future<void> _checkAutoRestore() async {
+    try {
+      final restored = await DataSnapshotService().autoRestoreIfEmpty();
+      if (restored && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.restore_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Welcome back! Restored your playlists & library from backup snapshot.',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Color(0xFF1DB954),
+            duration: Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[MainScreen] Auto restore check error: $e');
+    }
   }
 
   Future<void> _checkAutoAppUpdate() async {
@@ -97,44 +124,82 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0B0F),
-      body: ResponsiveWrapper(
-        child: Stack(
-          children: [
-            PageView(
-              controller: _pageController,
-              physics: const ClampingScrollPhysics(),
-              onPageChanged: (index) {
-                setState(() => _selectedIndex = index);
-              },
-              children: _screens,
-            ),
-            // Floating Mini Player & Floating Glass Dock stacked at the bottom
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+    return PopScope(
+      canPop: _selectedIndex == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+
+        // If on Search Tab (index 1), verify whether active sub-search was handled
+        if (_selectedIndex == 1) {
+          final searchState = _searchScreenKey.currentState;
+          if (searchState != null) {
+            if (searchState.wasBackHandledRecently()) {
+              return;
+            }
+            if (searchState.isSearchActive) {
+              searchState.clearSearchAndDismiss();
+              return;
+            }
+          }
+        }
+
+        // With no active sub-search on Tab 1, or currently on Tab 2 (Library):
+        // Switch back to Tab 0 (Home) before exiting the app.
+        if (_selectedIndex != 0) {
+          setState(() => _selectedIndex = 0);
+          _pageController.animateToPage(
+            0,
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+          );
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0B0B0F),
+        body: ResponsiveWrapper(
+          child: Stack(
+            children: [
+              PageView(
+                controller: _pageController,
+                physics: const ClampingScrollPhysics(),
+                onPageChanged: (index) {
+                  setState(() => _selectedIndex = index);
+                },
                 children: [
-                  const _BackgroundImportBanner(),
-                  const MiniPlayer(),
-                  FloatingNavDock(
-                    selectedIndex: _selectedIndex,
-                    onTabSelected: (index) {
-                      setState(() => _selectedIndex = index);
-                      _pageController.animateToPage(
-                        index,
-                        duration: const Duration(milliseconds: 320),
-                        curve: Curves.easeOutCubic,
-                      );
-                    },
+                  const HomeScreen(),
+                  SearchScreen(
+                    key: _searchScreenKey,
+                    isActive: _selectedIndex == 1,
                   ),
+                  const LibraryScreen(),
                 ],
               ),
-            ),
-          ],
+              // Floating Mini Player & Floating Glass Dock stacked at the bottom
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const _BackgroundImportBanner(),
+                    const MiniPlayer(),
+                    FloatingNavDock(
+                      selectedIndex: _selectedIndex,
+                      onTabSelected: (index) {
+                        setState(() => _selectedIndex = index);
+                        _pageController.animateToPage(
+                          index,
+                          duration: const Duration(milliseconds: 320),
+                          curve: Curves.easeOutCubic,
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

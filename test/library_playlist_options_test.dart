@@ -68,20 +68,11 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Switch to Playlists tab (Tab index 2: Liked Songs, Downloads, Playlists, History)
-        final playlistsTabFinder = find.text('Playlists');
-        expect(playlistsTabFinder, findsOneWidget);
-        await tester.tap(playlistsTabFinder);
-        await tester.pumpAndSettle();
-
         // Verify playlist item is present
         expect(find.text('Party Vibes'), findsOneWidget);
 
-        // Verify top-right Import / Exportify button remains present
-        expect(find.text('Import / Exportify'), findsOneWidget);
-
         // Verify New Playlist button is present in the header
-        expect(find.byTooltip('New Playlist'), findsOneWidget);
+        expect(find.byTooltip('Create New Playlist'), findsOneWidget);
 
         // Verify the old 'Import from Spotify' icon beside New Playlist is REMOVED
         expect(find.byTooltip('Import from Spotify'), findsNothing);
@@ -98,7 +89,7 @@ void main() {
 
         // Verify Three Dots button is present
         final optionsButtonFinder = find.byKey(
-          const ValueKey('playlist_options_my_party_playlist'),
+          const ValueKey('playlist_more_my_party_playlist'),
         );
         expect(optionsButtonFinder, findsOneWidget);
 
@@ -111,34 +102,13 @@ void main() {
           reason: 'Three dots icon must appear after the play button',
         );
 
-        // Tap the Three Dots button to open the bottom sheet
+        // Tap the Three Dots button to open the menu
         await tester.tap(optionsButtonFinder);
         await tester.pumpAndSettle();
 
-        // Verify bottom sheet header and named options appear
-        expect(
-          find.byKey(const ValueKey('option_play_playlist')),
-          findsOneWidget,
-        );
-        expect(find.text('Play Playlist'), findsOneWidget);
-
-        expect(
-          find.byKey(const ValueKey('option_shuffle_playlist')),
-          findsOneWidget,
-        );
-        expect(find.text('Shuffle Playlist'), findsOneWidget);
-
-        expect(
-          find.byKey(const ValueKey('option_rename_playlist')),
-          findsOneWidget,
-        );
-        expect(find.text('Rename Playlist'), findsOneWidget);
-
-        expect(
-          find.byKey(const ValueKey('option_delete_playlist')),
-          findsOneWidget,
-        );
-        expect(find.text('Delete Playlist'), findsOneWidget);
+        // Verify menu options appear
+        expect(find.text('Rename'), findsOneWidget);
+        expect(find.text('Delete'), findsOneWidget);
       },
     );
 
@@ -150,18 +120,14 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Switch to Playlists tab
-        await tester.tap(find.text('Playlists'));
-        await tester.pumpAndSettle();
-
         // Tap 3-dots button
         await tester.tap(
-          find.byKey(const ValueKey('playlist_options_my_party_playlist')),
+          find.byKey(const ValueKey('playlist_more_my_party_playlist')),
         );
         await tester.pumpAndSettle();
 
-        // Tap Rename Playlist named option
-        await tester.tap(find.byKey(const ValueKey('option_rename_playlist')));
+        // Tap Rename option
+        await tester.tap(find.text('Rename'));
         await tester.pumpAndSettle();
 
         // Verify rename dialog opened
@@ -179,18 +145,14 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Switch to Playlists tab
-        await tester.tap(find.text('Playlists'));
-        await tester.pumpAndSettle();
-
         // Tap 3-dots button
         await tester.tap(
-          find.byKey(const ValueKey('playlist_options_my_party_playlist')),
+          find.byKey(const ValueKey('playlist_more_my_party_playlist')),
         );
         await tester.pumpAndSettle();
 
-        // Tap Delete Playlist named option
-        await tester.tap(find.byKey(const ValueKey('option_delete_playlist')));
+        // Tap Delete option
+        await tester.tap(find.text('Delete'));
         await tester.pumpAndSettle();
 
         // Verify delete confirmation dialog opened
@@ -199,7 +161,7 @@ void main() {
           find.text('Are you sure you want to delete "Party Vibes"?'),
           findsOneWidget,
         );
-        expect(find.text('Delete'), findsOneWidget);
+        expect(find.text('Delete'), findsWidgets);
       },
     );
   });

@@ -417,6 +417,47 @@
     );
   }
 
+  function handlePlayRejection(err, targetAudio) {
+    const errName = err ? (err.name || '') : '';
+    const errMsg = err ? (err.message || String(err)) : '';
+    console.warn('[DilSe Web Player] audioEl.play() rejected:', errName, errMsg);
+
+    // If browser Autoplay policy blocked sound before user gesture, DO NOT trigger fallback or skip track!
+    if (
+      errName === 'NotAllowedError' ||
+      errName === 'SecurityError' ||
+      errMsg.includes('interact') ||
+      errMsg.includes('user gesture')
+    ) {
+      console.warn(
+        '[DilSe Web Player] Autoplay policy prevented playback. Arming user-interaction listener…'
+      );
+      clearFallbackTimer();
+      broadcastState('paused');
+
+      const resumeOnGesture = () => {
+        window.removeEventListener('pointerdown', resumeOnGesture, true);
+        window.removeEventListener('keydown', resumeOnGesture, true);
+        window.removeEventListener('click', resumeOnGesture, true);
+        const el = targetAudio || audioEl;
+        if (activeEngine === ENGINE_AUDIO && el && el.src) {
+          el.play().then(() => {
+            unlockAudioContext();
+          }).catch((e) => {
+            console.warn('[DilSe Web Player] Gesture-triggered play failed:', e);
+            triggerFallback();
+          });
+        }
+      };
+      window.addEventListener('pointerdown', resumeOnGesture, { capture: true, once: true });
+      window.addEventListener('keydown', resumeOnGesture, { capture: true, once: true });
+      window.addEventListener('click', resumeOnGesture, { capture: true, once: true });
+      return;
+    }
+
+    triggerFallback();
+  }
+
   function triggerFallback() {
     clearFallbackTimer();
     if (activeEngine === ENGINE_IFRAME) return; // already in fallback
@@ -875,8 +916,7 @@
       audioEl.play().then(() => {
         unlockAudioContext();
       }).catch((err) => {
-        console.warn('[DilSe Web Player] audioEl.play() rejected:', err);
-        triggerFallback();
+        handlePlayRejection(err, audioEl);
       });
       return;
     }
@@ -1004,8 +1044,7 @@
             audioEl.play().then(() => {
               unlockAudioContext();
             }).catch((err) => {
-              console.warn('[DilSe Web Player] audioEl.play() rejected:', err);
-              triggerFallback();
+              handlePlayRejection(err, audioEl);
             });
             return;
           } else {

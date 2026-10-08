@@ -3,101 +3,341 @@
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/dilse_widget_background"
-    android:padding="14dp">
+    android:background="@drawable/dilse_widget_background">
 
+    <!-- Dynamic Glassmorphic Dominant-Color Background Canvas -->
+    <ImageView
+        android:id="@+id/widget_background_image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:contentDescription="Widget Background" />
+
+    <!-- Main Content Container -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:orientation="vertical"
+        android:padding="13dp">
 
-        <!-- Album Cover -->
-        <ImageView
-            android:id="@+id/widget_album_art"
-            android:layout_width="72dp"
-            android:layout_height="72dp"
-            android:scaleType="centerCrop"
-            android:background="#222230"
-            android:contentDescription="Album Art"
-            android:src="@drawable/ic_stat_music" />
-
-        <!-- Track Info & Controls -->
+        <!-- Top Playback Deck: Album Artwork (Left) + Metadata & Responsive Controls (Right) -->
         <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
             android:layout_weight="1"
-            android:orientation="vertical"
-            android:layout_marginStart="14dp">
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="DILSE MUSIC"
-                android:textColor="#80FFFFFF"
-                android:textSize="9sp"
-                android:textStyle="bold"
-                android:letterSpacing="0.1" />
+            <!-- Rounded Squircle Album Artwork -->
+            <ImageView
+                android:id="@+id/widget_album_art"
+                android:layout_width="96dp"
+                android:layout_height="96dp"
+                android:scaleType="centerCrop"
+                android:contentDescription="Album Art"
+                android:src="@drawable/ic_stat_music" />
 
-            <TextView
-                android:id="@+id/widget_song_title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="DilSe Music"
-                android:textColor="#FFFFFFFF"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                android:singleLine="true"
-                android:ellipsize="marquee"
-                android:layout_marginTop="2dp" />
-
-            <TextView
-                android:id="@+id/widget_song_artist"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Tap to play"
-                android:textColor="#B3FFFFFF"
-                android:textSize="12sp"
-                android:singleLine="true"
-                android:ellipsize="end"
-                android:layout_marginTop="1dp" />
-
-            <!-- Controls: Previous, Play/Pause, Next -->
+            <!-- Track Metadata, Controls & Progress Scrubber -->
             <LinearLayout
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="14dp"
+                android:gravity="center_vertical">
+
+                <!-- Song Title -->
+                <TextView
+                    android:id="@+id/widget_song_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="DilSe Music"
+                    android:textColor="#FFFFFFFF"
+                    android:textSize="17sp"
+                    android:textStyle="bold"
+                    android:singleLine="true"
+                    android:ellipsize="marquee" />
+
+                <!-- Artist Name -->
+                <TextView
+                    android:id="@+id/widget_song_artist"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Tap to play"
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp"
+                    android:singleLine="true"
+                    android:ellipsize="end"
+                    android:layout_marginTop="2dp" />
+
+                <!-- Responsive Fluid Playcontrols Row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="6dp">
+
+                    <!-- Shuffle Toggle -->
+                    <ImageView
+                        android:id="@+id/widget_btn_shuffle"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:padding="8dp"
+                        android:background="?android:attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/ic_widget_shuffle"
+                        android:contentDescription="Shuffle" />
+
+                    <!-- Previous Track -->
+                    <ImageView
+                        android:id="@+id/widget_btn_prev"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:padding="6dp"
+                        android:background="?android:attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/audio_service_skip_previous"
+                        android:contentDescription="Previous" />
+
+                    <!-- Glowing Circular Play / Pause Deck -->
+                    <ImageView
+                        android:id="@+id/widget_btn_play_pause"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1.3"
+                        android:padding="2dp"
+                        android:background="?android:attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/audio_service_play_arrow"
+                        android:contentDescription="Play/Pause" />
+
+                    <!-- Next Track -->
+                    <ImageView
+                        android:id="@+id/widget_btn_next"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:padding="6dp"
+                        android:background="?android:attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/audio_service_skip_next"
+                        android:contentDescription="Next" />
+
+                    <!-- Repeat Toggle -->
+                    <ImageView
+                        android:id="@+id/widget_btn_repeat"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:padding="8dp"
+                        android:background="?android:attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/ic_widget_repeat"
+                        android:contentDescription="Repeat" />
+
+                </LinearLayout>
+
+                <!-- Responsive Progress Bar -->
+                <ProgressBar
+                    android:id="@+id/widget_progress_bar"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="3.5dp"
+                    android:layout_marginTop="6dp"
+                    android:max="1000"
+                    android:progress="0"
+                    android:progressDrawable="@drawable/dilse_widget_progress" />
+
+                <!-- Monospace Timestamps: Elapsed & Total Duration -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="2dp">
+
+                    <TextView
+                        android:id="@+id/widget_time_current"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="0:00"
+                        android:textColor="#80FFFFFF"
+                        android:textSize="9.5sp"
+                        android:fontFamily="sans-serif-medium" />
+
+                    <TextView
+                        android:id="@+id/widget_time_total"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0:00"
+                        android:textColor="#80FFFFFF"
+                        android:textSize="9.5sp"
+                        android:fontFamily="sans-serif-medium" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Bottom Shelf: 5 Top Playlists Based On Listening Data -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="10dp">
+
+            <!-- Playlist 0 -->
+            <LinearLayout
+                android:id="@+id/widget_playlist_0"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
                 android:orientation="horizontal"
-                android:gravity="center_vertical|start"
-                android:layout_marginTop="8dp">
+                android:gravity="center_vertical"
+                android:background="?android:attr/selectableItemBackgroundBorderless">
 
                 <ImageView
-                    android:id="@+id/widget_btn_prev"
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
-                    android:padding="6dp"
-                    android:background="@android:color/transparent"
-                    android:src="@drawable/audio_service_skip_previous"
-                    android:contentDescription="Previous" />
+                    android:id="@+id/widget_playlist_art_0"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:scaleType="centerCrop"
+                    android:src="@drawable/ic_stat_music"
+                    android:contentDescription="Playlist 1" />
+
+                <TextView
+                    android:id="@+id/widget_playlist_title_0"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="Daily\nMix"
+                    android:textColor="#CCFFFFFF"
+                    android:textSize="9.5sp"
+                    android:maxLines="2"
+                    android:ellipsize="end" />
+
+            </LinearLayout>
+
+            <!-- Playlist 1 -->
+            <LinearLayout
+                android:id="@+id/widget_playlist_1"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="?android:attr/selectableItemBackgroundBorderless">
 
                 <ImageView
-                    android:id="@+id/widget_btn_play_pause"
-                    android:layout_width="38dp"
-                    android:layout_height="38dp"
-                    android:padding="4dp"
-                    android:layout_marginStart="10dp"
-                    android:background="@android:color/transparent"
-                    android:src="@drawable/audio_service_play_arrow"
-                    android:contentDescription="Play/Pause" />
+                    android:id="@+id/widget_playlist_art_1"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:scaleType="centerCrop"
+                    android:src="@drawable/ic_stat_music"
+                    android:contentDescription="Playlist 2" />
+
+                <TextView
+                    android:id="@+id/widget_playlist_title_1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="Favorites"
+                    android:textColor="#CCFFFFFF"
+                    android:textSize="9.5sp"
+                    android:maxLines="2"
+                    android:ellipsize="end" />
+
+            </LinearLayout>
+
+            <!-- Playlist 2 -->
+            <LinearLayout
+                android:id="@+id/widget_playlist_2"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="?android:attr/selectableItemBackgroundBorderless">
 
                 <ImageView
-                    android:id="@+id/widget_btn_next"
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
-                    android:padding="6dp"
-                    android:layout_marginStart="10dp"
-                    android:background="@android:color/transparent"
-                    android:src="@drawable/audio_service_skip_next"
-                    android:contentDescription="Next" />
+                    android:id="@+id/widget_playlist_art_2"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:scaleType="centerCrop"
+                    android:src="@drawable/ic_stat_music"
+                    android:contentDescription="Playlist 3" />
+
+                <TextView
+                    android:id="@+id/widget_playlist_title_2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="Most\nPlayed"
+                    android:textColor="#CCFFFFFF"
+                    android:textSize="9.5sp"
+                    android:maxLines="2"
+                    android:ellipsize="end" />
+
+            </LinearLayout>
+
+            <!-- Playlist 3 -->
+            <LinearLayout
+                android:id="@+id/widget_playlist_3"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="?android:attr/selectableItemBackgroundBorderless">
+
+                <ImageView
+                    android:id="@+id/widget_playlist_art_3"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:scaleType="centerCrop"
+                    android:src="@drawable/ic_stat_music"
+                    android:contentDescription="Playlist 4" />
+
+                <TextView
+                    android:id="@+id/widget_playlist_title_3"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="History\nReplay"
+                    android:textColor="#CCFFFFFF"
+                    android:textSize="9.5sp"
+                    android:maxLines="2"
+                    android:ellipsize="end" />
+
+            </LinearLayout>
+
+            <!-- Playlist 4 -->
+            <LinearLayout
+                android:id="@+id/widget_playlist_4"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="?android:attr/selectableItemBackgroundBorderless">
+
+                <ImageView
+                    android:id="@+id/widget_playlist_art_4"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:scaleType="centerCrop"
+                    android:src="@drawable/ic_stat_music"
+                    android:contentDescription="Playlist 5" />
+
+                <TextView
+                    android:id="@+id/widget_playlist_title_4"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="Chill\nVibes"
+                    android:textColor="#CCFFFFFF"
+                    android:textSize="9.5sp"
+                    android:maxLines="2"
+                    android:ellipsize="end" />
 
             </LinearLayout>
 

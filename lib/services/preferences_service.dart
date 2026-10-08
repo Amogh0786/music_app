@@ -459,6 +459,18 @@ class PreferencesService extends ChangeNotifier {
       } catch (_) {}
     }
 
+    final savedSpotifyIds = _prefs.getStringList(
+      'spotify_imported_playlist_ids',
+    );
+    if (savedSpotifyIds != null) {
+      _spotifyImportedPlaylistIds = savedSpotifyIds.toSet();
+    }
+
+    final savedManualIds = _prefs.getStringList('manual_created_playlist_ids');
+    if (savedManualIds != null) {
+      _manualCreatedPlaylistIds = savedManualIds.toSet();
+    }
+
     _isInitialized = true;
     WebPlayerBridge.setEqualizer(_equalizerEnabled, _equalizerBands);
     notifyListeners();
@@ -1480,6 +1492,88 @@ class PreferencesService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Set<String> _spotifyImportedPlaylistIds = {};
+  Set<String> _manualCreatedPlaylistIds = {};
+
+  Set<String> get spotifyImportedPlaylistIds =>
+      Set.unmodifiable(_spotifyImportedPlaylistIds);
+  Set<String> get manualCreatedPlaylistIds =>
+      Set.unmodifiable(_manualCreatedPlaylistIds);
+
+  bool isSpotifyImportedPlaylist(String id) =>
+      _spotifyImportedPlaylistIds.contains(id);
+
+  bool isManualCreatedPlaylist(String id) =>
+      _manualCreatedPlaylistIds.contains(id);
+
+  Future<void> registerSpotifyPlaylistId(String id) async {
+    if (id.isEmpty) return;
+    _spotifyImportedPlaylistIds.add(id);
+    _manualCreatedPlaylistIds.remove(id);
+    if (_isInitialized) {
+      await _prefs.setStringList(
+        'spotify_imported_playlist_ids',
+        _spotifyImportedPlaylistIds.toList(),
+      );
+      await _prefs.setStringList(
+        'manual_created_playlist_ids',
+        _manualCreatedPlaylistIds.toList(),
+      );
+    }
+    notifyListeners();
+  }
+
+  Future<void> unregisterSpotifyPlaylistId(String id) async {
+    if (id.isEmpty) return;
+    _spotifyImportedPlaylistIds.remove(id);
+    if (_isInitialized) {
+      await _prefs.setStringList(
+        'spotify_imported_playlist_ids',
+        _spotifyImportedPlaylistIds.toList(),
+      );
+    }
+    notifyListeners();
+  }
+
+  Future<void> registerManualPlaylistId(String id) async {
+    if (id.isEmpty) return;
+    _manualCreatedPlaylistIds.add(id);
+    _spotifyImportedPlaylistIds.remove(id);
+    if (_isInitialized) {
+      await _prefs.setStringList(
+        'manual_created_playlist_ids',
+        _manualCreatedPlaylistIds.toList(),
+      );
+      await _prefs.setStringList(
+        'spotify_imported_playlist_ids',
+        _spotifyImportedPlaylistIds.toList(),
+      );
+    }
+    notifyListeners();
+  }
+
+  Future<void> unregisterManualPlaylistId(String id) async {
+    if (id.isEmpty) return;
+    _manualCreatedPlaylistIds.remove(id);
+    if (_isInitialized) {
+      await _prefs.setStringList(
+        'manual_created_playlist_ids',
+        _manualCreatedPlaylistIds.toList(),
+      );
+    }
+    notifyListeners();
+  }
+
+  Future<void> toggleSpotifyPlaylistId(String id) async {
+    if (_spotifyImportedPlaylistIds.contains(id)) {
+      await unregisterSpotifyPlaylistId(id);
+      await registerManualPlaylistId(id);
+    } else {
+      await unregisterManualPlaylistId(id);
+      await registerSpotifyPlaylistId(id);
+    }
+  }
+
   @visibleForTesting
   void resetForTesting() {
     _isInitialized = false;
@@ -1494,5 +1588,7 @@ class PreferencesService extends ChangeNotifier {
     _mostPlayedArtist = '';
     _topArtistPlayCount = 0;
     _profileImagePath = null;
+    _spotifyImportedPlaylistIds.clear();
+    _manualCreatedPlaylistIds.clear();
   }
 }
