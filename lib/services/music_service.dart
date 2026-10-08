@@ -22,6 +22,8 @@ import 'album_color_deriver.dart';
 import 'lyrics_transliteration_service.dart';
 import 'widget_update_service.dart';
 import 'dynamic_artist_service.dart';
+import 'taste_matrix_scorer.dart';
+import '../models/jio_album.dart';
 
 enum SearchSuggestionType { artist, song, album, history, query }
 
@@ -223,6 +225,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   bool get isPlaying =>
       kIsWeb ? WebPlayerBridge.isPlaying : _activePlayer.playing;
   Duration get position {
+    if (_isLoading) return Duration.zero;
     if (kIsWeb) {
       final p = WebPlayerBridge.currentPosition;
       if (p > Duration.zero) return p;
@@ -234,6 +237,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Duration? get duration {
+    if (_isLoading) return _currentSong?.duration;
     if (kIsWeb) {
       final d = WebPlayerBridge.currentDuration;
       if (d > Duration.zero) return d;
@@ -661,6 +665,73 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     return 'https://i.ytimg.com/vi/$videoId/maxresdefault.jpg';
   }
 
+  /// Background artwork enrichment pass.
+  ///
+  /// Iterates over [songs] and for any song whose current artwork is:
+  ///   (a) a known compilation/playlist cover, OR
+  ///   (b) absent from _artworkMap (would fall back to a raw YouTube thumbnail)
+  ///
+  /// …fires a lightweight JioSaavn single-track resolve to retrieve the genuine
+  /// original movie/album cover. Updates [_artworkMap] and calls [notifyListeners]
+  /// so the UI refreshes without reloading the page.
+  ///
+  /// Rate-limited to one resolve per 80ms so the edge worker is not flooded.
+  Future<void> enrichArtworkForSongs(List<Video> songs) async {
+    // Collect songs that need artwork enrichment
+    final needsEnrich = <Video>[];
+    for (final s in songs) {
+      final id = s.id.value;
+      final current = _artworkMap[id];
+      final isCompilation =
+          current != null && _compilationArtworks.contains(current);
+      final isYtFallback =
+          current == null ||
+          current.isEmpty ||
+          current.startsWith('https://i.ytimg.com/');
+      if (isCompilation || isYtFallback) {
+        needsEnrich.add(s);
+      }
+    }
+    if (needsEnrich.isEmpty) return;
+
+    debugPrint(
+      '[ArtworkEnrich] Enriching artwork for ${needsEnrich.length} songs...',
+    );
+
+    for (final song in needsEnrich) {
+      try {
+        final cleanTitle = CanonicalSongDedup.cleanTitle(song.title);
+        final cleanArtist = CanonicalSongDedup.cleanArtist(song.author);
+        if (cleanTitle.isEmpty) continue;
+
+        final uri = ApiConfig.jioSingleTrackUri(
+          cleanTitle,
+          artist: cleanArtist,
+        );
+        final resp = await http.get(uri).timeout(const Duration(seconds: 4));
+
+        if (resp.statusCode == 200) {
+          final body = json.decode(resp.body);
+          if (body is Map && body['match'] == true) {
+            final data = body['data'] as Map<String, dynamic>?;
+            final artwork = data?['artwork'] as String? ?? '';
+            final album = data?['album'] as String? ?? '';
+
+            // Only accept this artwork if it's NOT itself a compilation
+            if (artwork.isNotEmpty && !_compilationAlbumRegex.hasMatch(album)) {
+              _artworkMap[song.id.value] = artwork;
+              debugPrint('[ArtworkEnrich] ✓ ${song.title} → $album');
+              notifyListeners();
+            }
+          }
+        }
+      } catch (_) {}
+
+      // 80ms gap between requests to avoid hammering the edge worker
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+    }
+  }
+
   final List<Video> _sessionPlayedHistory = [];
   bool _isNavigatingHistory = false;
 
@@ -760,7 +831,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         _durationBroadcaster.add(dur);
       });
       WebPlayerBridge.onTrackEnded.listen((_) async {
-        if (_isTransitioning || _isCrossfading) return;
+        if (_isTransitioning || _isCrossfading || _isLoading) return;
         _isTransitioning = true;
         try {
           if (_loopMode == LoopMode.one && _currentSong != null) {
@@ -826,7 +897,18 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           if (state.processingState == ProcessingState.completed) {
             if (_isTransitioning ||
                 _isCrossfading ||
+                _isLoading ||
                 !identical(player, _activePlayer)) {
+              return;
+            }
+            final currentPos = player.position;
+            final currentDur = player.duration;
+            if (currentDur != null &&
+                currentDur.inSeconds > 5 &&
+                (currentDur - currentPos).inSeconds > 4) {
+              debugPrint(
+                '[AudioPlayer] Ignoring spurious completion event at ${currentPos.inSeconds}s / ${currentDur.inSeconds}s',
+              );
               return;
             }
             _isTransitioning = true;
@@ -1111,6 +1193,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     if (_loopMode == LoopMode.one) return;
+    if (pos < const Duration(seconds: 5)) return;
     final prefs = PreferencesService();
     if (!prefs.crossfadeEnabled) return;
 
@@ -1192,14 +1275,14 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
     if (!shouldFade) {
       await _setVolume(1.0);
-      unawaited(playAction());
+      await playAction();
       return;
     }
 
     // Never mute to 0.0 because Android hardware AudioTrack can initialize muted.
     // Start from 0.3 so it is audible from the first millisecond and smoothly reaches 1.0.
     await _setVolume(0.3);
-    unawaited(playAction());
+    await playAction();
 
     unawaited(() async {
       try {
@@ -1950,11 +2033,31 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       'tribute version',
       'tribute band',
       'cover version',
+      'cover classics',
+      'cover song',
+      'female cover',
+      'male cover',
+      'acoustic cover',
       'backing track',
       'piano version',
       'guitar backing',
       'sing-along',
       'acoustic tribute',
+      'tabata',
+      'power music',
+      'workout mix',
+      'workout music',
+      'workout track',
+      'fitness beats',
+      'gym music',
+      'gym workout',
+      'carnatic mix',
+      'lo-fi mix',
+      'lofi mix',
+      'slowed + reverb',
+      'slowed and reverb',
+      'speed up',
+      'sped up',
       'zzang',
       'luxebeats',
       'sweet strings',
@@ -1993,8 +2096,13 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         final songId = item['id'] as String? ?? '';
         if (songId.isEmpty) continue;
         final rawTitle = item['title'] as String? ?? 'Unknown Title';
-        final title = CanonicalSongDedup.deduplicateRepeatedTokens(rawTitle);
-        final author = item['author'] as String? ?? 'DilSe Music';
+        final rawAuthor = item['author'] as String? ?? 'DilSe Music';
+        final cleanA = CanonicalSongDedup.cleanArtist(rawAuthor);
+        final author = cleanA.isNotEmpty ? cleanA : rawAuthor;
+        final title = CanonicalSongDedup.sanitizeDisplayTitle(
+          rawTitle,
+          artist: author,
+        );
         final album = item['album'] as String? ?? '';
         final durationSec = item['duration'] != null
             ? int.tryParse(item['duration'].toString())
@@ -2074,6 +2182,136 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     return list;
   }
 
+  /// Fetches an optimized, pure JioSaavn Studio 320kbps catalog for Daily Mix.
+  /// Strictly guarantees 100% official studio tracks, 0 YouTube video noise,
+  /// 0 wedding/DJ noise, and 0 duplicate tracks.
+  Future<List<Video>> fetchJioDailyMix(
+    DailyMixConfig config, {
+    int limit = 35,
+  }) async {
+    final cleanQuery = config.query.trim();
+    if (cleanQuery.isEmpty) return [];
+
+    try {
+      final cleanedArtist = PreferencesService.extractSingleLeadArtist(
+        cleanQuery.replaceAll(
+          RegExp(
+            r'\b(hit\s+songs|songs|acoustic\s+chill|hits|chill|melodies)\b',
+            caseSensitive: false,
+          ),
+          '',
+        ),
+      );
+
+      final futures = <Future<List<Video>>>[];
+
+      // 1. Direct JioSaavn catalog search
+      futures.add(
+        http
+            .get(ApiConfig.jioSearchUri(cleanQuery, limit: limit, page: 1))
+            .timeout(const Duration(seconds: 6))
+            .then(
+              (res) => res.statusCode == 200
+                  ? _parseJioResults(res.body, query: cleanQuery)
+                  : <Video>[],
+            )
+            .catchError((_) => <Video>[]),
+      );
+
+      // 2. Artist-specific studio search if lead artist was resolved
+      if (cleanedArtist.isNotEmpty && cleanedArtist != cleanQuery) {
+        futures.add(
+          http
+              .get(
+                ApiConfig.jioSearchUri(
+                  '$cleanedArtist hits',
+                  limit: limit,
+                  page: 1,
+                ),
+              )
+              .timeout(const Duration(seconds: 6))
+              .then(
+                (res) => res.statusCode == 200
+                    ? _parseJioResults(res.body, query: cleanedArtist)
+                    : <Video>[],
+              )
+              .catchError((_) => <Video>[]),
+        );
+      }
+
+      // 3. JioSaavn Recommendations endpoint for seamless track variety
+      final recTarget = cleanedArtist.isNotEmpty ? cleanedArtist : cleanQuery;
+      futures.add(
+        http
+            .get(ApiConfig.jioRecommendationsUri(recTarget, limit: limit))
+            .timeout(const Duration(seconds: 6))
+            .then(
+              (res) => res.statusCode == 200
+                  ? _parseJioResults(res.body, query: recTarget)
+                  : <Video>[],
+            )
+            .catchError((_) => <Video>[]),
+      );
+
+      final resultsLists = await Future.wait(futures);
+
+      // Progressive deduplication across JioSaavn streams
+      final List<Video> combined = [];
+      for (final list in resultsLists) {
+        final genuine = list
+            .where((v) => CanonicalSongDedup.isGenuineSong(v))
+            .toList();
+        final deduped = CanonicalSongDedup.deduplicateList(combined, genuine);
+        combined.addAll(deduped);
+      }
+
+      // Fallback: If edge worker returned fewer than 10 tracks, query custom backend JioSaavn if available
+      if (combined.length < 10 &&
+          PreferencesService().customServerUrl.isNotEmpty) {
+        try {
+          final backendResp = await http
+              .get(ApiConfig.jioBackendSearchUri(cleanQuery, limit: limit))
+              .timeout(const Duration(seconds: 5))
+              .catchError((_) => http.Response('[]', 500));
+          if (backendResp.statusCode == 200) {
+            final fallbackList = _parseJioResults(
+              backendResp.body,
+              query: cleanQuery,
+            );
+            final genuineFallback = fallbackList
+                .where((v) => CanonicalSongDedup.isGenuineSong(v))
+                .toList();
+            final dedupedFallback = CanonicalSongDedup.deduplicateList(
+              combined,
+              genuineFallback,
+            );
+            combined.addAll(dedupedFallback);
+          }
+        } catch (_) {}
+      }
+
+      if (combined.isEmpty) {
+        return [];
+      }
+
+      // Final deduplication & artist distribution balancing
+      final dedupedFinal = CanonicalSongDedup.deduplicateList(combined);
+      final balanced = CanonicalSongDedup.balanceArtistDistribution(
+        dedupedFinal,
+      );
+      debugPrint(
+        '[Jio Daily Mix] Generated pristine mix with ${balanced.length} 320k tracks for "${config.title}"',
+      );
+      final result = balanced.take(limit).toList();
+      // Fire background artwork enrichment — upgrades compilation/YT covers to original album art
+      unawaited(enrichArtworkForSongs(result));
+      return result;
+    } catch (e) {
+      debugPrint('[Jio Daily Mix] Error generating mix: $e');
+      return [];
+    }
+  }
+
   /// 3-Tier Multi-Engine Search with JioSaavn Studio-First Priority:
   /// Fetches an expansive, multi-dimensional catalog (80-150+ tracks) for an artist across their entire career.
   /// Fans out parallel queries across vocal tracks, melody hits, mass blockbusters, regional classics, and YTM studio releases.
@@ -2094,7 +2332,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       final queryLimit = (page == 1) ? 50 : 30;
       final jioFutures = queries.map((q) async {
         try {
-          final uri = ApiConfig.jioSearchUri(q, limit: queryLimit, page: page);
+          // Subqueries generated by DynamicArtistService are already era/album/theme targeted for this page tier,
+          // so fetch page 1 of each specific theme/album to get authentic primary soundtrack cuts.
+          final uri = ApiConfig.jioSearchUri(q, limit: queryLimit, page: 1);
           final res = await http.get(uri).timeout(const Duration(seconds: 7));
           if (res.statusCode == 200) {
             return _parseJioResults(res.body, query: clean);
@@ -2110,12 +2350,21 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       final ytmFuture = YouTubeMusicClient().searchSongs(ytmQuery, limit: 30);
 
       final jioResultsLists = await Future.wait(jioFutures);
-      final ytmResults = await ytmFuture.catchError((_) => <Video>[]);
+      final rawYtm = await ytmFuture.catchError((_) => <Video>[]);
+      final ytmResults = rawYtm
+          .where((v) => CanonicalSongDedup.isGenuineSong(v))
+          .toList();
 
       // 3. Progressive deduplication across streams
       final List<Video> combined = [];
       for (final list in jioResultsLists) {
-        final deduped = CanonicalSongDedup.deduplicateList(combined, list);
+        final genuineJio = list
+            .where((v) => CanonicalSongDedup.isGenuineSong(v))
+            .toList();
+        final deduped = CanonicalSongDedup.deduplicateList(
+          combined,
+          genuineJio,
+        );
         combined.addAll(deduped);
       }
 
@@ -2125,16 +2374,97 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       );
       combined.addAll(dedupedYtm);
 
+      final finalDeduped = CanonicalSongDedup.deduplicateList(combined);
+
       debugPrint(
-        '[Artist Discography] Fetched ${combined.length} unique songs for "$clean" (page: $page)',
+        '[Artist Discography] Fetched ${finalDeduped.length} unique songs for "$clean" (page: $page)',
       );
-      return combined;
+      return finalDeduped;
     } catch (e) {
       debugPrint(
         '[Artist Discography] Error fetching discography for $clean: $e',
       );
       return [];
     }
+  }
+
+  /// Universal Reverse YTM Seed Bridge:
+  /// Resolves any song (even JioSaavn numeric IDs) to an 11-char YTM ID,
+  /// queries Google's Radio Automix, and re-ranks candidates via TasteMatrixScorer.
+  Future<List<Video>> fetchRadioTracksForSong(
+    Video seed, {
+    int limit = 35,
+    String? targetLanguage,
+  }) async {
+    final lang =
+        targetLanguage ?? CanonicalSongDedup.detectLanguage(seed.title);
+    List<Video> rawCandidates = [];
+
+    // 1. Resolve 11-char YouTube Video ID
+    String? ytmVideoId;
+    final isJioSynthetic =
+        seed.id.value.endsWith('000') ||
+        _webStreamUrls.containsKey(seed.id.value) ||
+        !CanonicalSongDedup.isLikelyYouTubeId(seed.id.value);
+
+    if (seed.id.value.length == 11 && !isJioSynthetic) {
+      ytmVideoId = seed.id.value;
+    } else {
+      try {
+        final cleanT = CanonicalSongDedup.cleanTitle(seed.title);
+        final cleanA = CanonicalSongDedup.cleanArtist(seed.author);
+        final query = '$cleanT $cleanA';
+        final ytmMatch = await YouTubeMusicClient()
+            .searchSongs(query, limit: 1)
+            .timeout(const Duration(seconds: 4));
+        if (ytmMatch.isNotEmpty && ytmMatch.first.id.value.length == 11) {
+          ytmVideoId = ytmMatch.first.id.value;
+        }
+      } catch (e) {
+        debugPrint('[RadioBridge] YTM ID lookup failed: $e');
+      }
+    }
+
+    // 2. Fetch Radio Automix from YouTube Music Graph
+    if (ytmVideoId != null) {
+      try {
+        rawCandidates = await YouTubeMusicClient()
+            .fetchRadioTracks(ytmVideoId, limit: 40)
+            .timeout(const Duration(seconds: 6));
+      } catch (e) {
+        debugPrint('[RadioBridge] Radio tracks fetch failed: $e');
+      }
+    }
+
+    // 3. Fallback: Query JioSaavn / YTM search if radio graph returned empty
+    if (rawCandidates.isEmpty) {
+      final cleanArtist = CanonicalSongDedup.cleanArtist(seed.author);
+      final fallbackQuery = cleanArtist.isNotEmpty
+          ? (lang != null ? '$cleanArtist $lang hits' : '$cleanArtist hits')
+          : (lang != null ? '$lang top songs' : 'Top Hits 2026');
+      try {
+        final jioFallback = await http
+            .get(ApiConfig.jioSearchUri(fallbackQuery, limit: 25))
+            .timeout(const Duration(seconds: 4))
+            .then((res) => _parseJioResults(res.body))
+            .catchError((_) => <Video>[]);
+        rawCandidates.addAll(jioFallback);
+      } catch (_) {}
+    }
+
+    // 4. Client-Side Re-Ranking via TasteMatrixScorer
+    final likedTitles = likedSongs
+        .map((s) => (s['title'] ?? '').toString())
+        .toList();
+    final scored = TasteMatrixScorer().scoreAndRankCandidates(
+      rawCandidates,
+      targetLanguage: lang,
+      likedSongTitles: likedTitles,
+      maxResults: limit,
+    );
+    // Fire background artwork enrichment — upgrades compilation/YT covers to original album art
+    unawaited(enrichArtworkForSongs(scored));
+    return scored;
   }
 
   /// Tier 1: JioSaavn (320kbps studio releases with pristine album covers)
@@ -2203,8 +2533,16 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         } catch (_) {}
       }
 
-      // Await Tier 2 in parallel
-      final ytmResults = await ytmFuture.catchError((_) => <Video>[]);
+      // Deduplicate Tier 1 JioSaavn results against itself immediately
+      jioResults = CanonicalSongDedup.deduplicateList(
+        jioResults.where((v) => CanonicalSongDedup.isGenuineSong(v)).toList(),
+      );
+
+      // Await Tier 2 in parallel and filter genuine tracks
+      final rawYtm = await ytmFuture.catchError((_) => <Video>[]);
+      final ytmResults = rawYtm
+          .where((v) => CanonicalSongDedup.isGenuineSong(v))
+          .toList();
 
       // Fallback: If JioSaavn from edge worker returned fewer than 8 genuine tracks, query the custom backend if configured
       if (jioResults.length < 8 &&
@@ -2230,9 +2568,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         } catch (_) {}
       }
 
-      // Tier 3: YouTube Standard backend (safety net only if JioSaavn + YTM return fewer than 8 tracks and custom backend is configured)
+      // Tier 3: YouTube Standard backend (safety net ONLY if JioSaavn + YTM return 0 tracks and custom backend is configured)
       final List<Video> backendResults = [];
-      if (jioResults.length + ytmResults.length < 8 &&
+      if (jioResults.isEmpty &&
+          ytmResults.isEmpty &&
           PreferencesService().customServerUrl.isNotEmpty) {
         final backendResponse = await http
             .get(ApiConfig.searchUri(query, page: page, limit: 15))
@@ -2296,6 +2635,8 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint(
         '[Studio Search] Returned ${ranked.length} songs (${jioResults.length} Jio + ${dedupedYtm.length} YTM + ${dedupedYt.length} YT)',
       );
+      // Fire background artwork enrichment — does not block return
+      unawaited(enrichArtworkForSongs(ranked));
       return ranked;
     } catch (e) {
       debugPrint('[Studio Search] Error: $e');
@@ -2313,6 +2654,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   List<Video> _rankSearchResults(List<Video> songs, String rawQuery) {
     if (songs.isEmpty || rawQuery.trim().isEmpty) return songs;
 
+    // Filter genuine songs first and deduplicate pool via CanonicalSongDedup
+    final cleanPool = songs
+        .where((s) => CanonicalSongDedup.isGenuineSong(s))
+        .toList();
+    final dedupedSongs = CanonicalSongDedup.deduplicateList(cleanPool);
+
     final q = rawQuery.trim().toLowerCase();
     final cleanQ = CanonicalSongDedup.cleanTitle(rawQuery);
     final queryTokens = q
@@ -2321,25 +2668,19 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         .toList();
 
     final scored = <MapEntry<Video, double>>[];
-    final seenDeduplicationKeys = <String, Video>{};
+    final seenKeys = <String>{};
 
-    for (int i = 0; i < songs.length; i++) {
-      final song = songs[i];
+    for (int i = 0; i < dedupedSongs.length; i++) {
+      final song = dedupedSongs[i];
       final title = song.title.toLowerCase();
       final cleanT = CanonicalSongDedup.cleanTitle(song.title);
       final author = song.author.toLowerCase();
       final cleanA = CanonicalSongDedup.cleanArtist(song.author);
 
-      // Deduplicate near-identical tracks from the same movie/soundtrack (e.g. Mr. Perfect and Mr. Perfect (DSP Mix))
       final dedupKey = '$cleanT|$cleanA';
-      if (seenDeduplicationKeys.containsKey(dedupKey)) {
-        final existing = seenDeduplicationKeys[dedupKey]!;
-        if (song.title.length < existing.title.length) {
-          seenDeduplicationKeys[dedupKey] = song;
-        }
+      if (!seenKeys.add(dedupKey)) {
         continue;
       }
-      seenDeduplicationKeys[dedupKey] = song;
 
       double score = 0.0;
 
@@ -2385,8 +2726,32 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       final lengthPenalty = (cleanT.length - cleanQ.length).clamp(0, 50) * 2.0;
       score -= lengthPenalty;
 
-      // 6. Preservation of source priority (JioSaavn 320k gets small base tie-breaker)
-      final sourceBonus = (songs.length - i) * 1.0;
+      // 6. Studio Quality Bonus: JioSaavn 320k studio tracks get overwhelming priority
+      final bool isJioStudio =
+          _artworkMap.containsKey(song.id.value) ||
+          _webStreamUrls.containsKey(song.id.value);
+      if (isJioStudio) {
+        score += 800.0;
+      }
+
+      // 7. Video Noise Penalty: Heavily penalize YouTube video uploads and non-music clips
+      final lowerTitle = song.title.toLowerCase();
+      if (lowerTitle.contains('official video') ||
+          lowerTitle.contains('full video') ||
+          lowerTitle.contains('video song') ||
+          lowerTitle.contains('4k video') ||
+          lowerTitle.contains('hd video') ||
+          lowerTitle.contains('status video') ||
+          lowerTitle.contains('lyric video') ||
+          lowerTitle.contains('dance cover') ||
+          lowerTitle.contains('reaction') ||
+          lowerTitle.contains('movie scene') ||
+          lowerTitle.contains('comedy scene')) {
+        score -= 600.0;
+      }
+
+      // 8. Preservation of source priority
+      final sourceBonus = (dedupedSongs.length - i) * 1.0;
       score += sourceBonus;
 
       scored.add(MapEntry(song, score));
@@ -2718,6 +3083,17 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     if (_currentIndex >= 0 && _currentIndex < _playlist.length) {
       await playSong(_playlist[_currentIndex], updateQueue: false);
     }
+  }
+
+  /// Starts an instant smart radio seeded by [song], resetting the queue and
+  /// populating a 50-song progressive queue scored by TasteMatrixScorer.
+  Future<void> startSongRadio(Video song) async {
+    _playlist = [song];
+    _currentIndex = 0;
+    _seedPlaylistArtists = [];
+    _playlistArtistRecommendationOffset = 0;
+    await playSong(song, updateQueue: false);
+    _generate50SongProgressiveQueue(song);
   }
 
   void _checkAndPreloadNextQueue() {
@@ -3343,6 +3719,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }) async {
     _savedPosition = null;
     _savedDuration = null;
+    _positionBroadcaster.add(Duration.zero);
+    if (song.duration != null && song.duration! > Duration.zero) {
+      _durationBroadcaster.add(song.duration);
+    }
 
     if (!isCrossfade) {
       _cancelActiveFade();
@@ -3351,7 +3731,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       } else if (!kIsWeb) {
         _standbyPlayer.stop();
         if (_activePlayer.playing) {
-          unawaited(_activePlayer.pause());
+          try {
+            await _activePlayer.stop();
+          } catch (_) {}
         }
       }
       unawaited(_setVolume(1.0));
@@ -4291,7 +4673,6 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       final seenKeys = <String>{CanonicalSongDedup.cleanTitle(seed.title)};
 
       final seedLanguage = CanonicalSongDedup.detectLanguage(seed.title);
-      final cleanSeedArtist = CanonicalSongDedup.cleanArtist(seed.author);
 
       // Extract movie/soundtrack name if present e.g. (From "Nagabandham") or (From 'Movie')
       String? movieName;
@@ -4342,101 +4723,87 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       final libraryMatches = _getLibraryRecommendationsForSeed(seed);
       addTracks(libraryMatches, targetLang: seedLanguage);
 
-      if (seedLanguage == 'english') {
-        // --- ENGLISH MUSIC DISCOVERY PIPELINE ---
-        // For English tracks (e.g. Ed Sheeran - "Perfect"), avoid querying Indian movie soundtracks
-        // or regional Telugu/Hindi top artists. Use YouTube Music Radio Automix + artist studio hits.
+      // 2. Stage 2 (Primary Studio Recommendations): Query JioSaavn Recommendations & Hits for Indic songs
+      if (progressiveQueue.length < 51 && seedLanguage != 'english') {
+        final cleanArtist = CanonicalSongDedup.cleanArtist(seed.author);
+        final leadArtist = PreferencesService.extractSingleLeadArtist(
+          cleanArtist,
+        );
+        final jioRecFutures = <Future<List<Video>>>[];
 
-        // 2. Stage 2 (Primary): YouTube Music Radio Automix
-        if (progressiveQueue.length < 51 && seed.id.value.length == 11) {
-          final radioTracks = await YouTubeMusicClient()
-              .fetchRadioTracks(seed.id.value, limit: 35)
-              .catchError((_) => <Video>[]);
-          addTracks(radioTracks, targetLang: 'english');
+        jioRecFutures.add(
+          http
+              .get(ApiConfig.jioRecommendationsUri(seed.title, limit: 30))
+              .timeout(const Duration(seconds: 5))
+              .then(
+                (res) => res.statusCode == 200
+                    ? _parseJioResults(res.body)
+                    : <Video>[],
+              )
+              .catchError((_) => <Video>[]),
+        );
+
+        if (leadArtist.isNotEmpty) {
+          final query = seedLanguage != null
+              ? '$leadArtist $seedLanguage hits'
+              : '$leadArtist hits';
+          jioRecFutures.add(
+            http
+                .get(ApiConfig.jioSearchUri(query, limit: 25))
+                .timeout(const Duration(seconds: 5))
+                .then(
+                  (res) => res.statusCode == 200
+                      ? _parseJioResults(res.body)
+                      : <Video>[],
+                )
+                .catchError((_) => <Video>[]),
+          );
         }
 
-        // 3. Stage 3: Clean Seed Artist studio hits via YouTube Music
-        if (progressiveQueue.length < 51 && cleanSeedArtist.isNotEmpty) {
-          final artistResults = await YouTubeMusicClient()
-              .searchSongs('$cleanSeedArtist hits', limit: 20)
-              .catchError((_) => <Video>[]);
-          addTracks(artistResults, targetLang: 'english');
+        final jioRecLists = await Future.wait(jioRecFutures);
+        for (final list in jioRecLists) {
+          addTracks(list, targetLang: seedLanguage);
         }
+      }
 
-        // 4. Stage 4: Global Pop Hits if still under 35 tracks
-        if (progressiveQueue.length < 35) {
-          final popHits = await YouTubeMusicClient()
-              .searchSongs('Top Pop Hits 2026', limit: 20)
-              .catchError((_) => <Video>[]);
-          addTracks(popHits, targetLang: 'english');
-        }
-      } else {
-        // --- REGIONAL / INDIC MUSIC PIPELINE ---
-        // 2. Stage 2 (Primary): JioSaavn Movie / Album Affinity (if from a movie soundtrack)
-        if (progressiveQueue.length < 51 &&
-            movieName != null &&
-            movieName.isNotEmpty) {
-          final movieResults = await http
-              .get(ApiConfig.jioSearchUri('$movieName songs', limit: 20))
+      // 3. Stage 3 (Secondary Discovery): Universal Reverse YTM Seed Bridge + TasteMatrixScorer
+      if (progressiveQueue.length < 40) {
+        final radioTracks = await fetchRadioTracksForSong(
+          seed,
+          limit: 35,
+          targetLanguage: seedLanguage,
+        );
+        addTracks(radioTracks, targetLang: seedLanguage);
+      }
+
+      // 3. Stage 3 (Secondary): Movie Soundtrack Affinity if available
+      if (progressiveQueue.length < 51 &&
+          movieName != null &&
+          movieName.isNotEmpty) {
+        final movieResults = await http
+            .get(ApiConfig.jioSearchUri('$movieName songs', limit: 15))
+            .timeout(const Duration(seconds: 4))
+            .then((res) => _parseJioResults(res.body))
+            .catchError((_) => <Video>[]);
+        addTracks(movieResults, targetLang: seedLanguage);
+      }
+
+      // 4. Stage 4: User Top Taste Matrix Artists if still under 30
+      if (progressiveQueue.length < 30) {
+        final favArtists = PreferencesService().getTopArtists();
+        for (final fav in favArtists) {
+          if (progressiveQueue.length >= 40) break;
+          final cleanFav = CanonicalSongDedup.cleanArtist(fav);
+          if (cleanFav.isEmpty) continue;
+          final favQuery = seedLanguage != null
+              ? '$cleanFav $seedLanguage hits'
+              : '$cleanFav hits';
+          final favResults = await http
+              .get(ApiConfig.jioSearchUri(favQuery, limit: 10))
               .timeout(const Duration(seconds: 4))
               .then((res) => _parseJioResults(res.body))
               .catchError((_) => <Video>[]);
-          addTracks(movieResults, targetLang: seedLanguage);
-        }
-
-        // 3. Stage 3 (Primary): JioSaavn Primary Composer / Artist Studio Hits
-        if (progressiveQueue.length < 51 && cleanSeedArtist.isNotEmpty) {
-          final artistQuery = seedLanguage != null
-              ? '$cleanSeedArtist $seedLanguage songs'
-              : '$cleanSeedArtist songs';
-          final artistResults = await http
-              .get(ApiConfig.jioSearchUri(artistQuery, limit: 20))
-              .timeout(const Duration(seconds: 4))
-              .then((res) => _parseJioResults(res.body))
-              .catchError((_) => <Video>[]);
-          addTracks(artistResults, targetLang: seedLanguage);
-        }
-
-        // 4. Stage 4: Top User Taste Matrix Artists from JioSaavn
-        if (progressiveQueue.length < 51) {
-          final favArtists = PreferencesService().getTopArtists();
-          for (final fav in favArtists) {
-            if (progressiveQueue.length >= 51) break;
-            final cleanFav = CanonicalSongDedup.cleanArtist(fav);
-            if (cleanFav.isEmpty) continue;
-            final favQuery = seedLanguage != null
-                ? '$cleanFav $seedLanguage hits'
-                : '$cleanFav hits';
-            final favResults = await http
-                .get(ApiConfig.jioSearchUri(favQuery, limit: 12))
-                .timeout(const Duration(seconds: 4))
-                .then((res) => _parseJioResults(res.body))
-                .catchError((_) => <Video>[]);
-            addTracks(favResults, targetLang: seedLanguage);
-          }
-        }
-
-        // 5. Stage 5: Online Discovery (Only if library and artist queries yielded < 25 tracks)
-        if (progressiveQueue.length < 25) {
-          final fallbackQuery = seedLanguage != null
-              ? '$seedLanguage top hit songs'
-              : (cleanSeedArtist.isNotEmpty
-                    ? '$cleanSeedArtist hits'
-                    : 'Top Hits 2026');
-          final jioFallback = await http
-              .get(ApiConfig.jioSearchUri(fallbackQuery, limit: 15))
-              .timeout(const Duration(seconds: 4))
-              .then((res) => _parseJioResults(res.body))
-              .catchError((_) => <Video>[]);
-          addTracks(jioFallback, targetLang: seedLanguage);
-
-          if (progressiveQueue.length < 20) {
-            final ytmTracks = await YouTubeMusicClient().searchSongs(
-              fallbackQuery,
-              limit: 15,
-            );
-            addTracks(ytmTracks, targetLang: seedLanguage);
-          }
+          addTracks(favResults, targetLang: seedLanguage);
         }
       }
 
@@ -4563,48 +4930,19 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           }
         }
       } else {
-        // Single-artist or single-track playback: Standard artist query
-        final cleanArtist = allPlaylistArtists.isNotEmpty
-            ? allPlaylistArtists.first
-            : CanonicalSongDedup.cleanArtist(song.author);
+        // Single-artist or single-track playback: Universal Reverse YTM Seed Bridge + TasteMatrixScorer
+        final radioMatches = await fetchRadioTracksForSong(
+          song,
+          limit: 20,
+          targetLanguage: dominantLang,
+        );
+        candidates.addAll(radioMatches);
 
-        // 1. Primary: Library tracks from matching artist / taste matrix
-        final libraryMatches = _getLibraryRecommendationsForSeed(song);
-        candidates.addAll(libraryMatches);
-
-        // 2. Secondary: JioSaavn Studio catalog query if library yielded < 10
+        // 2. Secondary: Library tracks from matching artist / taste matrix
         if (candidates.length < 10) {
-          final query = cleanArtist.isNotEmpty
-              ? (dominantLang != null
-                    ? '$cleanArtist $dominantLang hits'
-                    : '$cleanArtist hits')
-              : (dominantLang != null
-                    ? '$dominantLang top songs'
-                    : 'Top Hits 2026');
-          final jioResults = await http
-              .get(ApiConfig.jioSearchUri(query, limit: 15))
-              .timeout(const Duration(seconds: 4))
-              .then((res) => _parseJioResults(res.body))
-              .catchError((_) => <Video>[]);
-          candidates.addAll(jioResults);
+          final libraryMatches = _getLibraryRecommendationsForSeed(song);
+          candidates.addAll(libraryMatches);
         }
-      }
-
-      // 3. Fallback: YouTube Music Radio automix only if still empty
-      if (candidates.isEmpty && song.id.value.length == 11) {
-        candidates = await YouTubeMusicClient().fetchRadioTracks(
-          song.id.value,
-          limit: 15,
-        );
-      }
-      if (candidates.isEmpty) {
-        final fallbackQuery = dominantLang != null
-            ? '$dominantLang top hit songs'
-            : 'Top Hits 2026';
-        candidates = await YouTubeMusicClient().searchSongs(
-          fallbackQuery,
-          limit: 15,
-        );
       }
 
       // Filter for genuine songs and language compatibility
@@ -5321,5 +5659,122 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       artworkPath: song != null ? _artworkMap[song.id.value] : null,
       trackId: song?.id.value,
     );
+  }
+  // ────────────────────────────────────────────────────────────────────────────
+  // Movie / Soundtrack Album Feature
+  // ────────────────────────────────────────────────────────────────────────────
+
+  /// Searches JioSaavn album catalog via the Cloudflare Edge Worker.
+  ///
+  /// Returns a list of [JioAlbum] objects. Each album has id, title, artist,
+  /// artwork, year, songCount — but no songs list until [fetchAlbumTracks].
+  Future<List<JioAlbum>> searchAlbums(String query, {int limit = 12}) async {
+    if (query.trim().isEmpty) return [];
+    try {
+      final uri = ApiConfig.jioAlbumSearchUri(query.trim(), limit: limit);
+      final resp = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (resp.statusCode != 200) return [];
+      final body = json.decode(resp.body);
+      if (body is! List) return [];
+      return body
+          .whereType<Map<String, dynamic>>()
+          .map(JioAlbum.fromJson)
+          .where((a) => a.id.isNotEmpty && a.title.isNotEmpty)
+          .toList();
+    } catch (e) {
+      debugPrint('[Album Search] Error: $e');
+      return [];
+    }
+  }
+
+  /// Fetches all songs for a JioSaavn album and returns a fully-populated
+  /// [JioAlbum]. Each song's artwork and stream URL are pre-registered in
+  /// [_artworkMap] and [_webStreamUrls] so playback works immediately.
+  Future<JioAlbum?> fetchAlbumTracks(String albumId) async {
+    if (albumId.isEmpty) return null;
+    try {
+      final uri = ApiConfig.jioAlbumDetailUri(albumId);
+      final resp = await http.get(uri).timeout(const Duration(seconds: 10));
+      if (resp.statusCode != 200) return null;
+      final body = json.decode(resp.body);
+      if (body is! Map<String, dynamic>) return null;
+
+      final album = JioAlbum.fromJson(body);
+
+      for (final s in album.songs) {
+        final id = s['id']?.toString() ?? '';
+        if (id.isEmpty) continue;
+        final thumb = s['thumbnail'] as String? ?? '';
+        final stream = s['streamUrl'] as String? ?? '';
+        if (thumb.isNotEmpty) _artworkMap[id] = thumb;
+        if (stream.isNotEmpty) {
+          _webStreamUrls[id] = stream;
+          cacheWebStreamUrl(id, stream);
+        }
+      }
+
+      debugPrint(
+        '[Album Tracks] Loaded \${album.songs.length} songs for "\${album.title}"',
+      );
+      return album;
+    } catch (e) {
+      debugPrint('[Album Tracks] Error: $e');
+      return null;
+    }
+  }
+
+  /// Converts a [JioAlbum]'s songs into a queue-ready [List<Video>].
+  /// Also pre-registers artwork and stream URLs.
+  List<Video> albumSongsToVideos(JioAlbum album) {
+    final result = <Video>[];
+    for (final s in album.songs) {
+      final rawId = s['id']?.toString() ?? '';
+      if (rawId.isEmpty) continue;
+      final vidId = rawId.length >= 11
+          ? rawId.substring(0, 11)
+          : rawId.padRight(11, '0');
+
+      final rawTitle = s['title'] as String? ?? 'Unknown Title';
+      final rawAuthor = s['author'] as String? ?? 'Various Artists';
+      final thumb = s['thumbnail'] as String? ?? album.artwork;
+      final stream = s['streamUrl'] as String? ?? '';
+      final durationSec = s['duration'] as int? ?? 0;
+
+      final title = CanonicalSongDedup.sanitizeDisplayTitle(
+        rawTitle,
+        artist: rawAuthor,
+      );
+      final cleanedAuthor = CanonicalSongDedup.cleanArtist(rawAuthor);
+      final author = cleanedAuthor.isNotEmpty ? cleanedAuthor : rawAuthor;
+
+      if (thumb.isNotEmpty) {
+        _artworkMap[rawId] = thumb;
+        _artworkMap[vidId] = thumb;
+      }
+      if (stream.isNotEmpty) {
+        _webStreamUrls[rawId] = stream;
+        _webStreamUrls[vidId] = stream;
+        cacheWebStreamUrl(rawId, stream);
+      }
+
+      result.add(
+        Video(
+          VideoId(vidId),
+          title,
+          author,
+          ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+          DateTime.now(),
+          '',
+          null,
+          '',
+          durationSec > 0 ? Duration(seconds: durationSec) : null,
+          ThumbnailSet(vidId),
+          null,
+          Engagement(0, null, null),
+          false,
+        ),
+      );
+    }
+    return result;
   }
 }

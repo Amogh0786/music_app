@@ -246,9 +246,621 @@ export default {
       }
     }
 
+    // 6. YouTube Music Radio Automix: /ytm/radio?v=...&limit=40 (and alias /radio?v=...)
+    if (url.pathname === '/ytm/radio' || url.pathname === '/radio') {
+      const videoId = url.searchParams.get('v') || '';
+      const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') || '30')));
+
+      if (!videoId) {
+        return new Response(JSON.stringify([]), {
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        });
+      }
+
+      try {
+        const results = await fetchYtmRadio(videoId, limit);
+        return new Response(JSON.stringify(results), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=3600',
+            ...CORS_HEADERS,
+          },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify([]), {
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        });
+      }
+    }
+
+    // 7. YouTube Music Studio Search: /ytm/search?q=...&limit=20
+    if (url.pathname === '/ytm/search') {
+      const query = url.searchParams.get('q') || '';
+      const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') || '20')));
+
+      if (!query || query.trim().length < 1) {
+        return new Response(JSON.stringify([]), {
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        });
+      }
+
+      try {
+        const results = await searchYtmSongs(query.trim(), limit);
+        return new Response(JSON.stringify(results), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=3600',
+            ...CORS_HEADERS,
+          },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify([]), {
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        });
+      }
+    }
+
+    // 8. JioSaavn Album Search: /jio/albums?q=...&limit=10
+    if (url.pathname === '/jio/albums') {
+      const query = url.searchParams.get('q') || '';
+      const limit = Math.min(20, Math.max(1, parseInt(url.searchParams.get('limit') || '10')));
+
+      if (!query || query.trim().length < 1) {
+        return new Response(JSON.stringify([]), {
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        });
+      }
+
+      try {
+        const results = await searchJioAlbums(query.trim(), limit);
+        return new Response(JSON.stringify(results), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=7200',
+            ...CORS_HEADERS,
+          },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify([]), {
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        });
+      }
+    }
+
+    // 9. JioSaavn Album Detail (all songs): /jio/album?id=...
+    if (url.pathname === '/jio/album') {
+      const albumId = url.searchParams.get('id') || '';
+
+      if (!albumId) {
+        return new Response(JSON.stringify({ error: 'Missing album id' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        });
+      }
+
+      try {
+        const data = await fetchAlbumDetails(albumId);
+        return new Response(JSON.stringify(data), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=3600',
+            ...CORS_HEADERS,
+          },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        });
+      }
+    }
+
     return new Response('Not Found', { status: 404, headers: CORS_HEADERS });
   },
 };
+
+
+/**
+ * Helper to extract movie/film name from titles like:
+ * 'Samayama (From "Hi Nanna")', 'Ammayi (From "ANIMAL") [Telugu]',
+ * 'Devara Thandavam (From "Devara Part 1")'
+ */
+function extractMovieName(str) {
+  if (!str) return null;
+  const m = str.match(
+    /(?:from\s+["']([^"']+)["']|from\s+([A-Za-z0-9\s]+?)(?:\)|\]|\s+trailer|\s+ost|\s*[-–—]|$))/i
+  );
+  if (m) {
+    const raw = (m[1] || m[2] || '').trim();
+    if (raw.length >= 2 && !/^(the|a|an|remix|lofi|official)$/i.test(raw)) {
+      return raw;
+    }
+  }
+  return null;
+}
+
+/**
+ * Searches and synthesizes a complete movie soundtrack album for Indian cinema films.
+ * Solves the single-song fragmentation issue where distributor labels publish songs as 1-track singles.
+ */
+async function fetchMovieSoundtrackTracks(movieName, fallbackArt = '') {
+  const url =
+    'https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&api_version=4&ctx=android&n=35&p=1&q=' +
+    encodeURIComponent(movieName);
+
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'SaavnAndroid/9.0.0',
+      'Accept': 'application/json',
+      ...JIO_GEO_HEADERS,
+    },
+  });
+
+  if (!res.ok) return null;
+
+  const data = await res.json();
+  const results = data.results || [];
+
+  const cleanMovie = movieName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const seenTitles = new Set();
+  const songs = [];
+  let bestArtwork = fallbackArt ? fallbackArt.replace('http:', 'https:') : '';
+  let primaryArtist = '';
+  let movieYear = '';
+  let movieLang = '';
+
+  const JUNK_SONG_RE =
+    /\b(slowed|reverb|speed\s*up|sped\s*up|nightcore|karaoke|originally\s+performed|in\s+the\s+style\s+of|tribute|parody|spoof)\b/i;
+
+  for (const r of results) {
+    if (!r || !r.id) continue;
+    const mi = r.more_info || {};
+    const rawTitle = (r.title || r.song || '')
+      .replace(/&quot;/g, '"')
+      .replace(/&#039;/g, "'")
+      .replace(/&amp;/g, '&')
+      .trim();
+
+    if (JUNK_SONG_RE.test(rawTitle)) continue;
+
+    const rawAlbum = (mi.album || r.album || '')
+      .replace(/&quot;/g, '"')
+      .replace(/&#039;/g, "'")
+      .replace(/&amp;/g, '&')
+      .trim();
+
+    const cTitle = rawTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cAlbum = rawAlbum.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const isFromMovie =
+      new RegExp('from.*?[\\s"\'(]' + cleanMovie, 'i').test(rawTitle) ||
+      cAlbum === cleanMovie ||
+      cAlbum.includes(cleanMovie);
+
+    if (isFromMovie) {
+      const baseTitle = rawTitle
+        .replace(/\s*\(from.*?\)/i, '')
+        .replace(/\s*\[from.*?\]/i, '')
+        .trim();
+      const normBase = baseTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      if (!seenTitles.has(normBase) && normBase.length > 0) {
+        seenTitles.add(normBase);
+
+        let thumb = (r.image || '').replace('150x150', '500x500');
+        if (thumb.startsWith('http:')) thumb = thumb.replace('http:', 'https:');
+        if (!bestArtwork && thumb && !thumb.includes('default_')) {
+          bestArtwork = thumb;
+        }
+
+        const artist =
+          (mi.artistMap?.primary_artists || []).map((a) => a.name).join(', ') ||
+          r.subtitle ||
+          'Various Artists';
+
+        if (!primaryArtist && artist) primaryArtist = artist;
+        if (!movieYear && (mi.year || r.year)) movieYear = mi.year || r.year;
+        if (!movieLang && (mi.language || r.language)) movieLang = mi.language || r.language;
+
+        const encMedia = mi.encrypted_media_url || r.encrypted_media_url || '';
+        const streamUrl = decryptMediaUrl(encMedia);
+
+        songs.push({
+          id: String(r.id),
+          title: baseTitle,
+          author: artist,
+          album: movieName,
+          duration: parseInt(mi.duration || r.duration || '0', 10) || 0,
+          thumbnail: thumb || bestArtwork,
+          streamUrl: streamUrl,
+          trackNumber: songs.length + 1,
+          source: 'jiosaavn',
+          bitrate: '320kbps',
+        });
+      }
+    }
+  }
+
+  if (songs.length === 0) return null;
+
+  return {
+    id: 'movie_' + encodeURIComponent(movieName),
+    title: `${movieName} (Soundtrack)`,
+    artist: primaryArtist || 'Original Motion Picture Soundtrack',
+    artwork: bestArtwork,
+    year: String(movieYear || new Date().getFullYear()),
+    language: (movieLang || 'telugu').toLowerCase(),
+    songCount: songs.length,
+    type: 'album',
+    songs: songs,
+  };
+}
+
+/**
+ * Searches JioSaavn album catalog and returns album metadata.
+ * Consolidates fragmented movie singles into unified movie soundtrack albums
+ * and prioritizes multi-track full albums.
+ * Used by /jio/albums endpoint.
+ */
+async function searchJioAlbums(query, limit = 12) {
+  const url =
+    'https://www.jiosaavn.com/api.php?__call=search.getAlbumResults&_format=json&_marker=0&api_version=4&ctx=web6dot0&n=35&p=1&q=' +
+    encodeURIComponent(query);
+
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'SaavnAndroid/9.0.0',
+      'Accept': 'application/json',
+      ...JIO_GEO_HEADERS,
+    },
+  });
+
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  const results = data.results || [];
+
+  const JUNK_ALBUM_RE =
+    /\b(slowed|reverb|speed\s*up|sped\s*up|nightcore|karaoke|originally\s+performed|in\s+the\s+style\s+of|tribute\s+to|instrumental\s+cover|parody|spoof)\b/i;
+
+  const fullAlbums = [];
+  const singles = [];
+
+  for (const r of results) {
+    if (!r || !r.id) continue;
+    const mi = r.more_info || {};
+    const title = (r.title || '')
+      .replace(/&quot;/g, '"')
+      .replace(/&#039;/g, "'")
+      .replace(/&amp;/g, '&')
+      .trim();
+
+    if (JUNK_ALBUM_RE.test(title)) continue;
+
+    let artwork = (r.image || '').replace('150x150', '500x500');
+    if (artwork.startsWith('http:')) artwork = artwork.replace('http:', 'https:');
+    if (
+      artwork.includes('default_') ||
+      artwork.includes('album-default') ||
+      !artwork.startsWith('http')
+    ) {
+      artwork = '';
+    }
+
+    const artistStr = (mi.music || r.subtitle || '')
+      .replace(/&quot;/g, '"')
+      .replace(/&#039;/g, "'")
+      .replace(/&amp;/g, '&')
+      .trim();
+    const year = mi.year || r.year || '';
+    const songCount = parseInt(mi.song_count || '0', 10) || 0;
+    const language = (mi.language || r.language || '').toLowerCase();
+    const isDialogue = /\b(dialogue|dialogues|bgm\s+only)\b/i.test(title);
+
+    const albumObj = {
+      id: String(r.id),
+      title: title || 'Unknown Album',
+      artist: artistStr || 'Various Artists',
+      artwork: artwork,
+      year: String(year),
+      songCount: songCount,
+      language: language,
+      type: songCount > 1 ? 'album' : 'single',
+      isDialogue: isDialogue,
+    };
+
+    if (songCount >= 2) {
+      fullAlbums.push(albumObj);
+    } else {
+      singles.push(albumObj);
+    }
+  }
+
+  // Group fragmented movie singles (e.g. Samayama, Odiyamma, Gaaju Bomma from Hi Nanna)
+  const movieGroups = new Map();
+  for (const s of singles) {
+    const movie = extractMovieName(s.title);
+    if (movie) {
+      const key = movie.toLowerCase();
+      if (!movieGroups.has(key)) {
+        movieGroups.set(key, {
+          movie,
+          count: 0,
+          bestArtwork: s.artwork,
+          artist: s.artist,
+          year: s.year,
+          language: s.language,
+        });
+      }
+      const g = movieGroups.get(key);
+      g.count++;
+      if (!g.bestArtwork && s.artwork) g.bestArtwork = s.artwork;
+    }
+  }
+
+  // Create consolidated Movie Soundtrack Albums for grouped singles
+  const syntheticMovieSoundtracks = [];
+  for (const g of movieGroups.values()) {
+    // Only synthesize if there isn't already a full album with this movie title
+    const exists = fullAlbums.some(
+      (fa) =>
+        fa.title.toLowerCase().includes(g.movie.toLowerCase()) ||
+        g.movie.toLowerCase().includes(fa.title.toLowerCase())
+    );
+    if (!exists) {
+      syntheticMovieSoundtracks.push({
+        id: 'movie_' + encodeURIComponent(g.movie),
+        title: `${g.movie} (Original Soundtrack)`,
+        artist: g.artist || 'Original Motion Picture Soundtrack',
+        artwork: g.bestArtwork,
+        year: g.year,
+        songCount: Math.max(g.count, 5),
+        language: g.language,
+        type: 'album',
+        isDialogue: false,
+      });
+    }
+  }
+
+  // Sort full albums: non-dialogue first, then highest song count
+  fullAlbums.sort((a, b) => {
+    if (a.isDialogue !== b.isDialogue) return a.isDialogue ? 1 : -1;
+    return (b.songCount || 0) - (a.songCount || 0);
+  });
+
+  // Prioritize synthetic movie soundtracks + full albums
+  const combined = [...syntheticMovieSoundtracks, ...fullAlbums];
+
+  // Only append non-grouped singles if we have fewer results than requested limit
+  if (combined.length < limit) {
+    const remainingSingles = singles.filter((s) => !extractMovieName(s.title));
+    combined.push(...remainingSingles);
+  }
+
+  return combined.slice(0, limit);
+}
+
+/**
+ * Fetches all songs for a JioSaavn album by albumId.
+ * Returns album metadata + decrypted 320k song list.
+ * Includes movie soundtrack expansion, multi-key detection, and YouTube Music fallback.
+ */
+async function fetchAlbumDetails(albumId) {
+  // 1. Synthetic movie soundtrack album
+  if (albumId.startsWith('movie_')) {
+    const movie = decodeURIComponent(albumId.replace('movie_', ''));
+    const soundtrack = await fetchMovieSoundtrackTracks(movie);
+    if (soundtrack) return soundtrack;
+  }
+
+  // 2. Standard JioSaavn album lookup
+  const url =
+    'https://www.jiosaavn.com/api.php?__call=content.getAlbumDetails&_format=json&_marker=0&api_version=4&ctx=web6dot0&albumid=' +
+    encodeURIComponent(albumId);
+
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'SaavnAndroid/9.0.0',
+      'Accept': 'application/json',
+      ...JIO_GEO_HEADERS,
+    },
+  });
+
+  if (!res.ok) throw new Error(`JioSaavn album fetch failed: ${res.status}`);
+
+  const data = await res.json();
+
+  const albumTitle = (data.title || data.name || 'Unknown Album')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&amp;/g, '&')
+    .trim();
+
+  let cleanArtwork = (data.image || '').replace('150x150', '500x500');
+  if (cleanArtwork.startsWith('http:')) cleanArtwork = cleanArtwork.replace('http:', 'https:');
+  if (
+    cleanArtwork.includes('default_') ||
+    cleanArtwork.includes('album-default') ||
+    !cleanArtwork.startsWith('http')
+  ) {
+    cleanArtwork = '';
+  }
+
+  const artistStr = (data.primary_artists || data.music || data.subtitle || '')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&amp;/g, '&')
+    .trim();
+  const year = data.year || (data.more_info || {}).year || '';
+  const language = (
+    data.language || (data.more_info || {}).language || ''
+  ).toLowerCase();
+
+  // Inspect data.list, data.songs, or modules for songs
+  let rawSongs = [];
+  if (Array.isArray(data.list) && data.list.length > 0) {
+    rawSongs = data.list;
+  } else if (Array.isArray(data.songs) && data.songs.length > 0) {
+    rawSongs = data.songs;
+  } else if (Array.isArray(data.modules?.songs?.data)) {
+    rawSongs = data.modules.songs.data;
+  }
+
+  // 3. Movie Single Expansion: If album only has 1 song and is from a movie, enrich to full soundtrack!
+  const movieFromTitle =
+    extractMovieName(albumTitle) ||
+    (rawSongs[0] ? extractMovieName(rawSongs[0].title || rawSongs[0].song || '') : null);
+
+  if (rawSongs.length <= 1 && movieFromTitle) {
+    try {
+      const enrichedMovie = await fetchMovieSoundtrackTracks(movieFromTitle, cleanArtwork);
+      if (enrichedMovie && enrichedMovie.songs.length > rawSongs.length) {
+        return enrichedMovie;
+      }
+    } catch (_) {}
+  }
+
+  // 4. Fallback: If album details API returned 0 songs, search catalog with fuzzy matching
+  if (rawSongs.length === 0 && albumTitle && albumTitle !== 'Unknown Album') {
+    try {
+      const cleanSearchTitle = albumTitle
+        .replace(/\s*\(.*?\)/g, '')
+        .replace(/\s*\[.*?\]/g, '')
+        .replace(/[-–—]\s*(Original Soundtrack|OST|Telugu|Tamil|Hindi|Kannada|Malayalam).*/i, '')
+        .trim();
+
+      const fallbackTracks = await searchJioSaavn(cleanSearchTitle || albumTitle, 30);
+      const cleanLower = (cleanSearchTitle || albumTitle).toLowerCase();
+
+      const matching = fallbackTracks.filter(
+        (t) =>
+          (t.album && t.album.toLowerCase().includes(cleanLower)) ||
+          t.title.toLowerCase().includes(cleanLower) ||
+          cleanLower.includes(t.album.toLowerCase())
+      );
+
+      if (matching.length > 0) {
+        return {
+          id: String(albumId),
+          title: albumTitle,
+          artist: artistStr || matching[0].author || 'Various Artists',
+          artwork: cleanArtwork || matching[0].thumbnail || '',
+          year: String(year),
+          language: language,
+          songCount: matching.length,
+          type: 'album',
+          songs: matching.map((m, idx) => ({
+            id: String(m.id),
+            title: m.title,
+            author: m.author,
+            album: albumTitle,
+            duration: m.duration,
+            thumbnail: m.thumbnail || cleanArtwork,
+            streamUrl: m.streamUrl,
+            trackNumber: idx + 1,
+            source: 'jiosaavn',
+            bitrate: '320kbps',
+          })),
+        };
+      }
+
+      // If JioSaavn search yielded nothing, fall back to YouTube Music tracks
+      const ytmFallback = await searchYtmSongs(albumTitle);
+      if (ytmFallback && ytmFallback.length > 0) {
+        return {
+          id: String(albumId),
+          title: albumTitle,
+          artist: artistStr || ytmFallback[0].author || 'Various Artists',
+          artwork: cleanArtwork || ytmFallback[0].thumbnail || '',
+          year: String(year),
+          language: language,
+          songCount: ytmFallback.length,
+          type: 'album',
+          songs: ytmFallback.map((y, idx) => ({
+            id: String(y.id),
+            title: y.title,
+            author: y.author,
+            album: albumTitle,
+            duration: y.duration,
+            thumbnail: y.thumbnail || cleanArtwork,
+            streamUrl: y.streamUrl || '',
+            trackNumber: idx + 1,
+            source: 'youtube',
+            bitrate: '160kbps',
+          })),
+        };
+      }
+    } catch (_) {}
+  }
+
+  const songs = rawSongs
+    .filter((s) => s && s.id)
+    .map((s) => {
+      const mi = s.more_info || {};
+      const encMedia = mi.encrypted_media_url || s.encrypted_media_url || '';
+      const streamUrl = decryptMediaUrl(encMedia);
+      let thumb = (s.image || '').replace('150x150', '500x500');
+      if (thumb.startsWith('http:')) thumb = thumb.replace('http:', 'https:');
+      if (
+        thumb.includes('default_') ||
+        thumb.includes('album-default') ||
+        !thumb.startsWith('http')
+      ) {
+        thumb = cleanArtwork;
+      }
+
+      const title = (s.title || s.song || '')
+        .replace(/&quot;/g, '"')
+        .replace(/&#039;/g, "'")
+        .replace(/&amp;/g, '&');
+      const primaryArtists = (mi.artistMap?.primary_artists || [])
+        .map((a) => a.name)
+        .join(', ');
+      const artist = (
+        primaryArtists ||
+        s.subtitle ||
+        s.primary_artists ||
+        mi.music ||
+        ''
+      )
+        .replace(/&quot;/g, '"')
+        .replace(/&#039;/g, "'")
+        .replace(/&amp;/g, '&');
+      const duration = parseInt(mi.duration || s.duration || '0', 10) || 0;
+      const trackNum = parseInt(mi.track_number || s.track_number || '0', 10) || 0;
+
+      return {
+        id: String(s.id),
+        title: title || 'Unknown Title',
+        author: artist || artistStr || 'Various Artists',
+        album: albumTitle,
+        duration: duration,
+        thumbnail: thumb || cleanArtwork,
+        streamUrl: streamUrl,
+        trackNumber: trackNum,
+        source: 'jiosaavn',
+        bitrate: '320kbps',
+      };
+    })
+    .sort((a, b) => (a.trackNumber || 999) - (b.trackNumber || 999));
+
+  // If album artwork is missing, fallback to the first song's thumbnail
+  if (!cleanArtwork && songs.length > 0 && songs[0].thumbnail) {
+    cleanArtwork = songs[0].thumbnail;
+  }
+
+  return {
+    id: String(albumId),
+    title: albumTitle,
+    artist: artistStr || 'Various Artists',
+    artwork: cleanArtwork,
+    year: String(year),
+    language: language,
+    songCount: songs.length,
+    type: songs.length > 1 ? 'album' : 'single',
+    songs: songs,
+  };
+}
 
 const UNICODE_SCRIPTS = {
   telugu: [0x0C00, 0x0C7F],
@@ -604,4 +1216,223 @@ async function resolveSingleTrack(rawTitle, rawArtist) {
     };
   }
   return null;
+}
+
+/**
+ * YouTube Music InnerTube Edge Bridge
+ */
+const YTM_HEADERS = {
+  'Content-Type': 'application/json',
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Origin': 'https://music.youtube.com',
+  'Referer': 'https://music.youtube.com/',
+};
+
+const YTM_CONTEXT = {
+  client: {
+    clientName: 'WEB_REMIX',
+    clientVersion: '1.20240101.01.00',
+    hl: 'en',
+    gl: 'IN',
+  },
+};
+
+// ── Non-music noise patterns (mirrors canonical_song_dedup.dart) ──────────────
+const NON_MUSIC_TITLE_RE = /\b(speech|press\s+meet|launch\s+event|interview|talk\s+show|podcast|reaction|reacting|dance\s+cover|dance\s+video|stage\s+performance|performance\s+video|full\s+movie|movie\s+scene|comedy\s+scene|ringtone|bgm\s+only|#?shorts|reels?|tiktok|troll|parody|spoof|jukebox|all\s+songs|audio\s+jukebox|mega\s+jukebox|full\s+album|slowed[\s+]*(?:and|\+)?[\s+]*reverb|speed\s*up|sped\s*up|nightcore|8d\s+audio|bass\s+boosted|acoustic\s+cover|guitar\s+cover|piano\s+cover|violin\s+cover|cover\s+song|cover\s+version|cover\s+classics|female\s+cover|male\s+cover|karaoke|originally\s+performed|in\s+the\s+style\s+of|tribute\s+to|tribute\s+version|instrumental|tabata|power\s+music|workout|fitness\s+beats|gym\s+(?:music|mix|workout)|carnatic\s+mix|lo-?fi\s+mix|varmala|vidhi|ceremony|wedding\s+music|shaadi|mehendi|sangeet|dj\s+mix|dj\s+remix|mashup|mash\s+up|club\s+mix|oye\s+lalii|boostereo|shadow\s+tower|party\s+hits\s+band|the\s+hit\s+crew|the\s+covers|making\s+video|bloopers|teaser|trailer|glimpse|promo)\b/i;
+const NON_MUSIC_AUTHOR_RE = /\b(media|news|tv|filmnagar|events|buzz|sports|daily|vlogs?|cricket|gaming|memes?|dj\s+\w+|remix\s+hub|wedding|ceremony|oye\s+lalii|cover\s+classics|the\s+covers|the\s+hit\s+crew|party\s+hits\s+band|tabata|power\s+music|fitness\s+beats|workout|luxebeats|zzang|sweet\s+strings|boostereo|shadow\s+tower)\b/i;
+
+function isGenuineTrack(title, author, durationSec) {
+  if (!title) return false;
+  if (NON_MUSIC_TITLE_RE.test(title)) return false;
+  if (NON_MUSIC_AUTHOR_RE.test(author || '')) return false;
+  if (durationSec && (durationSec < 60 || durationSec > 600)) return false;
+  return true;
+}
+
+function parseDurationSec(str) {
+  if (!str || typeof str !== 'string') return 0;
+  const parts = str.split(':').map((p) => parseInt(p, 10));
+  if (parts.some((n) => isNaN(n))) return 0;
+  if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  } else if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  return 0;
+}
+
+async function fetchYtmRadio(videoId, limit = 40) {
+  try {
+    const resp = await fetch('https://music.youtube.com/youtubei/v1/next', {
+      method: 'POST',
+      headers: YTM_HEADERS,
+      body: JSON.stringify({
+        context: YTM_CONTEXT,
+        videoId: videoId,
+        playlistId: `RDAMVM${videoId}`,
+      }),
+    });
+
+    if (!resp.ok) return [];
+
+    const data = await resp.json();
+    const tabs =
+      data?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer
+        ?.watchNextTabbedResultsRenderer?.tabs || [];
+    if (!tabs.length) return [];
+
+    const items =
+      tabs[0]?.tabRenderer?.content?.musicQueueRenderer?.content
+        ?.playlistPanelRenderer?.contents || [];
+    const results = [];
+
+    for (const it of items) {
+      const r = it?.playlistPanelVideoRenderer;
+      if (!r) continue;
+      const vid = r.videoId;
+      if (!vid || vid === videoId) continue;
+
+      const titleRuns = r.title?.runs || [];
+      const title = titleRuns[0]?.text || 'Unknown Title';
+
+      const bylineRuns = r.longBylineText?.runs || [];
+      const author = bylineRuns[0]?.text || 'Unknown Artist';
+
+      const lengthText = r.lengthText?.runs?.[0]?.text || '';
+      const duration = parseDurationSec(lengthText) || 210;
+
+      // Filter out non-music content (covers, karaoke, workout, remixes, etc.)
+      if (!isGenuineTrack(title, author, duration)) continue;
+
+      results.push({
+        id: vid,
+        title: title,
+        author: author,
+        duration: duration,
+      });
+
+      if (results.length >= limit) break;
+    }
+
+    return results;
+  } catch (e) {
+    return [];
+  }
+}
+
+async function searchYtmSongs(query, limit = 20) {
+  try {
+    const resp = await fetch('https://music.youtube.com/youtubei/v1/search', {
+      method: 'POST',
+      headers: YTM_HEADERS,
+      body: JSON.stringify({
+        context: YTM_CONTEXT,
+        query: query.trim(),
+      }),
+    });
+
+    if (!resp.ok) return [];
+
+    const data = await resp.json();
+    const contents =
+      data?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer
+        ?.content?.sectionListRenderer?.contents || [];
+    const songs = [];
+
+    // 1. Top Result Card (if it is an official studio Song)
+    const card = contents[0]?.musicCardShelfRenderer;
+    if (card) {
+      const subtitle = (card.subtitle?.runs?.map((r) => r.text).join('') || '').toLowerCase();
+      const vid = card.onTap?.watchEndpoint?.videoId;
+      const title = card.title?.runs?.[0]?.text || '';
+      const artistRun = card.subtitle?.runs?.find((r) =>
+        r.navigationEndpoint?.browseEndpoint?.browseId?.startsWith('UC')
+      );
+      const author = artistRun?.text || 'Various Artists';
+      if (
+        vid &&
+        title &&
+        !subtitle.includes('video') &&
+        !subtitle.includes('episode') &&
+        !subtitle.includes('podcast')
+      ) {
+        if (isGenuineTrack(title, author, 210)) {
+          songs.push({ id: vid, title, author, duration: 210 });
+        }
+      }
+    }
+
+    // 2. Scan sections for official studio songs only
+    for (let i = 0; i < contents.length; i++) {
+      const section = contents[i];
+      const items =
+        section?.itemSectionRenderer?.contents ||
+        section?.musicShelfRenderer?.contents ||
+        [];
+      for (const item of items) {
+        const renderer = item?.musicResponsiveListItemRenderer;
+        if (!renderer) continue;
+
+        const flexColumns = renderer.flexColumns || [];
+        if (flexColumns.length < 2) continue;
+
+        // Subruns check: MUST be tagged as 'Song' by YouTube Music
+        const subRuns =
+          flexColumns[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs ||
+          [];
+        const itemType = (subRuns[0]?.text || '').toLowerCase();
+        if (itemType !== 'song') continue;
+
+        const titleRuns =
+          flexColumns[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs ||
+          [];
+        const title = titleRuns[0]?.text || 'Unknown Title';
+
+        let videoId =
+          renderer.overlay?.musicItemThumbnailOverlayRenderer?.content
+            ?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint
+            ?.videoId ||
+          renderer.onTap?.watchEndpoint?.videoId ||
+          titleRuns[0]?.navigationEndpoint?.watchEndpoint?.videoId;
+
+        if (!videoId) continue;
+
+        // Author & Duration
+        const artistRun =
+          subRuns.find(
+            (r) =>
+              r.navigationEndpoint?.browseEndpoint
+                ?.browseEndpointContextSupportedConfigs
+                ?.browseEndpointContextMusicConfig?.pageType ===
+              'MUSIC_PAGE_TYPE_ARTIST'
+          ) || subRuns[2];
+        const author = artistRun?.text || 'Various Artists';
+
+        let duration = 210;
+        if (subRuns.length > 2) {
+          const lastText = subRuns[subRuns.length - 1]?.text || '';
+          const parsed = parseDurationSec(lastText);
+          if (parsed) duration = parsed;
+        }
+
+        // Filter out non-music content (covers, karaoke, workout, remixes, etc.)
+        if (!isGenuineTrack(title, author, duration)) continue;
+
+        songs.push({
+          id: videoId,
+          title: title,
+          author: author,
+          duration: duration,
+        });
+
+        if (songs.length >= limit) break;
+      }
+      if (songs.length >= limit) break;
+    }
+
+    return songs;
+  } catch (e) {
+    return [];
+  }
 }

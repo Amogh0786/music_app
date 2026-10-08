@@ -6,6 +6,7 @@ import '../services/music_service.dart';
 import '../services/playlist_artist_filter.dart';
 import '../services/preferences_service.dart';
 import '../widgets/animated_equalizer.dart';
+import '../widgets/mini_player.dart';
 
 class CustomPlaylistScreen extends StatefulWidget {
   final String playlistId;
@@ -1298,6 +1299,21 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
               // Bottom spacing for miniplayer
               const SliverToBoxAdapter(child: SizedBox(height: 120)),
             ],
+          ),
+          // Floating MiniPlayer visible over playlist content when a song is playing
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: AnimatedBuilder(
+              animation: MusicService(),
+              builder: (context, _) {
+                if (MusicService().currentSong == null) {
+                  return const SizedBox.shrink();
+                }
+                return const MiniPlayer();
+              },
+            ),
           ),
         ],
       ),

@@ -611,5 +611,140 @@ void main() {
         isTrue,
       );
     });
+
+    test(
+      'isGenuineSong aggressively rejects wedding rituals, DJ remixes, and instrumentals',
+      () {
+        Video makeVideo(String title, {String author = 'Test Artist'}) => Video(
+          VideoId('dQw4w9WgXcQ'),
+          title,
+          author,
+          ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+          DateTime.now(),
+          '',
+          null,
+          '',
+          const Duration(minutes: 3, seconds: 30),
+          ThumbnailSet('dQw4w9WgXcQ'),
+          null,
+          Engagement(0, null, null),
+          false,
+        );
+
+        // Wedding ritual junk
+        expect(
+          CanonicalSongDedup.isGenuineSong(makeVideo('Varmala Vidhi')),
+          isFalse,
+        );
+        expect(
+          CanonicalSongDedup.isGenuineSong(makeVideo('Varmala Ceremony')),
+          isFalse,
+        );
+        expect(
+          CanonicalSongDedup.isGenuineSong(
+            makeVideo('Sarangi Tabla Wedding Music Varmala'),
+          ),
+          isFalse,
+        );
+
+        // DJ remixes and mashups
+        expect(
+          CanonicalSongDedup.isGenuineSong(
+            makeVideo(
+              'Bas Tera Saath Chahiye',
+              author: 'DJ D Karan Karan, DJ Karan Bhaii, sonu roy',
+            ),
+          ),
+          isFalse,
+        );
+        expect(
+          CanonicalSongDedup.isGenuineSong(
+            makeVideo(
+              'Tere Naam Se Dil Dhadke',
+              author: 'DJ Karan Bhaii, sonu roy, DJ Karan Raaj',
+            ),
+          ),
+          isFalse,
+        );
+        expect(
+          CanonicalSongDedup.isGenuineSong(
+            makeVideo('Arabic Kuthu - Halamithi Habibo (Remix)'),
+          ),
+          isFalse,
+        );
+        expect(
+          CanonicalSongDedup.isGenuineSong(
+            makeVideo('Pathala Pathala (Remix)'),
+          ),
+          isFalse,
+        );
+
+        // Instrumentals and noise
+        expect(
+          CanonicalSongDedup.isGenuineSong(
+            makeVideo('Naatu Naatu (Instrumental)'),
+          ),
+          isFalse,
+        );
+        expect(
+          CanonicalSongDedup.isGenuineSong(
+            makeVideo('2026', author: 'OYE LALII, Anku PadheWala'),
+          ),
+          isFalse,
+        );
+
+        // Pristine official studio tracks must pass
+        expect(
+          CanonicalSongDedup.isGenuineSong(
+            makeVideo(
+              'Bloody Sweet (From "Leo")',
+              author: 'Anirudh Ravichander, Siddharth Basrur',
+            ),
+          ),
+          isTrue,
+        );
+        expect(
+          CanonicalSongDedup.isGenuineSong(
+            makeVideo('Once Upon A Time', author: 'Anirudh Ravichander'),
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'areDuplicateSongs detects duplicate tracks with movie tags and spelling variants',
+      () {
+        expect(
+          CanonicalSongDedup.areDuplicateSongs(
+            titleA: 'Once Upon A Time',
+            artistA: 'Anirudh Ravichander, Heisenberg',
+            titleB: 'Once Upon a time',
+            artistB: 'Anirudh Ravichander, Heizenberg',
+          ),
+          isTrue,
+        );
+
+        expect(
+          CanonicalSongDedup.areDuplicateSongs(
+            titleA: 'Once Upon A Time',
+            artistA: 'Anirudh Ravichander',
+            titleB: 'Once Upon A Time (From "Vikram")',
+            artistB: 'Heisenberg, Anirudh Ravichander',
+          ),
+          isTrue,
+        );
+
+        expect(
+          CanonicalSongDedup.areDuplicateSongs(
+            titleA: "Bloody Sweet (From 'Leo')",
+            artistA: 'Anirudh Ravichander, Siddharth Basrur, Heisenberg',
+            titleB: 'Bloody Sweet (From "Leo")',
+            artistB: 'Heisenberg, Anirudh Ravichander, Siddharth Basrur',
+          ),
+          isTrue,
+        );
+      },
+    );
   });
 }

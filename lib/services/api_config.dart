@@ -77,6 +77,39 @@ class ApiConfig {
     );
   }
 
+  /// Single-track JioSaavn resolver — returns original album artwork, streamUrl, and album name.
+  /// Used by the artwork enrichment pass to upgrade compilation covers to genuine album art.
+  static Uri jioSingleTrackUri(String title, {String? artist}) {
+    final customUrl = PreferencesService().cloudflareWorkerUrl;
+    final base = customUrl.isNotEmpty
+        ? (customUrl.endsWith('/')
+              ? customUrl.substring(0, customUrl.length - 1)
+              : customUrl)
+        : defaultCloudflareWorkerUrl;
+    final buffer = StringBuffer(
+      '$base/jio?title=${Uri.encodeComponent(title)}',
+    );
+    if (artist != null && artist.isNotEmpty) {
+      buffer.write('&artist=${Uri.encodeComponent(artist)}');
+    }
+    return Uri.parse(buffer.toString());
+  }
+
+  /// JioSaavn album search via Cloudflare Edge Worker.
+  /// Returns a list of album metadata objects (id, title, artist, artwork, year, songCount).
+  static Uri jioAlbumSearchUri(String query, {int limit = 12}) {
+    return Uri.parse(
+      '$cloudflareWorkerUrl/jio/albums?q=${Uri.encodeComponent(query)}&limit=$limit',
+    );
+  }
+
+  /// JioSaavn album detail — all songs with decrypted 320k stream URLs.
+  static Uri jioAlbumDetailUri(String albumId) {
+    return Uri.parse(
+      '$cloudflareWorkerUrl/jio/album?id=${Uri.encodeComponent(albumId)}',
+    );
+  }
+
   /// Recommendations via Cloudflare Edge Worker (falls back to search on edge or Render).
   static Uri jioRecommendationsUri(
     String query, {
@@ -107,7 +140,44 @@ class ApiConfig {
     );
   }
 
+  /// Google YouTube Music radio automix via Cloudflare Edge Worker (< 150ms latency, zero cold start).
   static Uri radioUri(
+    String videoId, {
+    int limit = 30,
+    String? title,
+    String? artist,
+  }) {
+    final customUrl = PreferencesService().customServerUrl;
+    final base = customUrl.isNotEmpty
+        ? (customUrl.endsWith('/')
+              ? customUrl.substring(0, customUrl.length - 1)
+              : customUrl)
+        : cloudflareWorkerUrl;
+    final buffer = StringBuffer('$base/ytm/radio?v=$videoId&limit=$limit');
+    if (title != null && title.isNotEmpty) {
+      buffer.write('&title=${Uri.encodeComponent(title)}');
+    }
+    if (artist != null && artist.isNotEmpty) {
+      buffer.write('&artist=${Uri.encodeComponent(artist)}');
+    }
+    return Uri.parse(buffer.toString());
+  }
+
+  /// Cloudflare Edge Worker fallback for YouTube Music official song search (0ms cold start, CORS bypassed).
+  static Uri ytmSearchUri(String query, {int limit = 20}) {
+    final customUrl = PreferencesService().customServerUrl;
+    final base = customUrl.isNotEmpty
+        ? (customUrl.endsWith('/')
+              ? customUrl.substring(0, customUrl.length - 1)
+              : customUrl)
+        : cloudflareWorkerUrl;
+    return Uri.parse(
+      '$base/ytm/search?q=${Uri.encodeComponent(query)}&limit=$limit',
+    );
+  }
+
+  /// Secondary Render cloud backend radio fallback.
+  static Uri renderRadioUri(
     String videoId, {
     int limit = 30,
     String? title,

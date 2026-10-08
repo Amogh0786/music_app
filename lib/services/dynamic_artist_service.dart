@@ -857,6 +857,51 @@ class DynamicArtistService {
     return null;
   }
 
+  /// Returns the verified filmography or iconic album catalog for an artist.
+  List<String> getFilmography(String artistName) {
+    final clean = artistName.trim();
+    if (clean.isEmpty) return const [];
+    final matched = findArtist(clean);
+    final canonicalName = matched?.name ?? clean;
+    final norm = PlaylistArtistFilter.normalize(canonicalName);
+    return _artistFilmographies[norm] ?? const [];
+  }
+
+  /// Returns the active languages associated with an artist (e.g. multi-lingual repertoire).
+  List<String> getArtistLanguages(String artistName) {
+    final clean = artistName.trim();
+    final matched = findArtist(clean);
+    final primary = matched?.language ?? 'Telugu';
+    final norm = PlaylistArtistFilter.normalize(matched?.name ?? clean);
+
+    const multiLingual = {
+      'devi sri prasad': ['Telugu', 'Tamil', 'Hindi'],
+      'a r rahman': ['Tamil', 'Hindi', 'Telugu'],
+      'ar rahman': ['Tamil', 'Hindi', 'Telugu'],
+      'anirudh ravichander': ['Tamil', 'Telugu', 'Hindi'],
+      'thaman s': ['Telugu', 'Tamil', 'Kannada'],
+      'sid sriram': ['Telugu', 'Tamil', 'Malayalam', 'Kannada'],
+      's p balasubrahmanyam': ['Telugu', 'Tamil', 'Kannada', 'Hindi'],
+      'spb': ['Telugu', 'Tamil', 'Kannada', 'Hindi'],
+      'k s chithra': ['Telugu', 'Tamil', 'Malayalam', 'Kannada'],
+      'chithra': ['Telugu', 'Tamil', 'Malayalam', 'Kannada'],
+      'shreya ghoshal': ['Hindi', 'Telugu', 'Tamil', 'Kannada', 'Malayalam'],
+      'ilaiyaraaja': ['Tamil', 'Telugu', 'Malayalam', 'Hindi'],
+      'harris jayaraj': ['Tamil', 'Telugu'],
+      'm m keeravani': ['Telugu', 'Hindi', 'Tamil'],
+      'yuvan shankar raja': ['Tamil', 'Telugu'],
+      'g v prakash kumar': ['Tamil', 'Telugu'],
+      'santhosh narayanan': ['Tamil', 'Telugu'],
+      'arijit singh': ['Hindi', 'Bengali', 'Telugu'],
+      'sushin shyam': ['Malayalam', 'Tamil'],
+      'ravi basrur': ['Kannada', 'Telugu', 'Hindi', 'Tamil'],
+    };
+
+    final list = multiLingual[norm];
+    if (list != null) return list;
+    return [primary];
+  }
+
   /// Curated filmographies and iconic album catalogs for legendary music directors, composers, and singers.
   /// Unlocks hundreds of film soundtrack songs that plain keyword searches miss due to singer/composer metadata splitting.
   static const Map<String, List<String>> _artistFilmographies = {

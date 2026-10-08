@@ -35,6 +35,30 @@ class YouTubeMusicClient {
   Future<List<Video>> searchSongs(String query, {int limit = 20}) async {
     if (query.trim().isEmpty) return [];
 
+    // 1. On Flutter Web: Route through Cloudflare Edge Worker to bypass browser CORS
+    if (kIsWeb) {
+      try {
+        final edgeUri = ApiConfig.ytmSearchUri(query, limit: limit);
+        final resp = await http
+            .get(edgeUri)
+            .timeout(const Duration(seconds: 5));
+        if (resp.statusCode == 200) {
+          final List<dynamic> list = json.decode(resp.body);
+          final parsed = _parseJsonTracks(list);
+          if (parsed.isNotEmpty) {
+            debugPrint(
+              '[YTM] Found ${parsed.length} clean studio tracks via Edge Worker for: "$query"',
+            );
+            return parsed;
+          }
+        }
+      } catch (e) {
+        debugPrint('[YTM] Edge search proxy failed: $e');
+      }
+
+      return [];
+    }
+
     try {
       final uri = Uri.parse('$_baseUrl/search');
       final payload = {
@@ -90,54 +114,42 @@ class YouTubeMusicClient {
   Future<List<Video>> fetchRadioTracks(String videoId, {int limit = 50}) async {
     if (videoId.trim().isEmpty) return [];
 
-    // 1. First try Backend / Cloud Proxy (guarantees CORS bypass on Flutter Web)
+    // 1. First try Cloudflare Edge Worker / Cloud Proxy (guarantees CORS bypass on Web & 0ms cold start)
     try {
       final proxyUri = ApiConfig.radioUri(videoId, limit: limit);
       final resp = await http.get(proxyUri).timeout(const Duration(seconds: 5));
       if (resp.statusCode == 200) {
         final List<dynamic> list = json.decode(resp.body);
         if (list.isNotEmpty) {
-          final List<Video> serverTracks = [];
-          for (final item in list) {
-            final vid = item['id'] as String?;
-            if (vid == null || vid.isEmpty || vid == videoId) continue;
-            final t = item['title'] as String? ?? 'Unknown Title';
-            final a = item['author'] as String? ?? 'Unknown Artist';
-            final durSec = item['duration'] != null
-                ? int.tryParse(item['duration'].toString())
-                : null;
-            final track = Video(
-              VideoId(vid),
-              t,
-              a,
-              ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
-              DateTime.now(),
-              '',
-              null,
-              '',
-              durSec != null ? Duration(seconds: durSec) : null,
-              ThumbnailSet(vid),
-              null,
-              Engagement(0, null, null),
-              false,
-            );
-            if (CanonicalSongDedup.isGenuineSong(track)) {
-              serverTracks.add(track);
-            }
-          }
+          final serverTracks = _parseJsonTracks(list, excludeId: videoId);
           if (serverTracks.isNotEmpty) {
             debugPrint(
-              '[YTM] Retrieved ${serverTracks.length} clean radio tracks via backend proxy',
+              '[YTM] Retrieved ${serverTracks.length} clean radio tracks via edge proxy',
             );
             return serverTracks;
           }
         }
       }
     } catch (e) {
-      debugPrint('[YTM] Backend radio proxy failed, trying direct YTM: $e');
+      debugPrint('[YTM] Edge radio proxy failed, trying fallback: $e');
     }
 
-    // 2. Direct client-side InnerTube fallback (Mobile / Desktop)
+    // 2. On Web: if Edge Worker returned empty, try Render backend radio
+    if (kIsWeb) {
+      try {
+        final renderUri = ApiConfig.renderRadioUri(videoId, limit: limit);
+        final resp = await http
+            .get(renderUri)
+            .timeout(const Duration(seconds: 6));
+        if (resp.statusCode == 200) {
+          final List<dynamic> list = json.decode(resp.body);
+          return _parseJsonTracks(list, excludeId: videoId);
+        }
+      } catch (_) {}
+      return [];
+    }
+
+    // 3. Direct client-side InnerTube fallback (Mobile / Desktop)
     try {
       final uri = Uri.parse('$_baseUrl/next');
       final payload = {
@@ -178,15 +190,22 @@ class YouTubeMusicClient {
         if (vid == videoId && radioTracks.isNotEmpty) continue;
 
         final titleRuns = renderer['title']?['runs'] as List<dynamic>? ?? [];
-        final title = titleRuns.isNotEmpty
+        final rawTitle = titleRuns.isNotEmpty
             ? titleRuns[0]['text'] as String? ?? 'Unknown Title'
             : 'Unknown Title';
 
         final bylineRuns =
             renderer['longBylineText']?['runs'] as List<dynamic>? ?? [];
-        final author = bylineRuns.isNotEmpty
+        final rawAuthor = bylineRuns.isNotEmpty
             ? bylineRuns[0]['text'] as String? ?? 'Unknown Artist'
             : 'Unknown Artist';
+
+        final cleanA = CanonicalSongDedup.cleanArtist(rawAuthor);
+        final author = cleanA.isNotEmpty ? cleanA : rawAuthor;
+        final title = CanonicalSongDedup.sanitizeDisplayTitle(
+          rawTitle,
+          artist: author,
+        );
 
         final lengthText =
             renderer['lengthText']?['runs']?[0]?['text'] as String? ?? '';
@@ -235,7 +254,7 @@ class YouTubeMusicClient {
           flexColumns[0]['musicResponsiveListItemFlexColumnRenderer'];
       final titleRuns = titleColumn?['text']?['runs'] as List<dynamic>? ?? [];
       if (titleRuns.isEmpty) return null;
-      final title = titleRuns[0]['text'] as String? ?? 'Unknown Title';
+      final rawTitle = titleRuns[0]['text'] as String? ?? 'Unknown Title';
 
       // 2. VideoId & Navigation
       String? videoId;
@@ -251,7 +270,7 @@ class YouTubeMusicClient {
       if (videoId == null || videoId.isEmpty) return null;
 
       // 3. Artist & Duration
-      String author = 'Unknown Artist';
+      String rawAuthor = 'Unknown Artist';
       Duration? duration;
 
       if (flexColumns.length > 1) {
@@ -259,7 +278,7 @@ class YouTubeMusicClient {
             flexColumns[1]['musicResponsiveListItemFlexColumnRenderer'];
         final subRuns = subColumn?['text']?['runs'] as List<dynamic>? ?? [];
         if (subRuns.isNotEmpty) {
-          author = subRuns[0]['text'] as String? ?? 'Unknown Artist';
+          rawAuthor = subRuns[0]['text'] as String? ?? 'Unknown Artist';
         }
 
         // Duration is often the last text run
@@ -268,6 +287,13 @@ class YouTubeMusicClient {
           duration = _parseDuration(lastText);
         }
       }
+
+      final cleanA = CanonicalSongDedup.cleanArtist(rawAuthor);
+      final author = cleanA.isNotEmpty ? cleanA : rawAuthor;
+      final title = CanonicalSongDedup.sanitizeDisplayTitle(
+        rawTitle,
+        artist: author,
+      );
 
       return Video(
         VideoId(videoId),
@@ -303,5 +329,44 @@ class YouTubeMusicClient {
       return Duration(hours: h, minutes: m, seconds: s);
     }
     return null;
+  }
+
+  List<Video> _parseJsonTracks(List<dynamic> list, {String? excludeId}) {
+    final List<Video> result = [];
+    for (final item in list) {
+      if (item is! Map) continue;
+      final vid = item['id'] as String?;
+      if (vid == null || vid.isEmpty || vid == excludeId) continue;
+      final rawTitle = item['title'] as String? ?? 'Unknown Title';
+      final rawAuthor = item['author'] as String? ?? 'Unknown Artist';
+      final cleanA = CanonicalSongDedup.cleanArtist(rawAuthor);
+      final author = cleanA.isNotEmpty ? cleanA : rawAuthor;
+      final t = CanonicalSongDedup.sanitizeDisplayTitle(
+        rawTitle,
+        artist: author,
+      );
+      final durSec = item['duration'] != null
+          ? int.tryParse(item['duration'].toString())
+          : null;
+      final track = Video(
+        VideoId(vid),
+        t,
+        author,
+        ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+        DateTime.now(),
+        '',
+        null,
+        '',
+        durSec != null ? Duration(seconds: durSec) : null,
+        ThumbnailSet(vid),
+        null,
+        Engagement(0, null, null),
+        false,
+      );
+      if (CanonicalSongDedup.isGenuineSong(track)) {
+        result.add(track);
+      }
+    }
+    return result;
   }
 }
