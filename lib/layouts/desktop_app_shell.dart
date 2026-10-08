@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../screens/home_screen.dart';
 import '../widgets/desktop/desktop_resize_divider.dart';
 import '../widgets/desktop/desktop_now_playing_bar.dart';
+import '../widgets/desktop/desktop_left_sidebar.dart';
 import 'desktop_layout_state.dart';
 
 /// Spotify-grade 3-Column Desktop Application Shell.
@@ -47,7 +48,7 @@ class DesktopAppShell extends StatelessWidget {
                         return SizedBox(
                           width: width,
                           child: RepaintBoundary(
-                            child: DesktopLeftSidebarPlaceholder(width: width),
+                            child: DesktopLeftSidebar(width: width),
                           ),
                         );
                       },
