@@ -340,7 +340,9 @@ class DataSnapshotService {
       } else {
         // 1. Restore Playlists
         if (playlists.isNotEmpty) {
-          final playlistsFile = File('${primaryDir.path}/custom_playlists.json');
+          final playlistsFile = File(
+            '${primaryDir.path}/custom_playlists.json',
+          );
           await playlistsFile.writeAsString(
             json.encode(playlists),
             flush: true,
