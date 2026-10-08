@@ -11,6 +11,7 @@ import '../widgets/animated_equalizer.dart';
 import '../widgets/bug_report_button.dart';
 import 'profile_screen.dart';
 import 'album_screen.dart';
+import 'dilse_capsule_screen.dart';
 import '../models/jio_album.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -465,6 +466,46 @@ class _HomeScreenState extends State<HomeScreen>
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFE040FB), Color(0xFF1DB954)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFFE040FB,
+                                  ).withValues(alpha: 0.35),
+                                  blurRadius: 8,
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.auto_awesome_rounded,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                          ),
+                          tooltip: 'DilSe Capsule',
+                          onPressed: () {
+                            HapticFeedback.mediumImpact();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const DilSeCapsuleScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 8),
                         const BugReportButton(),
                         const SizedBox(width: 8),
                         GestureDetector(
