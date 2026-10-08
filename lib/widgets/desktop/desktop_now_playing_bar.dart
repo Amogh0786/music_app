@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import '../../layouts/desktop_layout_state.dart';
 import '../../services/music_service.dart';
+import '../../screens/player_screen.dart';
 
 /// Spotify-grade 90px Edge-to-Edge Bottom Now Playing Deck (#now-playing-bar).
 ///
@@ -103,63 +104,78 @@ class _DesktopTrackInfoSection extends StatelessWidget {
 
         return Row(
           children: [
-            // 56x56 Squircle Album Artwork
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6.0),
-              child: Container(
-                width: 56.0,
-                height: 56.0,
-                color: const Color(0xFF161622),
-                child: artworkUrl.isNotEmpty
-                    ? Image.network(
-                        artworkUrl,
-                        fit: BoxFit.cover,
-                        cacheWidth: 120,
-                        cacheHeight: 120,
-                        errorBuilder: (_, _, _) => const Icon(
-                          Icons.music_note_rounded,
-                          color: Colors.white38,
-                          size: 24.0,
-                        ),
-                      )
-                    : const Icon(
-                        Icons.music_note_rounded,
-                        color: Colors.white38,
-                        size: 24.0,
-                      ),
-              ),
-            ),
-            const SizedBox(width: 12.0),
-
-            // Track Title & Artist Name
+            // Clickable 56x56 Squircle Album Artwork & Title
             Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    song.title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.2,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const PlayerScreen()),
+                    );
+                  },
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6.0),
+                        child: Container(
+                          width: 56.0,
+                          height: 56.0,
+                          color: const Color(0xFF161622),
+                          child: artworkUrl.isNotEmpty
+                              ? Image.network(
+                                  artworkUrl,
+                                  fit: BoxFit.cover,
+                                  cacheWidth: 120,
+                                  cacheHeight: 120,
+                                  errorBuilder: (_, _, _) => const Icon(
+                                    Icons.music_note_rounded,
+                                    color: Colors.white38,
+                                    size: 24.0,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.music_note_rounded,
+                                  color: Colors.white38,
+                                  size: 24.0,
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 12.0),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              song.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.2,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 3.0),
+                            Text(
+                              song.author,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.65),
+                                fontSize: 12.0,
+                                fontWeight: FontWeight.w400,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 3.0),
-                  Text(
-                    song.author,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.65),
-                      fontSize: 12.0,
-                      fontWeight: FontWeight.w400,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                ),
               ),
             ),
 
@@ -443,6 +459,7 @@ class _DesktopUtilitiesSectionState extends State<_DesktopUtilitiesSection> {
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
       children: [
         // Synced Lyrics Toggle
         ValueListenableBuilder<DesktopContextTab>(
@@ -453,6 +470,12 @@ class _DesktopUtilitiesSectionState extends State<_DesktopUtilitiesSection> {
               builder: (context, isVisible, _) {
                 final active = isVisible && tab == DesktopContextTab.lyrics;
                 return IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.all(4.0),
+                  constraints: const BoxConstraints(
+                    minWidth: 28.0,
+                    minHeight: 28.0,
+                  ),
                   tooltip: 'Lyrics',
                   icon: Icon(
                     Icons.lyrics_rounded,
@@ -485,6 +508,12 @@ class _DesktopUtilitiesSectionState extends State<_DesktopUtilitiesSection> {
               builder: (context, isVisible, _) {
                 final active = isVisible && tab == DesktopContextTab.queue;
                 return IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.all(4.0),
+                  constraints: const BoxConstraints(
+                    minWidth: 28.0,
+                    minHeight: 28.0,
+                  ),
                   tooltip: 'Queue',
                   icon: Icon(
                     Icons.queue_music_rounded,
@@ -506,7 +535,7 @@ class _DesktopUtilitiesSectionState extends State<_DesktopUtilitiesSection> {
           },
         ),
 
-        const SizedBox(width: 8.0),
+        const SizedBox(width: 2.0),
 
         // Volume Mute / Unmute Button
         StreamBuilder<double>(
@@ -519,6 +548,12 @@ class _DesktopUtilitiesSectionState extends State<_DesktopUtilitiesSection> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.all(4.0),
+                  constraints: const BoxConstraints(
+                    minWidth: 28.0,
+                    minHeight: 28.0,
+                  ),
                   tooltip: isMuted ? 'Unmute' : 'Mute',
                   icon: Icon(
                     isMuted
@@ -541,9 +576,9 @@ class _DesktopUtilitiesSectionState extends State<_DesktopUtilitiesSection> {
                   },
                 ),
 
-                // Sleek 96px Volume Slider
+                // Sleek 72px Volume Slider
                 SizedBox(
-                  width: 96.0,
+                  width: 72.0,
                   child: SliderTheme(
                     data: SliderTheme.of(context).copyWith(
                       trackHeight: 3.5,
@@ -574,10 +609,13 @@ class _DesktopUtilitiesSectionState extends State<_DesktopUtilitiesSection> {
           },
         ),
 
-        const SizedBox(width: 6.0),
+        const SizedBox(width: 2.0),
 
         // Right Panel Visibility Toggle
         IconButton(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.all(4.0),
+          constraints: const BoxConstraints(minWidth: 28.0, minHeight: 28.0),
           tooltip: 'Toggle Now Playing Panel',
           icon: Icon(
             Icons.dock_rounded,
@@ -585,6 +623,27 @@ class _DesktopUtilitiesSectionState extends State<_DesktopUtilitiesSection> {
             size: 19.0,
           ),
           onPressed: () => DesktopLayoutState.toggleRightPanel(),
+        ),
+
+        const SizedBox(width: 2.0),
+
+        // Fullscreen Player Launcher
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.all(4.0),
+          constraints: const BoxConstraints(minWidth: 28.0, minHeight: 28.0),
+          tooltip: 'Open Full Player Screen',
+          icon: Icon(
+            Icons.open_in_full_rounded,
+            color: Colors.white.withValues(alpha: 0.6),
+            size: 17.0,
+          ),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PlayerScreen()),
+            );
+          },
         ),
       ],
     );

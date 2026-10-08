@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../layouts/desktop_layout_state.dart';
 
-/// Interactive vertical resize splitter between the Left Sidebar and Center Viewport.
+/// Interactive vertical resize splitter for Desktop Left Sidebar or Right Panel.
 ///
-/// Provides a 4px wide hit area with column resize cursor, hover highlight (#FA2D48),
-/// and drag physics that snap the sidebar to collapsed icon mode (72px) when dragged < 120px.
+/// Provides a 6px wide hit area with column resize cursor, hover highlight (#FA2D48),
+/// and smooth drag physics.
 class DesktopResizeDivider extends StatefulWidget {
-  const DesktopResizeDivider({super.key});
+  final bool isRightSide;
+
+  const DesktopResizeDivider({super.key, this.isRightSide = false});
 
   @override
   State<DesktopResizeDivider> createState() => _DesktopResizeDividerState();
@@ -30,16 +32,23 @@ class _DesktopResizeDividerState extends State<DesktopResizeDivider> {
         onHorizontalDragEnd: (_) => setState(() => _isDragging = false),
         onHorizontalDragCancel: () => setState(() => _isDragging = false),
         onHorizontalDragUpdate: (details) {
-          final currentWidth = DesktopLayoutState.leftSidebarWidth.value;
-          final targetWidth = currentWidth + details.delta.dx;
-
-          if (currentWidth <= 72.0 && details.delta.dx > 0) {
-            // Dragging out of collapsed mode: snap straight to expanded starting width
-            if (targetWidth > 120.0) {
-              DesktopLayoutState.updateLeftSidebarWidth(280.0);
-            }
+          if (widget.isRightSide) {
+            // Dragging left increases right panel width, dragging right decreases it
+            final currentWidth = DesktopLayoutState.rightPanelWidth.value;
+            final targetWidth = currentWidth - details.delta.dx;
+            DesktopLayoutState.updateRightPanelWidth(targetWidth);
           } else {
-            DesktopLayoutState.updateLeftSidebarWidth(targetWidth);
+            final currentWidth = DesktopLayoutState.leftSidebarWidth.value;
+            final targetWidth = currentWidth + details.delta.dx;
+
+            if (currentWidth <= 72.0 && details.delta.dx > 0) {
+              // Dragging out of collapsed mode: snap straight to expanded starting width
+              if (targetWidth > 120.0) {
+                DesktopLayoutState.updateLeftSidebarWidth(280.0);
+              }
+            } else {
+              DesktopLayoutState.updateLeftSidebarWidth(targetWidth);
+            }
           }
         },
         child: Container(

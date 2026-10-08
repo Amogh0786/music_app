@@ -32,6 +32,11 @@ class DesktopLayoutState {
     false,
   );
 
+  /// Width of the resizable right contextual panel (clamped between 240.0 and 460.0).
+  static final ValueNotifier<double> rightPanelWidth = ValueNotifier<double>(
+    300.0,
+  );
+
   /// Whether the right-hand Now Playing / Queue / Lyrics contextual panel is visible.
   static final ValueNotifier<bool> isRightPanelVisible = ValueNotifier<bool>(
     true,
@@ -52,6 +57,11 @@ class DesktopLayoutState {
       leftSidebarWidth.value = newWidth.clamp(72.0, 398.0);
       isLeftSidebarCollapsed.value = false;
     }
+  }
+
+  /// Updates right panel width clamped between 240.0 and 460.0.
+  static void updateRightPanelWidth(double newWidth) {
+    rightPanelWidth.value = newWidth.clamp(240.0, 460.0);
   }
 
   /// Toggles the left sidebar between expanded (280px) and collapsed (72px).

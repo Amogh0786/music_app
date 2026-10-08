@@ -7,6 +7,7 @@ import '../../services/music_service.dart';
 import '../../services/dynamic_artist_service.dart';
 import '../../services/album_color_deriver.dart';
 import '../../screens/artist_profile_screen.dart';
+import '../../screens/player_screen.dart';
 import '../animated_lyrics.dart';
 
 /// Spotify-grade 280px Adaptive Desktop Right Context Panel (#Desktop_PanelContainer_Id).
@@ -22,7 +23,6 @@ class DesktopRightPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 280.0,
       decoration: BoxDecoration(
         color: const Color(0xFF0B0B0F),
         border: Border(
@@ -129,6 +129,27 @@ class _DesktopPanelHeader extends StatelessWidget {
                     ),
                   const SizedBox(width: 4.0),
                   IconButton(
+                    tooltip: 'Open Full Player Screen',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 28,
+                      minHeight: 28,
+                    ),
+                    icon: const Icon(
+                      Icons.open_in_full_rounded,
+                      color: Colors.white70,
+                      size: 15.0,
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const PlayerScreen()),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 4.0),
+                  IconButton(
                     tooltip: 'Close panel',
                     visualDensity: VisualDensity.compact,
                     padding: EdgeInsets.zero,
@@ -218,35 +239,49 @@ class _DesktopNowPlayingTab extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
           children: [
-            // 1. 248x248 Hero Cover Art
+            // 1. 248x248 Hero Cover Art (Clickable to open Full Player Screen)
             Center(
-              child: Container(
-                width: 248.0,
-                height: 248.0,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12.0),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.4),
-                      blurRadius: 18.0,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12.0),
-                  child: Image.network(
-                    artworkUrl,
-                    width: 248.0,
-                    height: 248.0,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
-                      color: const Color(0xFF1F1F2B),
-                      child: const Center(
-                        child: Icon(
-                          Icons.music_note_rounded,
-                          color: Colors.white38,
-                          size: 48.0,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const PlayerScreen()),
+                    );
+                  },
+                  child: Tooltip(
+                    message: 'Open Full Player Screen',
+                    child: Container(
+                      width: 248.0,
+                      height: 248.0,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12.0),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.4),
+                            blurRadius: 18.0,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12.0),
+                        child: Image.network(
+                          artworkUrl,
+                          width: 248.0,
+                          height: 248.0,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            color: const Color(0xFF1F1F2B),
+                            child: const Center(
+                              child: Icon(
+                                Icons.music_note_rounded,
+                                color: Colors.white38,
+                                size: 48.0,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),

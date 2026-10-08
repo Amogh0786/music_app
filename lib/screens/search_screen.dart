@@ -7,6 +7,7 @@ import '../services/preferences_service.dart';
 import '../services/dynamic_artist_service.dart';
 import '../services/canonical_song_dedup.dart';
 import '../models/jio_album.dart';
+import '../layouts/desktop_layout_state.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/category_card.dart';
 import '../widgets/artist_card.dart';
@@ -188,6 +189,23 @@ class SearchScreenState extends State<SearchScreen>
         ? _prefs.preferredLanguages.first
         : 'Telugu';
     _loadBrowseAlbums(_selectedAlbumBrowseLang);
+    DesktopLayoutState.globalSearchQuery.addListener(
+      _onGlobalSearchQueryChanged,
+    );
+    if (DesktopLayoutState.globalSearchQuery.value.isNotEmpty) {
+      _searchController.text = DesktopLayoutState.globalSearchQuery.value;
+      _performSearch(DesktopLayoutState.globalSearchQuery.value);
+    }
+  }
+
+  void _onGlobalSearchQueryChanged() {
+    final query = DesktopLayoutState.globalSearchQuery.value;
+    if (query.isNotEmpty && _searchController.text != query) {
+      _searchController.text = query;
+      _performSearch(query);
+    } else if (query.isEmpty && _searchController.text.isNotEmpty) {
+      clearSearchAndDismiss();
+    }
   }
 
   void _onFocusChanged() {
@@ -227,6 +245,9 @@ class SearchScreenState extends State<SearchScreen>
 
   @override
   void dispose() {
+    DesktopLayoutState.globalSearchQuery.removeListener(
+      _onGlobalSearchQueryChanged,
+    );
     _debounceTimer?.cancel();
     _prefs.removeListener(_onPrefsChanged);
     _musicService.removeListener(_onPrefsChanged);

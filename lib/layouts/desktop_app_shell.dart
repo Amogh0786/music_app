@@ -58,22 +58,38 @@ class DesktopAppShell extends StatelessWidget {
                         },
                       ),
 
-                      // Tactical Resize Divider
-                      const DesktopResizeDivider(),
+                      // Tactical Left Resize Divider
+                      const DesktopResizeDivider(isRightSide: false),
 
                       // Center Main Content Viewport (Expanded flex 1)
                       const Expanded(
                         child: RepaintBoundary(child: DesktopMainViewport()),
                       ),
 
-                      // Right Contextual Panel (280px Toggleable)
+                      // Right Contextual Panel with Resizer (Toggleable & Resizable)
                       ValueListenableBuilder<bool>(
                         valueListenable: DesktopLayoutState.isRightPanelVisible,
                         builder: (context, isVisible, _) {
                           if (!isVisible) return const SizedBox.shrink();
-                          return const SizedBox(
-                            width: 280.0,
-                            child: RepaintBoundary(child: DesktopRightPanel()),
+
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const DesktopResizeDivider(isRightSide: true),
+                              ValueListenableBuilder<double>(
+                                valueListenable:
+                                    DesktopLayoutState.rightPanelWidth,
+                                builder: (context, width, _) {
+                                  return SizedBox(
+                                    width: width,
+                                    child: const RepaintBoundary(
+                                      child: DesktopRightPanel(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
                           );
                         },
                       ),
