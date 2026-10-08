@@ -11,9 +11,19 @@ import 'spotify_import_screen.dart';
 import 'custom_playlist_screen.dart';
 import '../widgets/animated_equalizer.dart';
 import '../widgets/playlist_action_menu.dart';
+import '../widgets/dilse_scrollbar.dart';
+import '../services/device_audio_service.dart';
 
 /// Available navigation sections in the DilSe Library.
-enum LibrarySection { playlists, liked, downloaded, albums, spotify, history }
+enum LibrarySection {
+  playlists,
+  liked,
+  downloaded,
+  albums,
+  spotify,
+  history,
+  device,
+}
 
 extension LibrarySectionExt on LibrarySection {
   String get title {
@@ -30,6 +40,8 @@ extension LibrarySectionExt on LibrarySection {
         return 'Spotify Imports';
       case LibrarySection.history:
         return 'Listening History';
+      case LibrarySection.device:
+        return 'Device Audio';
     }
   }
 
@@ -47,6 +59,8 @@ extension LibrarySectionExt on LibrarySection {
         return 'Spotify';
       case LibrarySection.history:
         return 'History';
+      case LibrarySection.device:
+        return 'Device';
     }
   }
 
@@ -64,6 +78,8 @@ extension LibrarySectionExt on LibrarySection {
         return Icons.sync_alt_rounded;
       case LibrarySection.history:
         return Icons.history_rounded;
+      case LibrarySection.device:
+        return Icons.sd_storage_rounded;
     }
   }
 }
@@ -202,6 +218,8 @@ class _LibraryScreenState extends State<LibraryScreen>
         return _musicService.downloadedSongs.length;
       case LibrarySection.albums:
         return _getDerivedAlbums().length;
+      case LibrarySection.device:
+        return DeviceAudioService().deviceSongs.length;
       case LibrarySection.spotify:
         return _getSpotifyPlaylists().length;
       case LibrarySection.history:
@@ -829,6 +847,8 @@ class _LibraryScreenState extends State<LibraryScreen>
         return _buildDownloadedSection();
       case LibrarySection.albums:
         return _buildAlbumsSection(isWide: isWide);
+      case LibrarySection.device:
+        return _buildDeviceSection();
       case LibrarySection.spotify:
         return _buildSpotifyImportsSection(isWide: isWide);
       case LibrarySection.history:
@@ -1284,105 +1304,107 @@ class _LibraryScreenState extends State<LibraryScreen>
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 160, top: 10),
-      itemCount: liked.length + 1,
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return _buildActionHeader(
-            count: liked.length,
-            onPlayAll: () {
-              HapticFeedback.lightImpact();
-              _musicService.playLikedSong(liked.first);
-            },
-            onShuffle: () {
-              HapticFeedback.lightImpact();
-              _musicService.toggleShuffle();
-              _musicService.playLikedSong(liked.first);
-            },
-          );
-        }
+    return DilSeScrollbar(
+      child: ListView.builder(
+        padding: const EdgeInsets.only(bottom: 160, top: 10),
+        itemCount: liked.length + 1,
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return _buildActionHeader(
+              count: liked.length,
+              onPlayAll: () {
+                HapticFeedback.lightImpact();
+                _musicService.playLikedSong(liked.first);
+              },
+              onShuffle: () {
+                HapticFeedback.lightImpact();
+                _musicService.toggleShuffle();
+                _musicService.playLikedSong(liked.first);
+              },
+            );
+          }
 
-        final song = liked[index - 1];
-        final songId = song['id'] ?? '';
-        final isCurrent = _musicService.currentSong?.id.value == songId;
+          final song = liked[index - 1];
+          final songId = song['id'] ?? '';
+          final isCurrent = _musicService.currentSong?.id.value == songId;
 
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          leading: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: SizedBox(
-              width: 52,
-              height: 52,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    song['thumbnail'] ?? '',
-                    fit: BoxFit.cover,
-                    cacheWidth: 120,
-                    cacheHeight: 120,
-                    errorBuilder: (_, _, _) => Container(
-                      color: const Color(0xFF1E1E28),
-                      child: const Icon(
-                        Icons.music_note,
-                        color: Colors.white54,
-                      ),
-                    ),
-                  ),
-                  if (isCurrent)
-                    Container(
-                      color: Colors.black54,
-                      child: Center(
-                        child: AnimatedEqualizer(
-                          isPlaying: _musicService.isPlaying,
-                          size: 22,
+          return ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
+            leading: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: 52,
+                height: 52,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(
+                      song['thumbnail'] ?? '',
+                      fit: BoxFit.cover,
+                      cacheWidth: 120,
+                      cacheHeight: 120,
+                      errorBuilder: (_, _, _) => Container(
+                        color: const Color(0xFF1E1E28),
+                        child: const Icon(
+                          Icons.music_note,
+                          color: Colors.white54,
                         ),
                       ),
                     ),
-                ],
+                    if (isCurrent)
+                      Container(
+                        color: Colors.black54,
+                        child: Center(
+                          child: AnimatedEqualizer(
+                            isPlaying: _musicService.isPlaying,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
-          title: Text(
-            song['title'] ?? '',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-              fontSize: 14.5,
-              letterSpacing: -0.2,
+            title: Text(
+              song['title'] ?? '',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                fontSize: 14.5,
+                letterSpacing: -0.2,
+              ),
             ),
-          ),
-          subtitle: Text(
-            song['author'] ?? '',
-            maxLines: 1,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.6),
-              fontSize: 12.5,
+            subtitle: Text(
+              song['author'] ?? '',
+              maxLines: 1,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 12.5,
+              ),
             ),
-          ),
-          trailing: IconButton(
-            icon: const Icon(
-              Icons.favorite_rounded,
-              color: Color(0xFFFA2D48),
-              size: 22,
+            trailing: IconButton(
+              icon: const Icon(
+                Icons.favorite_rounded,
+                color: Color(0xFFFA2D48),
+                size: 22,
+              ),
+              onPressed: () {
+                HapticFeedback.selectionClick();
+                _musicService.removeLikedSong(song['id'] ?? '');
+              },
             ),
-            onPressed: () {
-              HapticFeedback.selectionClick();
-              _musicService.removeLikedSong(song['id'] ?? '');
+            onTap: () {
+              HapticFeedback.lightImpact();
+              _musicService.playLikedSong(song);
             },
-          ),
-          onTap: () {
-            HapticFeedback.lightImpact();
-            _musicService.playLikedSong(song);
-          },
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -1402,181 +1424,540 @@ class _LibraryScreenState extends State<LibraryScreen>
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 160, top: 10),
-      itemCount: downloaded.length + 1,
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return _buildActionHeader(
-            count: downloaded.length,
-            onPlayAll: () {
-              HapticFeedback.lightImpact();
-              _musicService.playDownloadedSong(downloaded.first);
-            },
-            onShuffle: () {
-              HapticFeedback.lightImpact();
-              _musicService.toggleShuffle();
-              _musicService.playDownloadedSong(downloaded.first);
-            },
-          );
-        }
+    return DilSeScrollbar(
+      child: ListView.builder(
+        padding: const EdgeInsets.only(bottom: 160, top: 10),
+        itemCount: downloaded.length + 1,
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return _buildActionHeader(
+              count: downloaded.length,
+              onPlayAll: () {
+                HapticFeedback.lightImpact();
+                _musicService.playDownloadedSong(downloaded.first);
+              },
+              onShuffle: () {
+                HapticFeedback.lightImpact();
+                _musicService.toggleShuffle();
+                _musicService.playDownloadedSong(downloaded.first);
+              },
+            );
+          }
 
-        final song = downloaded[index - 1];
-        final songId = song['id'] ?? '';
-        final sizeBytes = _songFileSizes[songId] ?? 0;
-        final sizeFormatted = _formatBytes(sizeBytes);
-        final isCurrent = _musicService.currentSong?.id.value == songId;
+          final song = downloaded[index - 1];
+          final songId = song['id'] ?? '';
+          final sizeBytes = _songFileSizes[songId] ?? 0;
+          final sizeFormatted = _formatBytes(sizeBytes);
+          final isCurrent = _musicService.currentSong?.id.value == songId;
 
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          leading: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: SizedBox(
-              width: 52,
-              height: 52,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    song['thumbnail'] ?? '',
-                    cacheWidth: 120,
-                    cacheHeight: 120,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
-                      color: const Color(0xFF1E1E28),
-                      child: const Icon(
-                        Icons.music_note,
-                        color: Colors.white54,
-                      ),
-                    ),
-                  ),
-                  if (isCurrent)
-                    Container(
-                      color: Colors.black54,
-                      child: Center(
-                        child: AnimatedEqualizer(
-                          isPlaying: _musicService.isPlaying,
-                          size: 22,
+          return ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
+            leading: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: 52,
+                height: 52,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(
+                      song['thumbnail'] ?? '',
+                      cacheWidth: 120,
+                      cacheHeight: 120,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        color: const Color(0xFF1E1E28),
+                        child: const Icon(
+                          Icons.music_note,
+                          color: Colors.white54,
                         ),
                       ),
                     ),
-                ],
-              ),
-            ),
-          ),
-          title: Text(
-            song['title'] ?? 'Unknown',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-              fontSize: 14.5,
-              letterSpacing: -0.2,
-            ),
-          ),
-          subtitle: Row(
-            children: [
-              Flexible(
-                child: Text(
-                  song['author'] ?? 'Unknown Artist',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontSize: 12.5,
-                  ),
+                    if (isCurrent)
+                      Container(
+                        color: Colors.black54,
+                        child: Center(
+                          child: AnimatedEqualizer(
+                            isPlaying: _musicService.isPlaying,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              if (sizeBytes > 0) ...[
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 1.5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white12,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
+            ),
+            title: Text(
+              song['title'] ?? 'Unknown',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                fontSize: 14.5,
+                letterSpacing: -0.2,
+              ),
+            ),
+            subtitle: Row(
+              children: [
+                Flexible(
                   child: Text(
-                    sizeFormatted,
+                    song['author'] ?? 'Unknown Artist',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+                if (sizeBytes > 0) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 1.5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white12,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      sizeFormatted,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.offline_pin_rounded,
+                  color: Color(0xFF1DB954),
+                  size: 20,
+                ),
+                IconButton(
+                  icon: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: Colors.white38,
+                    size: 20,
+                  ),
+                  onPressed: () async {
+                    HapticFeedback.mediumImpact();
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        backgroundColor: const Color(0xFF1E1E28),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        title: const Text(
+                          'Delete Download?',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        content: Text(
+                          'Remove "${song['title']}" from offline storage?',
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text(
+                              'Delete',
+                              style: TextStyle(
+                                color: Colors.redAccent,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      await _musicService.deleteDownloadedSong(song['id']!);
+                    }
+                  },
+                ),
+              ],
+            ),
+            onTap: () {
+              HapticFeedback.lightImpact();
+              _musicService.playDownloadedSong(song);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAudioBadge(String format) {
+    return Container(
+      color: const Color(0xFF242436),
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.music_note_rounded, size: 20, color: Colors.white70),
+          const SizedBox(height: 2),
+          Text(
+            format,
+            style: const TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              color: Colors.white54,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeviceSection() {
+    final deviceService = DeviceAudioService();
+    return AnimatedBuilder(
+      animation: deviceService,
+      builder: (context, _) {
+        final songs = deviceService.deviceSongs;
+        final isScanning = deviceService.isScanning;
+
+        if (isScanning) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Color(0xFFFA2D48),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    deviceService.scanStatusMessage.isNotEmpty
+                        ? deviceService.scanStatusMessage
+                        : 'Scanning device storage...',
+                    textAlign: TextAlign.center,
                     style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 10,
+                      color: Colors.white,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-              ],
-            ],
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.offline_pin_rounded,
-                color: Color(0xFF1DB954),
-                size: 20,
+                ],
               ),
-              IconButton(
-                icon: const Icon(
-                  Icons.delete_outline_rounded,
-                  color: Colors.white38,
-                  size: 20,
-                ),
-                onPressed: () async {
-                  HapticFeedback.mediumImpact();
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      backgroundColor: const Color(0xFF1E1E28),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      title: const Text(
-                        'Delete Download?',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      content: Text(
-                        'Remove "${song['title']}" from offline storage?',
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Cancel'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text(
-                            'Delete',
-                            style: TextStyle(
-                              color: Colors.redAccent,
-                              fontWeight: FontWeight.bold,
-                            ),
+            ),
+          );
+        }
+
+        if (songs.isEmpty) {
+          return Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.06),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.sd_storage_rounded,
+                      size: 36,
+                      color: Colors.white54,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'No on-device music found',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Play local audio files (.mp3, .m4a, .flac, .wav, .opus) directly from your device storage with zero streaming data.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: const Text('Scan Storage'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          deviceService.scanDeviceStorage();
+                        },
+                      ),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.folder_open_rounded, size: 18),
+                        label: const Text('Pick Folder'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.25),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          deviceService.pickDirectory();
+                        },
+                      ),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.file_upload_rounded, size: 18),
+                        label: const Text('Add Files'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.25),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          deviceService.pickAudioFiles();
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return DilSeScrollbar(
+          child: ListView.builder(
+            padding: const EdgeInsets.only(bottom: 160, top: 10),
+            itemCount: songs.length + 2,
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return _buildActionHeader(
+                  count: songs.length,
+                  onPlayAll: () {
+                    HapticFeedback.lightImpact();
+                    _musicService.playDeviceSong(songs.first);
+                  },
+                  onShuffle: () {
+                    HapticFeedback.lightImpact();
+                    _musicService.toggleShuffle();
+                    _musicService.playDeviceSong(songs.first);
+                  },
+                );
+              }
+
+              if (index == 1) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
+                  child: Row(
+                    children: [
+                      ActionChip(
+                        avatar: const Icon(Icons.refresh_rounded, size: 14),
+                        label: const Text(
+                          'Rescan',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        onPressed: () => deviceService.scanDeviceStorage(),
+                        backgroundColor: Colors.white.withValues(alpha: 0.08),
+                        side: BorderSide.none,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ActionChip(
+                        avatar: const Icon(Icons.folder_open_rounded, size: 14),
+                        label: const Text(
+                          'Folder',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        onPressed: () => deviceService.pickDirectory(),
+                        backgroundColor: Colors.white.withValues(alpha: 0.08),
+                        side: BorderSide.none,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ActionChip(
+                        avatar: const Icon(Icons.file_upload_rounded, size: 14),
+                        label: const Text(
+                          'Add Files',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        onPressed: () => deviceService.pickAudioFiles(),
+                        backgroundColor: Colors.white.withValues(alpha: 0.08),
+                        side: BorderSide.none,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              final song = songs[index - 2];
+              final songId = song['id'] ?? '';
+              final isCurrent = _musicService.currentSong?.id.value == songId;
+              final format = song['format'] ?? 'AUDIO';
+              final rawSize = int.tryParse(song['fileSize'] ?? '0') ?? 0;
+              final sizeFormatted = _formatBytes(rawSize);
+
+              return ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    color: const Color(0xFF1E1E28),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (song['thumbnail'] != null &&
+                            song['thumbnail']!.isNotEmpty)
+                          (song['thumbnail']!.startsWith('file://')
+                              ? Image.file(
+                                  File(
+                                    song['thumbnail']!.replaceFirst(
+                                      'file://',
+                                      '',
+                                    ),
+                                  ),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) =>
+                                      _buildAudioBadge(format),
+                                )
+                              : Image.network(
+                                  song['thumbnail']!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) =>
+                                      _buildAudioBadge(format),
+                                ))
+                        else
+                          _buildAudioBadge(format),
+                        if (isCurrent)
+                          Container(
+                            color: Colors.black54,
+                            child: Center(
+                              child: AnimatedEqualizer(
+                                isPlaying: _musicService.isPlaying,
+                                color: Theme.of(context).primaryColor,
+                                size: 20,
+                              ),
+                            ),
+                          ),
                       ],
                     ),
+                  ),
+                ),
+                title: Text(
+                  song['title'] ?? 'Unknown Title',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isCurrent
+                        ? Theme.of(context).primaryColor
+                        : Colors.white,
+                    fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 15,
+                  ),
+                ),
+                subtitle: Text(
+                  '${song['author'] ?? 'Device Audio'} • $format • $sizeFormatted',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                trailing: IconButton(
+                  icon: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: Colors.white38,
+                    size: 20,
+                  ),
+                  tooltip: 'Remove from device index',
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    final id = song['id'];
+                    if (id != null) {
+                      deviceService.removeSong(id);
+                    }
+                  },
+                ),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  _musicService.playDeviceSong(
+                    song,
+                    queue: songs,
+                    startIndex: index - 2,
                   );
-                  if (confirm == true) {
-                    await _musicService.deleteDownloadedSong(song['id']!);
-                  }
                 },
-              ),
-            ],
+              );
+            },
           ),
-          onTap: () {
-            HapticFeedback.lightImpact();
-            _musicService.playDownloadedSong(song);
-          },
         );
       },
     );
@@ -2225,123 +2606,125 @@ class _LibraryScreenState extends State<LibraryScreen>
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 160, top: 10),
-      itemCount: history.length + 1,
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Flexible(
-                  child: Text(
-                    '${history.length} Recently Played',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                ),
-                TextButton.icon(
-                  icon: const Icon(
-                    Icons.delete_sweep_rounded,
-                    size: 16,
-                    color: Colors.white54,
-                  ),
-                  label: const Text(
-                    'Clear',
-                    style: TextStyle(color: Colors.white54, fontSize: 13),
-                  ),
-                  onPressed: () {
-                    HapticFeedback.lightImpact();
-                    _prefs.clearListeningHistory();
-                  },
-                ),
-              ],
-            ),
-          );
-        }
-
-        final song = history[index - 1];
-        final songId = song['id'] ?? '';
-        final isCurrent = _musicService.currentSong?.id.value == songId;
-
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          leading: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: SizedBox(
-              width: 52,
-              height: 52,
-              child: Stack(
-                fit: StackFit.expand,
+    return DilSeScrollbar(
+      child: ListView.builder(
+        padding: const EdgeInsets.only(bottom: 160, top: 10),
+        itemCount: history.length + 1,
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Image.network(
-                    song['thumbnail'] ?? '',
-                    fit: BoxFit.cover,
-                    cacheWidth: 120,
-                    cacheHeight: 120,
-                    errorBuilder: (_, _, _) => Container(
-                      color: const Color(0xFF1E1E28),
-                      child: const Icon(
-                        Icons.music_note,
-                        color: Colors.white54,
+                  Flexible(
+                    child: Text(
+                      '${history.length} Recently Played',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.2,
                       ),
                     ),
                   ),
-                  if (isCurrent)
-                    Container(
-                      color: Colors.black54,
-                      child: Center(
-                        child: AnimatedEqualizer(
-                          isPlaying: _musicService.isPlaying,
-                          size: 22,
+                  TextButton.icon(
+                    icon: const Icon(
+                      Icons.delete_sweep_rounded,
+                      size: 16,
+                      color: Colors.white54,
+                    ),
+                    label: const Text(
+                      'Clear',
+                      style: TextStyle(color: Colors.white54, fontSize: 13),
+                    ),
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      _prefs.clearListeningHistory();
+                    },
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final song = history[index - 1];
+          final songId = song['id'] ?? '';
+          final isCurrent = _musicService.currentSong?.id.value == songId;
+
+          return ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
+            leading: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: 52,
+                height: 52,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(
+                      song['thumbnail'] ?? '',
+                      fit: BoxFit.cover,
+                      cacheWidth: 120,
+                      cacheHeight: 120,
+                      errorBuilder: (_, _, _) => Container(
+                        color: const Color(0xFF1E1E28),
+                        child: const Icon(
+                          Icons.music_note,
+                          color: Colors.white54,
                         ),
                       ),
                     ),
-                ],
+                    if (isCurrent)
+                      Container(
+                        color: Colors.black54,
+                        child: Center(
+                          child: AnimatedEqualizer(
+                            isPlaying: _musicService.isPlaying,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
-          title: Text(
-            song['title'] ?? 'Unknown Track',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-              fontSize: 14.5,
-              letterSpacing: -0.2,
+            title: Text(
+              song['title'] ?? 'Unknown Track',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                fontSize: 14.5,
+                letterSpacing: -0.2,
+              ),
             ),
-          ),
-          subtitle: Text(
-            song['author'] ?? 'Unknown Artist',
-            maxLines: 1,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.6),
-              fontSize: 12.5,
+            subtitle: Text(
+              song['author'] ?? 'Unknown Artist',
+              maxLines: 1,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 12.5,
+              ),
             ),
-          ),
-          trailing: const Icon(
-            Icons.play_circle_fill_rounded,
-            color: Colors.white38,
-            size: 24,
-          ),
-          onTap: () {
-            HapticFeedback.lightImpact();
-            _musicService.playHistorySong(song);
-          },
-        );
-      },
+            trailing: const Icon(
+              Icons.play_circle_fill_rounded,
+              color: Colors.white38,
+              size: 24,
+            ),
+            onTap: () {
+              HapticFeedback.lightImpact();
+              _musicService.playHistorySong(song);
+            },
+          );
+        },
+      ),
     );
   }
 

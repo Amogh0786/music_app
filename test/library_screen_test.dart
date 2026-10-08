@@ -384,4 +384,24 @@ void main() {
       expect(find.text('Late Night Lo-Fi'), findsNothing);
     },
   );
+
+  testWidgets('LibraryScreen renders Device Audio section properly', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    await tester.pumpWidget(const MaterialApp(home: LibraryScreen()));
+    await tester.pumpAndSettle();
+
+    // Tap on Device section in sidebar
+    await tester.tap(find.text('Device Audio'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No on-device music found'), findsOneWidget);
+    expect(find.text('Scan Storage'), findsOneWidget);
+    expect(find.text('Pick Folder'), findsOneWidget);
+    expect(find.text('Add Files'), findsOneWidget);
+  });
 }

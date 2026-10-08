@@ -36,11 +36,12 @@ class DilSeScrollbar extends StatefulWidget {
 class _DilSeScrollbarState extends State<DilSeScrollbar>
     with SingleTickerProviderStateMixin {
   ScrollController? _internalController;
-  ScrollController get _effectiveController =>
-      widget.controller ??
-      _internalController ??
-      (PrimaryScrollController.maybeOf(context) ??
-          (_internalController = ScrollController()));
+  ScrollController get _effectiveController {
+    if (widget.controller != null) return widget.controller!;
+    final primary = PrimaryScrollController.maybeOf(context);
+    if (primary != null && primary.hasClients) return primary;
+    return _internalController ??= ScrollController();
+  }
 
   double _scrollProgress = 0.0; // 0.0 to 1.0
   double _maxScrollExtent = 0.0;
@@ -57,9 +58,6 @@ class _DilSeScrollbarState extends State<DilSeScrollbar>
   @override
   void initState() {
     super.initState();
-    if (widget.controller == null) {
-      _internalController = ScrollController();
-    }
   }
 
   @override
