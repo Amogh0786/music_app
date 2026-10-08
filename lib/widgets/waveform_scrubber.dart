@@ -54,13 +54,22 @@ class _WaveformScrubberState extends State<WaveformScrubber> {
     });
   }
 
-  String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes.remainder(60);
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+  String _formatDuration(Duration? duration) {
+    if (duration == null) return '0:00';
+    final nonNegative = duration.isNegative ? Duration.zero : duration;
+    final hours = nonNegative.inHours;
+    final minutes = nonNegative.inMinutes.remainder(60);
+    final seconds = (nonNegative.inSeconds.remainder(
+      60,
+    )).toString().padLeft(2, '0');
+    if (hours > 0) {
+      return '$hours:${minutes.toString().padLeft(2, '0')}:$seconds';
+    }
     return '$minutes:$seconds';
   }
 
   void _handleSeek(double localDx, double width) {
+    if (widget.duration.inMilliseconds <= 0 || width <= 0) return;
     final progress = (localDx / width).clamp(0.0, 1.0);
     setState(() {
       _dragProgress = progress;
@@ -82,16 +91,19 @@ class _WaveformScrubberState extends State<WaveformScrubber> {
   @override
   Widget build(BuildContext context) {
     final totalMs = widget.duration.inMilliseconds;
+    final bool hasValidDuration = totalMs > 0;
     final currentMs = widget.position.inMilliseconds;
-    final liveProgress = totalMs > 0
+    final liveProgress = hasValidDuration
         ? (currentMs / totalMs).clamp(0.0, 1.0)
         : 0.0;
-    final activeProgress = _dragProgress ?? liveProgress;
+    final activeProgress = hasValidDuration
+        ? (_dragProgress ?? liveProgress)
+        : 0.0;
 
-    final displayPosition = _dragProgress != null
+    final displayPosition = _dragProgress != null && hasValidDuration
         ? Duration(milliseconds: (_dragProgress! * totalMs).round())
         : widget.position;
-    final remaining = widget.duration > displayPosition
+    final remaining = hasValidDuration && widget.duration > displayPosition
         ? widget.duration - displayPosition
         : Duration.zero;
 
@@ -105,25 +117,33 @@ class _WaveformScrubberState extends State<WaveformScrubber> {
 
             return GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onHorizontalDragStart: (details) {
-                _isDragging = true;
-                _handleSeek(details.localPosition.dx, trackWidth);
-                HapticFeedback.lightImpact();
-              },
-              onHorizontalDragUpdate: (details) {
-                _handleSeek(details.localPosition.dx, trackWidth);
-              },
-              onHorizontalDragEnd: (_) => _commitSeek(),
+              onHorizontalDragStart: hasValidDuration
+                  ? (details) {
+                      _isDragging = true;
+                      _handleSeek(details.localPosition.dx, trackWidth);
+                      HapticFeedback.lightImpact();
+                    }
+                  : null,
+              onHorizontalDragUpdate: hasValidDuration
+                  ? (details) {
+                      _handleSeek(details.localPosition.dx, trackWidth);
+                    }
+                  : null,
+              onHorizontalDragEnd: hasValidDuration
+                  ? (_) => _commitSeek()
+                  : null,
               onHorizontalDragCancel: () {
                 setState(() {
                   _isDragging = false;
                   _dragProgress = null;
                 });
               },
-              onTapDown: (details) {
-                _handleSeek(details.localPosition.dx, trackWidth);
-                _commitSeek();
-              },
+              onTapDown: hasValidDuration
+                  ? (details) {
+                      _handleSeek(details.localPosition.dx, trackWidth);
+                      _commitSeek();
+                    }
+                  : null,
               child: Container(
                 height: 44,
                 alignment: Alignment.center,
@@ -159,7 +179,7 @@ class _WaveformScrubberState extends State<WaveformScrubber> {
                 ),
               ),
               Text(
-                '-${_formatDuration(remaining)}',
+                hasValidDuration ? '-${_formatDuration(remaining)}' : '--:--',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.65),
                   fontSize: 12,

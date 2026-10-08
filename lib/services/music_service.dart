@@ -24,6 +24,7 @@ import 'widget_update_service.dart';
 import 'dynamic_artist_service.dart';
 import 'taste_matrix_scorer.dart';
 import '../models/jio_album.dart';
+import 'bug_report_service.dart';
 
 enum SearchSuggestionType { artist, song, album, history, query }
 
@@ -183,6 +184,44 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   // Crossfade & Volume Fading Engine
   bool _isCrossfading = false;
   StreamSubscription<Duration>? _positionCrossfadeSub;
+
+  int _consecutivePlaybackFailures = 0;
+
+  void _showToast(String message) {
+    try {
+      final ctx = BugReportService.instance.rootNavKey.currentContext;
+      if (ctx != null) {
+        final messenger = ScaffoldMessenger.maybeOf(ctx);
+        if (messenger != null) {
+          messenger.hideCurrentSnackBar();
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                message,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              backgroundColor: const Color(0xFF1E1E2C),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(milliseconds: 2200),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  width: 1,
+                ),
+              ),
+            ),
+          );
+        }
+      }
+    } catch (_) {}
+  }
 
   Video? get currentSong => _currentSong;
   List<Video> get playlist => _playlist;
@@ -830,7 +869,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         _durationBroadcaster.add(dur);
       });
       WebPlayerBridge.onTrackEnded.listen((_) async {
-        if (_isTransitioning || _isCrossfading || _isLoading) return;
+        if (_isTransitioning) return;
+        if (_isCrossfading) {
+          _cancelActiveFade();
+        }
         _isTransitioning = true;
         try {
           if (_loopMode == LoopMode.one && _currentSong != null) {
@@ -851,6 +893,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
               await nextSong();
             }
           } else {
+            debugPrint('[WebPlayer] Track ended. Auto-advancing to next song…');
             await nextSong();
           }
         } catch (e) {
@@ -865,11 +908,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       WebPlayerBridge.onError.listen((code) async {
         debugPrint('[WebPlayer] Error $code encountered. Handling recovery…');
         _isLoading = false;
+        _showToast('Playback error: Skipping to next track');
         notifyListeners();
-        if (_playlist.length > 1 && _currentIndex + 1 < _playlist.length) {
-          await Future.delayed(const Duration(milliseconds: 500));
-          await nextSong();
-        }
+        await Future.delayed(const Duration(milliseconds: 500));
+        await nextSong();
       });
 
       PreferencesService.onEqualizerChanged =
@@ -888,63 +930,95 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             _durationBroadcaster.add(dur);
           }
         });
-        player.playerStateStream.listen((state) async {
-          if (identical(player, _activePlayer)) {
-            notifyListeners();
-            _syncWidgetPlayback();
-          }
-          if (state.processingState == ProcessingState.completed) {
-            if (_isTransitioning ||
-                _isCrossfading ||
-                _isLoading ||
-                !identical(player, _activePlayer)) {
-              return;
+        player.playbackEventStream.listen(
+          (event) {},
+          onError: (Object error, StackTrace stackTrace) {
+            _handlePlaybackStreamError(player, error, stackTrace);
+          },
+        );
+        player.playerStateStream.listen(
+          (state) async {
+            if (identical(player, _activePlayer)) {
+              notifyListeners();
+              _syncWidgetPlayback();
             }
-            final currentPos = player.position;
-            final currentDur = player.duration;
-            if (currentDur != null &&
-                currentDur.inSeconds > 5 &&
-                (currentDur - currentPos).inSeconds > 4) {
-              debugPrint(
-                '[AudioPlayer] Ignoring spurious completion event at ${currentPos.inSeconds}s / ${currentDur.inSeconds}s',
-              );
-              return;
-            }
-            _isTransitioning = true;
-            try {
-              if (!kIsWeb && audioHandler != null) {
-                audioHandler!.notifyLoading(isLoading: true);
+            if (state.processingState == ProcessingState.completed) {
+              if (_isTransitioning) {
+                return;
               }
-              if (_loopMode == LoopMode.one) {
-                if (!_hasRepeatedOnce) {
-                  _hasRepeatedOnce = true;
+
+              // Only the active player should trigger auto-advance. Standby player completing
+              // simply means a previous fading-out track reached normal EOF.
+              if (!identical(player, _activePlayer)) {
+                return;
+              }
+
+              // If a crossfade was initiated, check if incoming player has actually started playback
+              if (_isCrossfading) {
+                if (!_standbyPlayer.playing) {
                   debugPrint(
-                    '[AudioPlayer] LoopMode.one active: repeating current track once…',
+                    '[AudioPlayer] Outgoing player completed EOF while incoming player is NOT playing: cancelling crossfade and force-advancing…',
                   );
-                  await player.seek(Duration.zero);
-                  await player.play();
+                  _cancelActiveFade();
                 } else {
                   debugPrint(
-                    '[AudioPlayer] Track completed its single repeat. Resetting repeat and advancing…',
+                    '[AudioPlayer] Outgoing player completed EOF while incoming player is already active. Ignoring completion.',
                   );
-                  _hasRepeatedOnce = false;
-                  _loopMode = LoopMode.off;
-                  notifyListeners();
+                  return;
+                }
+              }
+
+              final currentPos = player.position;
+              final currentDur = player.duration;
+              if (currentDur != null &&
+                  currentDur.inSeconds > 10 &&
+                  (currentDur - currentPos).inSeconds > 8 &&
+                  currentPos.inSeconds <
+                      (currentDur.inSeconds * 0.85).round()) {
+                debugPrint(
+                  '[AudioPlayer] Ignoring spurious completion event at ${currentPos.inSeconds}s / ${currentDur.inSeconds}s',
+                );
+                return;
+              }
+              _isTransitioning = true;
+              try {
+                if (!kIsWeb && audioHandler != null) {
+                  audioHandler!.notifyLoading(isLoading: true);
+                }
+                if (_loopMode == LoopMode.one) {
+                  if (!_hasRepeatedOnce) {
+                    _hasRepeatedOnce = true;
+                    debugPrint(
+                      '[AudioPlayer] LoopMode.one active: repeating current track once…',
+                    );
+                    await player.seek(Duration.zero);
+                    await player.play();
+                  } else {
+                    debugPrint(
+                      '[AudioPlayer] Track completed its single repeat. Resetting repeat and advancing…',
+                    );
+                    _hasRepeatedOnce = false;
+                    _loopMode = LoopMode.off;
+                    notifyListeners();
+                    await nextSong();
+                  }
+                } else {
+                  debugPrint(
+                    '[AudioPlayer] Track completed. Advancing to next song…',
+                  );
                   await nextSong();
                 }
-              } else {
-                debugPrint(
-                  '[AudioPlayer] Track completed. Advancing to next song…',
-                );
-                await nextSong();
+              } catch (e) {
+                debugPrint('[AudioPlayer] Error handling song completion: $e');
+              } finally {
+                _isTransitioning = false;
               }
-            } catch (e) {
-              debugPrint('[AudioPlayer] Error handling song completion: $e');
-            } finally {
-              _isTransitioning = false;
             }
-          }
-        });
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            _handlePlaybackStreamError(player, error, stackTrace);
+          },
+        );
       }
 
       PreferencesService.onEqualizerChanged =
@@ -998,6 +1072,83 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  String? _lastFailedSongId;
+  int _songRetryCount = 0;
+
+  Future<void> _handlePlaybackStreamError(
+    AudioPlayer player,
+    Object error,
+    StackTrace? stackTrace,
+  ) async {
+    debugPrint(
+      '[AudioPlayer] Stream error received on player (is active: ${identical(player, _activePlayer)}): $error',
+    );
+
+    // Standby player stream errors should not disrupt active playback
+    if (!identical(player, _activePlayer)) {
+      try {
+        await player.stop();
+        await player.clearAudioSources();
+      } catch (_) {}
+      return;
+    }
+
+    if (_isTransitioning) {
+      debugPrint('[AudioPlayer] Stream error ignored: transition in progress');
+      return;
+    }
+
+    final song = _currentSong;
+    if (song == null) return;
+
+    final errString = error.toString().toLowerCase();
+    final isHttpOrSourceError =
+        errString.contains('httpdatasource') ||
+        errString.contains('403') ||
+        errString.contains('source error') ||
+        errString.contains('failed to connect') ||
+        errString.contains('playbackexception') ||
+        errString.contains('response code') ||
+        errString.contains('behindlivewindow');
+
+    debugPrint(
+      '[AudioPlayer] Stream playback failure for "${song.title}": $error (isHttpOrSource: $isHttpOrSourceError, retries: $_songRetryCount)',
+    );
+
+    // Loop-breaker: If this track has already been retried once, skip to next track rather than freezing at 0:00
+    if (_lastFailedSongId == song.id.value && _songRetryCount >= 1) {
+      debugPrint(
+        '[AudioPlayer] Re-resolution limit reached for "${song.title}". Auto-advancing to next track…',
+      );
+      _lastFailedSongId = null;
+      _songRetryCount = 0;
+      _showToast('Playback error: Skipping ${song.title}');
+      await nextSong();
+      return;
+    }
+
+    _lastFailedSongId = song.id.value;
+    _songRetryCount++;
+
+    // Evict cached stream URL to force fresh stream candidate resolution
+    _webStreamUrls.remove(song.id.value);
+
+    _showToast('Stream interrupted: Reconnecting…');
+    debugPrint(
+      '[AudioPlayer] Re-resolving fresh stream candidates for "${song.title}"…',
+    );
+
+    _isTransitioning = true;
+    try {
+      await playSong(song, updateQueue: false);
+    } catch (e) {
+      debugPrint('[AudioPlayer] Stream re-resolution failed: $e');
+      await nextSong();
+    } finally {
+      _isTransitioning = false;
+    }
+  }
+
   int _fadeSession = 0;
 
   void _cancelActiveFade() {
@@ -1005,9 +1156,13 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _isCrossfading = false;
     try {
       _standbyPlayer.stop();
+      _standbyPlayer.clearAudioSources();
       _standbyPlayer.setVolume(1.0);
       _activePlayer.setVolume(1.0);
     } catch (_) {}
+    if (audioHandler is DilSeAudioHandler) {
+      (audioHandler as DilSeAudioHandler).bindPlayer(_activePlayer);
+    }
   }
 
   Future<void> _setVolume(double vol) async {
@@ -1076,11 +1231,15 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       if (_fadeSession == session) {
         try {
           await outgoingPlayer.stop();
+          await outgoingPlayer.clearAudioSources();
           await outgoingPlayer.setVolume(1.0);
         } catch (_) {}
         try {
           await incomingPlayer.setVolume(1.0);
         } catch (_) {}
+        if (audioHandler is DilSeAudioHandler) {
+          (audioHandler as DilSeAudioHandler).bindPlayer(_activePlayer);
+        }
         _isCrossfading = false;
         debugPrint('[Crossfade] Native crossfade completed successfully.');
       }
@@ -1460,24 +1619,59 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  String createPlaylist(String name) {
+  String createPlaylist(
+    String name, {
+    bool isSpotify = false,
+    String source = 'custom',
+  }) {
     final playlistId =
         '${DateTime.now().millisecondsSinceEpoch}_${_customPlaylists.length}';
-    return createPlaylistWithId(playlistId, name);
+    return createPlaylistWithId(
+      playlistId,
+      name,
+      isSpotify: isSpotify,
+      source: source,
+    );
   }
 
-  String createPlaylistWithId(String playlistId, String name) {
+  String createPlaylistWithId(
+    String playlistId,
+    String name, {
+    bool isSpotify = false,
+    String source = 'custom',
+  }) {
     // If playlist with this ID already exists, return existing
     final existingIndex = _customPlaylists.indexWhere(
       (p) => p['id'] == playlistId,
     );
     if (existingIndex != -1) {
+      if (isSpotify) {
+        _customPlaylists[existingIndex]['isSpotify'] = true;
+        _customPlaylists[existingIndex]['source'] = source;
+        saveCustomPlaylists();
+      }
       return playlistId;
     }
-    _customPlaylists.add({'id': playlistId, 'name': name, 'songs': []});
+    _customPlaylists.add({
+      'id': playlistId,
+      'name': name,
+      'songs': [],
+      'isSpotify': isSpotify,
+      'source': source,
+    });
     saveCustomPlaylists();
     notifyListeners();
     return playlistId;
+  }
+
+  void setPlaylistSource(String playlistId, {required bool isSpotify}) {
+    final idx = _customPlaylists.indexWhere((p) => p['id'] == playlistId);
+    if (idx != -1) {
+      _customPlaylists[idx]['isSpotify'] = isSpotify;
+      _customPlaylists[idx]['source'] = isSpotify ? 'spotify' : 'custom';
+      saveCustomPlaylists();
+      notifyListeners();
+    }
   }
 
   void addSongToPlaylist(String playlistId, Video song) {
@@ -3651,6 +3845,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _hasRepeatedOnce = false;
 
     if (updateQueue) {
+      _consecutivePlaybackFailures = 0;
+      _lastFailedSongId = null;
+      _songRetryCount = 0;
       final existingIndex = _playlist.indexWhere((item) => item.id == song.id);
       if (existingIndex != -1) {
         _currentIndex = existingIndex;
@@ -3796,6 +3993,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
               isHd: true,
             );
             _isLoading = false;
+            _consecutivePlaybackFailures = 0;
+            _lastFailedSongId = null;
+            _songRetryCount = 0;
             notifyListeners();
             _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
             _checkAndPreloadNextQueue();
@@ -3893,6 +4093,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
               q == AudioQualityPreset.high,
         );
         _isLoading = false;
+        _consecutivePlaybackFailures = 0;
+        _lastFailedSongId = null;
+        _songRetryCount = 0;
         notifyListeners();
         _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
         _checkAndPreloadNextQueue();
@@ -3902,11 +4105,14 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       bool playbackSourceSet = false;
 
       // 3. Mobile Native Mode (Android / iOS app):
-      // Check for direct JioSaavn CDN stream first (if user format allows)!
+      // Check for direct JioSaavn CDN stream first (if user format allows or if synthetic ID)!
+      final isSyntheticId = !CanonicalSongDedup.isLikelyYouTubeId(
+        song.id.value,
+      );
       final directStreamUrl = _webStreamUrls[song.id.value] ?? '';
       final canUseDirectCdn =
-          activeFormatPref != AudioFormatPreference.opus &&
-          directStreamUrl.isNotEmpty;
+          directStreamUrl.isNotEmpty &&
+          (isSyntheticId || activeFormatPref != AudioFormatPreference.opus);
       if (canUseDirectCdn) {
         final adaptedStreamUrl = adaptJioSaavnBitrate(
           directStreamUrl,
@@ -3942,6 +4148,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
                 activeQualityPreset == AudioQualityPreset.high,
           );
           _isLoading = false;
+          _consecutivePlaybackFailures = 0;
+          _lastFailedSongId = null;
+          _songRetryCount = 0;
           notifyListeners();
           _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
           _checkAndPreloadNextQueue();
@@ -3956,13 +4165,15 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       // Direct On-Device Multi-Candidate Resolution (Format 18 progressive AAC / itag 251)
       try {
         debugPrint(
-          '[Play] Resolving direct audio candidates on mobile device for ${song.id.value}…',
+          '[Play] Resolving direct audio candidates on mobile device for ${song.id.value} (isSynthetic: $isSyntheticId)…',
         );
         String effectiveYtId = song.id.value;
         List<StreamCandidate> candidates = [];
-        try {
-          candidates = await _resolveStreamCandidates(effectiveYtId);
-        } catch (_) {}
+        if (!isSyntheticId) {
+          try {
+            candidates = await _resolveStreamCandidates(effectiveYtId);
+          } catch (_) {}
+        }
 
         if (candidates.isEmpty && _currentSong?.id.value == song.id.value) {
           try {
@@ -3974,7 +4185,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             final ytmQuery = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
             final ytmResults = await YouTubeMusicClient()
                 .searchSongs(ytmQuery, limit: 3)
-                .timeout(const Duration(seconds: 5));
+                .timeout(const Duration(milliseconds: 3500));
             if (_currentSong?.id.value != song.id.value) return;
             if (ytmResults.isNotEmpty) {
               effectiveYtId = ytmResults.first.id.value;
@@ -3999,7 +4210,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             final ytQuery = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
             final ytResults = await _ytExplode.search
                 .search(ytQuery)
-                .timeout(const Duration(seconds: 6));
+                .timeout(const Duration(milliseconds: 3500));
             if (_currentSong?.id.value != song.id.value) return;
             for (final v in ytResults) {
               if (CanonicalSongDedup.isGenuineSong(v)) {
@@ -4190,14 +4401,31 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       if (_currentSong?.id.value != song.id.value) return;
 
       if (!playbackSourceSet) {
-        debugPrint(
-          '[Play] Could not resolve audio source for "${song.title}".',
-        );
+        _consecutivePlaybackFailures++;
         _isLoading = false;
         _isCrossfading = false;
+        if (_consecutivePlaybackFailures >= 3) {
+          debugPrint(
+            '[Play] 3 consecutive tracks failed resolution. Halting auto-advance loop to protect pipeline.',
+          );
+          _consecutivePlaybackFailures = 0;
+          _showToast('Playback stopped: Multiple tracks could not be loaded');
+          _stopPlayback();
+          return;
+        }
+
+        debugPrint(
+          '[Play] Could not resolve stream for "${song.title}". Auto-advancing to next track… (failure $_consecutivePlaybackFailures/3)',
+        );
+        _showToast('Skipping unplayable track: ${song.title}');
         notifyListeners();
+        await nextSong();
         return;
       }
+
+      _consecutivePlaybackFailures = 0;
+      _lastFailedSongId = null;
+      _songRetryCount = 0;
 
       debugPrint('[Play] Starting playback…');
       if (!kIsWeb && isCrossfade) {
@@ -5525,6 +5753,28 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   @visibleForTesting
+  int get consecutivePlaybackFailures => _consecutivePlaybackFailures;
+
+  @visibleForTesting
+  void setConsecutivePlaybackFailuresForTesting(int value) {
+    _consecutivePlaybackFailures = value;
+  }
+
+  @visibleForTesting
+  int get songRetryCount => _songRetryCount;
+
+  @visibleForTesting
+  void setSongRetryCountForTesting(int value) {
+    _songRetryCount = value;
+  }
+
+  @visibleForTesting
+  Future<void> handlePlaybackStreamErrorForTesting(
+    AudioPlayer player,
+    Object error,
+  ) => _handlePlaybackStreamError(player, error, null);
+
+  @visibleForTesting
   void resetForTesting() {
     _currentSong = null;
     _playlist.clear();
@@ -5532,6 +5782,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _savedPosition = null;
     _savedDuration = null;
     _lastSessionSaveTime = DateTime.fromMillisecondsSinceEpoch(0);
+    _consecutivePlaybackFailures = 0;
+    _lastFailedSongId = null;
+    _songRetryCount = 0;
   }
 
   void _syncWidgetPlayback() {
