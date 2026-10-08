@@ -4,6 +4,7 @@ import '../screens/home_screen.dart';
 import '../widgets/desktop/desktop_resize_divider.dart';
 import '../widgets/desktop/desktop_now_playing_bar.dart';
 import '../widgets/desktop/desktop_left_sidebar.dart';
+import '../widgets/desktop/desktop_right_panel.dart';
 import 'desktop_layout_state.dart';
 
 /// Spotify-grade 3-Column Desktop Application Shell.
@@ -71,9 +72,7 @@ class DesktopAppShell extends StatelessWidget {
                         if (!isVisible) return const SizedBox.shrink();
                         return const SizedBox(
                           width: 280.0,
-                          child: RepaintBoundary(
-                            child: DesktopRightPanelPlaceholder(),
-                          ),
+                          child: RepaintBoundary(child: DesktopRightPanel()),
                         );
                       },
                     ),
