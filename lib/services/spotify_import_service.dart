@@ -697,7 +697,14 @@ class SpotifyImportService extends ChangeNotifier {
       final cleanName = playlistName.trim().isNotEmpty
           ? playlistName.trim()
           : 'Exportify Mix';
-      final pid = _musicService.createPlaylist(cleanName);
+      final pid = _musicService.createPlaylist(
+        cleanName,
+        isSpotify: true,
+        source: 'spotify',
+      );
+      _musicService.setPlaylistSource(pid, isSpotify: true);
+      await _prefs.registerSpotifyPlaylistId(pid);
+      await _prefs.unregisterManualPlaylistId(pid);
 
       final resolved = await resolveTracksConcurrently(
         tracks: tracks,
@@ -728,11 +735,21 @@ class SpotifyImportService extends ChangeNotifier {
         _lastImportedPlaylistName = cleanName;
         _lastSuccessCount = resolved.length;
         _lastTotalCount = tracks.length;
+        _lastImportedPlaylists = [
+          {
+            'id': pid,
+            'name': cleanName,
+            'isSpotify': true,
+            'total': tracks.length,
+            'resolved': resolved.length,
+          },
+        ];
         _statusMessage = _isCancelled
             ? 'Import cancelled. Saved ${resolved.length} tracks into "$cleanName".'
             : 'Successfully imported ${resolved.length} of ${tracks.length} tracks into "$cleanName"!';
       } else if (_isCancelled) {
         await _musicService.deletePlaylist(pid);
+        await _prefs.unregisterSpotifyPlaylistId(pid);
         _lastImportedPlaylistId = null;
         _lastImportedPlaylistName = null;
         _lastSuccessCount = 0;
@@ -794,7 +811,14 @@ class SpotifyImportService extends ChangeNotifier {
         notifyListeners();
 
         // Create playlist on demand as it starts
-        final pid = _musicService.createPlaylist(pl.name);
+        final pid = _musicService.createPlaylist(
+          pl.name,
+          isSpotify: true,
+          source: 'spotify',
+        );
+        _musicService.setPlaylistSource(pid, isSpotify: true);
+        await _prefs.registerSpotifyPlaylistId(pid);
+        await _prefs.unregisterManualPlaylistId(pid);
 
         int prevProcessedBeforeThisPl = _processedTracks;
         final resolvedThisPl = await resolveTracksConcurrently(
@@ -830,6 +854,7 @@ class SpotifyImportService extends ChangeNotifier {
         } else if (_isCancelled) {
           // If cancelled before even 1 song was resolved in this playlist, delete empty playlist
           await _musicService.deletePlaylist(pid);
+          await _prefs.unregisterSpotifyPlaylistId(pid);
         }
 
         if (_isCancelled) break;
@@ -883,7 +908,14 @@ class SpotifyImportService extends ChangeNotifier {
       final cleanName = playlistName.trim().isNotEmpty
           ? playlistName.trim()
           : 'Spotify Playlist';
-      final pid = _musicService.createPlaylist(cleanName);
+      final pid = _musicService.createPlaylist(
+        cleanName,
+        isSpotify: true,
+        source: 'spotify',
+      );
+      _musicService.setPlaylistSource(pid, isSpotify: true);
+      await _prefs.registerSpotifyPlaylistId(pid);
+      await _prefs.unregisterManualPlaylistId(pid);
       final tracks = rawTrackQueries
           .map(
             (q) => ExportifyTrack(
@@ -923,11 +955,21 @@ class SpotifyImportService extends ChangeNotifier {
         _lastImportedPlaylistName = cleanName;
         _lastSuccessCount = resolved.length;
         _lastTotalCount = rawTrackQueries.length;
+        _lastImportedPlaylists = [
+          {
+            'id': pid,
+            'name': cleanName,
+            'isSpotify': true,
+            'total': rawTrackQueries.length,
+            'resolved': resolved.length,
+          },
+        ];
         _statusMessage = _isCancelled
             ? 'Import cancelled. Saved ${resolved.length} tracks into "$cleanName".'
             : 'Successfully imported ${resolved.length} of ${rawTrackQueries.length} tracks into "$cleanName"!';
       } else if (_isCancelled) {
         await _musicService.deletePlaylist(pid);
+        await _prefs.unregisterSpotifyPlaylistId(pid);
         _lastImportedPlaylistId = null;
         _lastImportedPlaylistName = null;
         _lastSuccessCount = 0;

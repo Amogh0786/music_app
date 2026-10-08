@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'api_config.dart';
 import 'canonical_song_dedup.dart';
+import 'music_service.dart';
 
 /// Lightweight, keyless client for YouTube Music's InnerTube API (`WEB_REMIX`).
 /// Provides studio release songs, clean album art, and Google's 50-track radio mixes.
@@ -379,6 +380,23 @@ class YouTubeMusicClient {
         artist: author,
       );
 
+      // Square high-resolution studio album artwork from InnerTube
+      final thumbRenderer =
+          renderer['thumbnail']?['musicThumbnailRenderer'] ??
+          renderer['thumbnailRenderer']?['musicThumbnailRenderer'];
+      final thumbs =
+          thumbRenderer?['thumbnail']?['thumbnails'] as List<dynamic>?;
+      if (thumbs != null && thumbs.isNotEmpty) {
+        final last = thumbs.last;
+        if (last is Map && last['url'] != null) {
+          var u = last['url'].toString();
+          if (u.contains('=w') && u.contains('-h')) {
+            u = u.replaceAll(RegExp(r'=w\d+-h\d+.*'), '=w544-h544-l90-rj');
+          }
+          MusicService.registerArtwork(videoId, u);
+        }
+      }
+
       final track = Video(
         VideoId(videoId),
         title,
@@ -434,6 +452,10 @@ class YouTubeMusicClient {
       final durSec = item['duration'] != null
           ? int.tryParse(item['duration'].toString())
           : null;
+      final thumb = (item['thumbnail'] ?? item['artwork']) as String?;
+      if (thumb != null && thumb.isNotEmpty) {
+        MusicService.registerArtwork(vid, thumb);
+      }
       final track = Video(
         VideoId(vid),
         t,

@@ -111,8 +111,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   String _formatDuration(Duration? duration) {
     if (duration == null) return '0:00';
-    final minutes = duration.inMinutes.remainder(60);
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final nonNegative = duration.isNegative ? Duration.zero : duration;
+    final hours = nonNegative.inHours;
+    final minutes = nonNegative.inMinutes.remainder(60);
+    final seconds = (nonNegative.inSeconds.remainder(
+      60,
+    )).toString().padLeft(2, '0');
+    if (hours > 0) {
+      return '$hours:${minutes.toString().padLeft(2, '0')}:$seconds';
+    }
     return '$minutes:$seconds';
   }
 
@@ -1727,35 +1734,42 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: RepaintBoundary(
-                          child: StreamBuilder<Duration>(
-                            initialData: _musicService.position,
-                            stream: _musicService.positionStream,
-                            builder: (context, snapshot) {
-                              final position =
-                                  snapshot.data ?? _musicService.position;
-                              final duration =
-                                  _musicService.duration ??
-                                  (shownSong.duration ??
-                                      song.duration ??
-                                      Duration.zero);
+                          child: StreamBuilder<Duration?>(
+                            stream: _musicService.durationStream,
+                            initialData: _musicService.duration,
+                            builder: (context, durSnapshot) {
+                              return StreamBuilder<Duration>(
+                                stream: _musicService.positionStream,
+                                initialData: _musicService.position,
+                                builder: (context, snapshot) {
+                                  final position =
+                                      snapshot.data ?? _musicService.position;
+                                  final duration =
+                                      durSnapshot.data ??
+                                      _musicService.duration ??
+                                      (shownSong.duration ??
+                                          song.duration ??
+                                          Duration.zero);
 
-                              if (_prefs.scrubberStyle ==
-                                  ScrubberStyle.classic) {
-                                return _buildClassicScrubber(
-                                  context,
-                                  position,
-                                  duration,
-                                  vibrantColor,
-                                );
-                              }
+                                  if (_prefs.scrubberStyle ==
+                                      ScrubberStyle.classic) {
+                                    return _buildClassicScrubber(
+                                      context,
+                                      position,
+                                      duration,
+                                      vibrantColor,
+                                    );
+                                  }
 
-                              return WaveformScrubber(
-                                position: position,
-                                duration: duration,
-                                songId: song.id.value,
-                                accentColor: vibrantColor,
-                                onSeek: (newPos) {
-                                  _musicService.seek(newPos);
+                                  return WaveformScrubber(
+                                    position: position,
+                                    duration: duration,
+                                    songId: song.id.value,
+                                    accentColor: vibrantColor,
+                                    onSeek: (newPos) {
+                                      _musicService.seek(newPos);
+                                    },
+                                  );
                                 },
                               );
                             },
@@ -2211,11 +2225,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
     Duration duration,
     Color accentColor,
   ) {
-    final maxMs = duration.inMilliseconds > 0
-        ? duration.inMilliseconds.toDouble()
-        : 1.0;
-    final curMs = position.inMilliseconds.clamp(0, maxMs.toInt()).toDouble();
-    final remaining = duration > position ? duration - position : Duration.zero;
+    final bool hasValidDuration = duration.inMilliseconds > 0;
+    final maxMs = hasValidDuration ? duration.inMilliseconds.toDouble() : 1.0;
+    final curMs = hasValidDuration
+        ? position.inMilliseconds.clamp(0, duration.inMilliseconds).toDouble()
+        : 0.0;
+    final remaining = hasValidDuration && duration > position
+        ? duration - position
+        : Duration.zero;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -2227,11 +2244,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
               trackHeight: 3.5,
               activeTrackColor: accentColor,
               inactiveTrackColor: Colors.white24,
-              thumbColor: Colors.white,
+              thumbColor: hasValidDuration ? Colors.white : Colors.white38,
               overlayColor: accentColor.withValues(alpha: 0.2),
-              thumbShape: const RoundSliderThumbShape(
-                enabledThumbRadius: 6,
-                elevation: 3,
+              thumbShape: RoundSliderThumbShape(
+                enabledThumbRadius: hasValidDuration ? 6 : 4,
+                elevation: hasValidDuration ? 3 : 0,
               ),
               overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
             ),
@@ -2239,10 +2256,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
               value: curMs,
               min: 0,
               max: maxMs,
-              onChanged: (val) {
-                HapticFeedback.selectionClick();
-                _musicService.seek(Duration(milliseconds: val.toInt()));
-              },
+              onChanged: hasValidDuration
+                  ? (val) {
+                      HapticFeedback.selectionClick();
+                      _musicService.seek(Duration(milliseconds: val.toInt()));
+                    }
+                  : null,
             ),
           ),
           Padding(
@@ -2259,7 +2278,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                 ),
                 Text(
-                  '-${_formatDuration(remaining)}',
+                  hasValidDuration ? '-${_formatDuration(remaining)}' : '--:--',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.6),
                     fontSize: 12,
@@ -3275,69 +3294,86 @@ class _PlayerScreenState extends State<PlayerScreen> {
     Video song,
     Color accentColor,
   ) {
-    return StreamBuilder<Duration>(
-      initialData: _musicService.position,
-      stream: _musicService.positionStream,
-      builder: (context, snapshot) {
-        final position = snapshot.data ?? _musicService.position;
-        final duration =
-            _musicService.duration ?? (song.duration ?? Duration.zero);
-        final maxMs = duration.inMilliseconds > 0
-            ? duration.inMilliseconds.toDouble()
-            : 1.0;
-        final curMs = position.inMilliseconds
-            .clamp(0, maxMs.toInt())
-            .toDouble();
+    return StreamBuilder<Duration?>(
+      stream: _musicService.durationStream,
+      initialData: _musicService.duration,
+      builder: (context, durSnapshot) {
+        return StreamBuilder<Duration>(
+          stream: _musicService.positionStream,
+          initialData: _musicService.position,
+          builder: (context, snapshot) {
+            final position = snapshot.data ?? _musicService.position;
+            final duration =
+                durSnapshot.data ??
+                _musicService.duration ??
+                (song.duration ?? Duration.zero);
+            final bool hasValidDuration = duration.inMilliseconds > 0;
+            final maxMs = hasValidDuration
+                ? duration.inMilliseconds.toDouble()
+                : 1.0;
+            final curMs = hasValidDuration
+                ? position.inMilliseconds
+                      .clamp(0, duration.inMilliseconds)
+                      .toDouble()
+                : 0.0;
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Row(
-            children: [
-              Text(
-                _formatDuration(position),
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.65),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Expanded(
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 3.5,
-                    activeTrackColor: accentColor,
-                    inactiveTrackColor: Colors.white24,
-                    thumbColor: Colors.white,
-                    overlayColor: accentColor.withValues(alpha: 0.2),
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 6,
-                      elevation: 3,
-                    ),
-                    overlayShape: const RoundSliderOverlayShape(
-                      overlayRadius: 14,
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                children: [
+                  Text(
+                    _formatDuration(position),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.65),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  child: Slider(
-                    value: curMs,
-                    min: 0,
-                    max: maxMs,
-                    onChanged: (val) {
-                      HapticFeedback.selectionClick();
-                      _musicService.seek(Duration(milliseconds: val.toInt()));
-                    },
+                  Expanded(
+                    child: SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 3.5,
+                        activeTrackColor: accentColor,
+                        inactiveTrackColor: Colors.white24,
+                        thumbColor: hasValidDuration
+                            ? Colors.white
+                            : Colors.white38,
+                        overlayColor: accentColor.withValues(alpha: 0.2),
+                        thumbShape: RoundSliderThumbShape(
+                          enabledThumbRadius: hasValidDuration ? 6 : 4,
+                          elevation: hasValidDuration ? 3 : 0,
+                        ),
+                        overlayShape: const RoundSliderOverlayShape(
+                          overlayRadius: 14,
+                        ),
+                      ),
+                      child: Slider(
+                        value: curMs,
+                        min: 0,
+                        max: maxMs,
+                        onChanged: hasValidDuration
+                            ? (val) {
+                                HapticFeedback.selectionClick();
+                                _musicService.seek(
+                                  Duration(milliseconds: val.toInt()),
+                                );
+                              }
+                            : null,
+                      ),
+                    ),
                   ),
-                ),
+                  Text(
+                    hasValidDuration ? _formatDuration(duration) : '--:--',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.65),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                _formatDuration(duration),
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.65),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -3345,69 +3381,86 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Widget _buildLandscapeMiniScrubber(Color accentColor) {
     final song = _musicService.currentSong;
-    return StreamBuilder<Duration>(
-      initialData: _musicService.position,
-      stream: _musicService.positionStream,
-      builder: (context, snapshot) {
-        final position = snapshot.data ?? _musicService.position;
-        final duration =
-            _musicService.duration ?? (song?.duration ?? Duration.zero);
-        final maxMs = duration.inMilliseconds > 0
-            ? duration.inMilliseconds.toDouble()
-            : 1.0;
-        final curMs = position.inMilliseconds
-            .clamp(0, maxMs.toInt())
-            .toDouble();
+    return StreamBuilder<Duration?>(
+      stream: _musicService.durationStream,
+      initialData: _musicService.duration,
+      builder: (context, durSnapshot) {
+        return StreamBuilder<Duration>(
+          stream: _musicService.positionStream,
+          initialData: _musicService.position,
+          builder: (context, snapshot) {
+            final position = snapshot.data ?? _musicService.position;
+            final duration =
+                durSnapshot.data ??
+                _musicService.duration ??
+                (song?.duration ?? Duration.zero);
+            final bool hasValidDuration = duration.inMilliseconds > 0;
+            final maxMs = hasValidDuration
+                ? duration.inMilliseconds.toDouble()
+                : 1.0;
+            final curMs = hasValidDuration
+                ? position.inMilliseconds
+                      .clamp(0, duration.inMilliseconds)
+                      .toDouble()
+                : 0.0;
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Row(
-            children: [
-              Text(
-                _formatDuration(position),
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Expanded(
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 2.2,
-                    activeTrackColor: accentColor,
-                    inactiveTrackColor: Colors.white24,
-                    thumbColor: Colors.white,
-                    overlayColor: accentColor.withValues(alpha: 0.2),
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 4,
-                      elevation: 2,
-                    ),
-                    overlayShape: const RoundSliderOverlayShape(
-                      overlayRadius: 10,
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                children: [
+                  Text(
+                    _formatDuration(position),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  child: Slider(
-                    value: curMs,
-                    min: 0,
-                    max: maxMs,
-                    onChanged: (val) {
-                      HapticFeedback.selectionClick();
-                      _musicService.seek(Duration(milliseconds: val.toInt()));
-                    },
+                  Expanded(
+                    child: SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 2.2,
+                        activeTrackColor: accentColor,
+                        inactiveTrackColor: Colors.white24,
+                        thumbColor: hasValidDuration
+                            ? Colors.white
+                            : Colors.white38,
+                        overlayColor: accentColor.withValues(alpha: 0.2),
+                        thumbShape: RoundSliderThumbShape(
+                          enabledThumbRadius: hasValidDuration ? 4 : 3,
+                          elevation: hasValidDuration ? 2 : 0,
+                        ),
+                        overlayShape: const RoundSliderOverlayShape(
+                          overlayRadius: 10,
+                        ),
+                      ),
+                      child: Slider(
+                        value: curMs,
+                        min: 0,
+                        max: maxMs,
+                        onChanged: hasValidDuration
+                            ? (val) {
+                                HapticFeedback.selectionClick();
+                                _musicService.seek(
+                                  Duration(milliseconds: val.toInt()),
+                                );
+                              }
+                            : null,
+                      ),
+                    ),
                   ),
-                ),
+                  Text(
+                    hasValidDuration ? _formatDuration(duration) : '--:--',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                _formatDuration(duration),
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );

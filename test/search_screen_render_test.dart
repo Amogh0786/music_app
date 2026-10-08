@@ -179,12 +179,12 @@ void main() {
       await tester.enterText(searchField, 'Devara');
       await tester.pumpAndSettle();
 
-      // Back arrow icon is now visible with 'Back to browse' tooltip
-      expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
-      expect(find.byTooltip('Back to browse'), findsOneWidget);
+      // Back arrow icon is now visible
+      expect(find.byIcon(Icons.arrow_back_rounded), findsWidgets);
+      expect(find.byKey(const ValueKey('search_field_back_btn')), findsOneWidget);
 
       // Tap the back arrow button in the search bar
-      final backButton = find.byTooltip('Back to browse');
+      final backButton = find.byKey(const ValueKey('search_field_back_btn'));
       await tester.tap(backButton);
       await tester.pumpAndSettle();
 

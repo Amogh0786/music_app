@@ -11,24 +11,61 @@ import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/category_card.dart';
 import '../widgets/artist_card.dart';
 import '../widgets/animated_equalizer.dart';
-import '../widgets/dilse_tooltip.dart';
 import 'artist_profile_screen.dart';
 import 'album_screen.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  const SearchScreen({super.key, this.isActive = true});
+
+  final bool isActive;
 
   @override
-  State<SearchScreen> createState() => _SearchScreenState();
+  State<SearchScreen> createState() => SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen>
+class SearchScreenState extends State<SearchScreen>
     with AutomaticKeepAliveClientMixin {
   final MusicService _musicService = MusicService();
   final PreferencesService _prefs = PreferencesService();
   final DynamicArtistService _artistService = DynamicArtistService();
+  late final FocusNode _searchFocusNode;
+  DateTime? _lastBackHandledTimestamp;
+
+  bool wasBackHandledRecently() {
+    if (_lastBackHandledTimestamp == null) return false;
+    return DateTime.now()
+            .difference(_lastBackHandledTimestamp!)
+            .inMilliseconds <
+        250;
+  }
+
+  bool get isSearchActive =>
+      _searchResults.isNotEmpty ||
+      _albumResults.isNotEmpty ||
+      _currentQuery.isNotEmpty ||
+      _suggestions.isNotEmpty ||
+      _searchController.text.trim().isNotEmpty ||
+      _isSearching;
+
+  void clearSearchAndDismiss() {
+    _debounceTimer?.cancel();
+    _searchController.clear();
+    _searchFocusNode.unfocus();
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _searchResults.clear();
+      _albumResults.clear();
+      _suggestions.clear();
+      _currentQuery = '';
+      _isSearching = false;
+      _isLoadingMore = false;
+      _isArtistSearchActive = false;
+      _searchTabIndex = 0;
+    });
+  }
+
   int _browseTabIndex = 0;
-  final PageController _browsePageController = PageController();
+  late PageController _browsePageController;
 
   @override
   bool get wantKeepAlive => true;
@@ -136,6 +173,9 @@ class _SearchScreenState extends State<SearchScreen>
   @override
   void initState() {
     super.initState();
+    _browsePageController = PageController(initialPage: _browseTabIndex);
+    _searchFocusNode = FocusNode();
+    _searchFocusNode.addListener(_onFocusChanged);
     _prefs.addListener(_onPrefsChanged);
     _musicService.addListener(_onPrefsChanged);
     _searchController.addListener(_onSearchChanged);
@@ -151,6 +191,10 @@ class _SearchScreenState extends State<SearchScreen>
     _loadBrowseAlbums(_selectedAlbumBrowseLang);
   }
 
+  void _onFocusChanged() {
+    if (mounted) setState(() {});
+  }
+
   void _onPrefsChanged() {
     if (mounted) setState(() {});
   }
@@ -162,12 +206,6 @@ class _SearchScreenState extends State<SearchScreen>
     if (query.isEmpty) {
       setState(() {
         _suggestions = [];
-        _searchResults.clear();
-        _albumResults.clear();
-        _currentQuery = '';
-        _isSearching = false;
-        _isArtistSearchActive = false;
-        _searchTabIndex = 0;
       });
       return;
     }
@@ -194,25 +232,12 @@ class _SearchScreenState extends State<SearchScreen>
     _prefs.removeListener(_onPrefsChanged);
     _musicService.removeListener(_onPrefsChanged);
     _searchController.removeListener(_onSearchChanged);
+    _searchFocusNode.removeListener(_onFocusChanged);
+    _searchFocusNode.dispose();
     _searchController.dispose();
     _scrollController.dispose();
     _browsePageController.dispose();
     super.dispose();
-  }
-
-  void _clearSearchAndReturnToBrowse() {
-    HapticFeedback.lightImpact();
-    FocusScope.of(context).unfocus();
-    _searchController.clear();
-    setState(() {
-      _searchResults.clear();
-      _albumResults.clear();
-      _suggestions.clear();
-      _currentQuery = '';
-      _isSearching = false;
-      _isArtistSearchActive = false;
-      _searchTabIndex = 0;
-    });
   }
 
   void _performSearch(String query, {bool isArtist = false}) async {
@@ -238,36 +263,24 @@ class _SearchScreenState extends State<SearchScreen>
       _searchTabIndex = 0;
     });
 
-    try {
-      // Fire song search + album search in parallel
-      final futures = await Future.wait([
-        isArtistSearch
-            ? _musicService.fetchArtistDiscography(effectiveQuery, page: 1)
-            : _musicService.searchSongs(effectiveQuery, page: 1, limit: 50),
-        if (!isArtistSearch)
-          _musicService.searchAlbums(effectiveQuery, limit: 12)
-        else
-          Future.value(<JioAlbum>[]),
-      ]);
+    // Fire song search + album search in parallel
+    final futures = await Future.wait([
+      isArtistSearch
+          ? _musicService.fetchArtistDiscography(effectiveQuery, page: 1)
+          : _musicService.searchSongs(effectiveQuery, page: 1, limit: 50),
+      if (!isArtistSearch)
+        _musicService.searchAlbums(effectiveQuery, limit: 12)
+      else
+        Future.value(<JioAlbum>[]),
+    ]);
 
-      if (mounted) {
-        final songs = futures[0] as List<Video>;
-        final albums = futures[1] as List<JioAlbum>;
-        setState(() {
-          _searchResults = songs;
-          _albumResults = albums;
-          _searchTabIndex = (songs.isEmpty && albums.isNotEmpty) ? 1 : 0;
-          _isSearching = false;
-          _hasMore = _searchResults.isNotEmpty;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _isSearching = false;
-          _hasMore = false;
-        });
-      }
+    if (mounted) {
+      setState(() {
+        _searchResults = futures[0] as List<Video>;
+        _albumResults = futures[1] as List<JioAlbum>;
+        _isSearching = false;
+        _hasMore = _searchResults.isNotEmpty;
+      });
     }
   }
 
@@ -337,18 +350,28 @@ class _SearchScreenState extends State<SearchScreen>
   Widget build(BuildContext context) {
     super.build(context);
     final history = _prefs.searchHistory;
-    final bool hasActiveSearch =
-        _searchController.text.isNotEmpty ||
-        _searchResults.isNotEmpty ||
-        _albumResults.isNotEmpty ||
-        _currentQuery.isNotEmpty ||
-        _isSearching;
+
+    if (_browsePageController.hasClients) {
+      final currentPage = _browsePageController.page?.round();
+      if (currentPage != null && currentPage != _browseTabIndex) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _browsePageController.hasClients) {
+            final cur = _browsePageController.page?.round();
+            if (cur != null && cur != _browseTabIndex) {
+              _browsePageController.jumpToPage(_browseTabIndex);
+            }
+          }
+        });
+      }
+    }
 
     return PopScope(
-      canPop: !hasActiveSearch,
+      canPop: !widget.isActive || !isSearchActive,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && hasActiveSearch) {
-          _clearSearchAndReturnToBrowse();
+        if (didPop || !widget.isActive) return;
+        if (isSearchActive) {
+          _lastBackHandledTimestamp = DateTime.now();
+          clearSearchAndDismiss();
         }
       },
       child: Scaffold(
@@ -356,6 +379,27 @@ class _SearchScreenState extends State<SearchScreen>
         appBar: AppBar(
           backgroundColor: const Color(0xFF0B0B0F),
           elevation: 0,
+          automaticallyImplyLeading: false,
+          leading: isSearchActive
+              ? IconButton(
+                  key: const ValueKey('search_appbar_back_btn'),
+                  icon: const Icon(
+                    Icons.arrow_back_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                  tooltip: 'Back to Browse',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    clearSearchAndDismiss();
+                  },
+                )
+              : null,
           title: const Text(
             'Search',
             style: TextStyle(
@@ -391,6 +435,7 @@ class _SearchScreenState extends State<SearchScreen>
                 ),
                 child: TextField(
                   controller: _searchController,
+                  focusNode: _searchFocusNode,
                   onSubmitted: (val) {
                     HapticFeedback.lightImpact();
                     _performSearch(val);
@@ -405,30 +450,38 @@ class _SearchScreenState extends State<SearchScreen>
                     ),
                     prefixIcon: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 200),
-                      child: hasActiveSearch
-                          ? DilSeTooltip(
-                              key: const ValueKey('search_back_button'),
-                              message: 'Back to browse',
-                              child: IconButton(
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                  minWidth: 44,
-                                  minHeight: 44,
-                                ),
-                                icon: const Icon(
-                                  Icons.arrow_back_rounded,
-                                  color: Colors.white,
-                                  size: 22,
-                                ),
-                                onPressed: _clearSearchAndReturnToBrowse,
-                                splashRadius: 20,
+                      transitionBuilder: (child, anim) => FadeTransition(
+                        opacity: anim,
+                        child: ScaleTransition(scale: anim, child: child),
+                      ),
+                      child: (isSearchActive || _searchFocusNode.hasFocus)
+                          ? IconButton(
+                              key: const ValueKey('search_field_back_btn'),
+                              icon: const Icon(
+                                Icons.arrow_back_rounded,
+                                color: Colors.white,
+                                size: 20,
                               ),
+                              tooltip: 'Back to Browse',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 48,
+                                minHeight: 48,
+                              ),
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                clearSearchAndDismiss();
+                              },
                             )
-                          : const Icon(
-                              Icons.search_rounded,
-                              key: ValueKey('search_icon'),
-                              color: Colors.white60,
-                              size: 22,
+                          : const SizedBox(
+                              key: ValueKey('search_field_search_icon'),
+                              width: 48,
+                              height: 48,
+                              child: Icon(
+                                Icons.search_rounded,
+                                color: Colors.white60,
+                                size: 22,
+                              ),
                             ),
                     ),
                     suffixIcon: _searchController.text.isNotEmpty
@@ -438,8 +491,10 @@ class _SearchScreenState extends State<SearchScreen>
                               color: Colors.white60,
                               size: 18,
                             ),
-                            onPressed: _clearSearchAndReturnToBrowse,
-                            tooltip: 'Clear search',
+                            onPressed: () {
+                              HapticFeedback.lightImpact();
+                              clearSearchAndDismiss();
+                            },
                           )
                         : null,
                     border: InputBorder.none,
@@ -531,27 +586,6 @@ class _SearchScreenState extends State<SearchScreen>
                                     _albumResults.isNotEmpty &&
                                     !_isArtistSearchActive
                                 ? _buildAlbumsGrid()
-                                : (_searchResults.isEmpty &&
-                                      _albumResults.isNotEmpty &&
-                                      !_isArtistSearchActive)
-                                ? Center(
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 24,
-                                        vertical: 32,
-                                      ),
-                                      child: Text(
-                                        'No individual songs found. Switch to Albums tab above.',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.5,
-                                          ),
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ),
-                                  )
                                 : ListView.builder(
                                     controller: _scrollController,
                                     padding: const EdgeInsets.only(bottom: 160),
@@ -779,8 +813,6 @@ class _SearchScreenState extends State<SearchScreen>
                           ),
                         ],
                       )
-                    : (_currentQuery.trim().isNotEmpty && !_isSearching)
-                    ? _buildSearchEmptyState()
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -943,6 +975,9 @@ class _SearchScreenState extends State<SearchScreen>
                           // Swappable Grid with PageView matching MainScreen switching animation
                           Expanded(
                             child: PageView(
+                              key: const PageStorageKey(
+                                'browse_tabs_page_view',
+                              ),
                               controller: _browsePageController,
                               physics: const ClampingScrollPhysics(),
                               onPageChanged: (index) {
@@ -995,14 +1030,7 @@ class _SearchScreenState extends State<SearchScreen>
                 child: Container(
                   margin: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        primaryColor.withValues(alpha: 0.32),
-                        primaryColor.withValues(alpha: 0.18),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: primaryColor.withValues(alpha: 0.22),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: primaryColor.withValues(alpha: 0.65),
@@ -1010,8 +1038,8 @@ class _SearchScreenState extends State<SearchScreen>
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: primaryColor.withValues(alpha: 0.30),
-                        blurRadius: 12,
+                        color: primaryColor.withValues(alpha: 0.25),
+                        blurRadius: 10,
                         offset: const Offset(0, 2),
                       ),
                     ],
@@ -1068,14 +1096,19 @@ class _SearchScreenState extends State<SearchScreen>
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
-          if (_browseTabIndex != index) {
+          final isOutOfSync =
+              _browsePageController.hasClients &&
+              _browsePageController.page?.round() != index;
+          if (_browseTabIndex != index || isOutOfSync) {
             HapticFeedback.lightImpact();
             setState(() => _browseTabIndex = index);
-            _browsePageController.animateToPage(
-              index,
-              duration: const Duration(milliseconds: 320),
-              curve: Curves.easeOutCubic,
-            );
+            if (_browsePageController.hasClients) {
+              _browsePageController.animateToPage(
+                index,
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+              );
+            }
           }
         },
         child: Center(
@@ -1599,81 +1632,6 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
-  Widget _buildSearchEmptyState() {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.05),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  width: 1.5,
-                ),
-              ),
-              child: const Icon(
-                Icons.search_off_rounded,
-                size: 36,
-                color: Colors.white54,
-              ),
-            ),
-            const SizedBox(height: 18),
-            const Text(
-              'No results found',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.3,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'We couldn\'t find any songs or albums matching "$_currentQuery".',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.5),
-                fontSize: 14,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: () {
-                _searchController.clear();
-                setState(() {
-                  _currentQuery = '';
-                  _searchResults.clear();
-                  _albumResults.clear();
-                  _searchTabIndex = 0;
-                });
-              },
-              icon: const Icon(Icons.clear_rounded, size: 16),
-              label: const Text('Clear Search'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF7C3AED),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // ─── Albums Search Results Grid ───────────────────────────────────────────
   Widget _buildAlbumsGrid() {
     return GridView.builder(
@@ -1726,7 +1684,7 @@ class _SearchScreenState extends State<SearchScreen>
               child: Stack(
                 children: [
                   Hero(
-                    tag: 'album-art-${album.id}',
+                    tag: '$heroPrefix-art-${album.id}',
                     child: album.artwork.isNotEmpty
                         ? Image.network(
                             album.artwork,
