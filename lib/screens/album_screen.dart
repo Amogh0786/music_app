@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/jio_album.dart';
 import '../services/music_service.dart';
+import '../services/preferences_service.dart';
 import '../widgets/mini_player.dart';
 import '../widgets/animated_equalizer.dart';
 import '../widgets/dilse_scrollbar.dart';
@@ -608,6 +609,53 @@ class _AlbumScreenState extends State<AlbumScreen>
                 size: 22,
               ),
             ),
+          ),
+          const SizedBox(width: 12),
+          // Bookmark / Save Album
+          AnimatedBuilder(
+            animation: PreferencesService(),
+            builder: (context, _) {
+              final prefs = PreferencesService();
+              final isSaved =
+                  prefs.isAlbumSaved(_album!.id) ||
+                  prefs.isAlbumSaved(_album!.title);
+              return GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  prefs.toggleSaveAlbum({
+                    'id': _album!.id,
+                    'title': _album!.title,
+                    'artist': _album!.artist,
+                    'artwork': _album!.artwork,
+                    'year': _album!.year,
+                    'language': _album!.language,
+                    'songs': _album!.songs,
+                  });
+                },
+                child: Container(
+                  height: 48,
+                  width: 48,
+                  decoration: BoxDecoration(
+                    color: isSaved
+                        ? AppThemeTokens.brandRuby.withValues(alpha: 0.2)
+                        : const Color(0xFF1A1A2E),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isSaved
+                          ? AppThemeTokens.brandRuby.withValues(alpha: 0.6)
+                          : Colors.white.withValues(alpha: 0.12),
+                    ),
+                  ),
+                  child: Icon(
+                    isSaved
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_outline_rounded,
+                    color: isSaved ? AppThemeTokens.brandRuby : Colors.white,
+                    size: 22,
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),

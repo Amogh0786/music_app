@@ -27,6 +27,11 @@ class FloatingNavDock extends StatelessWidget {
         label: 'Search',
       ),
       _NavTabItem(
+        icon: Icons.download_outlined,
+        activeIcon: Icons.download_rounded,
+        label: 'Downloads',
+      ),
+      _NavTabItem(
         icon: Icons.library_music_outlined,
         activeIcon: Icons.library_music_rounded,
         label: 'Library',
@@ -126,16 +131,16 @@ class FloatingNavDock extends StatelessWidget {
                                           ? CrossFadeState.showFirst
                                           : CrossFadeState.showSecond,
                                       firstChild: Padding(
-                                        padding: const EdgeInsets.only(left: 8),
+                                        padding: const EdgeInsets.only(left: 5),
                                         child: Text(
                                           tab.label,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(
                                             color: Colors.white,
-                                            fontSize: 13,
+                                            fontSize: 11.5,
                                             fontWeight: FontWeight.w700,
-                                            letterSpacing: -0.2,
+                                            letterSpacing: -0.3,
                                           ),
                                         ),
                                       ),

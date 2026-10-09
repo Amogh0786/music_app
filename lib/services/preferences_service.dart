@@ -248,6 +248,8 @@ class PreferencesService extends ChangeNotifier {
   ];
   String _mostPlayedArtist = '';
   UserAudioProfile _audioProfile = const UserAudioProfile();
+  List<Map<String, dynamic>> _savedAlbums = [];
+  List<Map<String, dynamic>> get savedAlbums => List.unmodifiable(_savedAlbums);
 
   bool get isInitialized => _isInitialized;
   bool get crossfadeEnabled => _crossfadeEnabled;
@@ -500,6 +502,17 @@ class PreferencesService extends ChangeNotifier {
     final savedManualIds = _prefs.getStringList('manual_created_playlist_ids');
     if (savedManualIds != null) {
       _manualCreatedPlaylistIds = savedManualIds.toSet();
+    }
+
+    final savedAlbumsStr = _prefs.getString('saved_albums_json');
+    if (savedAlbumsStr != null && savedAlbumsStr.isNotEmpty) {
+      try {
+        final decoded = json.decode(savedAlbumsStr) as List<dynamic>;
+        _savedAlbums = decoded
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      } catch (_) {}
     }
 
     _isInitialized = true;
@@ -1644,6 +1657,52 @@ class PreferencesService extends ChangeNotifier {
     }
   }
 
+  bool isAlbumSaved(String albumIdOrTitle) {
+    final lower = albumIdOrTitle.toLowerCase().trim();
+    return _savedAlbums.any((a) {
+      final id = (a['id']?.toString() ?? '').toLowerCase().trim();
+      final title = (a['title']?.toString() ?? '').toLowerCase().trim();
+      return id == lower || title == lower;
+    });
+  }
+
+  Future<void> saveAlbum(Map<String, dynamic> album) async {
+    final id = album['id']?.toString() ?? '';
+    final title = album['title']?.toString() ?? '';
+    if (id.isEmpty && title.isEmpty) return;
+    if (!isAlbumSaved(id.isNotEmpty ? id : title)) {
+      _savedAlbums.insert(0, Map<String, dynamic>.from(album));
+      if (_isInitialized) {
+        await _prefs.setString('saved_albums_json', json.encode(_savedAlbums));
+      }
+      notifyListeners();
+    }
+  }
+
+  Future<void> unsaveAlbum(String albumIdOrTitle) async {
+    final lower = albumIdOrTitle.toLowerCase().trim();
+    _savedAlbums.removeWhere((a) {
+      final id = (a['id']?.toString() ?? '').toLowerCase().trim();
+      final title = (a['title']?.toString() ?? '').toLowerCase().trim();
+      return id == lower || title == lower;
+    });
+    if (_isInitialized) {
+      await _prefs.setString('saved_albums_json', json.encode(_savedAlbums));
+    }
+    notifyListeners();
+  }
+
+  Future<void> toggleSaveAlbum(Map<String, dynamic> album) async {
+    final id = album['id']?.toString() ?? '';
+    final title = album['title']?.toString() ?? '';
+    final key = id.isNotEmpty ? id : title;
+    if (isAlbumSaved(key)) {
+      await unsaveAlbum(key);
+    } else {
+      await saveAlbum(album);
+    }
+  }
+
   @visibleForTesting
   void resetForTesting() {
     _isInitialized = false;
@@ -1660,5 +1719,6 @@ class PreferencesService extends ChangeNotifier {
     _profileImagePath = null;
     _spotifyImportedPlaylistIds.clear();
     _manualCreatedPlaylistIds.clear();
+    _savedAlbums.clear();
   }
 }

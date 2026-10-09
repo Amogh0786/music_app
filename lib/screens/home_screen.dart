@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,10 +11,8 @@ import '../services/canonical_song_dedup.dart';
 import '../widgets/shimmer_loading.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/animated_equalizer.dart';
-import '../widgets/bug_report_button.dart';
-import 'profile_screen.dart';
+import '../widgets/profile_side_drawer.dart';
 import 'album_screen.dart';
-import 'dilse_capsule_screen.dart';
 import '../models/jio_album.dart';
 import '../models/song_item.dart';
 import '../constants/app_theme_tokens.dart';
@@ -472,91 +471,45 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     ),
                     if (!kIsWeb || MediaQuery.of(context).size.width < 1024)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            icon: Container(
-                              padding: const EdgeInsets.all(7),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [
-                                    Color(0xFFE040FB),
-                                    Color(0xFF1DB954),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(
-                                      0xFFE040FB,
-                                    ).withValues(alpha: 0.35),
-                                    blurRadius: 8,
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(
-                                Icons.auto_awesome_rounded,
-                                color: Colors.white,
-                                size: 16,
-                              ),
+                      GestureDetector(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          ProfileSideDrawer.show(context);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(2.5),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.18),
+                              width: 1.5,
                             ),
-                            tooltip: 'DilSe Capsule',
-                            onPressed: () {
-                              HapticFeedback.mediumImpact();
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      const DilSeCapsuleScreen(),
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          const BugReportButton(),
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: () {
-                              HapticFeedback.lightImpact();
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const ProfileScreen(),
-                                ),
-                              );
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(2.5),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.18),
-                                  width: 1.5,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.35),
-                                    blurRadius: 10,
-                                  ),
-                                ],
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.35),
+                                blurRadius: 10,
                               ),
-                              child: const CircleAvatar(
-                                backgroundColor: Color(0xFF1E1E28),
-                                radius: 20,
-                                child: Icon(
-                                  Icons.person_rounded,
-                                  color: Colors.white,
-                                  size: 22,
-                                ),
-                              ),
-                            ),
+                            ],
                           ),
-                        ],
+                          child: CircleAvatar(
+                            backgroundColor: const Color(0xFF1E1E28),
+                            radius: 20,
+                            backgroundImage:
+                                _prefs.profileImagePath != null &&
+                                    File(_prefs.profileImagePath!).existsSync()
+                                ? FileImage(File(_prefs.profileImagePath!))
+                                : null,
+                            child:
+                                _prefs.profileImagePath == null ||
+                                    !File(_prefs.profileImagePath!).existsSync()
+                                ? const Icon(
+                                    Icons.person_rounded,
+                                    color: Colors.white,
+                                    size: 22,
+                                  )
+                                : null,
+                          ),
+                        ),
                       ),
                   ],
                 ),
@@ -761,9 +714,14 @@ class _HomeScreenState extends State<HomeScreen>
         title: dailyMix1?.title ?? 'Daily Mix 1',
         icon: Icons.shuffle_rounded,
         iconGradient: const [Color(0xFFE040FB), Color(0xFF1DB954)],
+        imageUrl: _dailyMix1.isNotEmpty
+            ? _dailyMix1.first.thumbnails.lowResUrl
+            : null,
         onTap: () {
           if (_dailyMix1.isNotEmpty) {
             _musicService.playPlaylist(_dailyMix1, 0);
+          } else {
+            _loadHomeFeeds();
           }
         },
       ),
@@ -771,6 +729,9 @@ class _HomeScreenState extends State<HomeScreen>
         title: 'Liked Songs',
         icon: Icons.favorite_rounded,
         iconGradient: const [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+        imageUrl: _musicService.likedSongs.isNotEmpty
+            ? _musicService.likedSongs.first['thumbnail']
+            : null,
         onTap: () {
           if (_musicService.likedSongs.isNotEmpty) {
             _musicService.playLikedSong(_musicService.likedSongs.first);
@@ -781,9 +742,14 @@ class _HomeScreenState extends State<HomeScreen>
         title: dailyMix2?.title ?? 'Daily Mix 2',
         icon: Icons.graphic_eq_rounded,
         iconGradient: const [Color(0xFF00C6FF), Color(0xFF0072FF)],
+        imageUrl: _dailyMix2.isNotEmpty
+            ? _dailyMix2.first.thumbnails.lowResUrl
+            : null,
         onTap: () {
           if (_dailyMix2.isNotEmpty) {
             _musicService.playPlaylist(_dailyMix2, 0);
+          } else {
+            _loadHomeFeeds();
           }
         },
       ),
@@ -791,6 +757,9 @@ class _HomeScreenState extends State<HomeScreen>
         title: 'Top Charts',
         icon: Icons.trending_up_rounded,
         iconGradient: const [Color(0xFFFF512F), Color(0xFFDD2476)],
+        imageUrl: _topChartsIndia.isNotEmpty
+            ? _topChartsIndia.first.thumbnails.lowResUrl
+            : null,
         onTap: () {
           if (_topChartsIndia.isNotEmpty) {
             _musicService.playPlaylist(_topChartsIndia, 0);
@@ -801,6 +770,9 @@ class _HomeScreenState extends State<HomeScreen>
         title: 'New Releases',
         icon: Icons.fiber_new_rounded,
         iconGradient: const [Color(0xFF11998E), Color(0xFF38EF7D)],
+        imageUrl: _newReleases.isNotEmpty
+            ? _newReleases.first.thumbnails.lowResUrl
+            : null,
         onTap: () {
           if (_newReleases.isNotEmpty) {
             _musicService.playPlaylist(_newReleases, 0);
@@ -811,6 +783,9 @@ class _HomeScreenState extends State<HomeScreen>
         title: 'Trending',
         icon: Icons.whatshot_rounded,
         iconGradient: const [Color(0xFFF857A6), Color(0xFFFF5858)],
+        imageUrl: _trendingNow.isNotEmpty
+            ? _trendingNow.first.thumbnails.lowResUrl
+            : null,
         onTap: () {
           if (_trendingNow.isNotEmpty) {
             _musicService.playPlaylist(_trendingNow, 0);
@@ -851,23 +826,51 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 child: Row(
                   children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: item.iconGradient,
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(AppThemeTokens.radiusSmall),
-                          bottomLeft: Radius.circular(
-                            AppThemeTokens.radiusSmall,
-                          ),
-                        ),
+                    ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(AppThemeTokens.radiusSmall),
+                        bottomLeft: Radius.circular(AppThemeTokens.radiusSmall),
                       ),
-                      child: Icon(item.icon, color: Colors.white, size: 22),
+                      child: SizedBox(
+                        width: 52,
+                        height: 52,
+                        child:
+                            item.imageUrl != null && item.imageUrl!.isNotEmpty
+                            ? Image.network(
+                                item.imageUrl!,
+                                width: 52,
+                                height: 52,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: item.iconGradient,
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    item.icon,
+                                    color: Colors.white,
+                                    size: 22,
+                                  ),
+                                ),
+                              )
+                            : Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: item.iconGradient,
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                ),
+                                child: Icon(
+                                  item.icon,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
+                              ),
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -2278,12 +2281,14 @@ class _HomeQuickAccessItem {
   final String title;
   final IconData icon;
   final List<Color> iconGradient;
+  final String? imageUrl;
   final VoidCallback onTap;
 
   const _HomeQuickAccessItem({
     required this.title,
     required this.icon,
     required this.iconGradient,
+    this.imageUrl,
     required this.onTap,
   });
 }

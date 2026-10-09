@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'search_screen.dart';
+import 'downloads_screen.dart';
 import 'library_screen.dart';
 import 'spotify_import_screen.dart';
 import '../widgets/mini_player.dart';
@@ -15,6 +16,7 @@ import '../services/update_service.dart';
 import '../services/spotify_import_service.dart';
 import '../services/data_snapshot_service.dart';
 import '../widgets/responsive_wrapper.dart';
+import '../widgets/offline_indicator_banner.dart';
 import '../layouts/desktop_app_shell.dart';
 
 class MainScreen extends StatefulWidget {
@@ -173,6 +175,7 @@ class _MainScreenState extends State<MainScreen> {
                       key: _searchScreenKey,
                       isActive: _selectedIndex == 1,
                     ),
+                    const DownloadsScreen(),
                     const LibraryScreen(),
                   ],
                 ),
@@ -198,6 +201,22 @@ class _MainScreenState extends State<MainScreen> {
                         },
                       ),
                     ],
+                  ),
+                ),
+                // Persistent non-intrusive offline indicator banner
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: OfflineIndicatorBanner(
+                    onGoToDownloads: () {
+                      setState(() => _selectedIndex = 2);
+                      _pageController.animateToPage(
+                        2,
+                        duration: const Duration(milliseconds: 320),
+                        curve: Curves.easeOutCubic,
+                      );
+                    },
                   ),
                 ),
               ],

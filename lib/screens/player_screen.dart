@@ -224,7 +224,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Drag ☰ on the left to change priority',
+                              'Swipe right to delete • Swipe left to send to bottom • Drag ☰ to reorder',
                               style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.5),
                                 fontSize: 12,
@@ -282,177 +282,277 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 song.id.value,
                               );
 
-                              return Container(
-                                key: ValueKey('${song.id.value}_$index'),
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: isCurrent
-                                      ? Theme.of(
-                                          context,
-                                        ).primaryColor.withValues(alpha: 0.16)
-                                      : const Color(0xFF1B1B26),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
+                              return Dismissible(
+                                key: ValueKey(
+                                  'queue_dismissible_${song.id.value}_$index',
+                                ),
+                                direction: isCurrent
+                                    ? DismissDirection.none
+                                    : DismissDirection.horizontal,
+                                background: Container(
+                                  margin: const EdgeInsets.symmetric(
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent.withValues(
+                                      alpha: 0.85,
+                                    ),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                  ),
+                                  alignment: Alignment.centerLeft,
+                                  child: const Row(
+                                    children: [
+                                      Icon(
+                                        Icons.delete_sweep_rounded,
+                                        color: Colors.white,
+                                        size: 22,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Remove from queue',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                secondaryBackground: Container(
+                                  margin: const EdgeInsets.symmetric(
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.indigoAccent.withValues(
+                                      alpha: 0.85,
+                                    ),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                  ),
+                                  alignment: Alignment.centerRight,
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        'Send to bottom',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      SizedBox(width: 8),
+                                      Icon(
+                                        Icons.vertical_align_bottom_rounded,
+                                        color: Colors.white,
+                                        size: 22,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                confirmDismiss: (direction) async {
+                                  if (direction ==
+                                      DismissDirection.startToEnd) {
+                                    HapticFeedback.mediumImpact();
+                                    return true;
+                                  } else if (direction ==
+                                      DismissDirection.endToStart) {
+                                    HapticFeedback.lightImpact();
+                                    _musicService.reorderQueue(
+                                      index,
+                                      playlist.length,
+                                    );
+                                    setSheetState(() {});
+                                    return false;
+                                  }
+                                  return false;
+                                },
+                                onDismissed: (direction) {
+                                  if (direction ==
+                                      DismissDirection.startToEnd) {
+                                    _musicService.removeFromQueue(index);
+                                    setSheetState(() {});
+                                  }
+                                },
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
                                     color: isCurrent
                                         ? Theme.of(
                                             context,
-                                          ).primaryColor.withValues(alpha: 0.45)
-                                        : Colors.white.withValues(alpha: 0.07),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
+                                          ).primaryColor.withValues(alpha: 0.16)
+                                        : const Color(0xFF1B1B26),
                                     borderRadius: BorderRadius.circular(14),
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      _musicService.playPlaylist(
-                                        playlist,
-                                        index,
-                                      );
-                                    },
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                        vertical: 6,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          // Far left 3-line handle for priority reordering
-                                          ReorderableDragStartListener(
-                                            index: index,
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 10,
-                                                    vertical: 12,
-                                                  ),
-                                              child: const Icon(
-                                                Icons.menu_rounded,
-                                                color: Colors.white60,
-                                                size: 20,
+                                    border: Border.all(
+                                      color: isCurrent
+                                          ? Theme.of(context).primaryColor
+                                                .withValues(alpha: 0.45)
+                                          : Colors.white.withValues(
+                                              alpha: 0.07,
+                                            ),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(14),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        _musicService.playPlaylist(
+                                          playlist,
+                                          index,
+                                        );
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                          vertical: 6,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            // Far left 3-line handle for priority reordering
+                                            ReorderableDragStartListener(
+                                              index: index,
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 12,
+                                                    ),
+                                                child: const Icon(
+                                                  Icons.menu_rounded,
+                                                  color: Colors.white60,
+                                                  size: 20,
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                          ClipRRect(
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                            child: Image.network(
-                                              hdThumbnail,
-                                              width: 44,
-                                              height: 44,
-                                              cacheWidth: 100,
-                                              cacheHeight: 100,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, _, _) =>
-                                                  Image.network(
-                                                    song.thumbnails.lowResUrl,
-                                                    width: 44,
-                                                    height: 44,
-                                                    cacheWidth: 100,
-                                                    cacheHeight: 100,
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Text(
-                                                  song.title,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    color: isCurrent
-                                                        ? Theme.of(
-                                                            context,
-                                                          ).primaryColor
-                                                        : Colors.white,
-                                                    fontWeight: isCurrent
-                                                        ? FontWeight.bold
-                                                        : FontWeight.w600,
-                                                    fontSize: 13.5,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 2),
-                                                Text(
-                                                  song.author,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    color: isCurrent
-                                                        ? Theme.of(context)
-                                                              .primaryColor
-                                                              .withValues(
-                                                                alpha: 0.8,
-                                                              )
-                                                        : Colors.white54,
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          if (isCurrent)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                right: 6,
+                                            ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              child: Image.network(
+                                                hdThumbnail,
+                                                width: 44,
+                                                height: 44,
+                                                cacheWidth: 100,
+                                                cacheHeight: 100,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, _, _) =>
+                                                    Image.network(
+                                                      song.thumbnails.lowResUrl,
+                                                      width: 44,
+                                                      height: 44,
+                                                      cacheWidth: 100,
+                                                      cacheHeight: 100,
+                                                      fit: BoxFit.cover,
+                                                    ),
                                               ),
-                                              child: Icon(
-                                                Icons.equalizer_rounded,
-                                                color: Theme.of(
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    song.title,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: isCurrent
+                                                          ? Theme.of(
+                                                              context,
+                                                            ).primaryColor
+                                                          : Colors.white,
+                                                      fontWeight: isCurrent
+                                                          ? FontWeight.bold
+                                                          : FontWeight.w600,
+                                                      fontSize: 13.5,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    song.author,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: isCurrent
+                                                          ? Theme.of(context)
+                                                                .primaryColor
+                                                                .withValues(
+                                                                  alpha: 0.8,
+                                                                )
+                                                          : Colors.white54,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            if (isCurrent)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  right: 6,
+                                                ),
+                                                child: Icon(
+                                                  Icons.equalizer_rounded,
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).primaryColor,
+                                                  size: 22,
+                                                ),
+                                              ),
+                                            IconButton(
+                                              icon: const Icon(
+                                                Icons.more_vert_rounded,
+                                                color: Colors.white38,
+                                                size: 18,
+                                              ),
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(
+                                                minWidth: 32,
+                                                minHeight: 32,
+                                              ),
+                                              onPressed: () {
+                                                showSongOptionsBottomSheet(
                                                   context,
-                                                ).primaryColor,
-                                                size: 22,
+                                                  song,
+                                                );
+                                              },
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(
+                                                Icons.close_rounded,
+                                                color: Colors.white38,
+                                                size: 18,
                                               ),
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(
+                                                minWidth: 32,
+                                                minHeight: 32,
+                                              ),
+                                              onPressed: () {
+                                                HapticFeedback.lightImpact();
+                                                _musicService.removeFromQueue(
+                                                  index,
+                                                );
+                                                setSheetState(() {});
+                                              },
                                             ),
-                                          IconButton(
-                                            icon: const Icon(
-                                              Icons.more_vert_rounded,
-                                              color: Colors.white38,
-                                              size: 18,
-                                            ),
-                                            padding: EdgeInsets.zero,
-                                            constraints: const BoxConstraints(
-                                              minWidth: 32,
-                                              minHeight: 32,
-                                            ),
-                                            onPressed: () {
-                                              showSongOptionsBottomSheet(
-                                                context,
-                                                song,
-                                              );
-                                            },
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(
-                                              Icons.close_rounded,
-                                              color: Colors.white38,
-                                              size: 18,
-                                            ),
-                                            padding: EdgeInsets.zero,
-                                            constraints: const BoxConstraints(
-                                              minWidth: 32,
-                                              minHeight: 32,
-                                            ),
-                                            onPressed: () {
-                                              HapticFeedback.lightImpact();
-                                              _musicService.removeFromQueue(
-                                                index,
-                                              );
-                                              setSheetState(() {});
-                                            },
-                                          ),
-                                          const SizedBox(width: 4),
-                                        ],
+                                            const SizedBox(width: 4),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
