@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../../layouts/desktop_layout_state.dart';
 import '../../services/music_service.dart';
+import '../../services/preferences_service.dart';
 import '../../services/dynamic_artist_service.dart';
 import '../../services/album_color_deriver.dart';
 import '../../screens/player_screen.dart';
@@ -343,7 +344,9 @@ class _DesktopNowPlayingTab extends StatelessWidget {
                     isLiked
                         ? Icons.favorite_rounded
                         : Icons.favorite_border_rounded,
-                    color: isLiked ? const Color(0xFFFA2D48) : Colors.white70,
+                    color: isLiked
+                        ? PreferencesService().themeColor
+                        : Colors.white70,
                     size: 20.0,
                   ),
                   onPressed: () => musicService.toggleLike(song),
@@ -510,11 +513,11 @@ class _DesktopLyricsPreviewBoxState extends State<_DesktopLyricsPreviewBox> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
+                Row(
                   children: [
                     Icon(
                       Icons.lyrics_rounded,
-                      color: Color(0xFFFA2D48),
+                      color: PreferencesService().themeColor,
                       size: 16.0,
                     ),
                     SizedBox(width: 6.0),
@@ -890,9 +893,9 @@ class _DesktopLyricsTab extends StatelessWidget {
         }
 
         if (musicService.isFetchingLyrics) {
-          return const Center(
+          return Center(
             child: CircularProgressIndicator(
-              color: Color(0xFFFA2D48),
+              color: PreferencesService().themeColor,
               strokeWidth: 2.5,
             ),
           );
@@ -1100,7 +1103,7 @@ class _DesktopQueueTabState extends State<_DesktopQueueTab> {
                                     track.title,
                                     style: TextStyle(
                                       color: isCurrent
-                                          ? const Color(0xFFFA2D48)
+                                          ? PreferencesService().themeColor
                                           : Colors.white,
                                       fontSize: 12.5,
                                       fontWeight: isCurrent

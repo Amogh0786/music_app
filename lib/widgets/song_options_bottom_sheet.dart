@@ -42,17 +42,20 @@ void showPlaylistSongOptionsBottomSheet(
   final video = songMapToVideo(songMap);
   final thumb = (songMap['thumbnail'] as String?) ?? '';
   final songId = (songMap['id'] as String?) ?? '';
+  final isLikedSongs = playlistId == 'liked_songs';
 
   showSongOptionsBottomSheet(
     context,
     video,
-    currentPlaylistId: playlistId,
+    currentPlaylistId: isLikedSongs ? null : playlistId,
     customThumbnail: thumb,
     onPlayNow: onPlayNow,
-    onRemoveFromPlaylist: () {
-      MusicService().removeSongFromPlaylist(playlistId, songId);
-      onRemoved?.call();
-    },
+    onRemoveFromPlaylist: isLikedSongs
+        ? null
+        : () {
+            MusicService().removeSongFromPlaylist(playlistId, songId);
+            onRemoved?.call();
+          },
   );
 }
 

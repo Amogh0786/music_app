@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../layouts/desktop_layout_state.dart';
 import '../../services/music_service.dart';
+import '../../services/preferences_service.dart';
 import '../playlist_action_menu.dart';
 import '../dilse_tooltip.dart';
 
@@ -115,137 +116,154 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
   // 1. COMPACT MODE (Width <= 96px)
   // ===========================================================================
   Widget _buildCompactSidebar(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(8.0, 8.0, 0.0, 8.0),
-      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 14.0),
-      decoration: BoxDecoration(
-        color: const Color(0xFF16161E),
-        borderRadius: BorderRadius.circular(12.0),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
-          width: 1.0,
-        ),
-      ),
-      child: Column(
-        children: [
-          // Logo Top Anchor
-          Container(
-            width: 40.0,
-            height: 40.0,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFA2D48), Color(0xFFFF6B81)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+    final prefs = PreferencesService();
+
+    return AnimatedBuilder(
+      animation: Listenable.merge([
+        _musicService,
+        prefs,
+        DesktopLayoutState.activeNavTab,
+        DesktopLayoutState.activePlaylistId,
+      ]),
+      builder: (context, _) {
+        final accentColor = prefs.legibleThemeColor;
+        final activeTab = DesktopLayoutState.activeNavTab.value;
+        final activePlaylistId = DesktopLayoutState.activePlaylistId.value;
+
+        return Container(
+          margin: const EdgeInsets.fromLTRB(8.0, 8.0, 0.0, 8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 12.0),
+          decoration: BoxDecoration(
+            color: const Color(0xFF16161E),
+            borderRadius: BorderRadius.circular(12.0),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.08),
+              width: 1.0,
+            ),
+          ),
+          child: Column(
+            children: [
+              // 1. Top Persistent Expand / Toggle Control (Spotify-parity Reference 1)
+              _buildCompactNavIcon(
+                icon: Icons.menu_open_rounded,
+                isFlipped: true,
+                label: 'Expand sidebar',
+                color: Colors.white70,
+                onTap: () => DesktopLayoutState.toggleLeftSidebar(),
               ),
-              borderRadius: BorderRadius.circular(10.0),
-            ),
-            child: const Icon(
-              Icons.music_note_rounded,
-              color: Colors.white,
-              size: 22,
-            ),
-          ),
-          const SizedBox(height: 16.0),
 
-          // Primary Navigation Icons
-          _buildCompactNavIcon(
-            icon: Icons.home_filled,
-            label: 'Home',
-            onTap: () => DesktopLayoutState.setNavTab(DesktopNavTab.home),
-          ),
-          _buildCompactNavIcon(
-            icon: Icons.search_rounded,
-            label: 'Search',
-            onTap: () => DesktopLayoutState.setNavTab(DesktopNavTab.search),
-          ),
-          _buildCompactNavIcon(
-            icon: Icons.library_music_rounded,
-            label: 'Your Library',
-            onTap: () => DesktopLayoutState.toggleLeftSidebar(),
-          ),
+              const SizedBox(height: 6.0),
 
-          const SizedBox(height: 10.0),
-          Divider(color: Colors.white.withValues(alpha: 0.08), height: 1.0),
-          const SizedBox(height: 10.0),
+              // 2. Primary Navigation Icons
+              _buildCompactNavIcon(
+                icon: Icons.home_filled,
+                label: 'Home',
+                isActive: activeTab == DesktopNavTab.home,
+                onTap: () => DesktopLayoutState.setNavTab(DesktopNavTab.home),
+              ),
+              _buildCompactNavIcon(
+                icon: Icons.search_rounded,
+                label: 'Search',
+                isActive: activeTab == DesktopNavTab.search,
+                onTap: () => DesktopLayoutState.setNavTab(DesktopNavTab.search),
+              ),
 
-          // Create Playlist Action
-          _buildCompactNavIcon(
-            icon: Icons.add_rounded,
-            label: 'Create Playlist',
-            color: Colors.white70,
-            onTap: _showCreatePlaylistDialog,
-          ),
+              const SizedBox(height: 6.0),
+              Divider(color: Colors.white.withValues(alpha: 0.08), height: 1.0),
+              const SizedBox(height: 6.0),
 
-          // Liked Songs Squircle Icon
-          _buildCompactNavIcon(
-            icon: Icons.favorite_rounded,
-            label: 'Liked Songs (${_musicService.likedSongs.length})',
-            color: const Color(0xFFFA2D48),
-            onTap: () {
-              if (_musicService.likedSongs.isNotEmpty) {
-                _musicService.playLikedSong(_musicService.likedSongs.first);
-              }
-            },
-          ),
+              // 3. Create Playlist Action
+              _buildCompactNavIcon(
+                icon: Icons.add_rounded,
+                label: 'Create Playlist',
+                color: Colors.white70,
+                onTap: _showCreatePlaylistDialog,
+              ),
 
-          const SizedBox(height: 8.0),
+              // 4. Liked Songs Squircle Icon
+              _buildCompactNavIcon(
+                icon: Icons.favorite_rounded,
+                label: 'Liked Songs (${_musicService.likedSongs.length})',
+                color: accentColor,
+                isActive:
+                    activeTab == DesktopNavTab.customPlaylist &&
+                    activePlaylistId == 'liked_songs',
+                onTap: () {
+                  DesktopLayoutState.openPlaylist('liked_songs');
+                },
+              ),
 
-          // Custom Playlists Squircles List
-          Expanded(
-            child: AnimatedBuilder(
-              animation: _musicService,
-              builder: (context, _) {
-                final playlists = _musicService.customPlaylists;
-                return ListView.builder(
-                  padding: EdgeInsets.zero,
-                  itemCount: playlists.length > 8 ? 8 : playlists.length,
-                  itemBuilder: (context, index) {
-                    final pl = playlists[index];
-                    final name = pl['name']?.toString() ?? 'Playlist';
-                    final id = pl['id']?.toString() ?? '';
+              const SizedBox(height: 8.0),
 
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4.0),
-                      child: DilSeTooltip(
-                        message: name,
-                        child: GestureDetector(
-                          onTap: () {
-                            if (id.isNotEmpty) {
-                              DesktopLayoutState.openPlaylist(id);
-                            }
-                          },
-                          child: Container(
-                            width: 44.0,
-                            height: 44.0,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF282836),
-                              borderRadius: BorderRadius.circular(8.0),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.06),
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                name.isNotEmpty ? name[0].toUpperCase() : 'P',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16.0,
+              // 5. Custom Playlists Squircles List
+              Expanded(
+                child: AnimatedBuilder(
+                  animation: _musicService,
+                  builder: (context, _) {
+                    final playlists = _musicService.customPlaylists;
+                    return ListView.builder(
+                      padding: EdgeInsets.zero,
+                      itemCount: playlists.length > 8 ? 8 : playlists.length,
+                      itemBuilder: (context, index) {
+                        final pl = playlists[index];
+                        final name = pl['name']?.toString() ?? 'Playlist';
+                        final id = pl['id']?.toString() ?? '';
+                        final isSelected =
+                            activeTab == DesktopNavTab.customPlaylist &&
+                            activePlaylistId == id;
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4.0),
+                          child: DilSeTooltip(
+                            message: name,
+                            child: GestureDetector(
+                              onTap: () {
+                                if (id.isNotEmpty) {
+                                  DesktopLayoutState.openPlaylist(id);
+                                }
+                              },
+                              child: Container(
+                                width: 44.0,
+                                height: 44.0,
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? accentColor.withValues(alpha: 0.22)
+                                      : const Color(0xFF282836),
+                                  borderRadius: BorderRadius.circular(8.0),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? accentColor
+                                        : Colors.white.withValues(alpha: 0.06),
+                                    width: isSelected ? 1.5 : 1.0,
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    name.isNotEmpty
+                                        ? name[0].toUpperCase()
+                                        : 'P',
+                                    style: TextStyle(
+                                      color: isSelected
+                                          ? accentColor
+                                          : Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16.0,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -253,10 +271,15 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
     required IconData icon,
     required String label,
     Color? color,
+    bool isActive = false,
+    bool isFlipped = false,
     required VoidCallback onTap,
   }) {
+    final prefs = PreferencesService();
+    final accentColor = prefs.legibleThemeColor;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      padding: const EdgeInsets.symmetric(vertical: 3.0),
       child: DilSeTooltip(
         message: label,
         child: InkWell(
@@ -267,13 +290,35 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
             height: 44.0,
             alignment: Alignment.center,
             decoration: BoxDecoration(
+              color: isActive
+                  ? accentColor.withValues(alpha: 0.18)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(10.0),
+              border: isActive
+                  ? Border.all(
+                      color: accentColor.withValues(alpha: 0.4),
+                      width: 1.0,
+                    )
+                  : null,
             ),
-            child: Icon(
-              icon,
-              color: color ?? Colors.white.withValues(alpha: 0.8),
-              size: 22.0,
-            ),
+            child: isFlipped
+                ? Transform.flip(
+                    flipX: true,
+                    child: Icon(
+                      icon,
+                      color: isActive
+                          ? accentColor
+                          : (color ?? Colors.white.withValues(alpha: 0.8)),
+                      size: 22.0,
+                    ),
+                  )
+                : Icon(
+                    icon,
+                    color: isActive
+                        ? accentColor
+                        : (color ?? Colors.white.withValues(alpha: 0.8)),
+                    size: 22.0,
+                  ),
           ),
         ),
       ),
@@ -351,7 +396,7 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            tooltip: 'Collapse Library',
+                            tooltip: 'Collapse sidebar',
                             visualDensity: VisualDensity.compact,
                             constraints: const BoxConstraints(
                               minWidth: 28,
@@ -573,6 +618,8 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                     animation: Listenable.merge([
                       _musicService,
                       _selectedFilters,
+                      DesktopLayoutState.activeNavTab,
+                      DesktopLayoutState.activePlaylistId,
                     ]),
                     builder: (context, _) {
                       final playlists = _getFilteredPlaylists();
@@ -741,6 +788,9 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
   Widget _buildLikedSongsRow(BuildContext context) {
     final count = _musicService.likedSongs.length;
     final isHovered = _hoveredRowId == 'liked_songs';
+    final isSelected =
+        DesktopLayoutState.activeNavTab.value == DesktopNavTab.customPlaylist &&
+        DesktopLayoutState.activePlaylistId.value == 'liked_songs';
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hoveredRowId = 'liked_songs'),
@@ -748,14 +798,14 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
       child: InkWell(
         borderRadius: BorderRadius.circular(8.0),
         onTap: () {
-          if (_musicService.likedSongs.isNotEmpty) {
-            _musicService.playLikedSong(_musicService.likedSongs.first);
-          }
+          DesktopLayoutState.openPlaylist('liked_songs');
         },
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
           decoration: BoxDecoration(
-            color: isHovered
+            color: isSelected
+                ? Colors.white.withValues(alpha: 0.10)
+                : isHovered
                 ? Colors.white.withValues(alpha: 0.05)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(8.0),
@@ -787,10 +837,12 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Liked Songs',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: isSelected
+                            ? const Color(0xFF1DB954)
+                            : Colors.white,
                         fontSize: 13.5,
                         fontWeight: FontWeight.w600,
                       ),
@@ -808,9 +860,13 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                         const SizedBox(width: 4.0),
                         Expanded(
                           child: Text(
-                            'Playlist • $count songs',
+                            'Playlist • $count ${count == 1 ? "song" : "songs"}',
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.6),
+                              color: isSelected
+                                  ? const Color(
+                                      0xFF1DB954,
+                                    ).withValues(alpha: 0.8)
+                                  : Colors.white.withValues(alpha: 0.6),
                               fontSize: 12.0,
                             ),
                             maxLines: 1,
@@ -836,6 +892,9 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
     final trackCount =
         (pl['tracks'] as List?)?.length ?? (pl['songs'] as List?)?.length ?? 0;
     final isHovered = _hoveredRowId == id;
+    final isSelected =
+        DesktopLayoutState.activeNavTab.value == DesktopNavTab.customPlaylist &&
+        DesktopLayoutState.activePlaylistId.value == id;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hoveredRowId = id),
@@ -850,7 +909,9 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
           decoration: BoxDecoration(
-            color: isHovered
+            color: isSelected
+                ? Colors.white.withValues(alpha: 0.10)
+                : isHovered
                 ? Colors.white.withValues(alpha: 0.05)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(8.0),
@@ -891,8 +952,10 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                   children: [
                     Text(
                       name,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: isSelected
+                            ? const Color(0xFF1DB954)
+                            : Colors.white,
                         fontSize: 13.5,
                         fontWeight: FontWeight.w600,
                       ),
@@ -903,9 +966,11 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                     Text(
                       isSpotify
                           ? 'Playlist • Spotify Import'
-                          : 'Playlist • $trackCount songs',
+                          : 'Playlist • $trackCount ${trackCount == 1 ? "song" : "songs"}',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.6),
+                        color: isSelected
+                            ? const Color(0xFF1DB954).withValues(alpha: 0.8)
+                            : Colors.white.withValues(alpha: 0.6),
                         fontSize: 12.0,
                       ),
                       maxLines: 1,

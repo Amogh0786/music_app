@@ -115,9 +115,7 @@ class _DesktopTrackInfoSection extends StatelessWidget {
                                     left: 0,
                                     right: 0,
                                     height: 3.0,
-                                    child: Container(
-                                      color: const Color(0xFFFA2D48),
-                                    ),
+                                    child: Container(color: prefs.themeColor),
                                   ),
                                 ],
                               ),
@@ -191,7 +189,7 @@ class _DesktopTrackInfoSection extends StatelessWidget {
                         ? Icons.favorite_rounded
                         : Icons.favorite_border_rounded,
                     color: isLiked
-                        ? const Color(0xFFFA2D48)
+                        ? prefs.themeColor
                         : Colors.white.withValues(alpha: 0.5),
                     size: 19.0,
                   ),
@@ -331,7 +329,7 @@ class _DesktopTrackInfoSection extends StatelessWidget {
                     ? Icons.favorite_rounded
                     : Icons.favorite_border_rounded,
                 color: isLiked
-                    ? const Color(0xFFFA2D48)
+                    ? prefs.themeColor
                     : Colors.white.withValues(alpha: 0.6),
                 size: 20.0,
               ),
@@ -351,6 +349,7 @@ class _DesktopCenterPlaybackSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final musicService = MusicService();
+    final prefs = PreferencesService();
 
     return Center(
       child: ConstrainedBox(
@@ -360,13 +359,14 @@ class _DesktopCenterPlaybackSection extends StatelessWidget {
           children: [
             // Top Controls Row
             AnimatedBuilder(
-              animation: musicService,
+              animation: Listenable.merge([musicService, prefs]),
               builder: (context, _) {
                 final isShuffle = musicService.isShuffle;
                 final isPlaying = musicService.isPlaying;
                 final isLoading = musicService.isLoading;
                 final isRepeat = musicService.loopMode != LoopMode.off;
                 final isRepeatOne = musicService.loopMode == LoopMode.one;
+                final accentColor = prefs.themeColor;
 
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -377,7 +377,7 @@ class _DesktopCenterPlaybackSection extends StatelessWidget {
                       icon: Icon(
                         Icons.shuffle_rounded,
                         color: isShuffle
-                            ? const Color(0xFFFA2D48)
+                            ? accentColor
                             : Colors.white.withValues(alpha: 0.6),
                         size: 19.0,
                       ),
@@ -458,7 +458,7 @@ class _DesktopCenterPlaybackSection extends StatelessWidget {
                             ? Icons.repeat_one_rounded
                             : Icons.repeat_rounded,
                         color: isRepeat
-                            ? const Color(0xFFFA2D48)
+                            ? accentColor
                             : Colors.white.withValues(alpha: 0.6),
                         size: 19.0,
                       ),
@@ -504,6 +504,9 @@ class _DesktopTimelineScrubberState extends State<_DesktopTimelineScrubber> {
 
   @override
   Widget build(BuildContext context) {
+    final prefs = PreferencesService();
+    final accentColor = prefs.themeColor;
+
     return StreamBuilder<Duration?>(
       stream: _musicService.durationStream,
       initialData: _musicService.duration,
@@ -569,14 +572,12 @@ class _DesktopTimelineScrubberState extends State<_DesktopTimelineScrubber> {
                         overlayShape: isScrubbable
                             ? const RoundSliderOverlayShape(overlayRadius: 10.0)
                             : const RoundSliderOverlayShape(overlayRadius: 0.0),
-                        activeTrackColor: const Color(0xFFFA2D48),
+                        activeTrackColor: accentColor,
                         inactiveTrackColor: Colors.white.withValues(
                           alpha: 0.15,
                         ),
                         thumbColor: Colors.white,
-                        overlayColor: const Color(
-                          0xFFFA2D48,
-                        ).withValues(alpha: 0.2),
+                        overlayColor: accentColor.withValues(alpha: 0.25),
                       ),
                       child: Slider(
                         value: isScrubbable ? currentVal : 0.0,
@@ -644,195 +645,221 @@ class _DesktopUtilitiesSectionState extends State<_DesktopUtilitiesSection> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Synced Lyrics Toggle
-        ValueListenableBuilder<DesktopContextTab>(
-          valueListenable: DesktopLayoutState.contextTab,
-          builder: (context, tab, _) {
-            return ValueListenableBuilder<bool>(
-              valueListenable: DesktopLayoutState.isRightPanelVisible,
-              builder: (context, isVisible, _) {
-                final active = isVisible && tab == DesktopContextTab.lyrics;
-                return IconButton(
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.all(4.0),
-                  constraints: const BoxConstraints(
-                    minWidth: 28.0,
-                    minHeight: 28.0,
-                  ),
-                  tooltip: 'Lyrics',
-                  icon: Icon(
-                    Icons.lyrics_rounded,
-                    color: active
-                        ? const Color(0xFFFA2D48)
-                        : Colors.white.withValues(alpha: 0.6),
-                    size: 19.0,
-                  ),
-                  onPressed: () {
-                    if (active) {
-                      DesktopLayoutState.toggleRightPanel();
-                    } else {
-                      DesktopLayoutState.setContextTab(
-                        DesktopContextTab.lyrics,
+    final prefs = PreferencesService();
+
+    return AnimatedBuilder(
+      animation: prefs,
+      builder: (context, _) {
+        final accentColor = prefs.themeColor;
+
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Synced Lyrics Toggle
+              ValueListenableBuilder<DesktopContextTab>(
+                valueListenable: DesktopLayoutState.contextTab,
+                builder: (context, tab, _) {
+                  return ValueListenableBuilder<bool>(
+                    valueListenable: DesktopLayoutState.isRightPanelVisible,
+                    builder: (context, isVisible, _) {
+                      final active =
+                          isVisible && tab == DesktopContextTab.lyrics;
+                      return IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.all(4.0),
+                        constraints: const BoxConstraints(
+                          minWidth: 28.0,
+                          minHeight: 28.0,
+                        ),
+                        tooltip: 'Lyrics',
+                        icon: Icon(
+                          Icons.lyrics_rounded,
+                          color: active
+                              ? accentColor
+                              : Colors.white.withValues(alpha: 0.6),
+                          size: 19.0,
+                        ),
+                        onPressed: () {
+                          if (active) {
+                            DesktopLayoutState.toggleRightPanel();
+                          } else {
+                            DesktopLayoutState.setContextTab(
+                              DesktopContextTab.lyrics,
+                            );
+                          }
+                        },
                       );
-                    }
-                  },
-                );
-              },
-            );
-          },
-        ),
+                    },
+                  );
+                },
+              ),
 
-        // Queue Toggle
-        ValueListenableBuilder<DesktopContextTab>(
-          valueListenable: DesktopLayoutState.contextTab,
-          builder: (context, tab, _) {
-            return ValueListenableBuilder<bool>(
-              valueListenable: DesktopLayoutState.isRightPanelVisible,
-              builder: (context, isVisible, _) {
-                final active = isVisible && tab == DesktopContextTab.queue;
-                return IconButton(
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.all(4.0),
-                  constraints: const BoxConstraints(
-                    minWidth: 28.0,
-                    minHeight: 28.0,
-                  ),
-                  tooltip: 'Queue',
-                  icon: Icon(
-                    Icons.queue_music_rounded,
-                    color: active
-                        ? const Color(0xFFFA2D48)
-                        : Colors.white.withValues(alpha: 0.6),
-                    size: 19.0,
-                  ),
-                  onPressed: () {
-                    if (active) {
-                      DesktopLayoutState.toggleRightPanel();
-                    } else {
-                      DesktopLayoutState.setContextTab(DesktopContextTab.queue);
-                    }
-                  },
-                );
-              },
-            );
-          },
-        ),
-
-        const SizedBox(width: 2.0),
-
-        // Volume Mute / Unmute Button
-        StreamBuilder<double>(
-          stream: _musicService.audioPlayer.volumeStream,
-          builder: (context, snapshot) {
-            final volume = snapshot.data ?? _musicService.audioPlayer.volume;
-            final isMuted = volume <= 0.001;
-
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.all(4.0),
-                  constraints: const BoxConstraints(
-                    minWidth: 28.0,
-                    minHeight: 28.0,
-                  ),
-                  tooltip: isMuted ? 'Unmute' : 'Mute',
-                  icon: Icon(
-                    isMuted
-                        ? Icons.volume_off_rounded
-                        : (volume < 0.5
-                              ? Icons.volume_down_rounded
-                              : Icons.volume_up_rounded),
-                    color: Colors.white.withValues(alpha: 0.6),
-                    size: 19.0,
-                  ),
-                  onPressed: () {
-                    if (isMuted) {
-                      _musicService.audioPlayer.setVolume(
-                        _lastVolume > 0 ? _lastVolume : 1.0,
+              // Queue Toggle
+              ValueListenableBuilder<DesktopContextTab>(
+                valueListenable: DesktopLayoutState.contextTab,
+                builder: (context, tab, _) {
+                  return ValueListenableBuilder<bool>(
+                    valueListenable: DesktopLayoutState.isRightPanelVisible,
+                    builder: (context, isVisible, _) {
+                      final active =
+                          isVisible && tab == DesktopContextTab.queue;
+                      return IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.all(4.0),
+                        constraints: const BoxConstraints(
+                          minWidth: 28.0,
+                          minHeight: 28.0,
+                        ),
+                        tooltip: 'Queue',
+                        icon: Icon(
+                          Icons.queue_music_rounded,
+                          color: active
+                              ? accentColor
+                              : Colors.white.withValues(alpha: 0.6),
+                          size: 19.0,
+                        ),
+                        onPressed: () {
+                          if (active) {
+                            DesktopLayoutState.toggleRightPanel();
+                          } else {
+                            DesktopLayoutState.setContextTab(
+                              DesktopContextTab.queue,
+                            );
+                          }
+                        },
                       );
-                    } else {
-                      _lastVolume = volume;
-                      _musicService.audioPlayer.setVolume(0.0);
-                    }
-                  },
-                ),
+                    },
+                  );
+                },
+              ),
 
-                // Sleek 72px Volume Slider
-                SizedBox(
-                  width: 72.0,
-                  child: SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 3.5,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 4.5,
+              const SizedBox(width: 2.0),
+
+              // Volume Mute / Unmute Button
+              StreamBuilder<double>(
+                stream: _musicService.audioPlayer.volumeStream,
+                builder: (context, snapshot) {
+                  final volume =
+                      snapshot.data ?? _musicService.audioPlayer.volume;
+                  final isMuted = volume <= 0.001;
+
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.all(4.0),
+                        constraints: const BoxConstraints(
+                          minWidth: 28.0,
+                          minHeight: 28.0,
+                        ),
+                        tooltip: isMuted ? 'Unmute' : 'Mute',
+                        icon: Icon(
+                          isMuted
+                              ? Icons.volume_off_rounded
+                              : (volume < 0.5
+                                    ? Icons.volume_down_rounded
+                                    : Icons.volume_up_rounded),
+                          color: Colors.white.withValues(alpha: 0.6),
+                          size: 19.0,
+                        ),
+                        onPressed: () {
+                          if (isMuted) {
+                            _musicService.audioPlayer.setVolume(
+                              _lastVolume > 0 ? _lastVolume : 1.0,
+                            );
+                          } else {
+                            _lastVolume = volume;
+                            _musicService.audioPlayer.setVolume(0.0);
+                          }
+                        },
                       ),
-                      overlayShape: const RoundSliderOverlayShape(
-                        overlayRadius: 8.0,
+
+                      // Sleek 72px Volume Slider
+                      SizedBox(
+                        width: 72.0,
+                        child: SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            trackHeight: 3.5,
+                            thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 4.5,
+                            ),
+                            overlayShape: const RoundSliderOverlayShape(
+                              overlayRadius: 8.0,
+                            ),
+                            activeTrackColor: Colors.white,
+                            inactiveTrackColor: Colors.white.withValues(
+                              alpha: 0.15,
+                            ),
+                            thumbColor: Colors.white,
+                            overlayColor: Colors.white.withValues(alpha: 0.15),
+                          ),
+                          child: Slider(
+                            value: volume.clamp(0.0, 1.0),
+                            min: 0.0,
+                            max: 1.0,
+                            onChanged: (val) {
+                              _lastVolume = val;
+                              _musicService.audioPlayer.setVolume(val);
+                            },
+                          ),
+                        ),
                       ),
-                      activeTrackColor: Colors.white,
-                      inactiveTrackColor: Colors.white.withValues(alpha: 0.15),
-                      thumbColor: Colors.white,
-                      overlayColor: Colors.white.withValues(alpha: 0.15),
-                    ),
-                    child: Slider(
-                      value: volume.clamp(0.0, 1.0),
-                      min: 0.0,
-                      max: 1.0,
-                      onChanged: (val) {
-                        _lastVolume = val;
-                        _musicService.audioPlayer.setVolume(val);
-                      },
-                    ),
-                  ),
+                    ],
+                  );
+                },
+              ),
+
+              const SizedBox(width: 2.0),
+
+              // Right Panel Visibility Toggle
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.all(4.0),
+                constraints: const BoxConstraints(
+                  minWidth: 28.0,
+                  minHeight: 28.0,
                 ),
-              ],
-            );
-          },
-        ),
+                tooltip: 'Toggle Now Playing Panel',
+                icon: Icon(
+                  Icons.dock_rounded,
+                  color: Colors.white.withValues(alpha: 0.6),
+                  size: 19.0,
+                ),
+                onPressed: () => DesktopLayoutState.toggleRightPanel(),
+              ),
 
-        const SizedBox(width: 2.0),
+              const SizedBox(width: 2.0),
 
-        // Right Panel Visibility Toggle
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          padding: const EdgeInsets.all(4.0),
-          constraints: const BoxConstraints(minWidth: 28.0, minHeight: 28.0),
-          tooltip: 'Toggle Now Playing Panel',
-          icon: Icon(
-            Icons.dock_rounded,
-            color: Colors.white.withValues(alpha: 0.6),
-            size: 19.0,
+              // Fullscreen Player Launcher
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.all(4.0),
+                constraints: const BoxConstraints(
+                  minWidth: 28.0,
+                  minHeight: 28.0,
+                ),
+                tooltip: 'Open Full Player Screen',
+                icon: Icon(
+                  Icons.open_in_full_rounded,
+                  color: Colors.white.withValues(alpha: 0.6),
+                  size: 17.0,
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PlayerScreen()),
+                  );
+                },
+              ),
+            ],
           ),
-          onPressed: () => DesktopLayoutState.toggleRightPanel(),
-        ),
-
-        const SizedBox(width: 2.0),
-
-        // Fullscreen Player Launcher
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          padding: const EdgeInsets.all(4.0),
-          constraints: const BoxConstraints(minWidth: 28.0, minHeight: 28.0),
-          tooltip: 'Open Full Player Screen',
-          icon: Icon(
-            Icons.open_in_full_rounded,
-            color: Colors.white.withValues(alpha: 0.6),
-            size: 17.0,
-          ),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const PlayerScreen()),
-            );
-          },
-        ),
-      ],
+        );
+      },
     );
   }
 }

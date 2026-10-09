@@ -256,6 +256,27 @@ class PreferencesService extends ChangeNotifier {
   double get bassBoost => _bassBoost;
   double get virtualizer => _virtualizer;
   Color get themeColor => _themeColor;
+
+  /// Returns a WCAG AA-compliant legible accent color on dark surfaces (#0B0B0F).
+  /// If the current theme color's luminance is below 0.18, it is brightened in HSL space
+  /// so scrubbers, active indicators, and icons remain crisp and accessible.
+  Color get legibleThemeColor => ensureLegibleColor(_themeColor);
+
+  /// Helper to ensure any accent color provides sufficient contrast on dark backgrounds.
+  static Color ensureLegibleColor(Color color, {double minLuminance = 0.18}) {
+    if (color.computeLuminance() >= minLuminance) return color;
+
+    final hsl = HSLColor.fromColor(color);
+    double lightness = (hsl.lightness + 0.35).clamp(0.48, 0.95);
+    var candidate = hsl.withLightness(lightness).toColor();
+
+    while (candidate.computeLuminance() < minLuminance && lightness < 0.95) {
+      lightness = (lightness + 0.05).clamp(0.0, 0.95);
+      candidate = hsl.withLightness(lightness).toColor();
+    }
+    return candidate;
+  }
+
   double get cacheSizeMB => _cacheSizeMB;
   String get customServerUrl => _customServerUrl;
   String get cloudflareWorkerUrl => _cloudflareWorkerUrl;

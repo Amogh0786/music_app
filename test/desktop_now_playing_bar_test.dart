@@ -114,5 +114,29 @@ void main() {
       expect(find.text('0:00'), findsNWidgets(2));
       expect(find.byType(Slider), findsWidgets);
     });
+
+    testWidgets(
+      'Propagates dynamic theme accent color to scrubber slider theme',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        const customAccent = Color(0xFF1E88E5); // Electric Blue
+        PreferencesService().setThemeColor(customAccent);
+
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(bottomNavigationBar: DesktopNowPlayingBar()),
+          ),
+        );
+        await tester.pump();
+
+        final sliderTheme = tester.widget<SliderTheme>(
+          find.byType(SliderTheme).first,
+        );
+        expect(sliderTheme.data.activeTrackColor, customAccent);
+      },
+    );
   });
 }

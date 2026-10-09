@@ -11,35 +11,41 @@ void main() {
       DesktopLayoutState.isRightPanelVisible.value = true;
     });
 
-    testWidgets('Renders Compact Mode when width <= 96px', (tester) async {
-      tester.view.physicalSize = const Size(1200, 900);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
+    testWidgets(
+      'Renders Compact Mode with top expand control when width <= 96px',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
 
-      DesktopLayoutState.leftSidebarWidth.value = 72.0;
-      DesktopLayoutState.isLeftSidebarCollapsed.value = true;
+        DesktopLayoutState.leftSidebarWidth.value = 72.0;
+        DesktopLayoutState.isLeftSidebarCollapsed.value = true;
 
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: SizedBox(width: 72.0, child: DesktopLeftSidebar(width: 72.0)),
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 72.0,
+                child: DesktopLeftSidebar(width: 72.0),
+              ),
+            ),
           ),
-        ),
-      );
+        );
 
-      // Verify compact navigation icons exist
-      expect(find.byIcon(Icons.home_filled), findsOneWidget);
-      expect(find.byIcon(Icons.search_rounded), findsOneWidget);
-      expect(find.byIcon(Icons.library_music_rounded), findsOneWidget);
-      expect(find.byIcon(Icons.add_rounded), findsOneWidget);
-      expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
+        // Verify top expand control and compact navigation icons exist
+        expect(find.byIcon(Icons.menu_open_rounded), findsOneWidget);
+        expect(find.byIcon(Icons.home_filled), findsOneWidget);
+        expect(find.byIcon(Icons.search_rounded), findsOneWidget);
+        expect(find.byIcon(Icons.add_rounded), findsOneWidget);
+        expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
 
-      // Test expanding sidebar from compact mode
-      await tester.tap(find.byIcon(Icons.library_music_rounded));
-      await tester.pump();
-      expect(DesktopLayoutState.isLeftSidebarCollapsed.value, false);
-      expect(DesktopLayoutState.leftSidebarWidth.value, 280.0);
-    });
+        // Test expanding sidebar from compact mode via top expand control
+        await tester.tap(find.byIcon(Icons.menu_open_rounded));
+        await tester.pump();
+        expect(DesktopLayoutState.isLeftSidebarCollapsed.value, false);
+        expect(DesktopLayoutState.leftSidebarWidth.value, 280.0);
+      },
+    );
 
     testWidgets('Renders Expanded Mode with filter chips & search toolbar', (
       tester,
@@ -163,6 +169,125 @@ void main() {
 
         // (X) button should disappear
         expect(find.byIcon(Icons.close_rounded), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'Tapping Liked Songs row in expanded sidebar opens liked_songs',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 398.0,
+                child: DesktopLeftSidebar(width: 398.0),
+              ),
+            ),
+          ),
+        );
+
+        expect(find.text('Liked Songs'), findsOneWidget);
+        await tester.tap(find.text('Liked Songs'));
+        await tester.pump();
+
+        expect(
+          DesktopLayoutState.activeNavTab.value,
+          DesktopNavTab.customPlaylist,
+        );
+        expect(DesktopLayoutState.activePlaylistId.value, 'liked_songs');
+      },
+    );
+
+    testWidgets(
+      'Tapping Liked Songs icon in compact sidebar opens liked_songs',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        DesktopLayoutState.leftSidebarWidth.value = 72.0;
+        DesktopLayoutState.isLeftSidebarCollapsed.value = true;
+
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 72.0,
+                child: DesktopLeftSidebar(width: 72.0),
+              ),
+            ),
+          ),
+        );
+
+        expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
+        await tester.tap(find.byIcon(Icons.favorite_rounded));
+        await tester.pump();
+
+        expect(
+          DesktopLayoutState.activeNavTab.value,
+          DesktopNavTab.customPlaylist,
+        );
+        expect(DesktopLayoutState.activePlaylistId.value, 'liked_songs');
+      },
+    );
+
+    testWidgets(
+      'Repeated expand and collapse toggles remain stable and preserve active state',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        DesktopLayoutState.leftSidebarWidth.value = 280.0;
+        DesktopLayoutState.isLeftSidebarCollapsed.value = false;
+        DesktopLayoutState.setNavTab(DesktopNavTab.search);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: ValueListenableBuilder<double>(
+                valueListenable: DesktopLayoutState.leftSidebarWidth,
+                builder: (context, width, _) {
+                  return SizedBox(
+                    width: width,
+                    child: DesktopLeftSidebar(width: width),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+
+        // 1. Initially Expanded
+        expect(find.text('Your Library'), findsOneWidget);
+        expect(DesktopLayoutState.activeNavTab.value, DesktopNavTab.search);
+
+        // 2. Collapse via collapse button
+        await tester.tap(find.byTooltip('Collapse sidebar'));
+        await tester.pump();
+        expect(DesktopLayoutState.isLeftSidebarCollapsed.value, true);
+        expect(DesktopLayoutState.leftSidebarWidth.value, 72.0);
+        expect(find.byTooltip('Expand sidebar'), findsOneWidget);
+        expect(DesktopLayoutState.activeNavTab.value, DesktopNavTab.search);
+
+        // 3. Expand via top expand button
+        await tester.tap(find.byTooltip('Expand sidebar'));
+        await tester.pump();
+        expect(DesktopLayoutState.isLeftSidebarCollapsed.value, false);
+        expect(DesktopLayoutState.leftSidebarWidth.value, 280.0);
+        expect(find.byTooltip('Collapse sidebar'), findsOneWidget);
+        expect(DesktopLayoutState.activeNavTab.value, DesktopNavTab.search);
+
+        // 4. Collapse again to ensure roundtrip durability
+        await tester.tap(find.byTooltip('Collapse sidebar'));
+        await tester.pump();
+        expect(DesktopLayoutState.isLeftSidebarCollapsed.value, true);
+        expect(DesktopLayoutState.leftSidebarWidth.value, 72.0);
+        expect(find.byTooltip('Expand sidebar'), findsOneWidget);
       },
     );
   });

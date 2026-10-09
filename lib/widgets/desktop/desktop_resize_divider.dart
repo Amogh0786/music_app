@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../layouts/desktop_layout_state.dart';
+import '../../services/preferences_service.dart';
 
 /// Interactive vertical resize splitter for Desktop Left Sidebar or Right Panel.
 ///
-/// Provides a 6px wide hit area with column resize cursor, hover highlight (#FA2D48),
+/// Provides a 6px wide hit area with column resize cursor, hover highlight with theme accent,
 /// and smooth drag physics.
 class DesktopResizeDivider extends StatefulWidget {
   final bool isRightSide;
@@ -21,6 +22,7 @@ class _DesktopResizeDividerState extends State<DesktopResizeDivider> {
   @override
   Widget build(BuildContext context) {
     final active = _isHovered || _isDragging;
+    final themeColor = PreferencesService().themeColor;
 
     return MouseRegion(
       cursor: SystemMouseCursors.resizeColumn,
@@ -59,9 +61,7 @@ class _DesktopResizeDividerState extends State<DesktopResizeDivider> {
             duration: const Duration(milliseconds: 140),
             curve: Curves.easeOut,
             width: active ? 2.0 : 1.0,
-            color: active
-                ? const Color(0xFFFA2D48)
-                : Colors.white.withValues(alpha: 0.08),
+            color: active ? themeColor : Colors.white.withValues(alpha: 0.08),
           ),
         ),
       ),

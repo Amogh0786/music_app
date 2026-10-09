@@ -135,5 +135,34 @@ void main() {
       expect(DesktopLayoutState.activeNavTab.value, DesktopNavTab.home);
       expect(DesktopLayoutState.activeAlbumData.value, null);
     });
+
+    testWidgets(
+      'Renders Liked Songs in CustomPlaylistScreen when openPlaylist(liked_songs) is invoked',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        await tester.pumpWidget(
+          const MaterialApp(home: Scaffold(body: DesktopMainViewport())),
+        );
+
+        DesktopLayoutState.openPlaylist('liked_songs');
+        await tester.pumpAndSettle();
+
+        expect(
+          DesktopLayoutState.activeNavTab.value,
+          DesktopNavTab.customPlaylist,
+        );
+        expect(DesktopLayoutState.activePlaylistId.value, 'liked_songs');
+        expect(find.text('Liked Songs'), findsWidgets);
+
+        // Close detail view
+        DesktopLayoutState.closeDetailView();
+        await tester.pumpAndSettle();
+        expect(DesktopLayoutState.activeNavTab.value, DesktopNavTab.home);
+        expect(DesktopLayoutState.activePlaylistId.value, null);
+      },
+    );
   });
 }
