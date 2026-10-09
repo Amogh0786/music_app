@@ -9,6 +9,7 @@ import '../widgets/animated_equalizer.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/shimmer_loading.dart';
 import '../widgets/mini_player.dart';
+import '../layouts/desktop_layout_state.dart';
 
 /// Dedicated Artist Profile & Discography Screen with deep multi-language,
 /// movie range, and filmography filters.
@@ -286,7 +287,13 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
                         size: 18,
                       ),
                     ),
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      if (Navigator.canPop(context)) {
+                        Navigator.pop(context);
+                      } else {
+                        DesktopLayoutState.closeDetailView();
+                      }
+                    },
                   ),
                   flexibleSpace: FlexibleSpaceBar(
                     background: Stack(
@@ -1147,7 +1154,7 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
               ],
             ),
           ),
-          // Floating MiniPlayer visible over artist content when a song is playing
+          // Floating MiniPlayer visible over artist content when a song is playing (mobile only)
           Positioned(
             left: 0,
             right: 0,
@@ -1155,7 +1162,8 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
             child: AnimatedBuilder(
               animation: MusicService(),
               builder: (context, _) {
-                if (MusicService().currentSong == null) {
+                if (MediaQuery.of(context).size.width >= 1024 ||
+                    MusicService().currentSong == null) {
                   return const SizedBox.shrink();
                 }
                 return const MiniPlayer();

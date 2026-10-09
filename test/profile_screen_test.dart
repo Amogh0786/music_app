@@ -70,7 +70,6 @@ void main() {
       expect(find.text('Your DilSe Capsule'), findsOneWidget);
       expect(find.text('READY'), findsOneWidget);
       expect(find.text('Edit Profile'), findsOneWidget);
-      expect(find.text('Change Photo'), findsOneWidget);
 
       // Listening Highlights Bar
       expect(find.text('Total Plays'), findsOneWidget);

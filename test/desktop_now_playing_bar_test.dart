@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music_app/layouts/desktop_layout_state.dart';
+import 'package:music_app/services/preferences_service.dart';
 import 'package:music_app/widgets/desktop/desktop_now_playing_bar.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('DesktopNowPlayingBar Widget Tests', () {
-    setUp(() {
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = PreferencesService();
+      prefs.resetForTesting();
+      await prefs.init();
+
       DesktopLayoutState.leftSidebarWidth.value = 280.0;
       DesktopLayoutState.isLeftSidebarCollapsed.value = false;
       DesktopLayoutState.isRightPanelVisible.value = true;
@@ -57,5 +66,34 @@ void main() {
       await tester.pump();
       expect(DesktopLayoutState.isRightPanelVisible.value, false);
     });
+
+    testWidgets(
+      'Renders Jump Back In track when history exists and engine is idle',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        // Populate history
+        await PreferencesService().addToListeningHistory({
+          'id': 'test_jump_song_123',
+          'title': 'Dil Kaa Jo Haal Hai',
+          'author': 'Abhijeet Bhattacharya',
+          'thumbnail': 'https://example.com/art.jpg',
+        });
+
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(bottomNavigationBar: DesktopNowPlayingBar()),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('JUMP BACK IN'), findsOneWidget);
+        expect(find.text('Dil Kaa Jo Haal Hai'), findsOneWidget);
+        expect(find.text('Abhijeet Bhattacharya'), findsOneWidget);
+        expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
+      },
+    );
   });
 }

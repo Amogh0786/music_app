@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -9,6 +10,7 @@ import 'settings_screen.dart';
 import 'dilse_capsule_screen.dart';
 import 'artist_profile_screen.dart';
 import 'custom_playlist_screen.dart';
+import '../layouts/desktop_layout_state.dart';
 
 /// Spotify-grade Profile & Activity Screen.
 ///
@@ -862,21 +864,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           onPressed: () => _showEditNameDialog(context, prefs),
         ),
-
-        // Change Picture Button
-        OutlinedButton.icon(
-          icon: const Icon(Icons.photo_camera_outlined, size: 16),
-          label: const Text('Change Photo'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white70,
-            side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-          ),
-          onPressed: () => _showAvatarOptionsSheet(context, prefs),
-        ),
       ],
     );
   }
@@ -929,13 +916,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         subtitle: topArtistPlays,
         onTap: prefs.mostPlayedArtist.isNotEmpty
             ? () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        ArtistProfileScreen(artistName: prefs.mostPlayedArtist),
-                  ),
-                );
+                if (isDesktop) {
+                  DesktopLayoutState.openArtist(prefs.mostPlayedArtist);
+                } else {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ArtistProfileScreen(
+                        artistName: prefs.mostPlayedArtist,
+                      ),
+                    ),
+                  );
+                }
               }
             : null,
       ),
@@ -1139,13 +1131,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               return InkWell(
                 onTap: () {
                   HapticFeedback.lightImpact();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          ArtistProfileScreen(artistName: artistName),
-                    ),
-                  );
+                  if (kIsWeb && MediaQuery.of(context).size.width >= 1024) {
+                    DesktopLayoutState.openArtist(artistName);
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            ArtistProfileScreen(artistName: artistName),
+                      ),
+                    );
+                  }
                 },
                 borderRadius: BorderRadius.circular(16),
                 child: Container(
@@ -1596,14 +1592,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
               return InkWell(
                 onTap: () {
                   HapticFeedback.lightImpact();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CustomPlaylistScreen(
-                        playlistId: playlist['id'] ?? '',
+                  final playlistId = playlist['id'] ?? '';
+                  if (kIsWeb && MediaQuery.of(context).size.width >= 1024) {
+                    DesktopLayoutState.openPlaylist(playlistId);
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            CustomPlaylistScreen(playlistId: playlistId),
                       ),
-                    ),
-                  );
+                    );
+                  }
                 },
                 borderRadius: BorderRadius.circular(14),
                 child: Container(

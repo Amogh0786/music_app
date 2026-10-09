@@ -49,5 +49,91 @@ void main() {
       indexedStack = tester.widget<IndexedStack>(indexedStackFinder);
       expect(indexedStack.index, 0);
     });
+
+    testWidgets('Renders CustomPlaylistScreen when openPlaylist is invoked', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: DesktopMainViewport())),
+      );
+
+      DesktopLayoutState.openPlaylist('sample_playlist_id');
+      await tester.pump();
+
+      expect(
+        DesktopLayoutState.activeNavTab.value,
+        DesktopNavTab.customPlaylist,
+      );
+      expect(DesktopLayoutState.activePlaylistId.value, 'sample_playlist_id');
+
+      // Close detail view
+      DesktopLayoutState.closeDetailView();
+      await tester.pump();
+      expect(DesktopLayoutState.activeNavTab.value, DesktopNavTab.home);
+      expect(DesktopLayoutState.activePlaylistId.value, null);
+    });
+
+    testWidgets('Renders ArtistProfileScreen when openArtist is invoked', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: DesktopMainViewport())),
+      );
+
+      DesktopLayoutState.openArtist('Anuv Jain');
+      await tester.pump();
+
+      expect(
+        DesktopLayoutState.activeNavTab.value,
+        DesktopNavTab.artistProfile,
+      );
+      expect(DesktopLayoutState.activeArtistName.value, 'Anuv Jain');
+
+      // Close detail view
+      DesktopLayoutState.closeDetailView();
+      await tester.pump();
+      expect(DesktopLayoutState.activeNavTab.value, DesktopNavTab.home);
+      expect(DesktopLayoutState.activeArtistName.value, null);
+    });
+
+    testWidgets('Renders AlbumScreen when openAlbum is invoked', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: DesktopMainViewport())),
+      );
+
+      DesktopLayoutState.openAlbum(
+        albumId: 'sample_album_id',
+        albumTitle: 'Soundtracks',
+        albumArtwork: 'https://example.com/art.jpg',
+        albumArtist: 'Eddy',
+      );
+      await tester.pump();
+
+      expect(DesktopLayoutState.activeNavTab.value, DesktopNavTab.album);
+      expect(
+        DesktopLayoutState.activeAlbumData.value?['albumId'],
+        'sample_album_id',
+      );
+
+      // Close detail view
+      DesktopLayoutState.closeDetailView();
+      await tester.pump();
+      expect(DesktopLayoutState.activeNavTab.value, DesktopNavTab.home);
+      expect(DesktopLayoutState.activeAlbumData.value, null);
+    });
   });
 }

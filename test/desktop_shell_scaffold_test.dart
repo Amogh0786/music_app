@@ -1,9 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_app/layouts/desktop_app_shell.dart';
 import 'package:music_app/layouts/desktop_layout_state.dart';
-import 'package:music_app/widgets/desktop/desktop_resize_divider.dart';
 import 'package:music_app/widgets/desktop/desktop_top_nav_bar.dart';
 
 void main() {

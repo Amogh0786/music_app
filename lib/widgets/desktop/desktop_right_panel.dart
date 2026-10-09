@@ -6,7 +6,6 @@ import '../../layouts/desktop_layout_state.dart';
 import '../../services/music_service.dart';
 import '../../services/dynamic_artist_service.dart';
 import '../../services/album_color_deriver.dart';
-import '../../screens/artist_profile_screen.dart';
 import '../../screens/player_screen.dart';
 import '../animated_lyrics.dart';
 
@@ -314,13 +313,7 @@ class _DesktopNowPlayingTab extends StatelessWidget {
                       const SizedBox(height: 2.0),
                       GestureDetector(
                         onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  ArtistProfileScreen(artistName: song.author),
-                            ),
-                          );
+                          DesktopLayoutState.openArtist(song.author);
                         },
                         child: Text(
                           song.author,
@@ -615,12 +608,7 @@ class _DesktopAboutArtistCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(10.0),
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ArtistProfileScreen(artistName: artistName),
-          ),
-        );
+        DesktopLayoutState.openArtist(artistName);
       },
       child: Container(
         decoration: BoxDecoration(

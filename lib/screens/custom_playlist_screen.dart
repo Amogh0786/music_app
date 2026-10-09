@@ -10,6 +10,7 @@ import '../widgets/mini_player.dart';
 import '../widgets/playlist_action_menu.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/dilse_scrollbar.dart';
+import '../layouts/desktop_layout_state.dart';
 
 class CustomPlaylistScreen extends StatefulWidget {
   final String playlistId;
@@ -196,7 +197,13 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                         size: 18,
                       ),
                     ),
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      if (Navigator.canPop(context)) {
+                        Navigator.pop(context);
+                      } else {
+                        DesktopLayoutState.closeDetailView();
+                      }
+                    },
                   ),
                   flexibleSpace: FlexibleSpaceBar(
                     centerTitle: false,
@@ -1345,13 +1352,17 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                 // Bottom spacing: dynamic clearance for floating MiniPlayer
                 SliverToBoxAdapter(
                   child: SizedBox(
-                    height: _musicService.currentSong != null ? 96 : 40,
+                    height:
+                        (MediaQuery.of(context).size.width < 1024 &&
+                            _musicService.currentSong != null)
+                        ? 96
+                        : 40,
                   ),
                 ),
               ],
             ),
           ),
-          // Floating MiniPlayer visible over playlist content when a song is playing
+          // Floating MiniPlayer visible over playlist content when a song is playing (mobile only)
           Positioned(
             left: 0,
             right: 0,
@@ -1359,7 +1370,8 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
             child: AnimatedBuilder(
               animation: MusicService(),
               builder: (context, _) {
-                if (MusicService().currentSong == null) {
+                if (MediaQuery.of(context).size.width >= 1024 ||
+                    MusicService().currentSong == null) {
                   return const SizedBox.shrink();
                 }
                 return const MiniPlayer();

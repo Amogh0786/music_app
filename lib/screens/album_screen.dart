@@ -6,6 +6,7 @@ import '../models/jio_album.dart';
 import '../services/music_service.dart';
 import '../widgets/mini_player.dart';
 import '../widgets/animated_equalizer.dart';
+import '../layouts/desktop_layout_state.dart';
 
 class AlbumScreen extends StatefulWidget {
   /// Provide either [album] (full) or [albumId] + [albumTitle] (for lazy load).
@@ -228,7 +229,13 @@ class _AlbumScreenState extends State<AlbumScreen>
                     Icons.arrow_back_ios_new_rounded,
                     color: Colors.white,
                   ),
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    } else {
+                      DesktopLayoutState.closeDetailView();
+                    }
+                  },
                 ),
                 flexibleSpace: FlexibleSpaceBar(
                   background: _buildHeader(
@@ -390,7 +397,10 @@ class _AlbumScreenState extends State<AlbumScreen>
             child: AnimatedBuilder(
               animation: _music,
               builder: (context, _) {
-                if (_music.currentSong == null) return const SizedBox.shrink();
+                if (MediaQuery.of(context).size.width >= 1024 ||
+                    _music.currentSong == null) {
+                  return const SizedBox.shrink();
+                }
                 return const MiniPlayer();
               },
             ),

@@ -13,6 +13,7 @@ import '../widgets/animated_equalizer.dart';
 import '../widgets/playlist_action_menu.dart';
 import '../widgets/dilse_scrollbar.dart';
 import '../services/device_audio_service.dart';
+import '../layouts/desktop_layout_state.dart';
 
 /// Available navigation sections in the DilSe Library.
 enum LibrarySection {
@@ -1275,11 +1276,15 @@ class _LibraryScreenState extends State<LibraryScreen>
               ),
               onTap: () {
                 HapticFeedback.lightImpact();
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => CustomPlaylistScreen(playlistId: id),
-                  ),
-                );
+                if (kIsWeb && MediaQuery.of(context).size.width >= 1024) {
+                  DesktopLayoutState.openPlaylist(id);
+                } else {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => CustomPlaylistScreen(playlistId: id),
+                    ),
+                  );
+                }
               },
             );
           },
@@ -2575,12 +2580,17 @@ class _LibraryScreenState extends State<LibraryScreen>
                       ),
                       onTap: () {
                         HapticFeedback.lightImpact();
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                CustomPlaylistScreen(playlistId: id),
-                          ),
-                        );
+                        if (kIsWeb &&
+                            MediaQuery.of(context).size.width >= 1024) {
+                          DesktopLayoutState.openPlaylist(id);
+                        } else {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  CustomPlaylistScreen(playlistId: id),
+                            ),
+                          );
+                        }
                       },
                     );
                   },

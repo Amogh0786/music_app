@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import '../../layouts/desktop_layout_state.dart';
 import '../../services/music_service.dart';
+import '../../services/preferences_service.dart';
 import '../../screens/player_screen.dart';
 
 /// Spotify-grade 90px Edge-to-Edge Bottom Now Playing Deck (#now-playing-bar).
 ///
 /// Features:
-/// 1. Left (Flex 3): Track Artwork squircle, title/artist, interactive Like button.
+/// 1. Left (Flex 3): Track Artwork squircle, title/artist, interactive Like button, and Jump Back In preview.
 /// 2. Center (Flex 5): Shuffle, Prev, Master Play/Pause, Next, Repeat + Isolated Scrubber.
 /// 3. Right (Flex 3): Synced Lyrics, Queue, Volume slider with mute toggle, Side panel dock.
 ///
@@ -53,12 +54,153 @@ class _DesktopTrackInfoSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final musicService = MusicService();
+    final prefs = PreferencesService();
 
     return AnimatedBuilder(
-      animation: musicService,
+      animation: Listenable.merge([musicService, prefs]),
       builder: (context, _) {
         final song = musicService.currentSong;
         if (song == null) {
+          final history = prefs.listeningHistory;
+          final lastPlayed = history.isNotEmpty ? history.first : null;
+
+          if (lastPlayed != null) {
+            final title = lastPlayed['title'] ?? 'Unknown Track';
+            final author = lastPlayed['author'] ?? 'Unknown Artist';
+            final thumbnail = lastPlayed['thumbnail'] ?? '';
+            final id = lastPlayed['id'] ?? '';
+            final isLiked = id.isNotEmpty && musicService.isLiked(id);
+
+            return Row(
+              children: [
+                Expanded(
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      onTap: () {
+                        musicService.playMostPlayedSong(lastPlayed);
+                      },
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6.0),
+                            child: Container(
+                              width: 56.0,
+                              height: 56.0,
+                              color: const Color(0xFF161622),
+                              child: Stack(
+                                children: [
+                                  Positioned.fill(
+                                    child: thumbnail.isNotEmpty
+                                        ? Image.network(
+                                            thumbnail,
+                                            fit: BoxFit.cover,
+                                            cacheWidth: 120,
+                                            cacheHeight: 120,
+                                            errorBuilder: (_, _, _) =>
+                                                const Icon(
+                                                  Icons.music_note_rounded,
+                                                  color: Colors.white38,
+                                                  size: 24.0,
+                                                ),
+                                          )
+                                        : const Icon(
+                                            Icons.music_note_rounded,
+                                            color: Colors.white38,
+                                            size: 24.0,
+                                          ),
+                                  ),
+                                  Positioned(
+                                    bottom: 0,
+                                    left: 0,
+                                    right: 0,
+                                    height: 3.0,
+                                    child: Container(
+                                      color: const Color(0xFFFA2D48),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12.0),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.history_rounded,
+                                      size: 11.0,
+                                      color: Colors.white.withValues(
+                                        alpha: 0.6,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4.0),
+                                    Text(
+                                      'JUMP BACK IN',
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.6,
+                                        ),
+                                        fontSize: 10.0,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2.0),
+                                Text(
+                                  title,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: -0.2,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2.0),
+                                Text(
+                                  author,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.65),
+                                    fontSize: 12.0,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8.0),
+                IconButton(
+                  tooltip: isLiked ? 'Remove from Liked' : 'Save to Liked',
+                  icon: Icon(
+                    isLiked
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    color: isLiked
+                        ? const Color(0xFFFA2D48)
+                        : Colors.white.withValues(alpha: 0.5),
+                    size: 19.0,
+                  ),
+                  onPressed: () => musicService.toggleLikeMap(lastPlayed),
+                ),
+              ],
+            );
+          }
+
           return Row(
             children: [
               Container(
@@ -256,7 +398,16 @@ class _DesktopCenterPlaybackSection extends StatelessWidget {
 
                     // Master Play/Pause Button (36x36 Circular White Pill)
                     GestureDetector(
-                      onTap: () => musicService.togglePlayPause(),
+                      onTap: () {
+                        if (musicService.currentSong == null) {
+                          final history = PreferencesService().listeningHistory;
+                          if (history.isNotEmpty) {
+                            musicService.playMostPlayedSong(history.first);
+                            return;
+                          }
+                        }
+                        musicService.togglePlayPause();
+                      },
                       child: Container(
                         width: 36.0,
                         height: 36.0,

@@ -3,8 +3,15 @@ import 'package:flutter/foundation.dart';
 /// Contextual tabs available in the Right-hand Desktop Context Panel.
 enum DesktopContextTab { nowPlaying, lyrics, queue, chords }
 
-/// Central Viewport tabs available in the Desktop Shell.
-enum DesktopNavTab { home, search, library }
+/// Central Viewport tabs/routes available in the Desktop Shell.
+enum DesktopNavTab {
+  home,
+  search,
+  library,
+  customPlaylist,
+  artistProfile,
+  album,
+}
 
 /// Lightweight, primitive ValueNotifier state holder for the Spotify-grade Desktop Shell.
 ///
@@ -16,6 +23,20 @@ class DesktopLayoutState {
   /// Active central viewport navigation tab.
   static final ValueNotifier<DesktopNavTab> activeNavTab =
       ValueNotifier<DesktopNavTab>(DesktopNavTab.home);
+
+  /// Active custom playlist ID rendered inside the central desktop viewport.
+  static final ValueNotifier<String?> activePlaylistId = ValueNotifier<String?>(
+    null,
+  );
+
+  /// Active artist name rendered inside the central desktop viewport.
+  static final ValueNotifier<String?> activeArtistName = ValueNotifier<String?>(
+    null,
+  );
+
+  /// Active album data rendered inside the central desktop viewport.
+  static final ValueNotifier<Map<String, dynamic>?> activeAlbumData =
+      ValueNotifier<Map<String, dynamic>?>(null);
 
   /// Global search query from the top navigation bar.
   static final ValueNotifier<String> globalSearchQuery = ValueNotifier<String>(
@@ -90,6 +111,61 @@ class DesktopLayoutState {
 
   /// Sets the active central viewport navigation tab.
   static void setNavTab(DesktopNavTab tab) {
+    if (tab != DesktopNavTab.customPlaylist &&
+        tab != DesktopNavTab.artistProfile &&
+        tab != DesktopNavTab.album) {
+      activePlaylistId.value = null;
+      activeArtistName.value = null;
+      activeAlbumData.value = null;
+    }
     activeNavTab.value = tab;
+  }
+
+  /// Opens a custom playlist inside the central desktop viewport while keeping side panels docked.
+  static void openPlaylist(String playlistId) {
+    activePlaylistId.value = playlistId;
+    activeArtistName.value = null;
+    activeAlbumData.value = null;
+    activeNavTab.value = DesktopNavTab.customPlaylist;
+  }
+
+  /// Opens an artist profile inside the central desktop viewport while keeping side panels docked.
+  static void openArtist(String artistName) {
+    activeArtistName.value = artistName;
+    activePlaylistId.value = null;
+    activeAlbumData.value = null;
+    activeNavTab.value = DesktopNavTab.artistProfile;
+  }
+
+  /// Opens an album inside the central desktop viewport while keeping side panels docked.
+  static void openAlbum({
+    dynamic album,
+    String? albumId,
+    String? albumTitle,
+    String? albumArtwork,
+    String? albumArtist,
+  }) {
+    activeAlbumData.value = {
+      'album': album,
+      'albumId': albumId,
+      'albumTitle': albumTitle,
+      'albumArtwork': albumArtwork,
+      'albumArtist': albumArtist,
+    };
+    activePlaylistId.value = null;
+    activeArtistName.value = null;
+    activeNavTab.value = DesktopNavTab.album;
+  }
+
+  /// Closes the detail view and returns to the home/library view.
+  static void closeDetailView() {
+    activePlaylistId.value = null;
+    activeArtistName.value = null;
+    activeAlbumData.value = null;
+    if (activeNavTab.value == DesktopNavTab.customPlaylist ||
+        activeNavTab.value == DesktopNavTab.artistProfile ||
+        activeNavTab.value == DesktopNavTab.album) {
+      activeNavTab.value = DesktopNavTab.home;
+    }
   }
 }

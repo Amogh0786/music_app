@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../layouts/desktop_layout_state.dart';
 import '../../services/music_service.dart';
-import '../../screens/custom_playlist_screen.dart';
 import '../playlist_action_menu.dart';
 import '../dilse_tooltip.dart';
 
@@ -23,14 +22,15 @@ class DesktopLeftSidebar extends StatefulWidget {
 
 class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
   final MusicService _musicService = MusicService();
-  final ValueNotifier<String?> _selectedFilter = ValueNotifier<String?>(null);
+  final ValueNotifier<Set<String>> _selectedFilters =
+      ValueNotifier<Set<String>>({});
   final ValueNotifier<bool> _isSearchActive = ValueNotifier<bool>(false);
   final TextEditingController _searchController = TextEditingController();
   String? _hoveredRowId;
 
   @override
   void dispose() {
-    _selectedFilter.dispose();
+    _selectedFilters.dispose();
     _isSearchActive.dispose();
     _searchController.dispose();
     super.dispose();
@@ -86,12 +86,7 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                 final newId = _musicService.createPlaylist(name);
                 Navigator.pop(ctx);
                 if (newId.isNotEmpty && mounted) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CustomPlaylistScreen(playlistId: newId),
-                    ),
-                  );
+                  DesktopLayoutState.openPlaylist(newId);
                 }
               }
             },
@@ -217,13 +212,7 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                         child: GestureDetector(
                           onTap: () {
                             if (id.isNotEmpty) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      CustomPlaylistScreen(playlistId: id),
-                                ),
-                              );
+                              DesktopLayoutState.openPlaylist(id);
                             }
                           },
                           child: Container(
@@ -408,23 +397,53 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                   ),
                 ),
 
-                // Horizontal Filter Chips Strip
+                // Horizontal Filter Chips Strip with Multi-Select and (X) Reset Button
                 SizedBox(
                   height: 34.0,
-                  child: ValueListenableBuilder<String?>(
-                    valueListenable: _selectedFilter,
-                    builder: (context, activeFilter, _) {
+                  child: ValueListenableBuilder<Set<String>>(
+                    valueListenable: _selectedFilters,
+                    builder: (context, activeFilters, _) {
                       return ListView(
                         scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
                         padding: const EdgeInsets.symmetric(horizontal: 14.0),
                         children: [
-                          _buildFilterChip('Playlists', activeFilter),
-                          _buildFilterChip('Albums', activeFilter),
+                          if (activeFilters.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 6.0),
+                              child: DilSeTooltip(
+                                message: 'Clear filters',
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(16.0),
+                                  onTap: () {
+                                    _selectedFilters.value = {};
+                                  },
+                                  child: Container(
+                                    width: 32.0,
+                                    height: 32.0,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.close_rounded,
+                                      color: Colors.white,
+                                      size: 16.0,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          _buildFilterChip('Playlists', activeFilters),
+                          _buildFilterChip('Albums', activeFilters),
                           _buildFilterChip(
                             'Imported from Spotify',
-                            activeFilter,
+                            activeFilters,
                           ),
-                          _buildFilterChip('History', activeFilter),
+                          _buildFilterChip('History', activeFilters),
                         ],
                       );
                     },
@@ -553,7 +572,7 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                   child: AnimatedBuilder(
                     animation: Listenable.merge([
                       _musicService,
-                      _selectedFilter,
+                      _selectedFilters,
                     ]),
                     builder: (context, _) {
                       final playlists = _getFilteredPlaylists();
@@ -627,14 +646,20 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
     );
   }
 
-  Widget _buildFilterChip(String label, String? activeFilter) {
-    final isSelected = activeFilter == label;
+  Widget _buildFilterChip(String label, Set<String> activeFilters) {
+    final isSelected = activeFilters.contains(label);
 
     return Padding(
       padding: const EdgeInsets.only(right: 6.0),
       child: GestureDetector(
         onTap: () {
-          _selectedFilter.value = isSelected ? null : label;
+          final next = Set<String>.from(_selectedFilters.value);
+          if (isSelected) {
+            next.remove(label);
+          } else {
+            next.add(label);
+          }
+          _selectedFilters.value = next;
         },
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
@@ -645,7 +670,7 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
             borderRadius: BorderRadius.circular(16.0),
             border: Border.all(
               color: isSelected
-                  ? Colors.white.withValues(alpha: 0.2)
+                  ? Colors.white.withValues(alpha: 0.3)
                   : Colors.transparent,
             ),
           ),
@@ -665,12 +690,14 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
   }
 
   bool _shouldShowLikedSongs() {
-    final filter = _selectedFilter.value;
+    final filters = _selectedFilters.value;
     final query = _searchController.text.trim().toLowerCase();
     if (query.isNotEmpty && !'liked songs'.contains(query)) {
       return false;
     }
-    if (filter == 'Albums' || filter == 'History') {
+    if (filters.isEmpty) return true;
+    if (filters.contains('Playlists')) return true;
+    if (filters.contains('Albums') || filters.contains('History')) {
       return false;
     }
     return true;
@@ -678,7 +705,7 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
 
   List<Map<String, dynamic>> _getFilteredPlaylists() {
     final allPlaylists = _musicService.customPlaylists;
-    final filter = _selectedFilter.value;
+    final filters = _selectedFilters.value;
     final query = _searchController.text.trim().toLowerCase();
 
     return allPlaylists.where((pl) {
@@ -686,21 +713,28 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
       final isSpotify =
           pl['isSpotify'] == true ||
           (pl['source']?.toString().contains('spotify') ?? false);
+      final isAlbum = pl['type'] == 'album';
 
       if (query.isNotEmpty && !name.contains(query)) {
         return false;
       }
 
-      if (filter == 'Playlists') {
-        return true;
+      if (filters.isEmpty) return true;
+
+      bool matches = false;
+      if (filters.contains('Playlists') && !isAlbum) {
+        matches = true;
       }
-      if (filter == 'Imported from Spotify') {
-        return isSpotify;
+      if (filters.contains('Imported from Spotify') && isSpotify) {
+        matches = true;
       }
-      if (filter == 'Albums') {
-        return pl['type'] == 'album';
+      if (filters.contains('Albums') && isAlbum) {
+        matches = true;
       }
-      return true;
+      if (filters.contains('History')) {
+        if (pl['type'] == 'history') matches = true;
+      }
+      return matches;
     }).toList();
   }
 
@@ -810,12 +844,7 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
         borderRadius: BorderRadius.circular(8.0),
         onTap: () {
           if (id.isNotEmpty) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => CustomPlaylistScreen(playlistId: id),
-              ),
-            );
+            DesktopLayoutState.openPlaylist(id);
           }
         },
         child: Container(

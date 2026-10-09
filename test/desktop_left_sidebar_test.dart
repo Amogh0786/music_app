@@ -128,5 +128,42 @@ void main() {
       // Liked songs is visible again
       expect(find.text('Liked Songs'), findsOneWidget);
     });
+
+    testWidgets(
+      'Shows (X) clear filters button when active and resets filters',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 398.0,
+                child: DesktopLeftSidebar(width: 398.0),
+              ),
+            ),
+          ),
+        );
+
+        // (X) button is initially not present
+        expect(find.byIcon(Icons.close_rounded), findsNothing);
+
+        // Tap Playlists chip
+        await tester.tap(find.text('Playlists'));
+        await tester.pump();
+
+        // (X) clear button should appear
+        expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+
+        // Tap (X) clear button
+        await tester.tap(find.byIcon(Icons.close_rounded));
+        await tester.pump();
+
+        // (X) button should disappear
+        expect(find.byIcon(Icons.close_rounded), findsNothing);
+      },
+    );
   });
 }
