@@ -21,6 +21,7 @@ import 'album_screen.dart';
 import 'artist_profile_screen.dart';
 import '../services/dynamic_artist_service.dart';
 import '../services/canonical_song_dedup.dart';
+import '../widgets/desktop/desktop_full_screen_player.dart';
 
 enum LandscapeActiveTab { none, lyrics, queue, more }
 
@@ -1310,6 +1311,28 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final dominantColor = palette.dominant;
     final vibrantColor = palette.vibrant;
     final darkVibrantColor = palette.darkVibrant;
+
+    final size = MediaQuery.of(context).size;
+    final isDesktopFullScreen =
+        (kIsWeb ||
+            defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.linux ||
+            size.width >= 800) &&
+        (size.width >= 800 && size.height >= 480);
+    if (isDesktopFullScreen) {
+      return DesktopFullScreenPlayer(
+        song: shownSong,
+        isPlaying: isPlaying,
+        isLoading: isLoading,
+        isLiked: isLiked,
+        dominantColor: dominantColor,
+        vibrantColor: vibrantColor,
+        darkVibrantColor: darkVibrantColor,
+        artworkStyle: artworkStyle,
+        onClose: () => Navigator.of(context).maybePop(),
+      );
+    }
 
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
