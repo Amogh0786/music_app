@@ -26,6 +26,8 @@ import 'taste_matrix_scorer.dart';
 import '../models/jio_album.dart';
 import 'bug_report_service.dart';
 import 'device_audio_service.dart';
+import '../models/song_item.dart';
+import 'audio/favorites_repository.dart';
 
 enum SearchSuggestionType { artist, song, album, history, query }
 
@@ -828,6 +830,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
   final List<Video> _sessionPlayedHistory = [];
   bool _isNavigatingHistory = false;
+  bool _isNavigatingNext = false;
+  DateTime _lastNextClickTime = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _isNavigatingPrev = false;
+  DateTime _lastPrevClickTime = DateTime.fromMillisecondsSinceEpoch(0);
 
   bool _isTransitioning = false;
   bool _isFetchingNextQueue = false;
@@ -1531,28 +1537,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> loadLikedSongs() async {
     try {
-      if (kIsWeb) {
-        final prefs = await SharedPreferences.getInstance();
-        final raw = prefs.getString('liked_songs_web');
-        if (raw != null && raw.isNotEmpty) {
-          final List<dynamic> jsonList = json.decode(raw);
-          _likedSongs = jsonList
-              .map((e) => Map<String, String>.from(e))
-              .toList();
-          _restoreLikedSongsMemoryCaches();
-          notifyListeners();
-        }
-        return;
-      }
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/liked_songs.json');
-      if (await file.exists()) {
-        final content = await file.readAsString();
-        final List<dynamic> jsonList = json.decode(content);
-        _likedSongs = jsonList.map((e) => Map<String, String>.from(e)).toList();
-        _restoreLikedSongsMemoryCaches();
-        notifyListeners();
-      }
+      await FavoritesRepository().load();
+      _likedSongs = FavoritesRepository().legacyLikedSongs;
+      _restoreLikedSongsMemoryCaches();
+      notifyListeners();
     } catch (e) {
       debugPrint('Error loading liked songs: $e');
     }
@@ -1575,48 +1563,26 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void toggleLike(Video song) async {
-    final exists = _likedSongs.any((s) => s['id'] == song.id.value);
-    if (exists) {
-      _likedSongs.removeWhere((s) => s['id'] == song.id.value);
-    } else {
-      _likedSongs.add({
-        'id': song.id.value,
-        'title': song.title,
-        'author': song.author,
-        'thumbnail': getHdThumbnail(song.id.value),
-        'streamUrl': _webStreamUrls[song.id.value] ?? '',
-      });
-    }
-    notifyListeners();
-
     try {
-      if (kIsWeb) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('liked_songs_web', json.encode(_likedSongs));
-        return;
-      }
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/liked_songs.json');
-      await file.writeAsString(json.encode(_likedSongs));
+      final item = SongItem.fromVideo(
+        song,
+        streamUrl: _webStreamUrls[song.id.value] ?? '',
+      );
+      await FavoritesRepository().toggleLike(item);
+      _likedSongs = FavoritesRepository().legacyLikedSongs;
+      notifyListeners();
     } catch (e) {
-      debugPrint('Error saving liked songs: $e');
+      debugPrint('Error toggling like: $e');
     }
   }
 
   Future<void> removeLikedSong(String videoId) async {
-    _likedSongs.removeWhere((s) => s['id'] == videoId);
-    notifyListeners();
     try {
-      if (kIsWeb) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('liked_songs_web', json.encode(_likedSongs));
-        return;
-      }
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/liked_songs.json');
-      await file.writeAsString(json.encode(_likedSongs));
+      await FavoritesRepository().removeLiked(videoId);
+      _likedSongs = FavoritesRepository().legacyLikedSongs;
+      notifyListeners();
     } catch (e) {
-      debugPrint('Error saving liked songs: $e');
+      debugPrint('Error removing liked song: $e');
     }
   }
 
@@ -3301,167 +3267,209 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> nextSong({bool isCrossfade = false}) async {
-    if (!isCrossfade && _isCrossfading) {
-      _cancelActiveFade();
-    }
-
-    if (_stopAtEndOfTrack) {
-      debugPrint(
-        '[SleepTimer] Reached end of current track. Stopping playback.',
-      );
-      _stopPlayback();
+    final now = DateTime.now();
+    if (_isNavigatingNext ||
+        (!isCrossfade &&
+            now.difference(_lastNextClickTime).inMilliseconds < 150)) {
+      debugPrint('[MusicService] Rapid Next click spam discarded.');
       return;
     }
+    _isNavigatingNext = true;
+    _lastNextClickTime = now;
 
-    if (_currentSong != null && _audioPlayer.position.inSeconds < 30) {
-      PreferencesService().recordSongSkip(_currentSong!.author);
-    }
+    try {
+      if (!isCrossfade && _isCrossfading) {
+        _cancelActiveFade();
+      }
 
-    if (_playlist.isNotEmpty) {
-      if (_isShuffle && _playlist.length > 1) {
-        // If navigating forward within existing shuffle history
-        if (_shuffleHistoryPointer + 1 < _shuffleHistory.length) {
-          _shuffleHistoryPointer++;
-          _currentIndex = _shuffleHistory[_shuffleHistoryPointer];
-        } else {
-          // Select next song avoiding consecutive artist repetition
-          final random = Random();
-          final currentArtist = _currentSong != null
-              ? CanonicalSongDedup.cleanArtist(_currentSong!.author)
-              : '';
+      if (_stopAtEndOfTrack) {
+        debugPrint(
+          '[SleepTimer] Reached end of current track. Stopping playback.',
+        );
+        _stopPlayback();
+        return;
+      }
 
-          final candidateIndices = <int>[];
-          for (int i = 0; i < _playlist.length; i++) {
-            if (i == _currentIndex) continue;
-            final artist = CanonicalSongDedup.cleanArtist(_playlist[i].author);
-            if (currentArtist.isEmpty || artist != currentArtist) {
-              candidateIndices.add(i);
-            }
-          }
+      if (_currentSong != null && _audioPlayer.position.inSeconds < 30) {
+        PreferencesService().recordSongSkip(_currentSong!.author);
+      }
 
-          int nextIdx;
-          if (candidateIndices.isNotEmpty) {
-            nextIdx = candidateIndices[random.nextInt(candidateIndices.length)];
+      if (_playlist.isNotEmpty) {
+        if (_isShuffle && _playlist.length > 1) {
+          // If navigating forward within existing shuffle history
+          if (_shuffleHistoryPointer + 1 < _shuffleHistory.length) {
+            _shuffleHistoryPointer++;
+            _currentIndex = _shuffleHistory[_shuffleHistoryPointer];
           } else {
-            nextIdx =
-                (random.nextInt(_playlist.length - 1) + _currentIndex + 1) %
-                _playlist.length;
+            // Select next song avoiding consecutive artist repetition
+            final random = Random();
+            final currentArtist = _currentSong != null
+                ? CanonicalSongDedup.cleanArtist(_currentSong!.author)
+                : '';
+
+            final candidateIndices = <int>[];
+            for (int i = 0; i < _playlist.length; i++) {
+              if (i == _currentIndex) continue;
+              final artist = CanonicalSongDedup.cleanArtist(
+                _playlist[i].author,
+              );
+              if (currentArtist.isEmpty || artist != currentArtist) {
+                candidateIndices.add(i);
+              }
+            }
+
+            int nextIdx;
+            if (candidateIndices.isNotEmpty) {
+              nextIdx =
+                  candidateIndices[random.nextInt(candidateIndices.length)];
+            } else {
+              nextIdx =
+                  (random.nextInt(_playlist.length - 1) + _currentIndex + 1) %
+                  _playlist.length;
+            }
+
+            _currentIndex = nextIdx;
+            _shuffleHistory.add(_currentIndex);
+            _shuffleHistoryPointer = _shuffleHistory.length - 1;
           }
 
-          _currentIndex = nextIdx;
-          _shuffleHistory.add(_currentIndex);
-          _shuffleHistoryPointer = _shuffleHistory.length - 1;
+          final prevSong = _currentSong;
+          final nextTrack = _playlist[_currentIndex];
+          if (prevSong != null) {
+            reportTrackFinished(prevSong.id.value, nextTrack.id.value);
+          }
+          await playSong(
+            nextTrack,
+            updateQueue: false,
+            isCrossfade: isCrossfade,
+          );
+          _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
+          _checkAndPreloadNextQueue();
+          return;
+        } else if (_currentIndex + 1 < _playlist.length) {
+          final prevSong = _currentSong;
+          _currentIndex++;
+          final nextTrack = _playlist[_currentIndex];
+          if (prevSong != null) {
+            reportTrackFinished(prevSong.id.value, nextTrack.id.value);
+          }
+          await playSong(
+            nextTrack,
+            updateQueue: false,
+            isCrossfade: isCrossfade,
+          );
+          _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
+          _checkAndPreloadNextQueue();
+          return;
         }
+      }
 
-        final prevSong = _currentSong;
+      if (_loopMode == LoopMode.all && _playlist.isNotEmpty) {
+        _currentIndex = 0;
         final nextTrack = _playlist[_currentIndex];
-        if (prevSong != null) {
-          reportTrackFinished(prevSong.id.value, nextTrack.id.value);
-        }
-        await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
-        _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
-        _checkAndPreloadNextQueue();
-        return;
-      } else if (_currentIndex + 1 < _playlist.length) {
-        final prevSong = _currentSong;
-        _currentIndex++;
-        final nextTrack = _playlist[_currentIndex];
-        if (prevSong != null) {
-          reportTrackFinished(prevSong.id.value, nextTrack.id.value);
-        }
         await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
         _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
         _checkAndPreloadNextQueue();
         return;
       }
-    }
 
-    if (_loopMode == LoopMode.all && _playlist.isNotEmpty) {
-      _currentIndex = 0;
-      final nextTrack = _playlist[_currentIndex];
-      await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
-      _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
-      _checkAndPreloadNextQueue();
-      return;
-    }
-
-    if (_currentSong != null) {
-      debugPrint(
-        '[Queue] End of queue reached. Fetching next recommendations…',
-      );
-      _isLoading = true;
-      notifyListeners();
-      await _fetchNextRecommendations(_currentSong!);
-      if (_currentIndex + 1 < _playlist.length) {
-        final prevSong = _currentSong;
-        _currentIndex++;
-        final nextTrack = _playlist[_currentIndex];
-        if (prevSong != null) {
-          reportTrackFinished(prevSong.id.value, nextTrack.id.value);
-        }
-        await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
-        _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
-        _checkAndPreloadNextQueue();
-      } else {
-        _isLoading = false;
+      if (_currentSong != null) {
+        debugPrint(
+          '[Queue] End of queue reached. Fetching next recommendations…',
+        );
+        _isLoading = true;
         notifyListeners();
+        await _fetchNextRecommendations(_currentSong!);
+        if (_currentIndex + 1 < _playlist.length) {
+          final prevSong = _currentSong;
+          _currentIndex++;
+          final nextTrack = _playlist[_currentIndex];
+          if (prevSong != null) {
+            reportTrackFinished(prevSong.id.value, nextTrack.id.value);
+          }
+          await playSong(
+            nextTrack,
+            updateQueue: false,
+            isCrossfade: isCrossfade,
+          );
+          _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
+          _checkAndPreloadNextQueue();
+        } else {
+          _isLoading = false;
+          notifyListeners();
+        }
       }
+    } finally {
+      _isNavigatingNext = false;
     }
   }
 
   Future<void> previousSong() async {
-    if (_isCrossfading) {
-      _cancelActiveFade();
+    final now = DateTime.now();
+    if (_isNavigatingPrev ||
+        now.difference(_lastPrevClickTime).inMilliseconds < 150) {
+      debugPrint('[MusicService] Rapid Prev click spam discarded.');
+      return;
     }
+    _isNavigatingPrev = true;
+    _lastPrevClickTime = now;
 
-    // If played for more than 3 seconds, replay current song from beginning
-    if (position.inSeconds > 3) {
-      if (kIsWeb) {
-        WebPlayerBridge.seek(Duration.zero);
-        notifyListeners();
-      } else {
-        await _audioPlayer.seek(Duration.zero);
+    try {
+      if (_isCrossfading) {
+        _cancelActiveFade();
       }
-      return;
-    }
 
-    // 1. If in shuffle mode and history exists, traverse back through true shuffle history
-    if (_isShuffle && _shuffleHistoryPointer > 0) {
-      _shuffleHistoryPointer--;
-      _currentIndex = _shuffleHistory[_shuffleHistoryPointer];
-      await playSong(_playlist[_currentIndex], updateQueue: false);
-      _prewarmUpcomingTracks(_currentIndex + 1, count: 2);
-      return;
-    }
-
-    // 2. Cross-playlist global navigation history:
-    // If user played songs from different playlists, seamlessly go back to the previous song!
-    if (_sessionPlayedHistory.isNotEmpty) {
-      final prevSong = _sessionPlayedHistory.removeLast();
-      _isNavigatingHistory = true;
-      try {
-        final existingIdx = _playlist.indexWhere(
-          (s) => s.id.value == prevSong.id.value,
-        );
-        if (existingIdx != -1) {
-          _currentIndex = existingIdx;
-          await playSong(_playlist[_currentIndex], updateQueue: false);
+      // If played for more than 3 seconds, replay current song from beginning
+      if (position.inSeconds > 3) {
+        if (kIsWeb) {
+          WebPlayerBridge.seek(Duration.zero);
+          notifyListeners();
         } else {
-          // Song was from another playlist/album: insert into current queue right before current song
-          _playlist.insert(_currentIndex, prevSong);
-          await playSong(prevSong, updateQueue: false);
+          await _audioPlayer.seek(Duration.zero);
         }
-      } finally {
-        _isNavigatingHistory = false;
+        return;
       }
-      return;
-    }
 
-    // 3. Normal sequential playback previous
-    if (_playlist.isNotEmpty && _currentIndex - 1 >= 0) {
-      _currentIndex--;
-      await playSong(_playlist[_currentIndex], updateQueue: false);
-      _prewarmUpcomingTracks(_currentIndex + 1, count: 2);
+      // 1. If in shuffle mode and history exists, traverse back through true shuffle history
+      if (_isShuffle && _shuffleHistoryPointer > 0) {
+        _shuffleHistoryPointer--;
+        _currentIndex = _shuffleHistory[_shuffleHistoryPointer];
+        await playSong(_playlist[_currentIndex], updateQueue: false);
+        _prewarmUpcomingTracks(_currentIndex + 1, count: 2);
+        return;
+      }
+
+      // 2. Cross-playlist global navigation history:
+      // If user played songs from different playlists, seamlessly go back to the previous song!
+      if (_sessionPlayedHistory.isNotEmpty) {
+        final prevSong = _sessionPlayedHistory.removeLast();
+        _isNavigatingHistory = true;
+        try {
+          final existingIdx = _playlist.indexWhere(
+            (s) => s.id.value == prevSong.id.value,
+          );
+          if (existingIdx != -1) {
+            _currentIndex = existingIdx;
+            await playSong(_playlist[_currentIndex], updateQueue: false);
+          } else {
+            // Song was from another playlist/album: insert into current queue right before current song
+            _playlist.insert(_currentIndex, prevSong);
+            await playSong(prevSong, updateQueue: false);
+          }
+        } finally {
+          _isNavigatingHistory = false;
+        }
+        return;
+      }
+
+      // 3. Normal sequential playback previous
+      if (_playlist.isNotEmpty && _currentIndex - 1 >= 0) {
+        _currentIndex--;
+        await playSong(_playlist[_currentIndex], updateQueue: false);
+        _prewarmUpcomingTracks(_currentIndex + 1, count: 2);
+      }
+    } finally {
+      _isNavigatingPrev = false;
     }
   }
 
@@ -5971,6 +5979,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _consecutivePlaybackFailures = 0;
     _lastFailedSongId = null;
     _songRetryCount = 0;
+    _isNavigatingNext = false;
+    _isNavigatingPrev = false;
+    _lastNextClickTime = DateTime.fromMillisecondsSinceEpoch(0);
+    _lastPrevClickTime = DateTime.fromMillisecondsSinceEpoch(0);
   }
 
   void _initWidgetBridge() {
