@@ -313,8 +313,20 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
   String? get currentSongLanguage {
     if (_currentSong == null) return null;
-    return CanonicalSongDedup.getSongLanguage(_currentSong!.id.value) ??
-        CanonicalSongDedup.detectLanguage(_currentSong!.title) ??
+    final registered = CanonicalSongDedup.getSongLanguage(
+      _currentSong!.id.value,
+    );
+    if (registered != null && registered.isNotEmpty) return registered;
+
+    if (_cachedLyrics != null && _cachedLyrics!.isNotEmpty) {
+      final script = CanonicalSongDedup.detectScript(
+        _cachedLyrics!,
+        minCount: 4,
+      );
+      if (script != null) return script;
+    }
+
+    return CanonicalSongDedup.detectLanguage(_currentSong!.title) ??
         CanonicalSongDedup.detectLanguage(_currentSong!.author);
   }
 
@@ -433,13 +445,20 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       targetLang ??= CanonicalSongDedup.detectLanguage(song.title);
       // 3. Check author / channel
       targetLang ??= CanonicalSongDedup.detectLanguage(song.author);
-      // 4. Check user's preferred primary language if available and not generic English
-      if (targetLang == null &&
-          PreferencesService().preferredLanguages.isNotEmpty) {
-        final pref = PreferencesService().preferredLanguages.first
-            .toLowerCase();
-        if (pref != 'english') {
-          targetLang = pref;
+      // 4. Check clean title & artist for English vocabulary or Indic artist affinity
+      if (targetLang == null) {
+        if (CanonicalSongDedup.detectLanguage('$cleanTitle $cleanArtist') ==
+            'english') {
+          targetLang = 'english';
+        } else if (CanonicalSongDedup.isKnownIndicArtist(cleanArtist)) {
+          // Known Indic artist without explicit language: check user preference
+          if (PreferencesService().preferredLanguages.isNotEmpty) {
+            final pref = PreferencesService().preferredLanguages.first
+                .toLowerCase();
+            if (pref != 'english') {
+              targetLang = pref;
+            }
+          }
         }
       }
 
@@ -632,11 +651,6 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       Map<String, dynamic>? bestSyncedCandidate;
       int bestSyncedScore = 120;
 
-      Map<String, dynamic>? bestNativeCandidate;
-      int bestNativeScore = 120;
-      Map<String, dynamic>? bestRomanizedCandidate;
-      int bestRomanizedScore = 120;
-
       for (final item in candidatePool) {
         if (item is! Map) continue;
         final map = Map<String, dynamic>.from(item);
@@ -661,62 +675,42 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         }
 
         final synced = (map['syncedLyrics'] as String?)?.trim();
-        final plain = (map['plainLyrics'] as String?)?.trim();
-        final text = (synced?.isNotEmpty == true ? synced! : (plain ?? ''))
-            .trim();
 
         if (synced != null && synced.isNotEmpty && score > bestSyncedScore) {
           bestSyncedScore = score;
           bestSyncedCandidate = map;
-        }
-
-        if (text.isNotEmpty && score > 120) {
-          final isNative = LyricsTransliterationService.hasIndicScript(text);
-          if (isNative && score > bestNativeScore) {
-            bestNativeScore = score;
-            bestNativeCandidate = map;
-          } else if (!isNative && score > bestRomanizedScore) {
-            bestRomanizedScore = score;
-            bestRomanizedCandidate = map;
-          }
         }
       }
 
       // Synced candidates ALWAYS supersede plain lyrics whenever available!
       final chosenCandidate = bestSyncedCandidate ?? bestCandidate;
 
-      if (bestNativeCandidate != null && bestRomanizedCandidate != null) {
-        final nativeSynced = (bestNativeCandidate['syncedLyrics'] as String?)
-            ?.trim();
-        final nativePlain = (bestNativeCandidate['plainLyrics'] as String?)
-            ?.trim();
-        final romanSynced = (bestRomanizedCandidate['syncedLyrics'] as String?)
-            ?.trim();
-        final romanPlain = (bestRomanizedCandidate['plainLyrics'] as String?)
-            ?.trim();
-
-        _cachedLyrics = (nativeSynced != null && nativeSynced.isNotEmpty)
-            ? nativeSynced
-            : (nativePlain != null && nativePlain.isNotEmpty
-                  ? nativePlain
-                  : null);
-        _cachedPronunciationLyrics =
-            (romanSynced != null && romanSynced.isNotEmpty)
-            ? romanSynced
-            : (romanPlain != null && romanPlain.isNotEmpty ? romanPlain : null);
-      } else if (chosenCandidate != null) {
+      if (chosenCandidate != null) {
         final synced = (chosenCandidate['syncedLyrics'] as String?)?.trim();
         final plain = (chosenCandidate['plainLyrics'] as String?)?.trim();
         final text = (synced != null && synced.isNotEmpty)
             ? synced
             : (plain != null && plain.isNotEmpty ? plain : null);
         _cachedLyrics = text;
-        if (text != null &&
-            !LyricsTransliterationService.hasIndicScript(text) &&
-            (targetLang == 'telugu' ||
-                LyricsTransliterationService.isRomanizedTelugu(text))) {
-          _cachedPronunciationLyrics = text;
+
+        if (text != null && text.isNotEmpty) {
+          if (LyricsTransliterationService.hasIndicScript(text)) {
+            // For native Indic script, auto-transliterate to phonetic English pronunciation
+            _cachedPronunciationLyrics = (synced != null && synced.isNotEmpty)
+                ? LyricsTransliterationService.transliterateLrc(synced)
+                : LyricsTransliterationService.transliterateText(text);
+          } else if (targetLang == 'telugu' ||
+              LyricsTransliterationService.isRomanizedTelugu(text)) {
+            _cachedPronunciationLyrics = text;
+          } else {
+            _cachedPronunciationLyrics = null;
+          }
+        } else {
+          _cachedPronunciationLyrics = null;
         }
+      } else {
+        _cachedLyrics = null;
+        _cachedPronunciationLyrics = null;
       }
 
       if (_cachedLyrics == null || _cachedLyrics!.isEmpty) {
