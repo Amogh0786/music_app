@@ -1272,6 +1272,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
     // Standby player stream errors should not disrupt active playback
     if (!identical(player, _activePlayer)) {
+      _standbyBufferedTrackId = null;
       try {
         await player.stop();
         await player.clearAudioSources();
@@ -1607,6 +1608,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _triggerCrossfade(Duration crossfadeDuration) async {
     if (_isCrossfading || _isTransitioning) return;
     _isCrossfading = true;
+    _isTransitioning = true;
     debugPrint(
       '[Crossfade] Starting ${crossfadeDuration.inSeconds}s crossfade merge…',
     );
@@ -1620,6 +1622,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint('[Crossfade] Transition error: $e');
       _cancelActiveFade();
     } finally {
+      _isTransitioning = false;
       _isCrossfading = false;
     }
   }
@@ -2335,6 +2338,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         }
       }
     } catch (e) {
+      _standbyBufferedTrackId = null;
       debugPrint('[Gapless] Standby pre-buffering silent fail: $e');
     } finally {
       _isPrebufferingStandby = false;
@@ -4021,13 +4025,13 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
     } else {
       // Auto (Smart Engine) / MP3
-      final bool isApplePlatform =
-          !kIsWeb &&
+      final bool isAacPreferredPlatform =
+          kIsWeb ||
           (defaultTargetPlatform == TargetPlatform.iOS ||
               defaultTargetPlatform == TargetPlatform.macOS);
 
-      if (isApplePlatform) {
-        // iOS/macOS AVPlayer natively excels with Apple Core Audio AAC (.m4a/.mp4)
+      if (isAacPreferredPlatform) {
+        // Web & Apple platforms: AAC (.m4a/.mp4) offers universal browser & CoreAudio codec compatibility
         if (quality == AudioQualityPreset.studioMaster ||
             quality == AudioQualityPreset.high) {
           for (final m in muxed22List) {

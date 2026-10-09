@@ -1,7 +1,7 @@
-import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
+import 'test_env_detector.dart';
 
 /// Industrial-grade local relational storage for DilSe Music.
 ///
@@ -21,15 +21,12 @@ class DatabaseService {
   final Map<String, Map<String, dynamic>> _fallbackFavoriteRecords = {};
 
   bool get _isTestEnvironment {
-    try {
-      return Platform.environment.containsKey('FLUTTER_TEST');
-    } catch (_) {
-      return false;
-    }
+    if (kIsWeb) return false;
+    return isFlutterTestEnvironment();
   }
 
   Future<Database?> get database async {
-    if (_useInMemoryFallback || _isTestEnvironment) return null;
+    if (kIsWeb || _useInMemoryFallback || _isTestEnvironment) return null;
     if (_db != null) return _db;
     try {
       _db = await _initDatabase();
