@@ -8,6 +8,7 @@ import '../widgets/mini_player.dart';
 import '../widgets/animated_equalizer.dart';
 import '../widgets/dilse_scrollbar.dart';
 import '../layouts/desktop_layout_state.dart';
+import '../constants/app_theme_tokens.dart';
 
 class AlbumScreen extends StatefulWidget {
   /// Provide either [album] (full) or [albumId] + [albumTitle] (for lazy load).
@@ -237,7 +238,7 @@ class _AlbumScreenState extends State<AlbumScreen>
     final year = _album?.year ?? widget.album?.year ?? '';
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0B0F),
+      backgroundColor: AppThemeTokens.oledBackground,
       body: Stack(
         children: [
           DilSeScrollbar(
@@ -250,7 +251,7 @@ class _AlbumScreenState extends State<AlbumScreen>
                 SliverAppBar(
                   expandedHeight: 340,
                   pinned: true,
-                  backgroundColor: const Color(0xFF0B0B0F),
+                  backgroundColor: AppThemeTokens.oledBackground,
                   leading: IconButton(
                     icon: const Icon(
                       Icons.arrow_back_ios_new_rounded,

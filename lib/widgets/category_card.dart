@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../constants/app_theme_tokens.dart';
 
 class CategoryCard extends StatefulWidget {
   final String title;
@@ -51,26 +52,27 @@ class _CategoryCardState extends State<CategoryCard> {
           curve: Curves.easeOutCubic,
           child: Container(
             decoration: BoxDecoration(
-              color: const Color(0xFF161622),
-              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  widget.colors.first.withValues(
+                    alpha: _isHovered ? 0.38 : 0.26,
+                  ),
+                  AppThemeTokens.surfaceCard,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(AppThemeTokens.radiusCard),
               border: Border.all(
                 color: _isHovered
                     ? Colors.white.withValues(alpha: 0.24)
-                    : Colors.white.withValues(alpha: 0.10),
+                    : AppThemeTokens.surfaceBorder,
                 width: 1.0,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(
-                    alpha: _isHovered ? 0.45 : 0.25,
-                  ),
-                  blurRadius: _isHovered ? 16 : 8,
-                  offset: Offset(0, _isHovered ? 6 : 3),
-                ),
-              ],
+              boxShadow: AppThemeTokens.cardShadow,
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(AppThemeTokens.radiusCard),
               child: Stack(
                 children: [
                   // Subtle translucent hover highlight

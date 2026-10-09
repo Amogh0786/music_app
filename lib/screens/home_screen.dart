@@ -16,6 +16,7 @@ import 'album_screen.dart';
 import 'dilse_capsule_screen.dart';
 import '../models/jio_album.dart';
 import '../models/song_item.dart';
+import '../constants/app_theme_tokens.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -423,7 +424,7 @@ class _HomeScreenState extends State<HomeScreen>
     super.build(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0B0F),
+      backgroundColor: AppThemeTokens.oledBackground,
       body: SafeArea(
         bottom: false,
         child: CustomScrollView(
@@ -564,6 +565,9 @@ class _HomeScreenState extends State<HomeScreen>
 
             // Smart Playback Quick Resume Banner
             _buildQuickResumeBanner(),
+
+            // 2x3 Minimalist Quick Access Grid for 1-Tap Playback
+            _buildQuickAccessGrid(),
 
             // Horizontal Mood & Activity Filter Chips
             SliverToBoxAdapter(
@@ -744,6 +748,147 @@ class _HomeScreenState extends State<HomeScreen>
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildQuickAccessGrid() {
+    final dailyMix1 = _dailyMixConfigs.isNotEmpty ? _dailyMixConfigs[0] : null;
+    final dailyMix2 = _dailyMixConfigs.length > 1 ? _dailyMixConfigs[1] : null;
+
+    final items = <_HomeQuickAccessItem>[
+      _HomeQuickAccessItem(
+        title: dailyMix1?.title ?? 'Daily Mix 1',
+        icon: Icons.shuffle_rounded,
+        iconGradient: const [Color(0xFFE040FB), Color(0xFF1DB954)],
+        onTap: () {
+          if (_dailyMix1.isNotEmpty) {
+            _musicService.playPlaylist(_dailyMix1, 0);
+          }
+        },
+      ),
+      _HomeQuickAccessItem(
+        title: 'Liked Songs',
+        icon: Icons.favorite_rounded,
+        iconGradient: const [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+        onTap: () {
+          if (_musicService.likedSongs.isNotEmpty) {
+            _musicService.playLikedSong(_musicService.likedSongs.first);
+          }
+        },
+      ),
+      _HomeQuickAccessItem(
+        title: dailyMix2?.title ?? 'Daily Mix 2',
+        icon: Icons.graphic_eq_rounded,
+        iconGradient: const [Color(0xFF00C6FF), Color(0xFF0072FF)],
+        onTap: () {
+          if (_dailyMix2.isNotEmpty) {
+            _musicService.playPlaylist(_dailyMix2, 0);
+          }
+        },
+      ),
+      _HomeQuickAccessItem(
+        title: 'Top Charts',
+        icon: Icons.trending_up_rounded,
+        iconGradient: const [Color(0xFFFF512F), Color(0xFFDD2476)],
+        onTap: () {
+          if (_topChartsIndia.isNotEmpty) {
+            _musicService.playPlaylist(_topChartsIndia, 0);
+          }
+        },
+      ),
+      _HomeQuickAccessItem(
+        title: 'New Releases',
+        icon: Icons.fiber_new_rounded,
+        iconGradient: const [Color(0xFF11998E), Color(0xFF38EF7D)],
+        onTap: () {
+          if (_newReleases.isNotEmpty) {
+            _musicService.playPlaylist(_newReleases, 0);
+          }
+        },
+      ),
+      _HomeQuickAccessItem(
+        title: 'Trending',
+        icon: Icons.whatshot_rounded,
+        iconGradient: const [Color(0xFFF857A6), Color(0xFFFF5858)],
+        onTap: () {
+          if (_trendingNow.isNotEmpty) {
+            _musicService.playPlaylist(_trendingNow, 0);
+          }
+        },
+      ),
+    ];
+
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisExtent: 52,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+        ),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final item = items[index];
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(AppThemeTokens.radiusSmall),
+              onTap: () {
+                HapticFeedback.lightImpact();
+                item.onTap();
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppThemeTokens.surfaceCard,
+                  borderRadius: BorderRadius.circular(
+                    AppThemeTokens.radiusSmall,
+                  ),
+                  border: Border.all(
+                    color: AppThemeTokens.surfaceBorder,
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: item.iconGradient,
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(AppThemeTokens.radiusSmall),
+                          bottomLeft: Radius.circular(
+                            AppThemeTokens.radiusSmall,
+                          ),
+                        ),
+                      ),
+                      child: Icon(item.icon, color: Colors.white, size: 22),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        item.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppThemeTokens.textPrimary,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }, childCount: items.length),
       ),
     );
   }
@@ -2126,5 +2271,19 @@ class CuratedPlaylist {
     required this.gradientColors,
     required this.icon,
     required this.tag,
+  });
+}
+
+class _HomeQuickAccessItem {
+  final String title;
+  final IconData icon;
+  final List<Color> iconGradient;
+  final VoidCallback onTap;
+
+  const _HomeQuickAccessItem({
+    required this.title,
+    required this.icon,
+    required this.iconGradient,
+    required this.onTap,
   });
 }

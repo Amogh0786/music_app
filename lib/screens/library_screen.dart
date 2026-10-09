@@ -16,6 +16,7 @@ import '../widgets/playlist_action_menu.dart';
 import '../widgets/dilse_scrollbar.dart';
 import '../services/device_audio_service.dart';
 import '../layouts/desktop_layout_state.dart';
+import '../constants/app_theme_tokens.dart';
 
 /// Available navigation sections in the DilSe Library.
 enum LibrarySection {
@@ -461,7 +462,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     super.build(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0B0F),
+      backgroundColor: AppThemeTokens.oledBackground,
       body: SafeArea(
         bottom: false,
         child: LayoutBuilder(

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import '../constants/app_theme_tokens.dart';
 import '../services/music_service.dart';
 import '../services/preferences_service.dart';
 import '../services/dynamic_artist_service.dart';
@@ -441,19 +442,15 @@ class SearchScreenState extends State<SearchScreen>
               Container(
                 height: 48,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF161622),
-                  borderRadius: BorderRadius.circular(16),
+                  color: AppThemeTokens.surfaceCard,
+                  borderRadius: BorderRadius.circular(
+                    AppThemeTokens.radiusCard,
+                  ),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.12),
+                    color: AppThemeTokens.surfaceBorder,
                     width: 1,
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.25),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                  boxShadow: AppThemeTokens.cardShadow,
                 ),
                 child: TextField(
                   controller: _searchController,
@@ -1047,12 +1044,9 @@ class SearchScreenState extends State<SearchScreen>
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: const Color(0xFF14141E),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.10),
-          width: 1,
-        ),
+        color: AppThemeTokens.surfaceCard,
+        borderRadius: BorderRadius.circular(AppThemeTokens.radiusCard),
+        border: Border.all(color: AppThemeTokens.surfaceBorder, width: 1),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
