@@ -4,6 +4,11 @@ import 'package:just_audio/just_audio.dart';
 import 'package:music_app/models/song_item.dart';
 import 'package:music_app/services/audio/queue_controller.dart';
 import 'package:music_app/services/audio/favorites_repository.dart';
+import 'package:music_app/services/audio/i_audio_engine.dart';
+import 'package:music_app/services/audio/audio_engine_factory.dart';
+import 'package:music_app/services/audio/mobile_audio_engine.dart';
+import 'package:music_app/services/audio/web_audio_engine.dart';
+import 'package:music_app/services/update_service.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 void main() {
@@ -224,5 +229,79 @@ void main() {
         expect(legacy.first['author'], 'Legacy Artist');
       },
     );
+  });
+
+  group('AudioEngine Platform Adapter & Factory Tests', () {
+    test(
+      'AudioEngineFactory instantiates MobileAudioEngine on non-web platform',
+      () {
+        final engine = AudioEngineFactory.createEngine();
+        expect(engine, isA<MobileAudioEngine>());
+        expect(engine.status, AudioEngineStatus.idle);
+        expect(engine.isPlaying, false);
+        expect(engine.position, Duration.zero);
+        expect(engine.duration, Duration.zero);
+        engine.dispose();
+      },
+    );
+
+    test('WebAudioEngine instantiates and provides valid default streams', () {
+      final engine = WebAudioEngine();
+      expect(engine.status, AudioEngineStatus.idle);
+      expect(engine.isPlaying, false);
+      expect(engine.position, Duration.zero);
+      expect(engine.duration, Duration.zero);
+      expect(engine.statusStream, isNotNull);
+      expect(engine.positionStream, isNotNull);
+      expect(engine.durationStream, isNotNull);
+      expect(engine.onTrackEnded, isNotNull);
+      expect(engine.onError, isNotNull);
+
+      // Volume safety clamping test (does not throw on out-of-bounds input)
+      expect(() => engine.setVolume(-0.5), returnsNormally);
+      expect(() => engine.setVolume(1.5), returnsNormally);
+      expect(() => engine.setVolume(50.0), returnsNormally);
+      engine.dispose();
+    });
+
+    test('MobileAudioEngine setVolume safely clamps values', () async {
+      final engine = MobileAudioEngine();
+      expect(() => engine.setVolume(-1.0), returnsNormally);
+      expect(() => engine.setVolume(2.0), returnsNormally);
+      expect(() => engine.setVolume(0.5), returnsNormally);
+      engine.dispose();
+    });
+  });
+
+  group('UpdateService & AppUpdateInfo Web Safety Tests', () {
+    test('AppUpdateInfo preserves releasePageUrl and formattedSize', () {
+      final info = AppUpdateInfo(
+        tagName: 'v2.1.0',
+        releaseName: 'DilSe v2.1.0',
+        changelog: 'Test changelog',
+        downloadUrl: 'https://github.com/releases/app.apk',
+        apkSizeBytes: 65 * 1024 * 1024,
+        currentVersion: '2.0.0',
+        currentBuildNumber: '1',
+        hasUpdate: true,
+        releasePageUrl:
+            'https://github.com/charanteja-k/music_app/releases/tag/v2.1.0',
+      );
+
+      expect(info.tagName, 'v2.1.0');
+      expect(info.formattedSize, '65.0 MB');
+      expect(
+        info.releasePageUrl,
+        'https://github.com/charanteja-k/music_app/releases/tag/v2.1.0',
+      );
+      expect(info.hasUpdate, true);
+    });
+
+    test('Version comparison handles semver and build numbers', () {
+      expect(UpdateService.compareVersion('v2.1.0', '2.0.0'), 1);
+      expect(UpdateService.compareVersion('v2.0.0', '2.0.0'), 0);
+      expect(UpdateService.compareVersion('v1.9.9', '2.0.0'), -1);
+      expect(UpdateService.compareVersion('v2.0.0+2', '2.0.0+1'), 1);
+    });
   });
 }
