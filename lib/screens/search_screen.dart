@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
@@ -7,6 +8,7 @@ import '../services/preferences_service.dart';
 import '../services/dynamic_artist_service.dart';
 import '../services/canonical_song_dedup.dart';
 import '../models/jio_album.dart';
+import '../layouts/desktop_layout_state.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/category_card.dart';
 import '../widgets/artist_card.dart';
@@ -189,6 +191,23 @@ class SearchScreenState extends State<SearchScreen>
         ? _prefs.preferredLanguages.first
         : 'Telugu';
     _loadBrowseAlbums(_selectedAlbumBrowseLang);
+    DesktopLayoutState.globalSearchQuery.addListener(
+      _onGlobalSearchQueryChanged,
+    );
+    if (DesktopLayoutState.globalSearchQuery.value.isNotEmpty) {
+      _searchController.text = DesktopLayoutState.globalSearchQuery.value;
+      _performSearch(DesktopLayoutState.globalSearchQuery.value);
+    }
+  }
+
+  void _onGlobalSearchQueryChanged() {
+    final query = DesktopLayoutState.globalSearchQuery.value;
+    if (query.isNotEmpty && _searchController.text != query) {
+      _searchController.text = query;
+      _performSearch(query);
+    } else if (query.isEmpty && _searchController.text.isNotEmpty) {
+      clearSearchAndDismiss();
+    }
   }
 
   void _onFocusChanged() {
@@ -228,6 +247,9 @@ class SearchScreenState extends State<SearchScreen>
 
   @override
   void dispose() {
+    DesktopLayoutState.globalSearchQuery.removeListener(
+      _onGlobalSearchQueryChanged,
+    );
     _debounceTimer?.cancel();
     _prefs.removeListener(_onPrefsChanged);
     _musicService.removeListener(_onPrefsChanged);
@@ -554,14 +576,21 @@ class SearchScreenState extends State<SearchScreen>
                               HapticFeedback.lightImpact();
                               if (suggestion.type ==
                                   SearchSuggestionType.artist) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => ArtistProfileScreen(
-                                      artistName: suggestion.text,
+                                if (kIsWeb &&
+                                    MediaQuery.of(context).size.width >= 1024) {
+                                  DesktopLayoutState.openArtist(
+                                    suggestion.text,
+                                  );
+                                } else {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ArtistProfileScreen(
+                                        artistName: suggestion.text,
+                                      ),
                                     ),
-                                  ),
-                                );
+                                  );
+                                }
                               } else {
                                 _searchController.text = suggestion.text;
                                 _performSearch(
@@ -626,18 +655,29 @@ class SearchScreenState extends State<SearchScreen>
                                               InkWell(
                                                 onTap: () {
                                                   HapticFeedback.lightImpact();
-                                                  Navigator.push(
-                                                    context,
-                                                    MaterialPageRoute(
-                                                      builder: (_) =>
-                                                          ArtistProfileScreen(
-                                                            artistName:
-                                                                _searchController
-                                                                    .text
-                                                                    .trim(),
-                                                          ),
-                                                    ),
-                                                  );
+                                                  final artistName =
+                                                      _searchController.text
+                                                          .trim();
+                                                  if (kIsWeb &&
+                                                      MediaQuery.of(
+                                                            context,
+                                                          ).size.width >=
+                                                          1024) {
+                                                    DesktopLayoutState.openArtist(
+                                                      artistName,
+                                                    );
+                                                  } else {
+                                                    Navigator.push(
+                                                      context,
+                                                      MaterialPageRoute(
+                                                        builder: (_) =>
+                                                            ArtistProfileScreen(
+                                                              artistName:
+                                                                  artistName,
+                                                            ),
+                                                      ),
+                                                    );
+                                                  }
                                                 },
                                                 borderRadius:
                                                     BorderRadius.circular(12),
@@ -1323,15 +1363,19 @@ class SearchScreenState extends State<SearchScreen>
                   artist: artist,
                   onTap: () {
                     HapticFeedback.lightImpact();
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ArtistProfileScreen(
-                          artist: artist,
-                          artistName: artist.name,
+                    if (kIsWeb && MediaQuery.of(context).size.width >= 1024) {
+                      DesktopLayoutState.openArtist(artist.name);
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ArtistProfileScreen(
+                            artist: artist,
+                            artistName: artist.name,
+                          ),
                         ),
-                      ),
-                    );
+                      );
+                    }
                   },
                 );
               },
@@ -1614,7 +1658,7 @@ class SearchScreenState extends State<SearchScreen>
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
-                  childAspectRatio: 0.72,
+                  childAspectRatio: 0.68,
                   crossAxisSpacing: 14,
                   mainAxisSpacing: 14,
                 ),
@@ -1640,7 +1684,7 @@ class SearchScreenState extends State<SearchScreen>
         crossAxisCount: 2,
         mainAxisSpacing: 16,
         crossAxisSpacing: 16,
-        childAspectRatio: 0.72,
+        childAspectRatio: 0.68,
       ),
       itemCount: _albumResults.length,
       itemBuilder: (context, i) {
@@ -1654,18 +1698,28 @@ class SearchScreenState extends State<SearchScreen>
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AlbumScreen(
-              album: album,
-              albumId: album.id,
-              albumTitle: album.title,
-              albumArtwork: album.artwork,
-              albumArtist: album.artist,
+        if (kIsWeb && MediaQuery.of(context).size.width >= 1024) {
+          DesktopLayoutState.openAlbum(
+            album: album,
+            albumId: album.id,
+            albumTitle: album.title,
+            albumArtwork: album.artwork,
+            albumArtist: album.artist,
+          );
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AlbumScreen(
+                album: album,
+                albumId: album.id,
+                albumTitle: album.title,
+                albumArtwork: album.artwork,
+                albumArtist: album.artist,
+              ),
             ),
-          ),
-        );
+          );
+        }
       },
       child: Container(
         decoration: BoxDecoration(
@@ -1683,18 +1737,21 @@ class SearchScreenState extends State<SearchScreen>
               ),
               child: Stack(
                 children: [
-                  Hero(
-                    tag: '$heroPrefix-art-${album.id}',
-                    child: album.artwork.isNotEmpty
-                        ? Image.network(
-                            album.artwork,
-                            width: double.infinity,
-                            height: 160,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, e2, st) =>
-                                _buildFallbackAlbumCover(album),
-                          )
-                        : _buildFallbackAlbumCover(album),
+                  AspectRatio(
+                    aspectRatio: 1.0,
+                    child: Hero(
+                      tag: '$heroPrefix-art-${album.id}',
+                      child: album.artwork.isNotEmpty
+                          ? Image.network(
+                              album.artwork,
+                              width: double.infinity,
+                              height: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, e2, st) =>
+                                  _buildFallbackAlbumCover(album),
+                            )
+                          : _buildFallbackAlbumCover(album),
+                    ),
                   ),
                   // Song count pill badge
                   Positioned(
