@@ -95,5 +95,24 @@ void main() {
         expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
       },
     );
+
+    testWidgets('Scrubber displays timestamps and renders slider safely', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(bottomNavigationBar: DesktopNowPlayingBar()),
+        ),
+      );
+      await tester.pump();
+
+      // Timestamps initially at 0:00
+      expect(find.text('0:00'), findsNWidgets(2));
+      expect(find.byType(Slider), findsWidgets);
+    });
   });
 }

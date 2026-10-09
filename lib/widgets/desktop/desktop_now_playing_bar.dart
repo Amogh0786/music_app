@@ -496,97 +496,133 @@ class _DesktopTimelineScrubberState extends State<_DesktopTimelineScrubber> {
 
   String _formatDuration(Duration? d) {
     if (d == null || d.inSeconds <= 0) return '0:00';
-    final minutes = d.inMinutes;
-    final seconds = d.inSeconds.remainder(60);
+    final nonNegative = d.isNegative ? Duration.zero : d;
+    final minutes = nonNegative.inMinutes;
+    final seconds = nonNegative.inSeconds.remainder(60);
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<Duration>(
-      stream: _musicService.audioPlayer.positionStream,
-      builder: (context, snapshot) {
-        final position = snapshot.data ?? Duration.zero;
+    return StreamBuilder<Duration?>(
+      stream: _musicService.durationStream,
+      initialData: _musicService.duration,
+      builder: (context, durSnapshot) {
         final totalDuration =
-            _musicService.audioPlayer.duration ??
+            durSnapshot.data ??
+            _musicService.duration ??
             _musicService.currentSong?.duration ??
             Duration.zero;
 
-        final posSec = position.inMilliseconds / 1000.0;
-        final durSec = totalDuration.inMilliseconds / 1000.0;
+        return StreamBuilder<Duration>(
+          stream: _musicService.positionStream,
+          initialData: _musicService.position,
+          builder: (context, snapshot) {
+            final position = snapshot.data ?? _musicService.position;
+            final durSec = totalDuration.inMilliseconds / 1000.0;
+            final posSec = position.inMilliseconds / 1000.0;
 
-        final maxVal = durSec > 0 ? durSec : 1.0;
-        final currentVal = (_dragPositionSeconds ?? posSec).clamp(0.0, maxVal);
+            final isScrubbable = durSec > 0;
+            final maxVal = isScrubbable ? durSec : 1.0;
+            final currentVal = (_dragPositionSeconds ?? posSec).clamp(
+              0.0,
+              maxVal,
+            );
 
-        return Row(
-          children: [
-            // Elapsed Timestamp
-            SizedBox(
-              width: 42.0,
-              child: Text(
-                _formatDuration(
-                  Duration(milliseconds: (currentVal * 1000).toInt()),
-                ),
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 11.0,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-                textAlign: TextAlign.right,
-              ),
-            ),
-            const SizedBox(width: 8.0),
-
-            // Interactive Progress Slider
-            Expanded(
-              child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 3.5,
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 5.5,
+            return Row(
+              children: [
+                // Elapsed Timestamp
+                SizedBox(
+                  width: 42.0,
+                  child: Text(
+                    _formatDuration(
+                      Duration(milliseconds: (currentVal * 1000).toInt()),
+                    ),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 11.0,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                    textAlign: TextAlign.right,
                   ),
-                  overlayShape: const RoundSliderOverlayShape(
-                    overlayRadius: 10.0,
-                  ),
-                  activeTrackColor: const Color(0xFFFA2D48),
-                  inactiveTrackColor: Colors.white.withValues(alpha: 0.15),
-                  thumbColor: Colors.white,
-                  overlayColor: const Color(0xFFFA2D48).withValues(alpha: 0.2),
                 ),
-                child: Slider(
-                  value: currentVal,
-                  min: 0.0,
-                  max: maxVal,
-                  onChangeStart: (val) {
-                    setState(() => _dragPositionSeconds = val);
-                  },
-                  onChanged: (val) {
-                    setState(() => _dragPositionSeconds = val);
-                  },
-                  onChangeEnd: (val) {
-                    final target = Duration(milliseconds: (val * 1000).toInt());
-                    _musicService.audioPlayer.seek(target);
-                    setState(() => _dragPositionSeconds = null);
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(width: 8.0),
+                const SizedBox(width: 8.0),
 
-            // Total Duration Timestamp
-            SizedBox(
-              width: 42.0,
-              child: Text(
-                _formatDuration(totalDuration),
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 11.0,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+                // Interactive Progress Slider
+                Expanded(
+                  child: MouseRegion(
+                    onExit: (_) {
+                      if (_dragPositionSeconds != null) {
+                        setState(() => _dragPositionSeconds = null);
+                      }
+                    },
+                    child: SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 3.5,
+                        thumbShape: isScrubbable
+                            ? const RoundSliderThumbShape(
+                                enabledThumbRadius: 5.5,
+                              )
+                            : const RoundSliderThumbShape(
+                                enabledThumbRadius: 0.0,
+                              ),
+                        overlayShape: isScrubbable
+                            ? const RoundSliderOverlayShape(overlayRadius: 10.0)
+                            : const RoundSliderOverlayShape(overlayRadius: 0.0),
+                        activeTrackColor: const Color(0xFFFA2D48),
+                        inactiveTrackColor: Colors.white.withValues(
+                          alpha: 0.15,
+                        ),
+                        thumbColor: Colors.white,
+                        overlayColor: const Color(
+                          0xFFFA2D48,
+                        ).withValues(alpha: 0.2),
+                      ),
+                      child: Slider(
+                        value: isScrubbable ? currentVal : 0.0,
+                        min: 0.0,
+                        max: maxVal,
+                        onChangeStart: isScrubbable
+                            ? (val) {
+                                setState(() => _dragPositionSeconds = val);
+                              }
+                            : null,
+                        onChanged: isScrubbable
+                            ? (val) {
+                                setState(() => _dragPositionSeconds = val);
+                              }
+                            : null,
+                        onChangeEnd: isScrubbable
+                            ? (val) {
+                                final target = Duration(
+                                  milliseconds: (val * 1000).toInt(),
+                                );
+                                _musicService.seek(target);
+                                setState(() => _dragPositionSeconds = null);
+                              }
+                            : null,
+                      ),
+                    ),
+                  ),
                 ),
-                textAlign: TextAlign.left,
-              ),
-            ),
-          ],
+                const SizedBox(width: 8.0),
+
+                // Total Duration Timestamp
+                SizedBox(
+                  width: 42.0,
+                  child: Text(
+                    _formatDuration(totalDuration),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 11.0,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                    textAlign: TextAlign.left,
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
