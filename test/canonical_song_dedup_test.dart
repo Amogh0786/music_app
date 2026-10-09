@@ -469,6 +469,72 @@ void main() {
           lessThan(0),
           reason: 'Telugu lyrics must be rejected for Tamil target',
         );
+
+        // When target language is English:
+        final hindiCandidateForEnglish = {
+          'id': 105,
+          'trackName': 'Shape of You',
+          'artistName': 'Ed Sheeran',
+          'duration': 233.0,
+          'syncedLyrics':
+              '[00:15.00] हम तेरे बिन अब रह नहीं सकते\n[00:20.00] ...',
+        };
+        final scoreIndicForEnglish = CanonicalSongDedup.scoreLyricsCandidate(
+          targetLang: 'english',
+          targetTitle: 'Shape of You',
+          targetArtist: 'Ed Sheeran',
+          targetDuration: 233,
+          candidate: hindiCandidateForEnglish,
+        );
+        expect(
+          scoreIndicForEnglish,
+          lessThan(0),
+          reason: 'Indic script lyrics must be rejected for English target',
+        );
+
+        final teluguRomanizedCandidateForEnglish = {
+          'id': 106,
+          'trackName': 'Shape of You',
+          'artistName': 'Ed Sheeran',
+          'duration': 233.0,
+          'syncedLyrics':
+              '[00:15.00] Naa manasulona prema unnadhi\n[00:20.00] Neeku telusu...\n',
+        };
+        final scoreRomanizedTeluguForEnglish =
+            CanonicalSongDedup.scoreLyricsCandidate(
+              targetLang: 'english',
+              targetTitle: 'Shape of You',
+              targetArtist: 'Ed Sheeran',
+              targetDuration: 233,
+              candidate: teluguRomanizedCandidateForEnglish,
+            );
+        expect(
+          scoreRomanizedTeluguForEnglish,
+          lessThan(0),
+          reason: 'Romanized Telugu lyrics must be rejected for English target',
+        );
+
+        // Extreme duration mismatch (> 60s)
+        final mismatchedDurationCandidate = {
+          'id': 107,
+          'trackName': 'Shape of You',
+          'artistName': 'Ed Sheeran',
+          'duration': 350.0,
+          'syncedLyrics':
+              '[00:15.00] I am in love with your body\n[00:20.00] ...',
+        };
+        final scoreDurationMismatch = CanonicalSongDedup.scoreLyricsCandidate(
+          targetLang: 'english',
+          targetTitle: 'Shape of You',
+          targetArtist: 'Ed Sheeran',
+          targetDuration: 233,
+          candidate: mismatchedDurationCandidate,
+        );
+        expect(
+          scoreDurationMismatch,
+          lessThan(0),
+          reason: 'Excessive duration difference must be hard rejected',
+        );
       },
     );
 

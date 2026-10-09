@@ -162,21 +162,15 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
                 LyricsTransliterationService.isRomanizedTelugu(
                   widget.songTitle!,
                 )));
-    final bool isRomanized =
-        !hasNativeIndic &&
-        (isTeluguSong ||
-            LyricsTransliterationService.isRomanizedIndic(
-              widget.rawLyrics,
-              widget.songLanguage,
-            ));
+    final bool isRomanizedTelugu = !hasNativeIndic && isTeluguSong;
 
-    _hasIndicScript = hasNativeIndic || isRomanized;
+    _hasIndicScript = hasNativeIndic || isRomanizedTelugu;
     _hasPronunciationLyrics =
-        isRomanized ||
+        isRomanizedTelugu ||
         (widget.pronunciationLyrics != null &&
             widget.pronunciationLyrics!.trim().isNotEmpty);
 
-    _initDisplayMode(isRomanized: isRomanized);
+    _initDisplayMode(isRomanized: isRomanizedTelugu);
 
     final lines = widget.rawLyrics.split('\n');
     // Ultra-flexible regex matching: [01:23.45], [1:23.456], [01:23:45], [00:01:23.45], [ 01:23.45 ]
@@ -203,16 +197,20 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
         if (text.isEmpty) {
           originalText = '♪ ♪ ♪';
           pronunciationText = '♪ ♪ ♪';
-        } else if (isRomanized) {
+        } else if (isRomanizedTelugu) {
           // Romanized English lyrics ("Rajamandri raagamajari") are placed in the English pronunciation slot
           pronunciationText = text;
           originalText = LyricsTransliterationService.toTeluguScript(text);
-        } else {
-          // Native Indic script lyrics ("రాజమండ్రి రాగమంజరి")
+        } else if (hasNativeIndic) {
+          // Native Indic script lyrics ("రాజమండ్రి రాగమంజరి" or "तुम ही हो" or "கண்ணம்மா")
           originalText = text;
           pronunciationText = LyricsTransliterationService.transliterateText(
             text,
           );
+        } else {
+          // Standard Latin / English / other lyrics without script transformation
+          originalText = text;
+          pronunciationText = text;
         }
 
         for (final m in matches) {
@@ -273,14 +271,17 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
           final String originalText;
           final String pronunciationText;
 
-          if (isRomanized) {
+          if (isRomanizedTelugu) {
             pronunciationText = line;
             originalText = LyricsTransliterationService.toTeluguScript(line);
-          } else {
+          } else if (hasNativeIndic) {
             originalText = line;
             pronunciationText = LyricsTransliterationService.transliterateText(
               line,
             );
+          } else {
+            originalText = line;
+            pronunciationText = line;
           }
 
           cleaned.add(
