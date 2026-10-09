@@ -199,7 +199,6 @@ void main() {
     );
 
     test('DilSeAudioHandler maintains boundPlayer to active deck', () {
-      final music = MusicService();
       final handler = DilSeAudioHandler();
       expect(handler.boundPlayer, isNotNull);
 

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -7,9 +8,29 @@ import '../services/music_service.dart';
 import '../widgets/animated_equalizer.dart';
 import 'settings_screen.dart';
 import 'dilse_capsule_screen.dart';
+import 'artist_profile_screen.dart';
+import 'custom_playlist_screen.dart';
+import '../layouts/desktop_layout_state.dart';
 
-class ProfileScreen extends StatelessWidget {
+/// Spotify-grade Profile & Activity Screen.
+///
+/// Features:
+/// 1. Dynamic Ambient Hero Header with large Circular Avatar, display name, and metadata subtitle.
+/// 2. Interactive Action Bar: DilSe Capsule Glowing Pill, Edit Profile button, Settings shortcut.
+/// 3. Responsive 4-Column / 2-Row Metrics Cards (Total Plays, Liked Songs, Offline Cache, Top Artist).
+/// 4. Spotify-style Top Streamed Artists Circular Avatars carousel with rank badges and tap-to-profile.
+/// 5. Spotify-style Top Tracks this month list with rank numbers, album art, play count, like toggle, and Play All / Shuffle.
+/// 6. Public Playlists / Your Playlists card row with cover art and tap-to-playlist.
+/// 7. Recently Played listening history stream with quick play actions.
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool _showAllTopTracks = false;
 
   void _showAvatarOptionsSheet(BuildContext context, PreferencesService prefs) {
     HapticFeedback.lightImpact();
@@ -29,96 +50,52 @@ class ProfileScreen extends StatelessWidget {
             border: Border.all(color: Colors.white12),
           ),
           child: SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 38,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white30,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                const Text(
-                  'Profile Photo',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 19,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.photo_library_rounded,
-                      color: Colors.white,
-                      size: 22,
+                      color: Colors.white30,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  title: const Text(
-                    'Choose from Gallery',
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Profile Photo',
                     style: TextStyle(
                       color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
+                      fontSize: 19,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  subtitle: Text(
-                    'Select a photo from your device',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.5),
-                      fontSize: 12,
-                    ),
-                  ),
-                  onTap: () async {
-                    Navigator.pop(ctx);
-                    try {
-                      final pickedFiles = await FilePicker.pickFiles(
-                        type: FileType.image,
-                      );
-                      if (pickedFiles.isNotEmpty) {
-                        final pickedPath = pickedFiles.first.path;
-                        if (pickedPath != null &&
-                            File(pickedPath).existsSync()) {
-                          await prefs.setProfileImagePath(pickedPath);
-                        }
-                      }
-                    } catch (_) {}
-                  },
-                ),
-                if (hasCustomImage) ...[
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 16),
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFA2D48).withValues(alpha: 0.15),
+                        color: Colors.white.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(
-                        Icons.delete_outline_rounded,
-                        color: Color(0xFFFA2D48),
+                        Icons.photo_library_rounded,
+                        color: Colors.white,
                         size: 22,
                       ),
                     ),
                     title: const Text(
-                      'Remove Photo',
+                      'Choose from Gallery',
                       style: TextStyle(
-                        color: Color(0xFFFA2D48),
+                        color: Colors.white,
                         fontWeight: FontWeight.w600,
                         fontSize: 15,
                       ),
                     ),
                     subtitle: Text(
-                      'Revert back to avatar initials',
+                      'Select a photo from your device',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.5),
                         fontSize: 12,
@@ -126,46 +103,95 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     onTap: () async {
                       Navigator.pop(ctx);
-                      await prefs.setProfileImagePath(null);
+                      try {
+                        final pickedFiles = await FilePicker.pickFiles(
+                          type: FileType.image,
+                        );
+                        if (pickedFiles.isNotEmpty) {
+                          final pickedPath = pickedFiles.first.path;
+                          if (pickedPath != null &&
+                              File(pickedPath).existsSync()) {
+                            await prefs.setProfileImagePath(pickedPath);
+                          }
+                        }
+                      } catch (_) {}
                     },
                   ),
+                  if (hasCustomImage) ...[
+                    const SizedBox(height: 6),
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(
+                            0xFFFA2D48,
+                          ).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.delete_outline_rounded,
+                          color: Color(0xFFFA2D48),
+                          size: 22,
+                        ),
+                      ),
+                      title: const Text(
+                        'Remove Photo',
+                        style: TextStyle(
+                          color: Color(0xFFFA2D48),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Revert back to avatar initials',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.5),
+                          fontSize: 12,
+                        ),
+                      ),
+                      onTap: () async {
+                        Navigator.pop(ctx);
+                        await prefs.setProfileImagePath(null);
+                      },
+                    ),
+                  ],
+                  const SizedBox(height: 6),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.badge_outlined,
+                        color: Colors.white70,
+                        size: 22,
+                      ),
+                    ),
+                    title: const Text(
+                      'Edit Display Name',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Change your profile nickname',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 12,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showEditNameDialog(context, prefs);
+                    },
+                  ),
+                  const SizedBox(height: 10),
                 ],
-                const SizedBox(height: 6),
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.badge_outlined,
-                      color: Colors.white70,
-                      size: 22,
-                    ),
-                  ),
-                  title: const Text(
-                    'Edit Display Name',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Change your profile nickname',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.5),
-                      fontSize: 12,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _showEditNameDialog(context, prefs);
-                  },
-                ),
-                const SizedBox(height: 10),
-              ],
+              ),
             ),
           ),
         );
@@ -219,7 +245,7 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'This name personalizes your greetings and mixes.',
+                  'This name personalizes your profile, greetings, and mixes.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.6),
                     fontSize: 13,
@@ -314,912 +340,184 @@ class ProfileScreen extends StatelessWidget {
 
         return Scaffold(
           backgroundColor: const Color(0xFF0B0B0F),
-          appBar: AppBar(
-            backgroundColor: const Color(0xFF0B0B0F),
-            elevation: 0,
-            title: const Text(
-              'Profile & Activity',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
-              ),
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(
-                  Icons.settings_outlined,
-                  color: Colors.white70,
-                ),
-                onPressed: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SettingsScreen(),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          body: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(height: 12),
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              final isDesktop = constraints.maxWidth >= 720;
+              final horizontalPadding = isDesktop ? 32.0 : 16.0;
 
-                // Apple-style Glowing User Avatar
-                GestureDetector(
-                  onTap: () => _showAvatarOptionsSheet(context, prefs),
-                  child: Stack(
-                    alignment: Alignment.bottomRight,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.08),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.16),
-                            width: 2,
+              return CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  // Spotify-style Ambient Header Sliver
+                  SliverToBoxAdapter(
+                    child: _buildSpotifyHeroHeader(
+                      context,
+                      prefs: prefs,
+                      music: music,
+                      name: name,
+                      initials: initials,
+                      hasCustomImage: hasCustomImage,
+                      customImagePath: customImagePath,
+                      themeColor: themeColor,
+                      isDesktop: isDesktop,
+                    ),
+                  ),
+
+                  // Main Content Body with Max Width Constraint on wide monitors
+                  SliverPadding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: horizontalPadding,
+                      vertical: 20.0,
+                    ),
+                    sliver: SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Quick Action Row (Capsule + Edit + Settings)
+                          _buildActionBar(context, prefs: prefs),
+
+                          const SizedBox(height: 24),
+
+                          // Sleek Metrics Row (Total Plays, Liked, Offline, Top Artist)
+                          _buildListeningHighlightsGrid(
+                            context,
+                            prefs: prefs,
+                            music: music,
+                            isDesktop: isDesktop,
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.4),
-                              blurRadius: 20,
-                              offset: const Offset(0, 8),
+
+                          const SizedBox(height: 32),
+
+                          // Top Streamed Artists (Circular Avatars)
+                          if (prefs.getTopPlayedArtists().isNotEmpty) ...[
+                            _buildTopArtistsSection(
+                              context,
+                              prefs: prefs,
+                              themeColor: themeColor,
+                              isDesktop: isDesktop,
                             ),
+                            const SizedBox(height: 36),
                           ],
-                        ),
-                        child: CircleAvatar(
-                          radius: 52,
-                          backgroundColor: const Color(0xFF1B1B26),
-                          backgroundImage: hasCustomImage
-                              ? FileImage(File(customImagePath))
-                              : null,
-                          child: hasCustomImage
-                              ? null
-                              : Text(
-                                  initials,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 42,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: themeColor,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: const Color(0xFF0B0B0F),
-                            width: 2.5,
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.camera_alt_rounded,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
 
-                const SizedBox(height: 16),
+                          // Top Tracks this month (Most Played Songs)
+                          if (prefs.mostPlayedSongs.isNotEmpty) ...[
+                            _buildTopTracksSection(
+                              context,
+                              prefs: prefs,
+                              music: music,
+                              themeColor: themeColor,
+                            ),
+                            const SizedBox(height: 36),
+                          ],
 
-                // Name with edit trigger
-                GestureDetector(
-                  onTap: () => _showEditNameDialog(context, prefs),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.4,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      const Icon(
-                        Icons.edit_outlined,
-                        color: Colors.white38,
-                        size: 18,
-                      ),
-                    ],
-                  ),
-                ),
+                          // Public Playlists / Your Playlists
+                          if (music.customPlaylists.isNotEmpty) ...[
+                            _buildPlaylistsSection(
+                              context,
+                              music: music,
+                              userName: name,
+                            ),
+                            const SizedBox(height: 36),
+                          ],
 
-                const SizedBox(height: 4),
+                          // Recently Played History
+                          if (prefs.listeningHistory.isNotEmpty) ...[
+                            _buildRecentlyPlayedSection(
+                              context,
+                              prefs: prefs,
+                              music: music,
+                            ),
+                            const SizedBox(height: 36),
+                          ],
 
-                Text(
-                  'DilSe Audiophile • Suno Dil Se',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.55),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+                          // Audio Preferences & Settings Tile
+                          _buildSettingsTile(context),
 
-                const SizedBox(height: 20),
-
-                // ✨ DilSe Capsule Hero Banner
-                GestureDetector(
-                  onTap: () {
-                    HapticFeedback.mediumImpact();
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const DilSeCapsuleScreen(),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          const Color(0xFFE040FB).withValues(alpha: 0.22),
-                          const Color(0xFF00E5FF).withValues(alpha: 0.14),
-                          const Color(0xFF1DB954).withValues(alpha: 0.18),
+                          const SizedBox(height: 60),
                         ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: const Color(0xFF00E5FF).withValues(alpha: 0.45),
-                        width: 1.2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(
-                            0xFFE040FB,
-                          ).withValues(alpha: 0.15),
-                          blurRadius: 18,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFE040FB), Color(0xFF1DB954)],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(
-                                  0xFFE040FB,
-                                ).withValues(alpha: 0.4),
-                                blurRadius: 10,
-                              ),
-                            ],
-                          ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.auto_awesome_rounded,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Text(
-                                    'Your DilSe Capsule',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: -0.2,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF1DB954),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: const Text(
-                                      'READY',
-                                      style: TextStyle(
-                                        color: Colors.black,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                'Tap to reveal your private, on-device listening journey',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.7),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(
-                          Icons.arrow_forward_ios_rounded,
-                          color: Colors.white54,
-                          size: 16,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // 2x2 Metric Cards Grid
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                  childAspectRatio: 1.45,
-                  children: [
-                    _buildMetricCard(
-                      context,
-                      icon: Icons.play_arrow_rounded,
-                      iconColor: const Color(0xFFFA2D48),
-                      title: 'Total Plays',
-                      value: '${prefs.totalPlays}',
-                      subtitle: 'Tracks enjoyed',
-                    ),
-                    _buildMetricCard(
-                      context,
-                      icon: Icons.favorite_rounded,
-                      iconColor: const Color(0xFFFF4081),
-                      title: 'Liked Songs',
-                      value: '${music.likedSongs.length}',
-                      subtitle: 'Favorites saved',
-                    ),
-                    _buildMetricCard(
-                      context,
-                      icon: Icons.download_done_rounded,
-                      iconColor: const Color(0xFF1DB954),
-                      title: 'Offline Music',
-                      value: '${music.downloadedSongs.length}',
-                      subtitle: 'Offline tracks',
-                    ),
-                    _buildMetricCard(
-                      context,
-                      icon: Icons.person_search_rounded,
-                      iconColor: const Color(0xFF2196F3),
-                      title: 'Top Artist',
-                      value: prefs.mostPlayedArtist.isNotEmpty
-                          ? prefs.mostPlayedArtist
-                          : 'Discovering',
-                      subtitle: prefs.topArtistPlayCount > 0
-                          ? '${prefs.topArtistPlayCount} plays'
-                          : 'Most streamed',
-                      isTextValue: true,
-                    ),
-                  ],
-                ),
-
-                // Top Streamed Artists Section (Ranked #1, #2, #3)
-                if (prefs.getTopPlayedArtists().isNotEmpty) ...[
-                  const SizedBox(height: 24),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Row(
-                      children: [
-                        const Text(
-                          'TOP STREAMED ARTISTS',
-                          style: TextStyle(
-                            color: Colors.white54,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: themeColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: themeColor.withValues(alpha: 0.35),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: BoxDecoration(
-                                  color: themeColor,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                'Live Sync',
-                                style: TextStyle(
-                                  color: themeColor,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 14,
-                      horizontal: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF161622),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white10),
-                    ),
-                    child: Row(
-                      children: prefs
-                          .getTopPlayedArtists(limit: 3)
-                          .asMap()
-                          .entries
-                          .map((entry) {
-                            final rank = entry.key + 1;
-                            final artistEntry = entry.value;
-                            final isFirst = rank == 1;
-
-                            return Expanded(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Stack(
-                                    alignment: Alignment.bottomRight,
-                                    children: [
-                                      Container(
-                                        width: 48,
-                                        height: 48,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          gradient: LinearGradient(
-                                            colors: isFirst
-                                                ? [
-                                                    themeColor,
-                                                    const Color(0xFFFF6584),
-                                                  ]
-                                                : [
-                                                    const Color(0xFF282838),
-                                                    const Color(0xFF1E1E2C),
-                                                  ],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                          ),
-                                        ),
-                                        child: Center(
-                                          child: Icon(
-                                            Icons.mic_external_on_rounded,
-                                            color: isFirst
-                                                ? Colors.white
-                                                : Colors.white60,
-                                            size: 22,
-                                          ),
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.all(4),
-                                        decoration: BoxDecoration(
-                                          color: isFirst
-                                              ? themeColor
-                                              : const Color(0xFF282838),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: const Color(0xFF161622),
-                                            width: 1.5,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          '#$rank',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    artistEntry.key,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: isFirst
-                                          ? Colors.white
-                                          : Colors.white.withValues(
-                                              alpha: 0.85,
-                                            ),
-                                      fontWeight: isFirst
-                                          ? FontWeight.bold
-                                          : FontWeight.w600,
-                                      fontSize: 12.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '${artistEntry.value} ${artistEntry.value == 1 ? "stream" : "streams"}',
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.5,
-                                      ),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          })
-                          .toList(),
                     ),
                   ),
                 ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
 
-                // Most Played Songs Section (Ranked #1..#100)
-                if (prefs.mostPlayedSongs.isNotEmpty) ...[
-                  const SizedBox(height: 24),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Row(
-                      children: [
-                        const Text(
-                          'MOST PLAYED SONGS',
-                          style: TextStyle(
-                            color: Colors.white54,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: themeColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: themeColor.withValues(alpha: 0.35),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: BoxDecoration(
-                                  color: themeColor,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                'Live Sync',
-                                style: TextStyle(
-                                  color: themeColor,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  // Action Row: Play All & Shuffle
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(
-                            Icons.play_arrow_rounded,
-                            color: Colors.black,
-                            size: 20,
-                          ),
-                          label: Text(
-                            'Play All (${prefs.mostPlayedSongs.length})',
-                            style: const TextStyle(
-                              color: Colors.black,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          onPressed: () {
-                            HapticFeedback.lightImpact();
-                            final list = prefs.mostPlayedSongs;
-                            music.playMostPlayedSong(
-                              list.first,
-                              allSongs: list,
-                              startIndex: 0,
-                            );
-                          },
-                        ),
+  /// Spotify-grade Dynamic Ambient Hero Header.
+  Widget _buildSpotifyHeroHeader(
+    BuildContext context, {
+    required PreferencesService prefs,
+    required MusicService music,
+    required String name,
+    required String initials,
+    required bool hasCustomImage,
+    required String? customImagePath,
+    required Color themeColor,
+    required bool isDesktop,
+  }) {
+    final publicPlaylistsCount = music.customPlaylists.length;
+    final likedSongsCount = music.likedSongs.length;
+    final totalPlays = prefs.totalPlays;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            const Color(0xFF4A1521).withValues(alpha: 0.85),
+            const Color(0xFF221118).withValues(alpha: 0.9),
+            const Color(0xFF0B0B0F),
+          ],
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            isDesktop ? 32.0 : 20.0,
+            12.0,
+            isDesktop ? 32.0 : 20.0,
+            24.0,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top Bar Navigation actions (Back + Settings)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  if (Navigator.canPop(context))
+                    IconButton(
+                      icon: const Icon(
+                        Icons.arrow_back_rounded,
+                        color: Colors.white,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(
-                            Icons.shuffle_rounded,
-                            color: Colors.white70,
-                            size: 18,
-                          ),
-                          label: const Text(
-                            'Shuffle',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(
-                              color: Colors.white.withValues(alpha: 0.2),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          onPressed: () {
-                            HapticFeedback.lightImpact();
-                            final shuffled = List<Map<String, dynamic>>.from(
-                              prefs.mostPlayedSongs,
-                            )..shuffle();
-                            music.playMostPlayedSong(
-                              shuffled.first,
-                              allSongs: shuffled,
-                              startIndex: 0,
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // Song List Container
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF161622),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white10),
-                    ),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: prefs.mostPlayedSongs.length,
-                      separatorBuilder: (context, index) => const Divider(
-                        color: Colors.white10,
-                        height: 1,
-                        indent: 68,
-                      ),
-                      itemBuilder: (context, index) {
-                        final song = prefs.mostPlayedSongs[index];
-                        final rank = index + 1;
-                        final isTop3 = rank <= 3;
-                        final playCount =
-                            (song['playCount'] as num?)?.toInt() ?? 1;
-                        final songId = (song['id'] as String?) ?? '';
-                        final isCurrent = music.currentSong?.id.value == songId;
-                        final isLiked = music.isLiked(songId);
-
-                        return ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 4,
-                          ),
-                          leading: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: 26,
-                                child: Center(
-                                  child: Text(
-                                    '$rank',
-                                    style: TextStyle(
-                                      color: isTop3
-                                          ? themeColor
-                                          : Colors.white54,
-                                      fontWeight: isTop3
-                                          ? FontWeight.w900
-                                          : FontWeight.w600,
-                                      fontSize: rank > 99 ? 11 : 13,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(10),
-                                child: SizedBox(
-                                  width: 48,
-                                  height: 48,
-                                  child: Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      Image.network(
-                                        song['thumbnail'] ?? '',
-                                        fit: BoxFit.cover,
-                                        cacheWidth: 120,
-                                        cacheHeight: 120,
-                                        errorBuilder: (_, _, _) => Container(
-                                          color: const Color(0xFF1E1E28),
-                                          child: const Icon(
-                                            Icons.music_note,
-                                            color: Colors.white54,
-                                          ),
-                                        ),
-                                      ),
-                                      if (isCurrent)
-                                        Container(
-                                          color: Colors.black54,
-                                          child: Center(
-                                            child: AnimatedEqualizer(
-                                              isPlaying: music.isPlaying,
-                                              size: 20,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          title: Text(
-                            song['title'] ?? 'Unknown Track',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: isCurrent ? themeColor : Colors.white,
-                              fontSize: 14,
-                              letterSpacing: -0.2,
-                            ),
-                          ),
-                          subtitle: Text(
-                            song['author'] ?? 'Unknown Artist',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              fontSize: 12,
-                            ),
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 7,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isTop3
-                                      ? themeColor.withValues(alpha: 0.15)
-                                      : const Color(0xFF1E1E28),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: isTop3
-                                        ? themeColor.withValues(alpha: 0.4)
-                                        : Colors.white12,
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.play_arrow_rounded,
-                                      size: 13,
-                                      color: isTop3
-                                          ? themeColor
-                                          : Colors.white60,
-                                    ),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      '$playCount ${playCount == 1 ? "play" : "plays"}',
-                                      style: TextStyle(
-                                        color: isTop3
-                                            ? Colors.white
-                                            : Colors.white70,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              IconButton(
-                                icon: Icon(
-                                  isLiked
-                                      ? Icons.favorite_rounded
-                                      : Icons.favorite_border_rounded,
-                                  color: isLiked
-                                      ? const Color(0xFFFA2D48)
-                                      : Colors.white38,
-                                  size: 20,
-                                ),
-                                onPressed: () {
-                                  HapticFeedback.selectionClick();
-                                  music.toggleLikeMap(song);
-                                },
-                              ),
-                            ],
-                          ),
-                          onTap: () {
-                            HapticFeedback.lightImpact();
-                            music.playMostPlayedSong(
-                              song,
-                              allSongs: prefs.mostPlayedSongs,
-                              startIndex: index,
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 24),
-
-                // Recent Listening Activity Card
-                if (prefs.listeningHistory.isNotEmpty) ...[
-                  Align(
-                    alignment: Alignment.centerLeft,
+                      onPressed: () => Navigator.pop(context),
+                    )
+                  else
+                    const SizedBox(width: 48),
+                  const Expanded(
                     child: Text(
-                      'RECENTLY PLAYED',
+                      'Profile & Activity',
+                      textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        fontSize: 12,
+                        color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2,
+                        fontSize: 17,
+                        letterSpacing: -0.3,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF161622),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white10),
-                    ),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: prefs.listeningHistory.take(4).length,
-                      separatorBuilder: (context, index) => const Divider(
-                        color: Colors.white10,
-                        height: 1,
-                        indent: 68,
-                      ),
-                      itemBuilder: (context, index) {
-                        final track = prefs.listeningHistory[index];
-                        return ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 4,
-                          ),
-                          leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.network(
-                              track['thumbnail'] ?? '',
-                              width: 44,
-                              height: 44,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Container(
-                                    width: 44,
-                                    height: 44,
-                                    color: Colors.white12,
-                                    child: const Icon(
-                                      Icons.music_note,
-                                      color: Colors.white54,
-                                    ),
-                                  ),
-                            ),
-                          ),
-                          title: Text(
-                            track['title'] ?? 'Unknown',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                          subtitle: Text(
-                            track['author'] ?? 'Artist',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.55),
-                              fontSize: 12,
-                            ),
-                          ),
-                          trailing: const Icon(
-                            Icons.play_circle_outline_rounded,
-                            color: Colors.white38,
-                            size: 24,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-
-                // Action Button: Full Settings & Preferences
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1E1E28),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        side: const BorderSide(color: Colors.white12),
-                      ),
-                      elevation: 0,
+                  IconButton(
+                    tooltip: 'Settings & Preferences',
+                    icon: const Icon(
+                      Icons.settings_outlined,
+                      color: Colors.white,
                     ),
                     onPressed: () {
                       HapticFeedback.lightImpact();
@@ -1230,100 +528,1298 @@ class ProfileScreen extends StatelessWidget {
                         ),
                       );
                     },
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.tune_rounded, size: 20),
-                        SizedBox(width: 10),
-                        Text(
-                          'Player & Audio Preferences',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Hero Identity row
+              if (isDesktop)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // Avatar
+                    _buildAvatarWidget(
+                      context,
+                      prefs: prefs,
+                      initials: initials,
+                      hasCustomImage: hasCustomImage,
+                      customImagePath: customImagePath,
+                      themeColor: themeColor,
+                      radius: 64,
                     ),
+                    const SizedBox(width: 24),
+
+                    // User Info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'PROFILE',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          GestureDetector(
+                            onTap: () => _showEditNameDialog(context, prefs),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    name,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 48,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: -1.2,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Icon(
+                                  Icons.edit_rounded,
+                                  color: Colors.white.withValues(alpha: 0.4),
+                                  size: 24,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              Text(
+                                '$publicPlaylistsCount Public ${publicPlaylistsCount == 1 ? "Playlist" : "Playlists"}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const Text(
+                                '•',
+                                style: TextStyle(color: Colors.white54),
+                              ),
+                              Text(
+                                '$likedSongsCount Liked Songs',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const Text(
+                                '•',
+                                style: TextStyle(color: Colors.white54),
+                              ),
+                              Text(
+                                '$totalPlays Streams',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Center(
+                  child: Column(
+                    children: [
+                      _buildAvatarWidget(
+                        context,
+                        prefs: prefs,
+                        initials: initials,
+                        hasCustomImage: hasCustomImage,
+                        customImagePath: customImagePath,
+                        themeColor: themeColor,
+                        radius: 50,
+                      ),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'PROFILE',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      GestureDetector(
+                        onTap: () => _showEditNameDialog(context, prefs),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                name,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.5,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.edit_rounded,
+                              color: Colors.white.withValues(alpha: 0.4),
+                              size: 18,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '$publicPlaylistsCount Playlists • $likedSongsCount Likes • $totalPlays Streams',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.65),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 40),
-              ],
-            ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
-  Widget _buildMetricCard(
+  /// Avatar with glowing rim and edit badge.
+  Widget _buildAvatarWidget(
+    BuildContext context, {
+    required PreferencesService prefs,
+    required String initials,
+    required bool hasCustomImage,
+    required String? customImagePath,
+    required Color themeColor,
+    required double radius,
+  }) {
+    return GestureDetector(
+      onTap: () => _showAvatarOptionsSheet(context, prefs),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Stack(
+          alignment: Alignment.bottomRight,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.black26,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: CircleAvatar(
+                radius: radius,
+                backgroundColor: const Color(0xFF282838),
+                backgroundImage: hasCustomImage
+                    ? FileImage(File(customImagePath!))
+                    : null,
+                child: hasCustomImage
+                    ? null
+                    : Text(
+                        initials,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: radius * 0.75,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: themeColor,
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF0B0B0F), width: 2.5),
+              ),
+              child: const Icon(
+                Icons.camera_alt_rounded,
+                color: Colors.white,
+                size: 15,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Action bar beneath header (Capsule, Edit profile, Settings).
+  Widget _buildActionBar(
+    BuildContext context, {
+    required PreferencesService prefs,
+  }) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        // DilSe Capsule Glowing Gradient Button
+        GestureDetector(
+          onTap: () {
+            HapticFeedback.mediumImpact();
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const DilSeCapsuleScreen()),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFE040FB), Color(0xFF1DB954)],
+              ),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFE040FB).withValues(alpha: 0.35),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Colors.white,
+                  size: 17,
+                ),
+                const SizedBox(width: 7),
+                const Text(
+                  'Your DilSe Capsule',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'READY',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Edit Profile Button
+        OutlinedButton.icon(
+          icon: const Icon(Icons.edit_outlined, size: 16),
+          label: const Text('Edit Profile'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.25)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+          ),
+          onPressed: () => _showEditNameDialog(context, prefs),
+        ),
+      ],
+    );
+  }
+
+  /// Clean, Lightweight 4-Column Listening Highlights Grid.
+  Widget _buildListeningHighlightsGrid(
+    BuildContext context, {
+    required PreferencesService prefs,
+    required MusicService music,
+    required bool isDesktop,
+  }) {
+    final topArtist = prefs.mostPlayedArtist.isNotEmpty
+        ? prefs.mostPlayedArtist
+        : 'Discovering';
+    final topArtistPlays = prefs.topArtistPlayCount > 0
+        ? '${prefs.topArtistPlayCount} plays'
+        : 'Most streamed';
+
+    final cards = [
+      _buildCompactMetricCard(
+        context,
+        icon: Icons.play_arrow_rounded,
+        iconColor: const Color(0xFFFA2D48),
+        title: 'Total Plays',
+        value: '${prefs.totalPlays}',
+        subtitle: 'Tracks enjoyed',
+      ),
+      _buildCompactMetricCard(
+        context,
+        icon: Icons.favorite_rounded,
+        iconColor: const Color(0xFFFF4081),
+        title: 'Liked Songs',
+        value: '${music.likedSongs.length}',
+        subtitle: 'Favorites saved',
+      ),
+      _buildCompactMetricCard(
+        context,
+        icon: Icons.download_done_rounded,
+        iconColor: const Color(0xFF1DB954),
+        title: 'Offline Music',
+        value: '${music.downloadedSongs.length}',
+        subtitle: 'Offline tracks',
+      ),
+      _buildCompactMetricCard(
+        context,
+        icon: Icons.person_search_rounded,
+        iconColor: const Color(0xFF2196F3),
+        title: 'Top Artist',
+        value: topArtist,
+        subtitle: topArtistPlays,
+        onTap: prefs.mostPlayedArtist.isNotEmpty
+            ? () {
+                if (isDesktop) {
+                  DesktopLayoutState.openArtist(prefs.mostPlayedArtist);
+                } else {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ArtistProfileScreen(
+                        artistName: prefs.mostPlayedArtist,
+                      ),
+                    ),
+                  );
+                }
+              }
+            : null,
+      ),
+    ];
+
+    if (isDesktop) {
+      return Row(
+        children: cards
+            .map(
+              (c) => Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                  child: c,
+                ),
+              ),
+            )
+            .toList(),
+      );
+    } else {
+      return GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 1.35,
+        children: cards,
+      );
+    }
+  }
+
+  /// Compact, aesthetic metric card.
+  Widget _buildCompactMetricCard(
     BuildContext context, {
     required IconData icon,
     required Color iconColor,
     required String title,
     required String value,
     required String subtitle,
-    bool isTextValue = false,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161622),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white10),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF14141E),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: iconColor, size: 16),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: iconColor.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Icon(icon, color: iconColor, size: 15),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
+              const SizedBox(height: 10),
               Text(
-                title,
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.4,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.65),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withValues(alpha: 0.4),
+                  fontSize: 11,
                 ),
               ),
             ],
           ),
-          const Spacer(),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: isTextValue ? 16 : 22,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
+        ),
+      ),
+    );
+  }
+
+  /// Top Streamed Artists Section (Spotify Circular Avatars).
+  Widget _buildTopArtistsSection(
+    BuildContext context, {
+    required PreferencesService prefs,
+    required Color themeColor,
+    required bool isDesktop,
+  }) {
+    final topArtists = prefs.getTopPlayedArtists(limit: 6);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Top artists this month',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Only visible to you',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.4),
-              fontSize: 11,
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: themeColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: themeColor.withValues(alpha: 0.35)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: themeColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Live Sync',
+                    style: TextStyle(
+                      color: themeColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
             ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Spotify-style circular cards carousel
+        SizedBox(
+          height: 170,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: topArtists.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 18),
+            itemBuilder: (context, index) {
+              final rank = index + 1;
+              final entry = topArtists[index];
+              final artistName = entry.key;
+              final streams = entry.value;
+              final isFirst = rank == 1;
+
+              return InkWell(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  if (kIsWeb && MediaQuery.of(context).size.width >= 1024) {
+                    DesktopLayoutState.openArtist(artistName);
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            ArtistProfileScreen(artistName: artistName),
+                      ),
+                    );
+                  }
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: 128,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF14141E),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.06),
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: isFirst
+                                    ? [themeColor, const Color(0xFFFF6584)]
+                                    : [
+                                        const Color(0xFF2C2C3E),
+                                        const Color(0xFF1A1A26),
+                                      ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.4),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: Text(
+                                artistName.isNotEmpty
+                                    ? artistName.substring(0, 1).toUpperCase()
+                                    : 'A',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isFirst
+                                  ? themeColor
+                                  : const Color(0xFF282838),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: const Color(0xFF14141E),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Text(
+                              '#$rank',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        artistName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$streams ${streams == 1 ? "stream" : "streams"}',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.5),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  /// Top Tracks this month Section (Spotify Tracklist).
+  Widget _buildTopTracksSection(
+    BuildContext context, {
+    required PreferencesService prefs,
+    required MusicService music,
+    required Color themeColor,
+  }) {
+    final allSongs = prefs.mostPlayedSongs;
+    final displaySongs = _showAllTopTracks
+        ? allSongs
+        : allSongs.take(5).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Top tracks this month',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Only visible to you',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (allSongs.length > 5)
+              TextButton(
+                onPressed: () {
+                  setState(() => _showAllTopTracks = !_showAllTopTracks);
+                },
+                child: Text(
+                  _showAllTopTracks ? 'Show less' : 'Show all',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Play All & Shuffle Buttons Row
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            ElevatedButton.icon(
+              icon: const Icon(
+                Icons.play_arrow_rounded,
+                color: Colors.black,
+                size: 20,
+              ),
+              label: Text(
+                'Play All (${allSongs.length})',
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                music.playMostPlayedSong(
+                  allSongs.first,
+                  allSongs: allSongs,
+                  startIndex: 0,
+                );
+              },
+            ),
+            OutlinedButton.icon(
+              icon: const Icon(
+                Icons.shuffle_rounded,
+                color: Colors.white70,
+                size: 18,
+              ),
+              label: const Text(
+                'Shuffle',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                final shuffled = List<Map<String, dynamic>>.from(allSongs)
+                  ..shuffle();
+                music.playMostPlayedSong(
+                  shuffled.first,
+                  allSongs: shuffled,
+                  startIndex: 0,
+                );
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+
+        // Spotify-grade Tracklist
+        Material(
+          color: const Color(0xFF14141E),
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+          ),
+          child: ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: displaySongs.length,
+            separatorBuilder: (context, index) => Divider(
+              color: Colors.white.withValues(alpha: 0.05),
+              height: 1,
+              indent: 68,
+            ),
+            itemBuilder: (context, index) {
+              final song = displaySongs[index];
+              final rank = index + 1;
+              final songId = (song['id'] as String?) ?? '';
+              final isCurrent = music.currentSong?.id.value == songId;
+              final isLiked = music.isLiked(songId);
+              final playCount = (song['playCount'] as num?)?.toInt() ?? 1;
+
+              return ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 2,
+                ),
+                leading: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      child: Center(
+                        child: Text(
+                          '$rank',
+                          style: TextStyle(
+                            color: isCurrent
+                                ? themeColor
+                                : Colors.white.withValues(alpha: 0.5),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: 44,
+                        height: 44,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.network(
+                              song['thumbnail'] ?? '',
+                              fit: BoxFit.cover,
+                              cacheWidth: 120,
+                              cacheHeight: 120,
+                              errorBuilder: (_, _, _) => Container(
+                                color: const Color(0xFF1E1E28),
+                                child: const Icon(
+                                  Icons.music_note,
+                                  color: Colors.white54,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                            if (isCurrent)
+                              Container(
+                                color: Colors.black54,
+                                child: Center(
+                                  child: AnimatedEqualizer(
+                                    isPlaying: music.isPlaying,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                title: Text(
+                  song['title'] ?? 'Unknown Track',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isCurrent ? themeColor : Colors.white,
+                    fontSize: 14,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                subtitle: Text(
+                  song['author'] ?? 'Unknown Artist',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.55),
+                    fontSize: 12,
+                  ),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '$playCount ${playCount == 1 ? "play" : "plays"}',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: Icon(
+                        isLiked
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        color: isLiked
+                            ? const Color(0xFFFA2D48)
+                            : Colors.white30,
+                        size: 19,
+                      ),
+                      onPressed: () {
+                        HapticFeedback.selectionClick();
+                        music.toggleLikeMap(song);
+                      },
+                    ),
+                  ],
+                ),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  music.playMostPlayedSong(
+                    song,
+                    allSongs: allSongs,
+                    startIndex: index,
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Public / Saved Playlists Section (Spotify Cards Carousel).
+  Widget _buildPlaylistsSection(
+    BuildContext context, {
+    required MusicService music,
+    required String userName,
+  }) {
+    final playlists = music.customPlaylists;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Public Playlists',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.4,
+          ),
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: 190,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: playlists.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 16),
+            itemBuilder: (context, index) {
+              final playlist = playlists[index];
+              final name = (playlist['name'] as String?) ?? 'My Playlist';
+              final songs = (playlist['songs'] as List?) ?? [];
+              final thumbnail = (playlist['thumbnail'] as String?) ?? '';
+
+              return InkWell(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  final playlistId = playlist['id'] ?? '';
+                  if (kIsWeb && MediaQuery.of(context).size.width >= 1024) {
+                    DesktopLayoutState.openPlaylist(playlistId);
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            CustomPlaylistScreen(playlistId: playlistId),
+                      ),
+                    );
+                  }
+                },
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  width: 140,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF14141E),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.06),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          width: 116,
+                          height: 100,
+                          color: const Color(0xFF222232),
+                          child: thumbnail.isNotEmpty
+                              ? Image.network(
+                                  thumbnail,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => const Icon(
+                                    Icons.queue_music_rounded,
+                                    color: Colors.white38,
+                                    size: 32,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.queue_music_rounded,
+                                  color: Colors.white38,
+                                  size: 32,
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'By $userName • ${songs.length} songs',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Colors.white, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Recently Played Activity Section.
+  Widget _buildRecentlyPlayedSection(
+    BuildContext context, {
+    required PreferencesService prefs,
+    required MusicService music,
+  }) {
+    final history = prefs.listeningHistory.take(4).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Recently played',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.4,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Material(
+          color: const Color(0xFF14141E),
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+          ),
+          child: ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: history.length,
+            separatorBuilder: (context, index) => Divider(
+              color: Colors.white.withValues(alpha: 0.05),
+              height: 1,
+              indent: 68,
+            ),
+            itemBuilder: (context, index) {
+              final track = history[index];
+              return ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 2,
+                ),
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    track['thumbnail'] ?? '',
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      width: 44,
+                      height: 44,
+                      color: Colors.white12,
+                      child: const Icon(
+                        Icons.music_note,
+                        color: Colors.white54,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ),
+                title: Text(
+                  track['title'] ?? 'Unknown Track',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+                subtitle: Text(
+                  track['author'] ?? 'Artist',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.55),
+                    fontSize: 12,
+                  ),
+                ),
+                trailing: const Icon(
+                  Icons.play_circle_outline_rounded,
+                  color: Colors.white38,
+                  size: 22,
+                ),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  music.playMostPlayedSong(
+                    track,
+                    allSongs: history,
+                    startIndex: index,
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Settings and Preferences action tile.
+  Widget _buildSettingsTile(BuildContext context) {
+    return Material(
+      color: const Color(0xFF14141E),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
+        ),
+        title: const Text(
+          'Player & Audio Preferences',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 14.5,
+          ),
+        ),
+        subtitle: Text(
+          'Streaming quality, equalizers, and themes',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.5),
+            fontSize: 12,
+          ),
+        ),
+        trailing: const Icon(
+          Icons.arrow_forward_ios_rounded,
+          color: Colors.white38,
+          size: 16,
+        ),
+        onTap: () {
+          HapticFeedback.lightImpact();
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SettingsScreen()),
+          );
+        },
       ),
     );
   }

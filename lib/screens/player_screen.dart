@@ -1,4 +1,3 @@
-import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1095,9 +1094,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _reportBug(BuildContext context, {Video? song}) async {
-    final osInfo = kIsWeb
-        ? 'Web Browser'
-        : '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
+    final osInfo = kIsWeb ? 'Web Browser' : defaultTargetPlatform.name;
 
     final songDetails = song != null
         ? '\n\n--- Current Playing Song ---\n'
@@ -1851,32 +1848,37 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                       ),
                                     ),
                                     const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.12,
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
                                         ),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(
+                                        decoration: BoxDecoration(
                                           color: Colors.white.withValues(
-                                            alpha: 0.15,
+                                            alpha: 0.12,
                                           ),
-                                          width: 0.5,
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.15,
+                                            ),
+                                            width: 0.5,
+                                          ),
                                         ),
-                                      ),
-                                      child: Text(
-                                        _musicService
-                                            .activeStreamInfo
-                                            .displayTag,
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 9.5,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 0.4,
+                                        child: Text(
+                                          _musicService
+                                              .activeStreamInfo
+                                              .displayTag,
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: 0.4,
+                                          ),
                                         ),
                                       ),
                                     ),

@@ -26,6 +26,8 @@ import 'taste_matrix_scorer.dart';
 import '../models/jio_album.dart';
 import 'bug_report_service.dart';
 import 'device_audio_service.dart';
+import '../models/song_item.dart';
+import 'audio/favorites_repository.dart';
 import 'database_service.dart';
 
 enum SearchSuggestionType { artist, song, album, history, query }
@@ -943,6 +945,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
   final List<Video> _sessionPlayedHistory = [];
   bool _isNavigatingHistory = false;
+  bool _isNavigatingNext = false;
+  DateTime _lastNextClickTime = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _isNavigatingPrev = false;
+  DateTime _lastPrevClickTime = DateTime.fromMillisecondsSinceEpoch(0);
 
   bool _isTransitioning = false;
   bool _isFetchingNextQueue = false;
@@ -1040,38 +1046,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         _durationBroadcaster.add(dur);
       });
       WebPlayerBridge.onTrackEnded.listen((_) async {
-        if (_isTransitioning) return;
-        if (_isCrossfading) {
-          _cancelActiveFade();
-        }
-        _isTransitioning = true;
-        try {
-          if (_loopMode == LoopMode.one && _currentSong != null) {
-            if (!_hasRepeatedOnce) {
-              _hasRepeatedOnce = true;
-              debugPrint(
-                '[WebPlayer] LoopMode.one active: repeating track once…',
-              );
-              WebPlayerBridge.seek(Duration.zero);
-              WebPlayerBridge.resume();
-            } else {
-              debugPrint(
-                '[WebPlayer] Single repeat complete. Resetting repeat mode and advancing…',
-              );
-              _hasRepeatedOnce = false;
-              _loopMode = LoopMode.off;
-              notifyListeners();
-              await nextSong();
-            }
-          } else {
-            debugPrint('[WebPlayer] Track ended. Auto-advancing to next song…');
-            await nextSong();
-          }
-        } catch (e) {
-          debugPrint('[WebPlayer] Completion error: $e');
-        } finally {
-          _isTransitioning = false;
-        }
+        await _handleTrackCompletion();
       });
       WebPlayerBridge.onNext.listen((_) => nextSong());
       WebPlayerBridge.onPrevious.listen((_) => previousSong());
@@ -1139,19 +1114,13 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
                 return;
               }
 
-              // If a crossfade was initiated, check if incoming player has actually started playback
+              // If a crossfade was initiated, outgoing player reaching EOF is expected.
+              // Do NOT cancel active fade or wipe incoming player that is currently resolving/buffering!
               if (_isCrossfading) {
-                if (!_standbyPlayer.playing) {
-                  debugPrint(
-                    '[AudioPlayer] Outgoing player completed EOF while incoming player is NOT playing: cancelling crossfade and force-advancing…',
-                  );
-                  _cancelActiveFade();
-                } else {
-                  debugPrint(
-                    '[AudioPlayer] Outgoing player completed EOF while incoming player is already active. Ignoring completion.',
-                  );
-                  return;
-                }
+                debugPrint(
+                  '[AudioPlayer] Outgoing player reached EOF during crossfade. Standby deck will assume playback.',
+                );
+                return;
               }
 
               final currentPos = player.position;
@@ -1166,39 +1135,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
                 );
                 return;
               }
-              _isTransitioning = true;
-              try {
-                if (!kIsWeb && audioHandler != null) {
-                  audioHandler!.notifyLoading(isLoading: true);
-                }
-                if (_loopMode == LoopMode.one) {
-                  if (!_hasRepeatedOnce) {
-                    _hasRepeatedOnce = true;
-                    debugPrint(
-                      '[AudioPlayer] LoopMode.one active: repeating current track once…',
-                    );
-                    await player.seek(Duration.zero);
-                    await player.play();
-                  } else {
-                    debugPrint(
-                      '[AudioPlayer] Track completed its single repeat. Resetting repeat and advancing…',
-                    );
-                    _hasRepeatedOnce = false;
-                    _loopMode = LoopMode.off;
-                    notifyListeners();
-                    await nextSong();
-                  }
-                } else {
-                  debugPrint(
-                    '[AudioPlayer] Track completed. Advancing to next song…',
-                  );
-                  await nextSong();
-                }
-              } catch (e) {
-                debugPrint('[AudioPlayer] Error handling song completion: $e');
-              } finally {
-                _isTransitioning = false;
-              }
+              await _handleTrackCompletion();
             }
           },
           onError: (Object error, StackTrace stackTrace) {
@@ -1228,6 +1165,43 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
     loadLikedSongs();
     loadCustomPlaylists();
+  }
+
+  Future<void> _handleTrackCompletion() async {
+    if (_isTransitioning || _isCrossfading) return;
+    _isTransitioning = true;
+    try {
+      if (!kIsWeb && audioHandler != null) {
+        audioHandler!.notifyLoading(isLoading: true);
+      }
+      if (_loopMode == LoopMode.one && _currentSong != null) {
+        if (!_hasRepeatedOnce) {
+          _hasRepeatedOnce = true;
+          debugPrint('[Playback] LoopMode.one active: repeating track once…');
+          if (kIsWeb) {
+            WebPlayerBridge.seek(Duration.zero);
+            WebPlayerBridge.resume();
+          } else {
+            await _activePlayer.seek(Duration.zero);
+            await _activePlayer.play();
+          }
+          return;
+        } else {
+          debugPrint(
+            '[Playback] Single repeat complete. Resetting repeat mode and advancing…',
+          );
+          _hasRepeatedOnce = false;
+          _loopMode = LoopMode.off;
+          notifyListeners();
+        }
+      }
+      debugPrint('[Playback] Track ended. Auto-advancing to next song…');
+      await nextSong(isAutoAdvance: true);
+    } catch (e) {
+      debugPrint('[Playback] Completion error: $e');
+    } finally {
+      _isTransitioning = false;
+    }
   }
 
   Future<void> applyEqualizerNative({
@@ -1416,6 +1390,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('[Crossfade] Error in native crossfade ramp: $e');
     } finally {
+      _isCrossfading = false;
       if (_fadeSession == session) {
         try {
           await outgoingPlayer.stop();
@@ -1428,7 +1403,6 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         if (audioHandler is DilSeAudioHandler) {
           (audioHandler as DilSeAudioHandler).bindPlayer(_activePlayer);
         }
-        _isCrossfading = false;
         debugPrint('[Crossfade] Native crossfade completed successfully.');
       }
     }
@@ -1437,6 +1411,31 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _startDualDeckCrossfade() async {
     final outgoingPlayer = _activePlayer;
     final incomingPlayer = _standbyPlayer;
+
+    // If outgoing player has already reached EOF or stopped while incoming track was resolving,
+    // take over directly without running an empty fade ramp against a dead player.
+    if (!outgoingPlayer.playing ||
+        outgoingPlayer.processingState == ProcessingState.completed) {
+      _activePlayer = incomingPlayer;
+      _standbyPlayer = outgoingPlayer;
+      _positionBroadcaster.add(Duration.zero);
+      if (incomingPlayer.duration != null) {
+        _durationBroadcaster.add(incomingPlayer.duration!);
+      }
+      if (audioHandler is DilSeAudioHandler) {
+        (audioHandler as DilSeAudioHandler).bindPlayer(_activePlayer);
+      }
+      try {
+        await incomingPlayer.setVolume(1.0);
+        await incomingPlayer.play();
+      } catch (e) {
+        debugPrint('[Crossfade] Error starting incoming player directly: $e');
+      }
+      _isCrossfading = false;
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
 
     try {
       await incomingPlayer.setVolume(0.0);
@@ -1663,28 +1662,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> loadLikedSongs() async {
     try {
-      if (kIsWeb) {
-        final prefs = await SharedPreferences.getInstance();
-        final raw = prefs.getString('liked_songs_web');
-        if (raw != null && raw.isNotEmpty) {
-          final List<dynamic> jsonList = json.decode(raw);
-          _likedSongs = jsonList
-              .map((e) => Map<String, String>.from(e))
-              .toList();
-          _restoreLikedSongsMemoryCaches();
-          notifyListeners();
-        }
-        return;
-      }
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/liked_songs.json');
-      if (await file.exists()) {
-        final content = await file.readAsString();
-        final List<dynamic> jsonList = json.decode(content);
-        _likedSongs = jsonList.map((e) => Map<String, String>.from(e)).toList();
-        _restoreLikedSongsMemoryCaches();
-        notifyListeners();
-      }
+      await FavoritesRepository().load();
+      _likedSongs = FavoritesRepository().legacyLikedSongs;
+      _restoreLikedSongsMemoryCaches();
+      notifyListeners();
     } catch (e) {
       debugPrint('Error loading liked songs: $e');
     }
@@ -1707,48 +1688,26 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void toggleLike(Video song) async {
-    final exists = _likedSongs.any((s) => s['id'] == song.id.value);
-    if (exists) {
-      _likedSongs.removeWhere((s) => s['id'] == song.id.value);
-    } else {
-      _likedSongs.add({
-        'id': song.id.value,
-        'title': song.title,
-        'author': song.author,
-        'thumbnail': getHdThumbnail(song.id.value),
-        'streamUrl': _webStreamUrls[song.id.value] ?? '',
-      });
-    }
-    notifyListeners();
-
     try {
-      if (kIsWeb) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('liked_songs_web', json.encode(_likedSongs));
-        return;
-      }
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/liked_songs.json');
-      await file.writeAsString(json.encode(_likedSongs));
+      final item = SongItem.fromVideo(
+        song,
+        streamUrl: _webStreamUrls[song.id.value] ?? '',
+      );
+      await FavoritesRepository().toggleLike(item);
+      _likedSongs = FavoritesRepository().legacyLikedSongs;
+      notifyListeners();
     } catch (e) {
-      debugPrint('Error saving liked songs: $e');
+      debugPrint('Error toggling like: $e');
     }
   }
 
   Future<void> removeLikedSong(String videoId) async {
-    _likedSongs.removeWhere((s) => s['id'] == videoId);
-    notifyListeners();
     try {
-      if (kIsWeb) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('liked_songs_web', json.encode(_likedSongs));
-        return;
-      }
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/liked_songs.json');
-      await file.writeAsString(json.encode(_likedSongs));
+      await FavoritesRepository().removeLiked(videoId);
+      _likedSongs = FavoritesRepository().legacyLikedSongs;
+      notifyListeners();
     } catch (e) {
-      debugPrint('Error saving liked songs: $e');
+      debugPrint('Error removing liked song: $e');
     }
   }
 
@@ -3471,7 +3430,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           if (!kIsWeb) {
             _audioPlayer.setVolume(vol);
           } else {
-            WebPlayerBridge.setVolume((vol * 100.0));
+            WebPlayerBridge.setVolume(vol);
           }
         }
         notifyListeners();
@@ -3493,7 +3452,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     if (!kIsWeb) {
       _audioPlayer.setVolume(1.0);
     } else {
-      WebPlayerBridge.setVolume(100.0);
+      WebPlayerBridge.setVolume(1.0);
     }
     notifyListeners();
   }
@@ -3502,7 +3461,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     persistPlaybackSession(force: true);
     if (kIsWeb) {
       WebPlayerBridge.pause();
-      WebPlayerBridge.setVolume(100.0);
+      WebPlayerBridge.setVolume(1.0);
     } else {
       _audioPlayer.pause();
       _audioPlayer.setVolume(1.0);
@@ -3555,168 +3514,214 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<void> nextSong({bool isCrossfade = false}) async {
-    if (!isCrossfade && _isCrossfading) {
-      _cancelActiveFade();
-    }
-
-    if (_stopAtEndOfTrack) {
-      debugPrint(
-        '[SleepTimer] Reached end of current track. Stopping playback.',
-      );
-      _stopPlayback();
+  Future<void> nextSong({
+    bool isCrossfade = false,
+    bool isAutoAdvance = false,
+  }) async {
+    final now = DateTime.now();
+    if (_isNavigatingNext ||
+        (!isCrossfade &&
+            !isAutoAdvance &&
+            now.difference(_lastNextClickTime).inMilliseconds < 150)) {
+      debugPrint('[MusicService] Rapid Next click spam discarded.');
       return;
     }
+    _isNavigatingNext = true;
+    _lastNextClickTime = now;
 
-    if (_currentSong != null && _audioPlayer.position.inSeconds < 30) {
-      PreferencesService().recordSongSkip(_currentSong!.author);
-    }
+    try {
+      if (!isCrossfade && _isCrossfading) {
+        _cancelActiveFade();
+      }
 
-    if (_playlist.isNotEmpty) {
-      if (_isShuffle && _playlist.length > 1) {
-        // If navigating forward within existing shuffle history
-        if (_shuffleHistoryPointer + 1 < _shuffleHistory.length) {
-          _shuffleHistoryPointer++;
-          _currentIndex = _shuffleHistory[_shuffleHistoryPointer];
-        } else {
-          // Select next song avoiding consecutive artist repetition
-          final random = Random();
-          final currentArtist = _currentSong != null
-              ? CanonicalSongDedup.cleanArtist(_currentSong!.author)
-              : '';
+      if (_stopAtEndOfTrack) {
+        debugPrint(
+          '[SleepTimer] Reached end of current track. Stopping playback.',
+        );
+        _stopPlayback();
+        return;
+      }
 
-          final candidateIndices = <int>[];
-          for (int i = 0; i < _playlist.length; i++) {
-            if (i == _currentIndex) continue;
-            final artist = CanonicalSongDedup.cleanArtist(_playlist[i].author);
-            if (currentArtist.isEmpty || artist != currentArtist) {
-              candidateIndices.add(i);
-            }
-          }
+      if (_currentSong != null && _audioPlayer.position.inSeconds < 30) {
+        PreferencesService().recordSongSkip(_currentSong!.author);
+      }
 
-          int nextIdx;
-          if (candidateIndices.isNotEmpty) {
-            nextIdx = candidateIndices[random.nextInt(candidateIndices.length)];
+      if (_playlist.isNotEmpty) {
+        if (_isShuffle && _playlist.length > 1) {
+          // If navigating forward within existing shuffle history
+          if (_shuffleHistoryPointer + 1 < _shuffleHistory.length) {
+            _shuffleHistoryPointer++;
+            _currentIndex = _shuffleHistory[_shuffleHistoryPointer];
           } else {
-            nextIdx =
-                (random.nextInt(_playlist.length - 1) + _currentIndex + 1) %
-                _playlist.length;
+            // Select next song avoiding consecutive artist repetition
+            final random = Random();
+            final currentArtist = _currentSong != null
+                ? CanonicalSongDedup.cleanArtist(_currentSong!.author)
+                : '';
+
+            final candidateIndices = <int>[];
+            for (int i = 0; i < _playlist.length; i++) {
+              if (i == _currentIndex) continue;
+              final artist = CanonicalSongDedup.cleanArtist(
+                _playlist[i].author,
+              );
+              if (currentArtist.isEmpty || artist != currentArtist) {
+                candidateIndices.add(i);
+              }
+            }
+
+            int nextIdx;
+            if (candidateIndices.isNotEmpty) {
+              nextIdx =
+                  candidateIndices[random.nextInt(candidateIndices.length)];
+            } else {
+              nextIdx =
+                  (random.nextInt(_playlist.length - 1) + _currentIndex + 1) %
+                  _playlist.length;
+            }
+
+            _currentIndex = nextIdx;
+            _shuffleHistory.add(_currentIndex);
+            _shuffleHistoryPointer = _shuffleHistory.length - 1;
           }
 
-          _currentIndex = nextIdx;
-          _shuffleHistory.add(_currentIndex);
-          _shuffleHistoryPointer = _shuffleHistory.length - 1;
+          final prevSong = _currentSong;
+          final nextTrack = _playlist[_currentIndex];
+          if (prevSong != null) {
+            reportTrackFinished(prevSong.id.value, nextTrack.id.value);
+          }
+          await playSong(
+            nextTrack,
+            updateQueue: false,
+            isCrossfade: isCrossfade,
+          );
+          _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
+          _checkAndPreloadNextQueue();
+          return;
+        } else if (_currentIndex + 1 < _playlist.length) {
+          final prevSong = _currentSong;
+          _currentIndex++;
+          final nextTrack = _playlist[_currentIndex];
+          if (prevSong != null) {
+            reportTrackFinished(prevSong.id.value, nextTrack.id.value);
+          }
+          await playSong(
+            nextTrack,
+            updateQueue: false,
+            isCrossfade: isCrossfade,
+          );
+          _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
+          _checkAndPreloadNextQueue();
+          return;
         }
+      }
 
-        final prevSong = _currentSong;
+      if (_loopMode == LoopMode.all && _playlist.isNotEmpty) {
+        _currentIndex = 0;
         final nextTrack = _playlist[_currentIndex];
-        if (prevSong != null) {
-          reportTrackFinished(prevSong.id.value, nextTrack.id.value);
-        }
-        await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
-        _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
-        _checkAndPreloadNextQueue();
-        return;
-      } else if (_currentIndex + 1 < _playlist.length) {
-        final prevSong = _currentSong;
-        _currentIndex++;
-        final nextTrack = _playlist[_currentIndex];
-        if (prevSong != null) {
-          reportTrackFinished(prevSong.id.value, nextTrack.id.value);
-        }
         await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
         _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
         _checkAndPreloadNextQueue();
         return;
       }
-    }
 
-    if (_loopMode == LoopMode.all && _playlist.isNotEmpty) {
-      _currentIndex = 0;
-      final nextTrack = _playlist[_currentIndex];
-      await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
-      _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
-      _checkAndPreloadNextQueue();
-      return;
-    }
-
-    if (_currentSong != null) {
-      debugPrint(
-        '[Queue] End of queue reached. Fetching next recommendations…',
-      );
-      _isLoading = true;
-      notifyListeners();
-      await _fetchNextRecommendations(_currentSong!);
-      if (_currentIndex + 1 < _playlist.length) {
-        final prevSong = _currentSong;
-        _currentIndex++;
-        final nextTrack = _playlist[_currentIndex];
-        if (prevSong != null) {
-          reportTrackFinished(prevSong.id.value, nextTrack.id.value);
-        }
-        await playSong(nextTrack, updateQueue: false, isCrossfade: isCrossfade);
-        _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
-        _checkAndPreloadNextQueue();
-      } else {
-        _isLoading = false;
+      if (_currentSong != null) {
+        debugPrint(
+          '[Queue] End of queue reached. Fetching next recommendations…',
+        );
+        _isLoading = true;
         notifyListeners();
+        await _fetchNextRecommendations(_currentSong!);
+        if (_currentIndex + 1 < _playlist.length) {
+          final prevSong = _currentSong;
+          _currentIndex++;
+          final nextTrack = _playlist[_currentIndex];
+          if (prevSong != null) {
+            reportTrackFinished(prevSong.id.value, nextTrack.id.value);
+          }
+          await playSong(
+            nextTrack,
+            updateQueue: false,
+            isCrossfade: isCrossfade,
+          );
+          _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
+          _checkAndPreloadNextQueue();
+        } else {
+          _isLoading = false;
+          notifyListeners();
+        }
       }
+    } finally {
+      _isNavigatingNext = false;
     }
   }
 
   Future<void> previousSong() async {
-    if (_isCrossfading) {
-      _cancelActiveFade();
+    final now = DateTime.now();
+    if (_isNavigatingPrev ||
+        now.difference(_lastPrevClickTime).inMilliseconds < 150) {
+      debugPrint('[MusicService] Rapid Prev click spam discarded.');
+      return;
     }
+    _isNavigatingPrev = true;
+    _lastPrevClickTime = now;
 
-    // If played for more than 3 seconds, replay current song from beginning
-    if (position.inSeconds > 3) {
-      if (kIsWeb) {
-        WebPlayerBridge.seek(Duration.zero);
-        notifyListeners();
-      } else {
-        await _audioPlayer.seek(Duration.zero);
+    try {
+      if (_isCrossfading) {
+        _cancelActiveFade();
       }
-      return;
-    }
 
-    // 1. If in shuffle mode and history exists, traverse back through true shuffle history
-    if (_isShuffle && _shuffleHistoryPointer > 0) {
-      _shuffleHistoryPointer--;
-      _currentIndex = _shuffleHistory[_shuffleHistoryPointer];
-      await playSong(_playlist[_currentIndex], updateQueue: false);
-      _prewarmUpcomingTracks(_currentIndex + 1, count: 2);
-      return;
-    }
-
-    // 2. Cross-playlist global navigation history:
-    // If user played songs from different playlists, seamlessly go back to the previous song!
-    if (_sessionPlayedHistory.isNotEmpty) {
-      final prevSong = _sessionPlayedHistory.removeLast();
-      _isNavigatingHistory = true;
-      try {
-        final existingIdx = _playlist.indexWhere(
-          (s) => s.id.value == prevSong.id.value,
-        );
-        if (existingIdx != -1) {
-          _currentIndex = existingIdx;
-          await playSong(_playlist[_currentIndex], updateQueue: false);
+      // If played for more than 3 seconds, replay current song from beginning
+      if (position.inSeconds > 3) {
+        if (kIsWeb) {
+          WebPlayerBridge.seek(Duration.zero);
+          notifyListeners();
         } else {
-          // Song was from another playlist/album: insert into current queue right before current song
-          _playlist.insert(_currentIndex, prevSong);
-          await playSong(prevSong, updateQueue: false);
+          await _audioPlayer.seek(Duration.zero);
         }
-      } finally {
-        _isNavigatingHistory = false;
+        return;
       }
-      return;
-    }
 
-    // 3. Normal sequential playback previous
-    if (_playlist.isNotEmpty && _currentIndex - 1 >= 0) {
-      _currentIndex--;
-      await playSong(_playlist[_currentIndex], updateQueue: false);
-      _prewarmUpcomingTracks(_currentIndex + 1, count: 2);
+      // 1. If in shuffle mode and history exists, traverse back through true shuffle history
+      if (_isShuffle && _shuffleHistoryPointer > 0) {
+        _shuffleHistoryPointer--;
+        _currentIndex = _shuffleHistory[_shuffleHistoryPointer];
+        await playSong(_playlist[_currentIndex], updateQueue: false);
+        _prewarmUpcomingTracks(_currentIndex + 1, count: 2);
+        return;
+      }
+
+      // 2. Cross-playlist global navigation history:
+      // If user played songs from different playlists, seamlessly go back to the previous song!
+      if (_sessionPlayedHistory.isNotEmpty) {
+        final prevSong = _sessionPlayedHistory.removeLast();
+        _isNavigatingHistory = true;
+        try {
+          final existingIdx = _playlist.indexWhere(
+            (s) => s.id.value == prevSong.id.value,
+          );
+          if (existingIdx != -1) {
+            _currentIndex = existingIdx;
+            await playSong(_playlist[_currentIndex], updateQueue: false);
+          } else {
+            // Song was from another playlist/album: insert into current queue right before current song
+            _playlist.insert(_currentIndex, prevSong);
+            await playSong(prevSong, updateQueue: false);
+          }
+        } finally {
+          _isNavigatingHistory = false;
+        }
+        return;
+      }
+
+      // 3. Normal sequential playback previous
+      if (_playlist.isNotEmpty && _currentIndex - 1 >= 0) {
+        _currentIndex--;
+        await playSong(_playlist[_currentIndex], updateQueue: false);
+        _prewarmUpcomingTracks(_currentIndex + 1, count: 2);
+      }
+    } finally {
+      _isNavigatingPrev = false;
     }
   }
 
@@ -3845,7 +3850,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     try {
       manifest = await _ytExplode.videos.streamsClient
           .getManifest(videoId)
-          .timeout(const Duration(seconds: 7));
+          .timeout(const Duration(milliseconds: 3500));
     } catch (e) {
       debugPrint('[StreamResolver] StreamClient error for $videoId: $e');
       _reportClientLog('resolve_error', {
@@ -3932,6 +3937,20 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     if (formatPref == AudioFormatPreference.opus) {
+      if (kIsWeb) {
+        // Web audio HTML5 elements strictly require AAC / MP4 progressive streams first to prevent decode/CORS stalls
+        for (final m in muxed18List) {
+          addCandidate(
+            m,
+            'mp4_progressive_360p_aac',
+            defaultBitrate: 128,
+            codec: 'aac',
+          );
+        }
+        for (final s in aacStreams) {
+          addCandidate(s, 'mp4_audio_dash', codec: 'aac');
+        }
+      }
       // 1. Opus streams strictly prioritized
       for (final s in opusStreams) {
         addCandidate(s, 'audio_webm_opus', codec: 'opus');
@@ -4025,13 +4044,13 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
     } else {
       // Auto (Smart Engine) / MP3
-      final bool isAacPreferredPlatform =
+      final bool requiresAacPriority =
           kIsWeb ||
           (defaultTargetPlatform == TargetPlatform.iOS ||
               defaultTargetPlatform == TargetPlatform.macOS);
 
-      if (isAacPreferredPlatform) {
-        // Web & Apple platforms: AAC (.m4a/.mp4) offers universal browser & CoreAudio codec compatibility
+      if (requiresAacPriority) {
+        // Web HTML5 Audio & Apple AVPlayer natively excel with AAC (.m4a/.mp4)
         if (quality == AudioQualityPreset.studioMaster ||
             quality == AudioQualityPreset.high) {
           for (final m in muxed22List) {
@@ -4079,12 +4098,14 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             addCandidate(s, 'mp4_audio_dash', codec: 'aac');
           }
         }
-        // Fallback to Opus if AAC candidates fail
-        for (final s in opusStreams) {
-          addCandidate(s, 'audio_webm_opus', codec: 'opus');
+        // Fallback to Opus only if NOT on web (web browsers choke on DASH Opus webm in <audio>)
+        if (!kIsWeb) {
+          for (final s in opusStreams) {
+            addCandidate(s, 'audio_webm_opus', codec: 'opus');
+          }
         }
       } else {
-        // Android (ExoPlayer) / Web / Desktop: Opus offers maximum compression & transparency
+        // Android (ExoPlayer) / Desktop: Opus offers maximum compression & transparency
         if (quality == AudioQualityPreset.dataSaver) {
           // Lowest data usage first
           for (final s in opusStreams) {
@@ -4378,7 +4399,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           Future<bool> tryResolveFromUri(Uri uri) async {
             final jioResp = await http
                 .get(uri)
-                .timeout(const Duration(seconds: 4));
+                .timeout(const Duration(milliseconds: 3000));
             if (_currentSong?.id.value != song.id.value ||
                 sessionToken != _activePlaySessionToken) {
               return false;
@@ -6386,6 +6407,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _consecutivePlaybackFailures = 0;
     _lastFailedSongId = null;
     _songRetryCount = 0;
+    _isNavigatingNext = false;
+    _isNavigatingPrev = false;
+    _lastNextClickTime = DateTime.fromMillisecondsSinceEpoch(0);
+    _lastPrevClickTime = DateTime.fromMillisecondsSinceEpoch(0);
   }
 
   void _initWidgetBridge() {

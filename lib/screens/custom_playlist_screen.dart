@@ -10,6 +10,7 @@ import '../widgets/mini_player.dart';
 import '../widgets/playlist_action_menu.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/dilse_scrollbar.dart';
+import '../layouts/desktop_layout_state.dart';
 
 class CustomPlaylistScreen extends StatefulWidget {
   final String playlistId;
@@ -68,10 +69,21 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
 
   void _onSearchQueryChanged(String query) {
     final trimmed = query.trim();
-    final playlist = _musicService.customPlaylists.firstWhere(
-      (p) => p['id'] == widget.playlistId,
-      orElse: () => <String, dynamic>{},
-    );
+    final isLikedSongs = widget.playlistId == 'liked_songs';
+    final playlist = isLikedSongs
+        ? <String, dynamic>{
+            'id': 'liked_songs',
+            'name': 'Liked Songs',
+            'isLiked': true,
+            'isPermanent': true,
+            'songs': _musicService.likedSongs
+                .map((s) => Map<String, dynamic>.from(s))
+                .toList(),
+          }
+        : _musicService.customPlaylists.firstWhere(
+            (p) => p['id'] == widget.playlistId,
+            orElse: () => <String, dynamic>{},
+          );
     final songs = List<Map<String, dynamic>>.from(playlist['songs'] ?? []);
     final searchResult = PlaylistArtistFilter.searchPlaylist(
       songs: songs,
@@ -120,10 +132,21 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final playlist = _musicService.customPlaylists.firstWhere(
-      (p) => p['id'] == widget.playlistId,
-      orElse: () => <String, dynamic>{},
-    );
+    final isLikedSongs = widget.playlistId == 'liked_songs';
+    final playlist = isLikedSongs
+        ? <String, dynamic>{
+            'id': 'liked_songs',
+            'name': 'Liked Songs',
+            'isLiked': true,
+            'isPermanent': true,
+            'songs': _musicService.likedSongs
+                .map((s) => Map<String, dynamic>.from(s))
+                .toList(),
+          }
+        : _musicService.customPlaylists.firstWhere(
+            (p) => p['id'] == widget.playlistId,
+            orElse: () => <String, dynamic>{},
+          );
 
     if (playlist.isEmpty) {
       return Scaffold(
@@ -136,7 +159,13 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
               Icons.arrow_back_ios_new_rounded,
               color: Colors.white,
             ),
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              if (Navigator.canPop(context)) {
+                Navigator.pop(context);
+              } else {
+                DesktopLayoutState.closeDetailView();
+              }
+            },
           ),
         ),
         body: const Center(
@@ -148,7 +177,9 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
       );
     }
 
-    final name = (playlist['name'] as String?) ?? 'Custom Playlist';
+    final name =
+        (playlist['name'] as String?) ??
+        (isLikedSongs ? 'Liked Songs' : 'Custom Playlist');
     final songs = List<Map<String, dynamic>>.from(playlist['songs'] ?? []);
     final firstThumbnail = songs.isNotEmpty
         ? songs.first['thumbnail'] as String?
@@ -196,7 +227,13 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                         size: 18,
                       ),
                     ),
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      if (Navigator.canPop(context)) {
+                        Navigator.pop(context);
+                      } else {
+                        DesktopLayoutState.closeDetailView();
+                      }
+                    },
                   ),
                   flexibleSpace: FlexibleSpaceBar(
                     centerTitle: false,
@@ -218,7 +255,10 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                     background: Stack(
                       fit: StackFit.expand,
                       children: [
-                        if (firstThumbnail != null && firstThumbnail.isNotEmpty)
+                        if (isLikedSongs)
+                          _buildLikedSongsArtwork()
+                        else if (firstThumbnail != null &&
+                            firstThumbnail.isNotEmpty)
                           Image.network(
                             firstThumbnail,
                             fit: BoxFit.cover,
@@ -254,7 +294,9 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                     child: Row(
                       children: [
                         Text(
-                          '${songs.length} ${songs.length == 1 ? "track" : "tracks"} • Drag handle to reorder',
+                          isLikedSongs
+                              ? '${songs.length} ${songs.length == 1 ? "song" : "songs"}'
+                              : '${songs.length} ${songs.length == 1 ? "track" : "tracks"} • Drag handle to reorder',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.6),
                             fontSize: 13,
@@ -290,66 +332,120 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                             ),
                             onPressed: () {
                               HapticFeedback.mediumImpact();
-                              _musicService.playCustomPlaylist(
-                                widget.playlistId,
-                                0,
-                              );
+                              if (isLikedSongs) {
+                                _musicService.playLikedSong(
+                                  _musicService.likedSongs.first,
+                                );
+                              } else {
+                                _musicService.playCustomPlaylist(
+                                  widget.playlistId,
+                                  0,
+                                );
+                              }
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            icon: const Icon(
+                              Icons.shuffle_rounded,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                            label: const Text(
+                              'Shuffle',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white.withValues(
+                                alpha: 0.12,
+                              ),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 9,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              elevation: 0,
+                            ),
+                            onPressed: () {
+                              HapticFeedback.mediumImpact();
+                              if (!_musicService.isShuffle) {
+                                _musicService.toggleShuffle();
+                              }
+                              if (isLikedSongs) {
+                                _musicService.playLikedSong(
+                                  _musicService.likedSongs.first,
+                                );
+                              } else {
+                                _musicService.playCustomPlaylist(
+                                  widget.playlistId,
+                                  0,
+                                );
+                              }
                             },
                           ),
                           const SizedBox(width: 8),
                         ],
-                        PlaylistActionMenu(
-                          playlistId: widget.playlistId,
-                          playlistName: name,
-                          isSpotifyImport: PreferencesService()
-                              .isSpotifyImportedPlaylist(widget.playlistId),
-                          customTrigger: Container(
-                            width: 38,
-                            height: 38,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.10),
-                              shape: BoxShape.circle,
+                        if (!isLikedSongs)
+                          PlaylistActionMenu(
+                            playlistId: widget.playlistId,
+                            playlistName: name,
+                            isSpotifyImport: PreferencesService()
+                                .isSpotifyImportedPlaylist(widget.playlistId),
+                            customTrigger: Container(
+                              width: 38,
+                              height: 38,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.10),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.more_vert_rounded,
+                                color: Colors.white70,
+                                size: 20,
+                              ),
                             ),
-                            child: const Icon(
-                              Icons.more_vert_rounded,
-                              color: Colors.white70,
-                              size: 20,
-                            ),
+                            closeScreenOnDelete: true,
+                            onRenamed: (_) {
+                              if (mounted) setState(() {});
+                            },
+                            onToggleSource: () {
+                              final prefs = PreferencesService();
+                              final nowSpotify = prefs
+                                  .isSpotifyImportedPlaylist(widget.playlistId);
+                              if (nowSpotify) {
+                                prefs.unregisterSpotifyPlaylistId(
+                                  widget.playlistId,
+                                );
+                                prefs.registerManualPlaylistId(
+                                  widget.playlistId,
+                                );
+                                _musicService.setPlaylistSource(
+                                  widget.playlistId,
+                                  isSpotify: false,
+                                );
+                              } else {
+                                prefs.unregisterManualPlaylistId(
+                                  widget.playlistId,
+                                );
+                                prefs.registerSpotifyPlaylistId(
+                                  widget.playlistId,
+                                );
+                                _musicService.setPlaylistSource(
+                                  widget.playlistId,
+                                  isSpotify: true,
+                                );
+                              }
+                              if (mounted) setState(() {});
+                            },
                           ),
-                          closeScreenOnDelete: true,
-                          onRenamed: (_) {
-                            if (mounted) setState(() {});
-                          },
-                          onToggleSource: () {
-                            final prefs = PreferencesService();
-                            final nowSpotify = prefs.isSpotifyImportedPlaylist(
-                              widget.playlistId,
-                            );
-                            if (nowSpotify) {
-                              prefs.unregisterSpotifyPlaylistId(
-                                widget.playlistId,
-                              );
-                              prefs.registerManualPlaylistId(widget.playlistId);
-                              _musicService.setPlaylistSource(
-                                widget.playlistId,
-                                isSpotify: false,
-                              );
-                            } else {
-                              prefs.unregisterManualPlaylistId(
-                                widget.playlistId,
-                              );
-                              prefs.registerSpotifyPlaylistId(
-                                widget.playlistId,
-                              );
-                              _musicService.setPlaylistSource(
-                                widget.playlistId,
-                                isSpotify: true,
-                              );
-                            }
-                            if (mounted) setState(() {});
-                          },
-                        ),
                       ],
                     ),
                   ),
@@ -693,20 +789,33 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                                     songMap: song,
                                     playlistId: widget.playlistId,
                                     onPlayNow: () {
-                                      _musicService.playCustomPlaylist(
-                                        widget.playlistId,
-                                        originalIndex,
-                                      );
+                                      if (isLikedSongs) {
+                                        _musicService.playLikedSong(
+                                          _musicService
+                                              .likedSongs[originalIndex],
+                                        );
+                                      } else {
+                                        _musicService.playCustomPlaylist(
+                                          widget.playlistId,
+                                          originalIndex,
+                                        );
+                                      }
                                     },
                                   );
                                 },
                               ),
                               onTap: () {
                                 HapticFeedback.lightImpact();
-                                _musicService.playCustomPlaylist(
-                                  widget.playlistId,
-                                  originalIndex,
-                                );
+                                if (isLikedSongs) {
+                                  _musicService.playLikedSong(
+                                    _musicService.likedSongs[originalIndex],
+                                  );
+                                } else {
+                                  _musicService.playCustomPlaylist(
+                                    widget.playlistId,
+                                    originalIndex,
+                                  );
+                                }
                               },
                             ),
                           ),
@@ -1040,16 +1149,22 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                                       ),
                                       onPressed: () {
                                         HapticFeedback.mediumImpact();
-                                        _musicService.addSongToPlaylist(
-                                          widget.playlistId,
-                                          song,
-                                        );
+                                        if (isLikedSongs) {
+                                          _musicService.toggleLike(song);
+                                        } else {
+                                          _musicService.addSongToPlaylist(
+                                            widget.playlistId,
+                                            song,
+                                          );
+                                        }
                                         ScaffoldMessenger.of(
                                           context,
                                         ).showSnackBar(
                                           SnackBar(
                                             content: Text(
-                                              'Added "${song.title}" to $name',
+                                              isLikedSongs
+                                                  ? 'Added "${song.title}" to Liked Songs'
+                                                  : 'Added "${song.title}" to $name',
                                             ),
                                             backgroundColor: const Color(
                                               0xFF1E1E28,
@@ -1086,14 +1201,18 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              Icons.music_note_rounded,
+                              isLikedSongs
+                                  ? Icons.favorite_border_rounded
+                                  : Icons.music_note_rounded,
                               size: 64,
                               color: Colors.white.withValues(alpha: 0.2),
                             ),
                             const SizedBox(height: 12),
-                            const Text(
-                              'No songs in this playlist yet',
-                              style: TextStyle(
+                            Text(
+                              isLikedSongs
+                                  ? 'No liked songs yet'
+                                  : 'No songs in this playlist yet',
+                              style: const TextStyle(
                                 color: Colors.white70,
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -1101,7 +1220,9 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'Use the search bar above or search tab to add songs',
+                              isLikedSongs
+                                  ? 'Songs you like will appear here'
+                                  : 'Use the search bar above or search tab to add songs',
                               style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.4),
                                 fontSize: 13,
@@ -1110,6 +1231,189 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                           ],
                         ),
                       ),
+                    )
+                  else if (isLikedSongs)
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        final song = songs[index];
+                        final songId = (song['id'] as String?) ?? '';
+                        final isCurrent =
+                            _musicService.currentSong?.id.value == songId;
+                        final thumb = song['thumbnail'] as String? ?? '';
+
+                        return Dismissible(
+                          key: ValueKey('liked_dismiss_${songId}_$index'),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            color: Colors.redAccent.withValues(alpha: 0.8),
+                            child: const Icon(
+                              Icons.favorite_border_rounded,
+                              color: Colors.white,
+                              size: 26,
+                            ),
+                          ),
+                          onDismissed: (_) {
+                            HapticFeedback.mediumImpact();
+                            _musicService.removeLikedSong(songId);
+                          },
+                          child: Container(
+                            height: 72.0,
+                            color: isCurrent
+                                ? themeColor.withValues(alpha: 0.12)
+                                : Colors.transparent,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: ListTile(
+                                dense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 4,
+                                ),
+                                leading: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SizedBox(
+                                      width: 28,
+                                      child:
+                                          isCurrent && _musicService.isPlaying
+                                          ? Center(
+                                              child: AnimatedEqualizer(
+                                                isPlaying: true,
+                                                color: themeColor,
+                                                size: 16,
+                                              ),
+                                            )
+                                          : Text(
+                                              '${index + 1}',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                color: isCurrent
+                                                    ? themeColor
+                                                    : Colors.white.withValues(
+                                                        alpha: 0.4,
+                                                      ),
+                                                fontWeight: isCurrent
+                                                    ? FontWeight.bold
+                                                    : FontWeight.w500,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Container(
+                                        width: 48,
+                                        height: 48,
+                                        color: const Color(0xFF1E1E28),
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            thumb.isNotEmpty
+                                                ? Image.network(
+                                                    thumb,
+                                                    width: 48,
+                                                    height: 48,
+                                                    cacheWidth: 120,
+                                                    cacheHeight: 120,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder:
+                                                        (
+                                                          context,
+                                                          error,
+                                                          stackTrace,
+                                                        ) => const Icon(
+                                                          Icons
+                                                              .music_note_rounded,
+                                                          color: Colors.white30,
+                                                        ),
+                                                  )
+                                                : const Icon(
+                                                    Icons.music_note_rounded,
+                                                    color: Colors.white30,
+                                                  ),
+                                            if (isCurrent)
+                                              Container(
+                                                color: Colors.black45,
+                                                child: Center(
+                                                  child: AnimatedEqualizer(
+                                                    isPlaying:
+                                                        _musicService.isPlaying,
+                                                    size: 18,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                title: Text(
+                                  (song['title'] as String?) ?? 'Unknown Title',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: isCurrent
+                                        ? themeColor
+                                        : Colors.white,
+                                    fontWeight: isCurrent
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                    fontSize: 14.5,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  (song['author'] as String?) ??
+                                      'Unknown Artist',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                    fontSize: 12.5,
+                                  ),
+                                ),
+                                trailing: IconButton(
+                                  key: ValueKey('liked_song_more_$songId'),
+                                  icon: const Icon(
+                                    Icons.more_vert_rounded,
+                                    color: Colors.white38,
+                                    size: 20,
+                                  ),
+                                  tooltip: 'Song options',
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 36,
+                                    minHeight: 40,
+                                  ),
+                                  onPressed: () {
+                                    HapticFeedback.lightImpact();
+                                    showPlaylistSongOptionsBottomSheet(
+                                      context,
+                                      songMap: song,
+                                      playlistId: widget.playlistId,
+                                      onPlayNow: () {
+                                        _musicService.playLikedSong(
+                                          _musicService.likedSongs[index],
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                                onTap: () {
+                                  HapticFeedback.lightImpact();
+                                  _musicService.playLikedSong(
+                                    _musicService.likedSongs[index],
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        );
+                      }, childCount: songs.length),
                     )
                   else
                     SliverReorderableList(
@@ -1345,13 +1649,17 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                 // Bottom spacing: dynamic clearance for floating MiniPlayer
                 SliverToBoxAdapter(
                   child: SizedBox(
-                    height: _musicService.currentSong != null ? 96 : 40,
+                    height:
+                        (MediaQuery.of(context).size.width < 1024 &&
+                            _musicService.currentSong != null)
+                        ? 96
+                        : 40,
                   ),
                 ),
               ],
             ),
           ),
-          // Floating MiniPlayer visible over playlist content when a song is playing
+          // Floating MiniPlayer visible over playlist content when a song is playing (mobile only)
           Positioned(
             left: 0,
             right: 0,
@@ -1359,7 +1667,8 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
             child: AnimatedBuilder(
               animation: MusicService(),
               builder: (context, _) {
-                if (MusicService().currentSong == null) {
+                if (MediaQuery.of(context).size.width >= 1024 ||
+                    MusicService().currentSong == null) {
                   return const SizedBox.shrink();
                 }
                 return const MiniPlayer();
@@ -1367,6 +1676,21 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLikedSongsArtwork() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF5018F0), Color(0xFF8A2BE2)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: const Center(
+        child: Icon(Icons.favorite_rounded, size: 72, color: Colors.white),
       ),
     );
   }

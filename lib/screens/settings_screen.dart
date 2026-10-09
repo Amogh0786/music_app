@@ -1771,14 +1771,17 @@ class _SettingsScreenState extends State<SettingsScreen>
       }
     }
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16.0),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Material(
         color: const Color(0xFF1E1E24),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white12),
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: Colors.white12),
+        ),
+        child: Column(children: separatedChildren),
       ),
-      child: Column(children: separatedChildren),
     );
   }
 

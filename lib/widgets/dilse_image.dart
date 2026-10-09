@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// Industrial-grade, memory-capped, disk-cached image renderer.
@@ -54,9 +55,10 @@ class DilSeImage extends StatelessWidget {
         placeholder: (_, _) => placeholder ?? _buildPlaceholder(),
         errorWidget: (_, _, _) => errorWidget ?? _buildErrorWidget(),
       );
-    } else if (cleanUrl.startsWith('/') ||
-        cleanUrl.startsWith('file://') ||
-        (cleanUrl.length > 2 && cleanUrl[1] == ':')) {
+    } else if (!kIsWeb &&
+        (cleanUrl.startsWith('/') ||
+            cleanUrl.startsWith('file://') ||
+            (cleanUrl.length > 2 && cleanUrl[1] == ':'))) {
       final path = cleanUrl.replaceFirst('file://', '');
       content = Image.file(
         File(path),

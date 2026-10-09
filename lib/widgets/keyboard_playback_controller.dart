@@ -82,6 +82,23 @@ class KeyboardPlaybackController extends StatelessWidget {
     } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
       _onArrowLeft();
       return KeyEventResult.handled;
+    } else if (event.logicalKey == LogicalKeyboardKey.keyM) {
+      final musicService = MusicService();
+      final player = musicService.audioPlayer;
+      final currentVol = player.volume;
+      if (currentVol <= 0.001) {
+        player.setVolume(1.0);
+      } else {
+        player.setVolume(0.0);
+      }
+      return KeyEventResult.handled;
+    } else if (event.logicalKey == LogicalKeyboardKey.keyL) {
+      final musicService = MusicService();
+      final current = musicService.currentSong;
+      if (current != null) {
+        musicService.toggleLike(current);
+      }
+      return KeyEventResult.handled;
     }
 
     return KeyEventResult.ignored;
