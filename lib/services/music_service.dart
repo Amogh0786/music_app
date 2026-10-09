@@ -730,6 +730,33 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
   static final Map<String, String> _artworkMap = {};
   static final Map<String, String> _webStreamUrls = {};
+  static final Map<String, String> _songAlbumMap = {};
+  static final Map<String, String> _songAlbumIdMap = {};
+  static final Map<String, JioAlbum> _songAlbumObjMap = {};
+
+  static void registerSongAlbum(
+    String songId, {
+    String? albumTitle,
+    String? albumId,
+    JioAlbum? album,
+  }) {
+    if (songId.isEmpty) return;
+    if (albumTitle != null && albumTitle.trim().isNotEmpty) {
+      _songAlbumMap[songId] = albumTitle.trim();
+    }
+    if (albumId != null && albumId.trim().isNotEmpty) {
+      _songAlbumIdMap[songId] = albumId.trim();
+    }
+    if (album != null) {
+      _songAlbumObjMap[songId] = album;
+      if (album.title.isNotEmpty) _songAlbumMap[songId] = album.title;
+      if (album.id.isNotEmpty) _songAlbumIdMap[songId] = album.id;
+    }
+  }
+
+  static String? getCachedAlbumTitle(String songId) => _songAlbumMap[songId];
+  static String? getCachedAlbumId(String songId) => _songAlbumIdMap[songId];
+  static JioAlbum? getCachedAlbum(String songId) => _songAlbumObjMap[songId];
 
   static void cacheWebStreamUrl(String videoId, String streamUrl) {
     if (videoId.isEmpty || streamUrl.isEmpty) return;
@@ -870,7 +897,19 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             final data = body['data'] as Map<String, dynamic>?;
             final artwork = data?['artwork'] as String? ?? '';
             final album = data?['album'] as String? ?? '';
+            final albumId =
+                data?['album_id']?.toString() ??
+                data?['albumId']?.toString() ??
+                '';
             final streamUrl = data?['streamUrl'] as String? ?? '';
+
+            if (album.isNotEmpty || albumId.isNotEmpty) {
+              registerSongAlbum(
+                song.id.value,
+                albumTitle: album,
+                albumId: albumId,
+              );
+            }
 
             final current = _artworkMap[song.id.value];
             final isYtFallback =
@@ -2534,6 +2573,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         if (lang.isNotEmpty) {
           CanonicalSongDedup.registerSongLanguage(songId, lang);
           CanonicalSongDedup.registerSongLanguage(vidString, lang);
+        }
+        final albumId =
+            item['album_id']?.toString() ?? item['albumId']?.toString() ?? '';
+        if (album.isNotEmpty || albumId.isNotEmpty) {
+          registerSongAlbum(songId, albumTitle: album, albumId: albumId);
+          registerSongAlbum(vidString, albumTitle: album, albumId: albumId);
         }
 
         final video = Video(
@@ -6571,6 +6616,18 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         _webStreamUrls[vidId] = stream;
         cacheWebStreamUrl(rawId, stream);
       }
+      registerSongAlbum(
+        rawId,
+        albumTitle: album.title,
+        albumId: album.id,
+        album: album,
+      );
+      registerSongAlbum(
+        vidId,
+        albumTitle: album.title,
+        albumId: album.id,
+        album: album,
+      );
 
       result.add(
         Video(
@@ -6591,5 +6648,149 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       );
     }
     return result;
+  }
+
+  /// Extracts movie or soundtrack album title from song title patterns
+  /// such as (From "Movie"), [From "Movie"], "Movie - Song Video", etc.
+  static String? extractMovieOrAlbumTitle(String rawTitle) {
+    if (rawTitle.trim().isEmpty) return null;
+
+    // 1. (From "Movie") or [From "Movie"] or (From 'Movie')
+    final fromQuotes = RegExp(
+      r'''(?:[\(\[]\s*)from\s+["']([^"']+)["'](?:\s*[\)\]])''',
+      caseSensitive: false,
+    );
+    final m1 = fromQuotes.firstMatch(rawTitle);
+    if (m1 != null) {
+      final val = m1.group(1)?.trim();
+      if (val != null && val.length >= 2) return val;
+    }
+
+    // 2. (From Movie Name) without quotes
+    final fromNoQuotes = RegExp(
+      r'''(?:[\(\[]\s*)from\s+([A-Za-z0-9\s]+?)(?:\s*[\)\]])''',
+      caseSensitive: false,
+    );
+    final m2 = fromNoQuotes.firstMatch(rawTitle);
+    if (m2 != null) {
+      final val = m2.group(1)?.trim();
+      if (val != null &&
+          val.length >= 2 &&
+          !RegExp(
+            r'^(the|a|an|remix|lofi|official|full|hd)$',
+            caseSensitive: false,
+          ).hasMatch(val)) {
+        return val;
+      }
+    }
+
+    // 3. Delimited "Movie - Song Video" format
+    final parts = rawTitle.split(RegExp(r'\s*[|:–—/]\s*|\s+-\s+'));
+    if (parts.length >= 2) {
+      final p0 = parts[0].trim();
+      final p1 = parts[1].trim();
+      final p0Lower = p0.toLowerCase();
+      final p1Lower = p1.toLowerCase();
+      final p1HasSong =
+          p1Lower.contains('song') ||
+          p1Lower.contains('video') ||
+          p1Lower.contains('audio');
+      final p0HasSong =
+          p0Lower.contains('song') ||
+          p0Lower.contains('video') ||
+          p0Lower.contains('audio');
+      if (p1HasSong && !p0HasSong && p0.length >= 2) {
+        return p0;
+      }
+    }
+
+    return null;
+  }
+
+  /// Multi-tier resolver to find the genuine [JioAlbum] for any given [song].
+  ///
+  /// Tier 1: In-memory cached JioAlbum object (instant)
+  /// Tier 2: Cached JioSaavn albumId -> fetch tracks
+  /// Tier 3: Cached album title or extracted movie title -> search albums catalog
+  /// Tier 4: Edge single-track endpoint (/jio) -> retrieve album tag -> search albums catalog
+  Future<JioAlbum?> resolveAlbumForSong(Video song) async {
+    final id = song.id.value;
+
+    // Tier 1: Direct in-memory cached JioAlbum object
+    final cachedObj = getCachedAlbum(id);
+    if (cachedObj != null && cachedObj.songs.isNotEmpty) {
+      return cachedObj;
+    }
+
+    // Tier 2: Cached albumId
+    final cachedId = getCachedAlbumId(id);
+    if (cachedId != null && cachedId.isNotEmpty) {
+      final loaded = await fetchAlbumTracks(cachedId);
+      if (loaded != null && loaded.songs.isNotEmpty) {
+        registerSongAlbum(id, album: loaded);
+        return loaded;
+      }
+    }
+
+    // Tier 3: Cached album title or regex-extracted movie title
+    String? albumTitle = getCachedAlbumTitle(id);
+    albumTitle ??= extractMovieOrAlbumTitle(song.title);
+
+    // Tier 4: Edge single-track resolver if albumTitle is still absent
+    if (albumTitle == null || albumTitle.isEmpty) {
+      try {
+        final cleanTitle = CanonicalSongDedup.cleanTitle(song.title);
+        final cleanArtist = CanonicalSongDedup.cleanArtist(song.author);
+        if (cleanTitle.isNotEmpty) {
+          final uri = ApiConfig.jioSingleTrackUri(
+            cleanTitle,
+            artist: cleanArtist,
+          );
+          final resp = await http.get(uri).timeout(const Duration(seconds: 4));
+          if (resp.statusCode == 200) {
+            final body = json.decode(resp.body);
+            if (body is Map && body['match'] == true) {
+              final data = body['data'] as Map<String, dynamic>?;
+              final resolvedAlbum = data?['album'] as String? ?? '';
+              final resolvedAlbumId =
+                  data?['album_id']?.toString() ??
+                  data?['albumId']?.toString() ??
+                  '';
+              if (resolvedAlbum.isNotEmpty) {
+                albumTitle = resolvedAlbum;
+                registerSongAlbum(
+                  id,
+                  albumTitle: resolvedAlbum,
+                  albumId: resolvedAlbumId,
+                );
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // If an album title was found, search the JioSaavn catalog for matching album
+    if (albumTitle != null && albumTitle.isNotEmpty) {
+      final albums = await searchAlbums(albumTitle, limit: 3);
+      if (albums.isNotEmpty) {
+        final searchLower = albumTitle.toLowerCase();
+        final match = albums.firstWhere(
+          (a) =>
+              a.title.toLowerCase().contains(searchLower) ||
+              searchLower.contains(a.title.toLowerCase()),
+          orElse: () => albums.first,
+        );
+        if (match.id.isNotEmpty) {
+          final loaded = await fetchAlbumTracks(match.id);
+          if (loaded != null && loaded.songs.isNotEmpty) {
+            registerSongAlbum(id, album: loaded);
+            return loaded;
+          }
+        }
+      }
+    }
+
+    return null;
   }
 }

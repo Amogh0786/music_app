@@ -24,8 +24,8 @@ class AlbumScreen extends StatefulWidget {
     this.albumArtwork,
     this.albumArtist,
   }) : assert(
-         album != null || albumId != null,
-         'Either album or albumId must be provided',
+         album != null || albumId != null || albumTitle != null,
+         'Either album, albumId, or albumTitle must be provided',
        );
 
   @override
@@ -80,44 +80,64 @@ class _AlbumScreenState extends State<AlbumScreen>
 
       // Resilient Fallback: If 0 songs were found via album ID, search tracks by album title
       if ((loaded == null || loaded.songs.isEmpty) && title.isNotEmpty) {
-        final fallbackTracks = await _music.searchSongs(title, limit: 25);
-        if (fallbackTracks.isNotEmpty) {
-          final mapped = fallbackTracks
-              .map(
-                (v) => {
-                  'id': v.id.value,
-                  'title': v.title,
-                  'author': v.author,
-                  'album': title,
-                  'thumbnail': v.thumbnails.highResUrl,
-                  'duration': v.duration?.inSeconds ?? 0,
-                  'trackNumber': 0,
-                },
-              )
-              .toList();
+        try {
+          final albumCandidates = await _music.searchAlbums(title, limit: 3);
+          if (albumCandidates.isNotEmpty) {
+            final titleLower = title.toLowerCase();
+            final match = albumCandidates.firstWhere(
+              (a) =>
+                  a.title.toLowerCase().contains(titleLower) ||
+                  titleLower.contains(a.title.toLowerCase()),
+              orElse: () => albumCandidates.first,
+            );
+            if (match.id.isNotEmpty) {
+              loaded = await _music.fetchAlbumTracks(match.id);
+            }
+          }
+        } catch (_) {}
 
-          loaded =
-              (loaded ??
-                      JioAlbum(
-                        id: id.isNotEmpty ? id : 'search_$title',
-                        title: title,
-                        artist:
-                            widget.albumArtist ?? widget.album?.artist ?? '',
-                        artwork:
-                            widget.albumArtwork ?? widget.album?.artwork ?? '',
-                        year: widget.album?.year ?? '',
-                        songCount: mapped.length,
-                        language: widget.album?.language ?? '',
-                      ))
-                  .copyWith(
-                    songs: mapped,
-                    songCount: mapped.length,
-                    artwork: (loaded?.artwork.isNotEmpty == true)
-                        ? loaded!.artwork
-                        : (mapped.isNotEmpty
-                              ? mapped[0]['thumbnail'] as String?
-                              : null),
-                  );
+        if (loaded == null || loaded.songs.isEmpty) {
+          final fallbackTracks = await _music.searchSongs(title, limit: 25);
+          if (fallbackTracks.isNotEmpty) {
+            final mapped = fallbackTracks
+                .map(
+                  (v) => {
+                    'id': v.id.value,
+                    'title': v.title,
+                    'author': v.author,
+                    'album': title,
+                    'thumbnail': v.thumbnails.highResUrl,
+                    'duration': v.duration?.inSeconds ?? 0,
+                    'trackNumber': 0,
+                  },
+                )
+                .toList();
+
+            loaded =
+                (loaded ??
+                        JioAlbum(
+                          id: id.isNotEmpty ? id : 'search_$title',
+                          title: title,
+                          artist:
+                              widget.albumArtist ?? widget.album?.artist ?? '',
+                          artwork:
+                              widget.albumArtwork ??
+                              widget.album?.artwork ??
+                              '',
+                          year: widget.album?.year ?? '',
+                          songCount: mapped.length,
+                          language: widget.album?.language ?? '',
+                        ))
+                    .copyWith(
+                      songs: mapped,
+                      songCount: mapped.length,
+                      artwork: (loaded?.artwork.isNotEmpty == true)
+                          ? loaded!.artwork
+                          : (mapped.isNotEmpty
+                                ? mapped[0]['thumbnail'] as String?
+                                : null),
+                    );
+          }
         }
       }
 
