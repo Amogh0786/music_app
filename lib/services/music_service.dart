@@ -28,6 +28,7 @@ import 'bug_report_service.dart';
 import 'device_audio_service.dart';
 import '../models/song_item.dart';
 import 'audio/favorites_repository.dart';
+import 'database_service.dart';
 
 enum SearchSuggestionType { artist, song, album, history, query }
 
@@ -113,13 +114,11 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   static final MusicService _instance = MusicService._internal();
   factory MusicService() => _instance;
 
-  final DeviceAudioService _deviceAudioService = DeviceAudioService();
-  DeviceAudioService get deviceAudioService => _deviceAudioService;
-
   MusicService._internal() {
     _initAudioPlayer();
     if (!kIsWeb) {
       _initAudioSession();
+
       if (defaultTargetPlatform == TargetPlatform.android) {
         _initWidgetBridge();
       }
@@ -149,6 +148,11 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   AndroidEqualizer? _equalizerA;
   AndroidEqualizer? _equalizerB;
 
+  // Concurrency & Gapless Dual-Deck State
+  int _activePlaySessionToken = 0;
+  String? _standbyBufferedTrackId;
+  bool _isPrebufferingStandby = false;
+
   final StreamController<Duration> _positionBroadcaster =
       StreamController<Duration>.broadcast();
   final StreamController<Duration?> _durationBroadcaster =
@@ -165,6 +169,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   bool _hasRepeatedOnce = false;
   List<Map<String, String>> _likedSongs = [];
   List<Map<String, dynamic>> _customPlaylists = [];
+  final DeviceAudioService _deviceAudioService = DeviceAudioService();
+
+  DeviceAudioService get deviceAudioService => _deviceAudioService;
+  List<Map<String, String>> get deviceSongs => _deviceAudioService.deviceSongs;
 
   // Bidirectional Shuffle History Stack
   final List<int> _shuffleHistory = [];
@@ -400,6 +408,14 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         song.title,
         song.author,
       );
+      final isTargetFeatured = CanonicalSongDedup.isFeaturedTrack(
+        song.title,
+        song.author,
+      );
+      final targetFeaturedArtist = CanonicalSongDedup.extractFeaturedArtist(
+        song.title,
+        song.author,
+      );
       final cleanTitle = (songCtx['title'] as String?)?.isNotEmpty == true
           ? songCtx['title'] as String
           : _cleanSongTitle(song.title);
@@ -553,6 +569,58 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             }
           } catch (_) {}
         }());
+
+        // 7. Explicit query for featured artist lyrics
+        if (isTargetFeatured &&
+            targetFeaturedArtist != null &&
+            targetFeaturedArtist.isNotEmpty) {
+          queries.add(() async {
+            try {
+              final urlFeat = Uri.parse(
+                'https://lrclib.net/api/search?q=${Uri.encodeComponent("$cleanTitle feat $targetFeaturedArtist")}',
+              );
+              final res = await http
+                  .get(urlFeat, headers: safeHeaders)
+                  .timeout(const Duration(seconds: 4));
+              if (res.statusCode == 200) {
+                final list = json.decode(res.body);
+                if (list is List) candidatePool.addAll(list);
+              }
+            } catch (_) {}
+          }());
+
+          queries.add(() async {
+            try {
+              final urlTrackFeat = Uri.parse(
+                'https://lrclib.net/api/search?track_name=${Uri.encodeComponent("$cleanTitle (feat. $targetFeaturedArtist)")}',
+              );
+              final res = await http
+                  .get(urlTrackFeat, headers: safeHeaders)
+                  .timeout(const Duration(seconds: 4));
+              if (res.statusCode == 200) {
+                final list = json.decode(res.body);
+                if (list is List) candidatePool.addAll(list);
+              }
+            } catch (_) {}
+          }());
+
+          if (cleanArtist.isNotEmpty) {
+            queries.add(() async {
+              try {
+                final urlCombo = Uri.parse(
+                  'https://lrclib.net/api/search?q=${Uri.encodeComponent("$cleanTitle $cleanArtist $targetFeaturedArtist")}',
+                );
+                final res = await http
+                    .get(urlCombo, headers: safeHeaders)
+                    .timeout(const Duration(seconds: 4));
+                if (res.statusCode == 200) {
+                  final list = json.decode(res.body);
+                  if (list is List) candidatePool.addAll(list);
+                }
+              } catch (_) {}
+            }());
+          }
+        }
       }
 
       await Future.wait(queries);
@@ -583,6 +651,8 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           targetDuration: durationSec,
           candidate: map,
           contextKeywords: contextKeywords,
+          isTargetFeatured: isTargetFeatured,
+          targetFeaturedArtist: targetFeaturedArtist,
         );
 
         if (score > bestScore) {
@@ -662,6 +732,33 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
   static final Map<String, String> _artworkMap = {};
   static final Map<String, String> _webStreamUrls = {};
+  static final Map<String, String> _songAlbumMap = {};
+  static final Map<String, String> _songAlbumIdMap = {};
+  static final Map<String, JioAlbum> _songAlbumObjMap = {};
+
+  static void registerSongAlbum(
+    String songId, {
+    String? albumTitle,
+    String? albumId,
+    JioAlbum? album,
+  }) {
+    if (songId.isEmpty) return;
+    if (albumTitle != null && albumTitle.trim().isNotEmpty) {
+      _songAlbumMap[songId] = albumTitle.trim();
+    }
+    if (albumId != null && albumId.trim().isNotEmpty) {
+      _songAlbumIdMap[songId] = albumId.trim();
+    }
+    if (album != null) {
+      _songAlbumObjMap[songId] = album;
+      if (album.title.isNotEmpty) _songAlbumMap[songId] = album.title;
+      if (album.id.isNotEmpty) _songAlbumIdMap[songId] = album.id;
+    }
+  }
+
+  static String? getCachedAlbumTitle(String songId) => _songAlbumMap[songId];
+  static String? getCachedAlbumId(String songId) => _songAlbumIdMap[songId];
+  static JioAlbum? getCachedAlbum(String songId) => _songAlbumObjMap[songId];
 
   static void cacheWebStreamUrl(String videoId, String streamUrl) {
     if (videoId.isEmpty || streamUrl.isEmpty) return;
@@ -694,6 +791,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           return t;
         }
       }
+    }
+    // Check device storage songs
+    final deviceSong = _instance._deviceAudioService.getSongById(videoId);
+    if (deviceSong != null && (deviceSong['thumbnail']?.isNotEmpty ?? false)) {
+      _artworkMap[videoId] = deviceSong['thumbnail']!;
+      return deviceSong['thumbnail']!;
     }
     // Check listening history
     for (final s in PreferencesService().listeningHistory) {
@@ -796,7 +899,19 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             final data = body['data'] as Map<String, dynamic>?;
             final artwork = data?['artwork'] as String? ?? '';
             final album = data?['album'] as String? ?? '';
+            final albumId =
+                data?['album_id']?.toString() ??
+                data?['albumId']?.toString() ??
+                '';
             final streamUrl = data?['streamUrl'] as String? ?? '';
+
+            if (album.isNotEmpty || albumId.isNotEmpty) {
+              registerSongAlbum(
+                song.id.value,
+                albumTitle: album,
+                albumId: albumId,
+              );
+            }
 
             final current = _artworkMap[song.id.value];
             final isYtFallback =
@@ -1199,6 +1314,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   void _cancelActiveFade() {
     _fadeSession++;
     _isCrossfading = false;
+    _standbyBufferedTrackId = null;
     try {
       _standbyPlayer.stop();
       _standbyPlayer.clearAudioSources();
@@ -1372,6 +1488,23 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     await _fadeVolume(from: 0.0, to: 1.0, duration: duration);
   }
 
+  Video? _getNextTrackCandidate() {
+    if (_playlist.isEmpty) return null;
+    if (_isShuffle && _playlist.length > 1) {
+      if (_shuffleHistoryPointer + 1 < _shuffleHistory.length) {
+        final nextIdx = _shuffleHistory[_shuffleHistoryPointer + 1];
+        if (nextIdx >= 0 && nextIdx < _playlist.length) {
+          return _playlist[nextIdx];
+        }
+      }
+    } else if (_currentIndex + 1 < _playlist.length) {
+      return _playlist[_currentIndex + 1];
+    } else if (_loopMode == LoopMode.all && _playlist.isNotEmpty) {
+      return _playlist[0];
+    }
+    return null;
+  }
+
   void _checkContinuousPlaybackPrewarm(Duration pos) {
     if (_isCrossfading ||
         _isTransitioning ||
@@ -1382,32 +1515,28 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
     if (_loopMode == LoopMode.one) return;
     final dur = duration;
-    if (dur == null || dur.inSeconds <= 20) return;
+    if (dur == null || dur.inSeconds <= 15) return;
 
     final remaining = dur - pos;
-    // Prewarm next track 10 to 15 seconds before song ends regardless of crossfade setting
-    if (remaining <= const Duration(seconds: 15) &&
-        remaining > const Duration(seconds: 5)) {
-      Video? nextTrack;
-      if (_isShuffle && _playlist.length > 1) {
-        if (_shuffleHistoryPointer + 1 < _shuffleHistory.length) {
-          final nextIdx = _shuffleHistory[_shuffleHistoryPointer + 1];
-          if (nextIdx >= 0 && nextIdx < _playlist.length) {
-            nextTrack = _playlist[nextIdx];
-          }
-        }
-      } else if (_currentIndex + 1 < _playlist.length) {
-        nextTrack = _playlist[_currentIndex + 1];
-      } else if (_loopMode == LoopMode.all && _playlist.isNotEmpty) {
-        nextTrack = _playlist[0];
-      }
+    final nextTrack = _getNextTrackCandidate();
+    if (nextTrack == null) return;
 
-      if (nextTrack != null) {
-        final trackId = nextTrack.id.value;
-        if (_webStreamUrls[trackId] == null ||
-            _webStreamUrls[trackId]!.isEmpty) {
-          _prewarmSingleTrack(nextTrack);
-        }
+    // 1. Proactive URL resolution at T-25s to T-5s
+    if (remaining <= const Duration(seconds: 25) &&
+        remaining > const Duration(seconds: 3)) {
+      final trackId = nextTrack.id.value;
+      if (_webStreamUrls[trackId] == null || _webStreamUrls[trackId]!.isEmpty) {
+        _prewarmSingleTrack(nextTrack);
+      }
+    }
+
+    // 2. Proactive Audio Frame Pre-Buffering on Standby Deck at T-15s to T-2s
+    if (!kIsWeb &&
+        remaining <= const Duration(seconds: 15) &&
+        remaining > const Duration(seconds: 2)) {
+      if (_standbyBufferedTrackId != nextTrack.id.value &&
+          !_isPrebufferingStandby) {
+        _primeStandbyDeckForNextTrack(nextTrack);
       }
     }
   }
@@ -1939,7 +2068,11 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  Future<void> playCustomPlaylist(String playlistId, int startIndex) async {
+  Future<void> playCustomPlaylist(
+    String playlistId,
+    int startIndex, {
+    bool? enableShuffle,
+  }) async {
     final playlist = _customPlaylists.firstWhere(
       (p) => p['id'] == playlistId,
       orElse: () => <String, dynamic>{},
@@ -1982,6 +2115,13 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _currentIndex = startIndex;
     if (_currentIndex < 0 || _currentIndex >= _playlist.length) {
       _currentIndex = 0;
+    }
+
+    if (enableShuffle != null) {
+      _isShuffle = enableShuffle;
+      if (!kIsWeb) {
+        _activePlayer.setShuffleModeEnabled(_isShuffle);
+      }
     }
 
     _seedPlaylistArtists = _extractArtistsFromSongs(_playlist);
@@ -2076,7 +2216,94 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     } catch (_) {}
   }
 
-  Future<void> playLikedSong(Map<String, String> songData) async {
+  /// Primes and pre-buffers the incoming track directly onto the standby deck.
+  /// When this track is subsequently requested, the engine can execute an instant 0ms handoff.
+  Future<void> _primeStandbyDeckForNextTrack(Video nextTrack) async {
+    if (kIsWeb) return;
+    final trackId = nextTrack.id.value;
+    if (_standbyBufferedTrackId == trackId || _isPrebufferingStandby) return;
+
+    final token = _activePlaySessionToken;
+    _isPrebufferingStandby = true;
+
+    try {
+      if (!kIsWeb) {
+        final downloadedItem = _downloadedSongs.firstWhere(
+          (item) => item['id'] == trackId,
+          orElse: () => {},
+        );
+        final localItem = downloadedItem.isNotEmpty
+            ? downloadedItem
+            : (_deviceAudioService.getSongById(trackId) ?? {});
+        if (localItem.isNotEmpty && localItem['localPath'] != null) {
+          final localFile = File(localItem['localPath']!);
+          if (localFile.existsSync()) {
+            final mediaItem = MediaItem(
+              id: trackId,
+              album: localItem['album'] ?? 'DilSe',
+              title: nextTrack.title,
+              artist: nextTrack.author,
+              artUri: Uri.tryParse(getHdThumbnail(trackId)),
+              duration: nextTrack.duration,
+            );
+            await _standbyPlayer.setAudioSource(
+              AudioSource.uri(Uri.file(localFile.path), tag: mediaItem),
+              preload: true,
+            );
+            if (token == _activePlaySessionToken) {
+              _standbyBufferedTrackId = trackId;
+              debugPrint(
+                '[Gapless] Deck B primed & pre-buffered for local track "${nextTrack.title}"',
+              );
+            }
+            return;
+          }
+        }
+      }
+
+      if (_webStreamUrls[trackId] == null || _webStreamUrls[trackId]!.isEmpty) {
+        await _prewarmSingleTrack(nextTrack);
+      }
+      if (token != _activePlaySessionToken) return;
+
+      final streamUrl = _webStreamUrls[trackId];
+      if (streamUrl != null && streamUrl.isNotEmpty) {
+        final mediaItem = MediaItem(
+          id: trackId,
+          album: 'DilSe',
+          title: nextTrack.title,
+          artist: nextTrack.author,
+          artUri: Uri.tryParse(getHdThumbnail(trackId)),
+          duration: nextTrack.duration,
+        );
+
+        final AudioSource source = streamUrl.contains('googlevideo.com')
+            ? AudioSource.uri(
+                Uri.parse(streamUrl),
+                headers: _ytHeaders,
+                tag: mediaItem,
+              )
+            : AudioSource.uri(Uri.parse(streamUrl), tag: mediaItem);
+
+        await _standbyPlayer.setAudioSource(source, preload: true);
+        if (token == _activePlaySessionToken) {
+          _standbyBufferedTrackId = trackId;
+          debugPrint(
+            '[Gapless] Deck B primed & pre-buffered for "${nextTrack.title}"',
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[Gapless] Standby pre-buffering silent fail: $e');
+    } finally {
+      _isPrebufferingStandby = false;
+    }
+  }
+
+  Future<void> playLikedSong(
+    Map<String, String> songData, {
+    bool? enableShuffle,
+  }) async {
     for (final item in _likedSongs) {
       final id = item['id'] ?? '';
       final thumb = item['thumbnail'] ?? '';
@@ -2112,6 +2339,13 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     );
     if (_currentIndex == -1) _currentIndex = 0;
     if (_playlist.isNotEmpty) {
+      if (enableShuffle != null) {
+        _isShuffle = enableShuffle;
+        if (!kIsWeb) {
+          _activePlayer.setShuffleModeEnabled(_isShuffle);
+        }
+      }
+
       _seedPlaylistArtists = _extractArtistsFromSongs(_playlist);
       _playlistArtistRecommendationOffset = 0;
       _prewarmUpcomingTracks(_currentIndex, count: 4);
@@ -2298,6 +2532,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         if (lang.isNotEmpty) {
           CanonicalSongDedup.registerSongLanguage(songId, lang);
           CanonicalSongDedup.registerSongLanguage(vidString, lang);
+        }
+        final albumId =
+            item['album_id']?.toString() ?? item['albumId']?.toString() ?? '';
+        if (album.isNotEmpty || albumId.isNotEmpty) {
+          registerSongAlbum(songId, albumTitle: album, albumId: albumId);
+          registerSongAlbum(vidString, albumTitle: album, albumId: albumId);
         }
 
         final video = Video(
@@ -3227,9 +3467,20 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _syncWidgetPlayback();
   }
 
-  Future<void> playPlaylist(List<Video> playlist, int index) async {
+  Future<void> playPlaylist(
+    List<Video> playlist,
+    int index, {
+    bool? enableShuffle,
+  }) async {
     _playlist = List.from(playlist);
     _currentIndex = index;
+    if (enableShuffle != null) {
+      _isShuffle = enableShuffle;
+      if (!kIsWeb) {
+        _activePlayer.setShuffleModeEnabled(_isShuffle);
+      }
+    }
+
     _seedPlaylistArtists = _extractArtistsFromSongs(_playlist);
     _playlistArtistRecommendationOffset = 0;
     if (_currentIndex >= 0 && _currentIndex < _playlist.length) {
@@ -3480,6 +3731,25 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _currentIndex = index;
     _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
     await playSong(_playlist[_currentIndex], updateQueue: false);
+  }
+
+  Future<void> playCustomPlaylistWithShuffle(String playlistId) async {
+    final playlist = _customPlaylists.firstWhere(
+      (p) => p['id'] == playlistId,
+      orElse: () => <String, dynamic>{},
+    );
+    if (playlist.isEmpty) return;
+
+    final songs = List<Map<String, dynamic>>.from(playlist['songs'] ?? []);
+    if (songs.isEmpty) return;
+
+    final randomIndex = Random().nextInt(songs.length);
+    _isShuffle = true;
+    if (!kIsWeb) {
+      _activePlayer.setShuffleModeEnabled(true);
+    }
+    notifyListeners();
+    await playCustomPlaylist(playlistId, randomIndex, enableShuffle: true);
   }
 
   // Full browser headers to avoid CDN 403s and throttling
@@ -3907,6 +4177,8 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     bool updateQueue = true,
     bool isCrossfade = false,
   }) async {
+    final int sessionToken = ++_activePlaySessionToken;
+
     _savedPosition = null;
     _savedDuration = null;
     _positionBroadcaster.add(Duration.zero);
@@ -3914,6 +4186,111 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       _durationBroadcaster.add(song.duration);
     }
 
+    // ⚡ Check if standby deck already has this exact song pre-buffered
+    final bool isPrebufferedOnStandby =
+        !kIsWeb && _standbyBufferedTrackId == song.id.value;
+
+    if (isPrebufferedOnStandby) {
+      debugPrint('[Gapless] ⚡ Instant 0ms Standby Handoff: "${song.title}"');
+      _standbyBufferedTrackId = null;
+
+      _isLoading = false;
+      _isCrossfading = false;
+      _hasRepeatedOnce = false;
+
+      if (!_isNavigatingHistory &&
+          _currentSong != null &&
+          _currentSong!.id.value != song.id.value) {
+        _sessionPlayedHistory.add(_currentSong!);
+        if (_sessionPlayedHistory.length > 50) {
+          _sessionPlayedHistory.removeAt(0);
+        }
+      }
+      _currentSong = song;
+
+      if (updateQueue) {
+        final existingIndex = _playlist.indexWhere(
+          (item) => item.id == song.id,
+        );
+        if (existingIndex != -1) {
+          _currentIndex = existingIndex;
+        } else {
+          _playlist = [song];
+          _currentIndex = 0;
+          _seedPlaylistArtists = [];
+          _playlistArtistRecommendationOffset = 0;
+          _generate50SongProgressiveQueue(song);
+        }
+      }
+      notifyListeners();
+
+      final mediaItem = MediaItem(
+        id: song.id.value,
+        album: 'DilSe',
+        title: song.title,
+        artist: song.author,
+        artUri: Uri.tryParse(getHdThumbnail(song.id.value)),
+        duration: song.duration,
+      );
+      if (!kIsWeb && audioHandler != null) {
+        audioHandler!.changeMediaItem(mediaItem);
+        audioHandler!.notifyLoading(isLoading: false);
+      }
+
+      if (isCrossfade) {
+        await _startDualDeckCrossfade();
+      } else {
+        final outgoingPlayer = _activePlayer;
+        final incomingPlayer = _standbyPlayer;
+        _activePlayer = incomingPlayer;
+        _standbyPlayer = outgoingPlayer;
+
+        if (audioHandler is DilSeAudioHandler) {
+          (audioHandler as DilSeAudioHandler).bindPlayer(_activePlayer);
+        }
+
+        try {
+          await outgoingPlayer.stop();
+        } catch (_) {}
+
+        unawaited(
+          incomingPlayer.play().catchError((e) {
+            debugPrint('[Gapless] Error starting incoming player: $e');
+          }),
+        );
+      }
+
+      _syncWidgetPlayback();
+      persistPlaybackSession(force: true);
+
+      _extractPalette(song.id.value);
+      fetchLyrics(song);
+      PreferencesService().recordSongPlay(song.author, song.title);
+      PreferencesService().addToListeningHistory({
+        'id': song.id.value,
+        'title': song.title,
+        'author': song.author,
+        'thumbnail': getHdThumbnail(song.id.value),
+        'playedAt': DateTime.now().toIso8601String(),
+      });
+      if (!kIsWeb) {
+        DatabaseService().recordPlay(
+          songId: song.id.value,
+          title: song.title,
+          artist: song.author,
+          artworkUrl: getHdThumbnail(song.id.value),
+          durationSeconds: song.duration?.inSeconds,
+        );
+      }
+
+      _prewarmUpcomingTracks(_currentIndex + 1, count: 3);
+      _preloadUpcomingTracks();
+      _checkAndPreloadNextQueue();
+      return;
+    }
+
+    // Normal or rapid-skip path: flush standby if it held a different track
+    _standbyBufferedTrackId = null;
     if (!isCrossfade) {
       _cancelActiveFade();
       if (kIsWeb && WebPlayerBridge.isPlaying) {
@@ -3993,6 +4370,15 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       'thumbnail': getHdThumbnail(song.id.value),
       'playedAt': DateTime.now().toIso8601String(),
     });
+    if (!kIsWeb) {
+      DatabaseService().recordPlay(
+        songId: song.id.value,
+        title: song.title,
+        artist: song.author,
+        artworkUrl: getHdThumbnail(song.id.value),
+        durationSeconds: song.duration?.inSeconds,
+      );
+    }
 
     final activeFormatPref = PreferencesService().audioFormat;
     final activeQualityPreset = PreferencesService().audioQuality;
@@ -4011,7 +4397,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             final jioResp = await http
                 .get(uri)
                 .timeout(const Duration(milliseconds: 3000));
-            if (_currentSong?.id.value != song.id.value) return false;
+            if (_currentSong?.id.value != song.id.value ||
+                sessionToken != _activePlaySessionToken) {
+              return false;
+            }
             if (jioResp.statusCode == 200) {
               final List<dynamic> list = json.decode(jioResp.body);
               for (final item in list) {
@@ -4065,6 +4454,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           // 2. If edge didn't match, fallback to custom backend if configured
           if (!matched &&
               _currentSong?.id.value == song.id.value &&
+              sessionToken == _activePlaySessionToken &&
               PreferencesService().customServerUrl.isNotEmpty) {
             await tryResolveFromUri(ApiConfig.jioBackendSearchUri(q, limit: 5));
           }
@@ -4074,6 +4464,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
     try {
       // 1. If this song is downloaded locally or indexed from device storage, play directly from disk (mobile only)
+
       if (!kIsWeb) {
         final downloadedItem = _downloadedSongs.firstWhere(
           (item) => item['id'] == song.id.value,
@@ -4094,6 +4485,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           final localFile = File(targetLocalPath);
           if (await localFile.exists()) {
             debugPrint('[Play] Playing local audio file: ${localFile.path}');
+
             await targetPlayer.setAudioSource(
               AudioSource.uri(Uri.file(localFile.path), tag: mediaItem),
             );
@@ -4105,6 +4497,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
                 playAction: () async => await targetPlayer.play(),
               );
             }
+
             final isDevice = localDeviceItem != null;
             _activeStreamInfo = ActiveStreamInfo(
               format: isDevice
@@ -4112,6 +4505,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
                   : 'Offline Audio',
               qualityLabel: 'Original Quality',
               source: isDevice ? 'Device Storage' : 'Local Storage',
+
               isHd: true,
             );
             _isLoading = false;
@@ -4520,7 +4914,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         }
       }
 
-      if (_currentSong?.id.value != song.id.value) return;
+      if (_currentSong?.id.value != song.id.value ||
+          sessionToken != _activePlaySessionToken) {
+        return;
+      }
 
       if (!playbackSourceSet) {
         _consecutivePlaybackFailures++;
@@ -4558,6 +4955,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           playAction: () async => await targetPlayer.play(),
         );
       }
+      if (sessionToken != _activePlaySessionToken) return;
       _isLoading = false;
       notifyListeners();
       persistPlaybackSession(force: true);
@@ -4578,7 +4976,8 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
       debugPrint('[Play] Error playing song: $e\n$st');
     } finally {
-      if (_currentSong?.id.value == song.id.value) {
+      if (_currentSong?.id.value == song.id.value &&
+          sessionToken == _activePlaySessionToken) {
         _isLoading = false;
         notifyListeners();
       }
@@ -5507,6 +5906,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _currentIndex =
         startIndex ??
         songList.indexWhere((item) => item['id'] == songData['id']);
+
     if (_currentIndex == -1) _currentIndex = 0;
     if (_playlist.isNotEmpty) {
       await playSong(_playlist[_currentIndex], updateQueue: false);
@@ -5554,6 +5954,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     Map<String, dynamic> songData, {
     List<Map<String, dynamic>>? allSongs,
     int? startIndex,
+    bool? enableShuffle,
   }) async {
     final list = allSongs ?? PreferencesService().mostPlayedSongs;
     if (list.isEmpty) return;
@@ -5611,6 +6012,13 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     if (_playlist.isNotEmpty) {
+      if (enableShuffle != null) {
+        _isShuffle = enableShuffle;
+        if (!kIsWeb) {
+          _activePlayer.setShuffleModeEnabled(_isShuffle);
+        }
+      }
+
       _seedPlaylistArtists = _extractArtistsFromSongs(_playlist);
       _playlistArtistRecommendationOffset = 0;
       _prewarmUpcomingTracks(_currentIndex, count: 4);
@@ -5989,6 +6397,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _currentIndex = 0;
     _savedPosition = null;
     _savedDuration = null;
+    _activePlaySessionToken = 0;
+    _standbyBufferedTrackId = null;
+    _isPrebufferingStandby = false;
     _lastSessionSaveTime = DateTime.fromMillisecondsSinceEpoch(0);
     _consecutivePlaybackFailures = 0;
     _lastFailedSongId = null;
@@ -6008,31 +6419,49 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     );
   }
 
+  @visibleForTesting
+  int get activePlaySessionToken => _activePlaySessionToken;
+
+  @visibleForTesting
+  String? get standbyBufferedTrackId => _standbyBufferedTrackId;
+
+  @visibleForTesting
+  void setStandbyBufferedTrackIdForTesting(String? id) {
+    _standbyBufferedTrackId = id;
+  }
+
   List<Map<String, String>> _getWidgetTopPlaylists() {
-    final list = <Map<String, String>>[];
-    list.add({'id': 'daily_mix', 'title': 'Daily Mix', 'query': 'Daily Mix'});
-    list.add({'id': 'favorites', 'title': 'Favorites', 'query': 'Favorites'});
-    list.add({
-      'id': 'most_played',
-      'title': 'Most Played',
-      'query': 'Most Played',
-    });
-    list.add({'id': 'history', 'title': 'History', 'query': 'History'});
+    final prefs = PreferencesService();
+    final topArtist = prefs.mostPlayedArtist;
+    final primaryArtist = topArtist.isNotEmpty ? topArtist : 'Trending Hits';
+
+    final List<Map<String, String>> result = [
+      {'id': 'daily_mix', 'title': 'Daily\nMix', 'query': primaryArtist},
+      {'id': 'favorites', 'title': 'Favorites', 'query': 'favorites'},
+      {'id': 'most_played', 'title': 'Most\nPlayed', 'query': 'most_played'},
+      {'id': 'history', 'title': 'History\nReplay', 'query': 'history'},
+    ];
+
     if (_customPlaylists.isNotEmpty) {
-      final custom = _customPlaylists.first;
-      list.add({
-        'id': 'custom_${custom['id']}',
-        'title': (custom['title'] as String?) ?? 'My Playlist',
-        'query': (custom['title'] as String?) ?? 'My Playlist',
+      final cp = _customPlaylists.first;
+      final cpName = (cp['name'] as String?) ?? 'My Mix';
+      final formattedName = cpName.length > 8 && !cpName.contains('\n')
+          ? cpName.replaceAll(' ', '\n')
+          : cpName;
+      result.add({
+        'id': 'custom_0',
+        'title': formattedName,
+        'query': 'custom_0',
       });
     } else {
-      list.add({
+      result.add({
         'id': 'chill_vibes',
-        'title': 'Chill Vibes',
-        'query': 'Chill Vibes',
+        'title': 'Chill\nVibes',
+        'query': 'Acoustic Pop Melodies',
       });
     }
-    return list;
+
+    return result;
   }
 
   Future<void> playPlaylistFromWidget(
@@ -6041,52 +6470,51 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     String query,
   ) async {
     try {
-      if (id == 'daily_mix') {
-        final configs = PreferencesService().getDailyMixConfigs();
-        if (configs.isNotEmpty) {
-          final mix = await fetchJioDailyMix(configs.first, limit: 30);
-          if (mix.isNotEmpty) {
-            await playPlaylist(mix, 0);
-            return;
+      switch (id) {
+        case 'favorites':
+          if (_likedSongs.isNotEmpty) {
+            await playLikedSong(_likedSongs.first);
           }
-        }
-      } else if (id == 'favorites') {
-        if (_likedSongs.isNotEmpty) {
-          await playLikedSong(_likedSongs.first);
-          return;
-        }
-      } else if (id == 'most_played') {
-        final mostPlayed = PreferencesService().mostPlayedSongs;
-        if (mostPlayed.isNotEmpty) {
-          await playMostPlayedSong(mostPlayed.first);
-          return;
-        }
-      } else if (id == 'history') {
-        final history = PreferencesService().listeningHistory;
-        if (history.isNotEmpty) {
-          await playHistorySong(history.first);
-          return;
-        }
-      } else if (id.startsWith('custom_')) {
-        final playlistId = id.replaceFirst('custom_', '');
-        await playCustomPlaylist(playlistId, 0);
-        return;
-      }
-
-      if (query.isNotEmpty) {
-        final songs = await searchSongs(query);
-        if (songs.isNotEmpty) {
-          await playPlaylist(songs, 0);
-        }
+          break;
+        case 'most_played':
+          final mostPlayed = PreferencesService().mostPlayedSongs;
+          if (mostPlayed.isNotEmpty) {
+            await playMostPlayedSong(mostPlayed.first);
+          }
+          break;
+        case 'history':
+          final history = PreferencesService().listeningHistory;
+          if (history.isNotEmpty) {
+            await playHistorySong(history.first);
+          }
+          break;
+        case 'custom_0':
+          if (_customPlaylists.isNotEmpty) {
+            final cp = _customPlaylists.first;
+            final playlistId = (cp['id'] as String?) ?? '';
+            if (playlistId.isNotEmpty) {
+              await playCustomPlaylist(playlistId, 0);
+            }
+          }
+          break;
+        default:
+          final tracks = await searchSongs(
+            query.isNotEmpty ? query : 'Top Hits',
+          );
+          if (tracks.isNotEmpty) {
+            await playPlaylist(tracks, 0);
+          }
+          break;
       }
     } catch (e) {
-      debugPrint('[MusicService] Error in playPlaylistFromWidget: $e');
+      debugPrint('[WidgetUpdateService] Error launching playlist: $e');
     }
   }
 
   void _syncWidgetPlayback() {
     if (kIsWeb) return;
     final song = _currentSong;
+
     int? dominantColor;
     if (song != null) {
       try {
@@ -6099,12 +6527,18 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     WidgetUpdateService().updateWidget(
-      title: song?.title ?? 'DilSe Music',
-      artist: song?.author ?? 'Tap to play',
+      title: song != null
+          ? CanonicalSongDedup.cleanTitle(song.title)
+          : 'DilSe Music',
+      artist: song != null
+          ? CanonicalSongDedup.cleanArtist(song.author)
+          : 'Tap to play',
       isPlaying: isPlaying,
       artworkPath: song != null ? _artworkMap[song.id.value] : null,
       trackId: song?.id.value,
+
       dominantColor: dominantColor,
+
       position: position,
       duration: duration,
       isShuffle: _isShuffle,
@@ -6208,6 +6642,18 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         _webStreamUrls[vidId] = stream;
         cacheWebStreamUrl(rawId, stream);
       }
+      registerSongAlbum(
+        rawId,
+        albumTitle: album.title,
+        albumId: album.id,
+        album: album,
+      );
+      registerSongAlbum(
+        vidId,
+        albumTitle: album.title,
+        albumId: album.id,
+        album: album,
+      );
 
       result.add(
         Video(
@@ -6228,5 +6674,149 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       );
     }
     return result;
+  }
+
+  /// Extracts movie or soundtrack album title from song title patterns
+  /// such as (From "Movie"), [From "Movie"], "Movie - Song Video", etc.
+  static String? extractMovieOrAlbumTitle(String rawTitle) {
+    if (rawTitle.trim().isEmpty) return null;
+
+    // 1. (From "Movie") or [From "Movie"] or (From 'Movie')
+    final fromQuotes = RegExp(
+      r'''(?:[\(\[]\s*)from\s+["']([^"']+)["'](?:\s*[\)\]])''',
+      caseSensitive: false,
+    );
+    final m1 = fromQuotes.firstMatch(rawTitle);
+    if (m1 != null) {
+      final val = m1.group(1)?.trim();
+      if (val != null && val.length >= 2) return val;
+    }
+
+    // 2. (From Movie Name) without quotes
+    final fromNoQuotes = RegExp(
+      r'''(?:[\(\[]\s*)from\s+([A-Za-z0-9\s]+?)(?:\s*[\)\]])''',
+      caseSensitive: false,
+    );
+    final m2 = fromNoQuotes.firstMatch(rawTitle);
+    if (m2 != null) {
+      final val = m2.group(1)?.trim();
+      if (val != null &&
+          val.length >= 2 &&
+          !RegExp(
+            r'^(the|a|an|remix|lofi|official|full|hd)$',
+            caseSensitive: false,
+          ).hasMatch(val)) {
+        return val;
+      }
+    }
+
+    // 3. Delimited "Movie - Song Video" format
+    final parts = rawTitle.split(RegExp(r'\s*[|:–—/]\s*|\s+-\s+'));
+    if (parts.length >= 2) {
+      final p0 = parts[0].trim();
+      final p1 = parts[1].trim();
+      final p0Lower = p0.toLowerCase();
+      final p1Lower = p1.toLowerCase();
+      final p1HasSong =
+          p1Lower.contains('song') ||
+          p1Lower.contains('video') ||
+          p1Lower.contains('audio');
+      final p0HasSong =
+          p0Lower.contains('song') ||
+          p0Lower.contains('video') ||
+          p0Lower.contains('audio');
+      if (p1HasSong && !p0HasSong && p0.length >= 2) {
+        return p0;
+      }
+    }
+
+    return null;
+  }
+
+  /// Multi-tier resolver to find the genuine [JioAlbum] for any given [song].
+  ///
+  /// Tier 1: In-memory cached JioAlbum object (instant)
+  /// Tier 2: Cached JioSaavn albumId -> fetch tracks
+  /// Tier 3: Cached album title or extracted movie title -> search albums catalog
+  /// Tier 4: Edge single-track endpoint (/jio) -> retrieve album tag -> search albums catalog
+  Future<JioAlbum?> resolveAlbumForSong(Video song) async {
+    final id = song.id.value;
+
+    // Tier 1: Direct in-memory cached JioAlbum object
+    final cachedObj = getCachedAlbum(id);
+    if (cachedObj != null && cachedObj.songs.isNotEmpty) {
+      return cachedObj;
+    }
+
+    // Tier 2: Cached albumId
+    final cachedId = getCachedAlbumId(id);
+    if (cachedId != null && cachedId.isNotEmpty) {
+      final loaded = await fetchAlbumTracks(cachedId);
+      if (loaded != null && loaded.songs.isNotEmpty) {
+        registerSongAlbum(id, album: loaded);
+        return loaded;
+      }
+    }
+
+    // Tier 3: Cached album title or regex-extracted movie title
+    String? albumTitle = getCachedAlbumTitle(id);
+    albumTitle ??= extractMovieOrAlbumTitle(song.title);
+
+    // Tier 4: Edge single-track resolver if albumTitle is still absent
+    if (albumTitle == null || albumTitle.isEmpty) {
+      try {
+        final cleanTitle = CanonicalSongDedup.cleanTitle(song.title);
+        final cleanArtist = CanonicalSongDedup.cleanArtist(song.author);
+        if (cleanTitle.isNotEmpty) {
+          final uri = ApiConfig.jioSingleTrackUri(
+            cleanTitle,
+            artist: cleanArtist,
+          );
+          final resp = await http.get(uri).timeout(const Duration(seconds: 4));
+          if (resp.statusCode == 200) {
+            final body = json.decode(resp.body);
+            if (body is Map && body['match'] == true) {
+              final data = body['data'] as Map<String, dynamic>?;
+              final resolvedAlbum = data?['album'] as String? ?? '';
+              final resolvedAlbumId =
+                  data?['album_id']?.toString() ??
+                  data?['albumId']?.toString() ??
+                  '';
+              if (resolvedAlbum.isNotEmpty) {
+                albumTitle = resolvedAlbum;
+                registerSongAlbum(
+                  id,
+                  albumTitle: resolvedAlbum,
+                  albumId: resolvedAlbumId,
+                );
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // If an album title was found, search the JioSaavn catalog for matching album
+    if (albumTitle != null && albumTitle.isNotEmpty) {
+      final albums = await searchAlbums(albumTitle, limit: 3);
+      if (albums.isNotEmpty) {
+        final searchLower = albumTitle.toLowerCase();
+        final match = albums.firstWhere(
+          (a) =>
+              a.title.toLowerCase().contains(searchLower) ||
+              searchLower.contains(a.title.toLowerCase()),
+          orElse: () => albums.first,
+        );
+        if (match.id.isNotEmpty) {
+          final loaded = await fetchAlbumTracks(match.id);
+          if (loaded != null && loaded.songs.isNotEmpty) {
+            registerSongAlbum(id, album: loaded);
+            return loaded;
+          }
+        }
+      }
+    }
+
+    return null;
   }
 }
