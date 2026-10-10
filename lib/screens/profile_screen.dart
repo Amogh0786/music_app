@@ -10,7 +10,6 @@ import '../widgets/profile_avatar_helper.dart';
 import 'dilse_capsule_screen.dart';
 import 'artist_profile_screen.dart';
 import 'custom_playlist_screen.dart';
-import 'settings_screen.dart';
 import '../layouts/desktop_layout_state.dart';
 
 /// Spotify-grade Profile & Activity Screen.
@@ -22,7 +21,6 @@ import '../layouts/desktop_layout_state.dart';
 /// 4. Spotify-style Top Streamed Artists Circular Avatars carousel with rank badges and tap-to-profile.
 /// 5. Spotify-style Top Tracks this month list with rank numbers, album art, play count, like toggle, and Play All / Shuffle.
 /// 6. Public Playlists / Your Playlists card row with cover art and tap-to-playlist.
-/// 7. Recently Played listening history stream with quick play actions.
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -442,16 +440,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             const SizedBox(height: 36),
                           ],
 
-                          // Recently Played History
-                          if (prefs.listeningHistory.isNotEmpty) ...[
-                            _buildRecentlyPlayedSection(
-                              context,
-                              prefs: prefs,
-                              music: music,
-                            ),
-                            const SizedBox(height: 36),
-                          ],
-
                           const SizedBox(height: 60),
                         ],
                       ),
@@ -532,22 +520,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'Settings & Preferences',
-                    icon: const Icon(
-                      Icons.settings_outlined,
-                      color: Colors.white,
-                    ),
-                    onPressed: () {
-                      HapticFeedback.lightImpact();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const SettingsScreen(),
-                        ),
-                      );
-                    },
-                  ),
+                  const SizedBox(width: 48),
                 ],
               ),
               const SizedBox(height: 16),
@@ -1733,109 +1706,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                 ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Recently Played Activity Section.
-  Widget _buildRecentlyPlayedSection(
-    BuildContext context, {
-    required PreferencesService prefs,
-    required MusicService music,
-  }) {
-    final history = prefs.listeningHistory.take(4).toList();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Recently played',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.4,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Material(
-          color: const Color(0xFF14141E),
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
-          ),
-          child: ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: history.length,
-            separatorBuilder: (context, index) => Divider(
-              color: Colors.white.withValues(alpha: 0.05),
-              height: 1,
-              indent: 68,
-            ),
-            itemBuilder: (context, index) {
-              final track = history[index];
-              return ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 2,
-                ),
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    track['thumbnail'] ?? '',
-                    width: 44,
-                    height: 44,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
-                      width: 44,
-                      height: 44,
-                      color: Colors.white12,
-                      child: const Icon(
-                        Icons.music_note,
-                        color: Colors.white54,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ),
-                title: Text(
-                  track['title'] ?? 'Unknown Track',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-                subtitle: Text(
-                  track['author'] ?? 'Artist',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.55),
-                    fontSize: 12,
-                  ),
-                ),
-                trailing: const Icon(
-                  Icons.play_circle_outline_rounded,
-                  color: Colors.white38,
-                  size: 22,
-                ),
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  music.playMostPlayedSong(
-                    track,
-                    allSongs: history,
-                    startIndex: index,
-                  );
-                },
               );
             },
           ),

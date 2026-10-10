@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_app/screens/profile_screen.dart';
-import 'package:music_app/screens/settings_screen.dart';
 import 'package:music_app/screens/dilse_capsule_screen.dart';
 import 'package:music_app/services/preferences_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -91,9 +90,6 @@ void main() {
       expect(find.text('Blinding Lights'), findsOneWidget);
       expect(find.textContaining('Play All'), findsOneWidget);
       expect(find.text('Shuffle'), findsOneWidget);
-
-      // Settings Action
-      expect(find.byTooltip('Settings & Preferences'), findsOneWidget);
     });
 
     testWidgets('Renders on mobile size (390x844) without overflow', (
@@ -110,24 +106,6 @@ void main() {
       expect(find.text('Tejassxo'), findsOneWidget);
       expect(find.text('Total Plays'), findsOneWidget);
       expect(find.text('Your DilSe Capsule'), findsOneWidget);
-    });
-
-    testWidgets('Tapping Settings opens SettingsScreen', (
-      WidgetTester tester,
-    ) async {
-      tester.view.physicalSize = const Size(1920, 1080);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
-
-      await tester.pumpWidget(const MaterialApp(home: ProfileScreen()));
-      await tester.pumpAndSettle();
-
-      final settingsBtn = find.byTooltip('Settings & Preferences');
-      expect(settingsBtn, findsOneWidget);
-      await tester.tap(settingsBtn);
-      await tester.pumpAndSettle();
-
-      expect(find.byType(SettingsScreen), findsOneWidget);
     });
 
     testWidgets('Tapping Capsule button opens DilSeCapsuleScreen', (
