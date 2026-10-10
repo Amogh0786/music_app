@@ -1,4 +1,5 @@
 import 'artist_profile_screen.dart';
+import 'album_screen.dart';
 import '../services/dynamic_artist_service.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -16,6 +17,7 @@ import '../widgets/playlist_action_menu.dart';
 import '../widgets/dilse_scrollbar.dart';
 import '../services/device_audio_service.dart';
 import '../layouts/desktop_layout_state.dart';
+import '../constants/app_theme_tokens.dart';
 
 /// Available navigation sections in the DilSe Library.
 enum LibrarySection {
@@ -110,7 +112,7 @@ class LibraryAlbum {
 }
 
 /// Available filters for segregating playlists inside the Library Playlists section.
-enum PlaylistFilter { all, personal, spotify }
+enum PlaylistFilter { all, personal, spotify, savedAlbums }
 
 extension PlaylistFilterExt on PlaylistFilter {
   String get label {
@@ -118,9 +120,11 @@ extension PlaylistFilterExt on PlaylistFilter {
       case PlaylistFilter.all:
         return 'All';
       case PlaylistFilter.personal:
-        return 'Created by You';
+        return 'My Playlists';
       case PlaylistFilter.spotify:
-        return 'Spotify Imports';
+        return 'Imported';
+      case PlaylistFilter.savedAlbums:
+        return 'Saved Albums';
     }
   }
 }
@@ -461,7 +465,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     super.build(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0B0F),
+      backgroundColor: AppThemeTokens.oledBackground,
       body: SafeArea(
         bottom: false,
         child: LayoutBuilder(
@@ -676,9 +680,16 @@ class _LibraryScreenState extends State<LibraryScreen>
   // ---------------------------------------------------------------------------
 
   Widget _buildMobileLayout(BuildContext context) {
+    final customPlaylists = _musicService.customPlaylists;
+    final spotifyPlaylists = customPlaylists.where(_isSpotifyPlaylist).toList();
+    final personalPlaylists = customPlaylists
+        .where((p) => !_isSpotifyPlaylist(p))
+        .toList();
+    final savedAlbums = _prefs.savedAlbums;
+
     return Column(
       children: [
-        // Compact App Bar with Title & Add Playlist Control (Green import button removed)
+        // Compact App Bar with Title & Add Playlist Control
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 12, 14, 8),
           child: Row(
@@ -700,140 +711,42 @@ class _LibraryScreenState extends State<LibraryScreen>
                 icon: const Icon(
                   Icons.add_rounded,
                   color: Colors.white,
-                  size: 22,
+                  size: 24,
                 ),
                 tooltip: 'Create New Playlist',
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.white.withValues(alpha: 0.10),
                   padding: const EdgeInsets.all(8),
-                  minimumSize: const Size(36, 36),
+                  minimumSize: const Size(38, 38),
                 ),
                 onPressed: () {
                   HapticFeedback.lightImpact();
-                  _showCreatePlaylistDialog();
+                  _showSophisticatedCreatePlaylistSheet();
                 },
               ),
             ],
           ),
         ),
 
-        // Responsive Horizontal Pill Tabs
-        SizedBox(
-          height: 44,
-          child: ValueListenableBuilder<LibrarySection>(
-            valueListenable: _selectedSection,
-            builder: (context, activeSection, _) {
-              return ListView(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                children: LibrarySection.values.map((section) {
-                  final isSelected = activeSection == section;
-                  final count = _getSectionCount(section);
-
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        if (_selectedAlbum.value != null) {
-                          _selectedAlbum.value = null;
-                        }
-                        _selectedSection.value = section;
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? Colors.white.withValues(alpha: 0.15)
-                              : Colors.white.withValues(alpha: 0.04),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isSelected
-                                ? Colors.white.withValues(alpha: 0.25)
-                                : Colors.white.withValues(alpha: 0.06),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              section.icon,
-                              size: 15,
-                              color: isSelected ? Colors.white : Colors.white60,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              section.shortTitle,
-                              style: TextStyle(
-                                color: isSelected
-                                    ? Colors.white
-                                    : Colors.white70,
-                                fontWeight: isSelected
-                                    ? FontWeight.w700
-                                    : FontWeight.w600,
-                                fontSize: 13,
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                            if (count > 0) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 1.5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? Colors.white.withValues(alpha: 0.20)
-                                      : Colors.white.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  '$count',
-                                  style: TextStyle(
-                                    color: isSelected
-                                        ? Colors.white
-                                        : Colors.white60,
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              );
-            },
-          ),
+        // Filter Pills: All, My Playlists, Imported, Saved Albums
+        _buildPlaylistFilterPills(
+          allCount: customPlaylists.length + savedAlbums.length,
+          personalCount: personalPlaylists.length,
+          spotifyCount: spotifyPlaylists.length,
+          albumsCount: savedAlbums.length,
         ),
 
         const SizedBox(height: 6),
 
-        // Main Panel: Content for the Active Section
+        // Main Panel: Content for active filter
         Expanded(
-          child: ValueListenableBuilder<LibrarySection>(
-            valueListenable: _selectedSection,
-            builder: (context, section, _) {
-              return ValueListenableBuilder<LibraryAlbum?>(
-                valueListenable: _selectedAlbum,
-                builder: (context, selectedAlbum, _) {
-                  if (section == LibrarySection.albums &&
-                      selectedAlbum != null) {
-                    return _buildAlbumDetailView(selectedAlbum);
-                  }
-                  return _buildContentPanel(context, section, isWide: false);
-                },
-              );
+          child: ValueListenableBuilder<PlaylistFilter>(
+            valueListenable: _playlistFilter,
+            builder: (context, filter, _) {
+              if (filter == PlaylistFilter.savedAlbums) {
+                return _buildSavedAlbumsSection();
+              }
+              return _buildPlaylistsSection(isWide: false);
             },
           ),
         ),
@@ -878,14 +791,16 @@ class _LibraryScreenState extends State<LibraryScreen>
     required int allCount,
     required int personalCount,
     required int spotifyCount,
+    int albumsCount = 0,
   }) {
     return ValueListenableBuilder<PlaylistFilter>(
       valueListenable: _playlistFilter,
       builder: (context, activeFilter, _) {
         final filters = [
           (PlaylistFilter.all, 'All', allCount),
-          (PlaylistFilter.personal, 'Created by You', personalCount),
-          (PlaylistFilter.spotify, 'Spotify Imports', spotifyCount),
+          (PlaylistFilter.personal, 'My Playlists', personalCount),
+          (PlaylistFilter.spotify, 'Imported', spotifyCount),
+          (PlaylistFilter.savedAlbums, 'Saved Albums', albumsCount),
         ];
 
         return SingleChildScrollView(
@@ -941,6 +856,13 @@ class _LibraryScreenState extends State<LibraryScreen>
                                 : Colors.white60,
                           ),
                           const SizedBox(width: 5),
+                        ] else if (filter == PlaylistFilter.savedAlbums) ...[
+                          Icon(
+                            Icons.album_rounded,
+                            size: 13,
+                            color: isSelected ? Colors.white : Colors.white60,
+                          ),
+                          const SizedBox(width: 5),
                         ],
                         Text(
                           label,
@@ -991,10 +913,359 @@ class _LibraryScreenState extends State<LibraryScreen>
     );
   }
 
+  Widget _buildSavedAlbumsSection() {
+    final saved = _prefs.savedAlbums;
+    if (saved.isEmpty) {
+      final derived = _getDerivedAlbums();
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 160),
+        children: [
+          _buildEmptyState(
+            icon: Icons.album_outlined,
+            title: 'No saved albums yet',
+            subtitle:
+                'Explore soundtracks or tap the bookmark icon on any album screen to save full albums to your library.',
+          ),
+          if (derived.isNotEmpty) ...[
+            const SizedBox(height: 28),
+            const Text(
+              'Albums From Your Liked Songs',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...derived
+                .take(6)
+                .map(
+                  (album) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: album.thumbnail.isNotEmpty
+                            ? Image.network(
+                                album.thumbnail,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => const Icon(
+                                  Icons.album_rounded,
+                                  color: Colors.white54,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.album_rounded,
+                                color: Colors.white54,
+                              ),
+                      ),
+                    ),
+                    title: Text(
+                      album.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${album.artist} • ${album.songs.length} tracks',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(
+                        Icons.bookmark_add_outlined,
+                        color: Colors.white70,
+                        size: 20,
+                      ),
+                      tooltip: 'Save Album',
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        _prefs.saveAlbum({
+                          'id': album.title,
+                          'title': album.title,
+                          'artist': album.artist,
+                          'artwork': album.thumbnail,
+                          'songCount': album.songs.length,
+                        });
+                        setState(() {});
+                      },
+                    ),
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AlbumScreen(
+                            albumId: album.title,
+                            albumTitle: album.title,
+                            albumArtwork: album.thumbnail,
+                            albumArtist: album.artist,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+          ],
+        ],
+      );
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 160),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 14,
+        mainAxisSpacing: 16,
+        childAspectRatio: 0.72,
+      ),
+      itemCount: saved.length,
+      itemBuilder: (context, index) {
+        final album = saved[index];
+        final id = album['id'] as String? ?? '';
+        final title = album['title'] as String? ?? 'Unknown Album';
+        final artist = album['artist'] as String? ?? 'Unknown Artist';
+        final artwork = album['artwork'] as String?;
+        final count = album['songCount'] as int? ?? 0;
+
+        return InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AlbumScreen(
+                  albumId: id,
+                  albumTitle: title,
+                  albumArtwork: artwork,
+                  albumArtist: artist,
+                ),
+              ),
+            );
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Stack(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        color: const Color(0xFF1E1E28),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          width: 1,
+                        ),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: artwork != null && artwork.isNotEmpty
+                          ? Image.network(
+                              artwork,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                              errorBuilder: (_, _, _) => const Center(
+                                child: Icon(
+                                  Icons.album_rounded,
+                                  color: Colors.white38,
+                                  size: 40,
+                                ),
+                              ),
+                            )
+                          : const Center(
+                              child: Icon(
+                                Icons.album_rounded,
+                                color: Colors.white38,
+                                size: 40,
+                              ),
+                            ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.bookmark_rounded,
+                          color: AppThemeTokens.brandRuby,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                count > 0 ? '$artist • $count tracks' : artist,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPinnedLikedSongsHero() {
+    final count = _musicService.likedSongs.length;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    const CustomPlaylistScreen(playlistId: 'liked_songs'),
+              ),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF161622),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.08),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF7C3AED), Color(0xFF4F46E5)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF7C3AED).withValues(alpha: 0.35),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.favorite_rounded,
+                    color: Colors.white,
+                    size: 26,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Liked Songs',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Pinned • $count tracks',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.6),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.push_pin_rounded,
+                  size: 18,
+                  color: Colors.white.withValues(alpha: 0.35),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPlaylistsSection({required bool isWide}) {
     final allPlaylists = _musicService.customPlaylists;
 
     if (allPlaylists.isEmpty) {
+      if (!isWide) {
+        return Column(
+          children: [
+            _buildPinnedLikedSongsHero(),
+            Expanded(
+              child: _buildEmptyState(
+                icon: Icons.featured_play_list_outlined,
+                title: 'No playlists yet',
+                subtitle:
+                    'Create your own playlists or import playlists from Spotify to build your collection.',
+                action: ElevatedButton.icon(
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('New Playlist'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    _showSophisticatedCreatePlaylistSheet();
+                  },
+                ),
+              ),
+            ),
+          ],
+        );
+      }
       return _buildEmptyState(
         icon: Icons.featured_play_list_outlined,
         title: 'No playlists yet',
@@ -1012,7 +1283,7 @@ class _LibraryScreenState extends State<LibraryScreen>
           ),
           onPressed: () {
             HapticFeedback.lightImpact();
-            _showCreatePlaylistDialog();
+            _showSophisticatedCreatePlaylistSheet();
           },
         ),
       );
@@ -1026,6 +1297,10 @@ class _LibraryScreenState extends State<LibraryScreen>
     return ValueListenableBuilder<PlaylistFilter>(
       valueListenable: _playlistFilter,
       builder: (context, activeFilter, _) {
+        if (activeFilter == PlaylistFilter.savedAlbums) {
+          return _buildSavedAlbumsSection();
+        }
+
         final List<Map<String, dynamic>> displayedPlaylists;
         switch (activeFilter) {
           case PlaylistFilter.all:
@@ -1036,6 +1311,9 @@ class _LibraryScreenState extends State<LibraryScreen>
             break;
           case PlaylistFilter.spotify:
             displayedPlaylists = spotifyPlaylists;
+            break;
+          case PlaylistFilter.savedAlbums:
+            displayedPlaylists = [];
             break;
         }
 
@@ -1083,7 +1361,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      onPressed: _showCreatePlaylistDialog,
+                      onPressed: _showSophisticatedCreatePlaylistSheet,
                     ),
                   ],
                 ),
@@ -1091,11 +1369,20 @@ class _LibraryScreenState extends State<LibraryScreen>
             }
 
             if (index == 1) {
-              return _buildPlaylistFilterPills(
-                allCount: allPlaylists.length,
-                personalCount: personalPlaylists.length,
-                spotifyCount: spotifyPlaylists.length,
-              );
+              if (isWide) {
+                return _buildPlaylistFilterPills(
+                  allCount: allPlaylists.length + _prefs.savedAlbums.length,
+                  personalCount: personalPlaylists.length,
+                  spotifyCount: spotifyPlaylists.length,
+                  albumsCount: _prefs.savedAlbums.length,
+                );
+              } else {
+                if (activeFilter == PlaylistFilter.all ||
+                    activeFilter == PlaylistFilter.personal) {
+                  return _buildPinnedLikedSongsHero();
+                }
+                return const SizedBox.shrink();
+              }
             }
 
             if (displayedPlaylists.isEmpty) {
@@ -3023,68 +3310,223 @@ class _LibraryScreenState extends State<LibraryScreen>
   // PLAYLIST DIALOGS
   // ---------------------------------------------------------------------------
 
-  void _showCreatePlaylistDialog() {
+  void _showSophisticatedCreatePlaylistSheet() {
     final controller = TextEditingController();
-    showDialog(
+
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E28),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Create New Playlist',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: 'Playlist name',
-            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.2),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(22, 16, 22, 28),
+          decoration: BoxDecoration(
+            color: const Color(0xFF14141C),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.1),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.6),
+                blurRadius: 30,
+                offset: const Offset(0, -6),
               ),
-            ),
-            focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.white70),
-            ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          _prefs.themeColor,
+                          _prefs.themeColor.withValues(alpha: 0.6),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.queue_music_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Create New Playlist',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Curate your personal sound collection',
+                          style: TextStyle(
+                            color: Colors.white60,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'e.g. Late Night Vibes, Driving Anthems',
+                  hintStyle: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.35),
+                    fontSize: 14,
+                  ),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.06),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.12),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.12),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: _prefs.themeColor,
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+                onSubmitted: (val) {
+                  final name = val.trim();
+                  if (name.isNotEmpty) {
+                    final newId = _musicService.createPlaylist(
+                      name,
+                      isSpotify: false,
+                      source: 'custom',
+                    );
+                    _prefs.registerManualPlaylistId(newId);
+                    _prefs.unregisterSpotifyPlaylistId(newId);
+                    Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CustomPlaylistScreen(playlistId: newId),
+                      ),
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 22),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white60,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 22,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () {
+                      final name = controller.text.trim();
+                      if (name.isNotEmpty) {
+                        HapticFeedback.lightImpact();
+                        final newId = _musicService.createPlaylist(
+                          name,
+                          isSpotify: false,
+                          source: 'custom',
+                        );
+                        _prefs.registerManualPlaylistId(newId);
+                        _prefs.unregisterSpotifyPlaylistId(newId);
+                        Navigator.pop(ctx);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                CustomPlaylistScreen(playlistId: newId),
+                          ),
+                        );
+                      }
+                    },
+                    child: const Text(
+                      'Create',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: Colors.white54),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            onPressed: () {
-              final name = controller.text.trim();
-              if (name.isNotEmpty) {
-                final newId = _musicService.createPlaylist(
-                  name,
-                  isSpotify: false,
-                  source: 'custom',
-                );
-                _prefs.registerManualPlaylistId(newId);
-                _prefs.unregisterSpotifyPlaylistId(newId);
-                Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Create'),
-          ),
-        ],
       ),
     );
+  }
+
+  void _showCreatePlaylistDialog() {
+    _showSophisticatedCreatePlaylistSheet();
   }
 
   void _showRenamePlaylistDialog(String id, String currentName) {

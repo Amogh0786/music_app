@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import '../constants/app_theme_tokens.dart';
 import '../services/music_service.dart';
 import '../services/preferences_service.dart';
 import '../services/dynamic_artist_service.dart';
@@ -15,6 +16,7 @@ import '../widgets/artist_card.dart';
 import '../widgets/animated_equalizer.dart';
 import 'artist_profile_screen.dart';
 import 'album_screen.dart';
+import 'curated_playlist_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key, this.isActive = true});
@@ -441,19 +443,15 @@ class SearchScreenState extends State<SearchScreen>
               Container(
                 height: 48,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF161622),
-                  borderRadius: BorderRadius.circular(16),
+                  color: AppThemeTokens.surfaceCard,
+                  borderRadius: BorderRadius.circular(
+                    AppThemeTokens.radiusCard,
+                  ),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.12),
+                    color: AppThemeTokens.surfaceBorder,
                     width: 1,
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.25),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                  boxShadow: AppThemeTokens.cardShadow,
                 ),
                 child: TextField(
                   controller: _searchController,
@@ -860,85 +858,75 @@ class SearchScreenState extends State<SearchScreen>
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Expanded(
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(5),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.08,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                        child: const Icon(
-                                          Icons.history_rounded,
-                                          size: 16,
-                                          color: Colors.white70,
-                                        ),
+                                const Row(
+                                  children: [
+                                    Icon(
+                                      Icons.history_rounded,
+                                      size: 16,
+                                      color: Colors.white70,
+                                    ),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'Recent Searches',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -0.2,
                                       ),
-                                      const SizedBox(width: 8),
-                                      const Flexible(
-                                        child: Text(
-                                          'Recent Searches',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            letterSpacing: -0.3,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 8),
-                                TextButton.icon(
+                                TextButton(
                                   onPressed: () {
                                     HapticFeedback.lightImpact();
                                     _prefs.clearSearchHistory();
                                     setState(() {});
                                   },
-                                  icon: Icon(
-                                    Icons.delete_sweep_rounded,
-                                    size: 15,
-                                    color: Theme.of(context).primaryColor,
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
                                   ),
-                                  label: Text(
-                                    'Clear All',
+                                  child: const Text(
+                                    'Clear',
                                     style: TextStyle(
-                                      color: Theme.of(context).primaryColor,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13,
+                                      color: Colors.white54,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: history.map((item) {
-                                return Container(
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF161622),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.12,
+                            const SizedBox(height: 6),
+                            SizedBox(
+                              height: 34,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                physics: const BouncingScrollPhysics(),
+                                itemCount: history.take(8).length,
+                                separatorBuilder: (_, _) =>
+                                    const SizedBox(width: 8),
+                                itemBuilder: (context, idx) {
+                                  final item = history.take(8).toList()[idx];
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF161622),
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.12,
+                                        ),
+                                        width: 1,
                                       ),
-                                      width: 1,
                                     ),
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
                                     child: InkWell(
-                                      borderRadius: BorderRadius.circular(20),
+                                      borderRadius: BorderRadius.circular(18),
                                       onTap: () {
                                         HapticFeedback.lightImpact();
                                         _searchController.text = item;
@@ -946,23 +934,15 @@ class SearchScreenState extends State<SearchScreen>
                                       },
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 7,
+                                          horizontal: 10,
+                                          vertical: 5,
                                         ),
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            Icon(
-                                              Icons.search_rounded,
-                                              size: 14,
-                                              color: Theme.of(context)
-                                                  .primaryColor
-                                                  .withValues(alpha: 0.8),
-                                            ),
-                                            const SizedBox(width: 6),
                                             ConstrainedBox(
                                               constraints: const BoxConstraints(
-                                                maxWidth: 180,
+                                                maxWidth: 160,
                                               ),
                                               child: Text(
                                                 item,
@@ -970,7 +950,7 @@ class SearchScreenState extends State<SearchScreen>
                                                 overflow: TextOverflow.ellipsis,
                                                 style: const TextStyle(
                                                   color: Colors.white,
-                                                  fontSize: 13,
+                                                  fontSize: 12.5,
                                                   fontWeight: FontWeight.w500,
                                                 ),
                                               ),
@@ -983,6 +963,7 @@ class SearchScreenState extends State<SearchScreen>
                                                 _prefs.removeFromSearchHistory(
                                                   item,
                                                 );
+                                                setState(() {});
                                               },
                                               child: Container(
                                                 padding: const EdgeInsets.all(
@@ -994,7 +975,7 @@ class SearchScreenState extends State<SearchScreen>
                                                 ),
                                                 child: const Icon(
                                                   Icons.close_rounded,
-                                                  size: 12,
+                                                  size: 11,
                                                   color: Colors.white70,
                                                 ),
                                               ),
@@ -1003,11 +984,11 @@ class SearchScreenState extends State<SearchScreen>
                                         ),
                                       ),
                                     ),
-                                  ),
-                                );
-                              }).toList(),
+                                  );
+                                },
+                              ),
                             ),
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 12),
                           ],
                           // Three Boxes Switcher: Categories, Albums, Artists
                           _buildBrowseTabsHeader(context),
@@ -1040,19 +1021,16 @@ class SearchScreenState extends State<SearchScreen>
     );
   }
 
-  /// Three Boxes Switcher: 'Categories', 'Albums', 'Artists' with Apple-style smooth sliding indicator
+  /// Three Boxes Switcher: 'Categories', 'Albums', 'Artists' with smooth sliding indicator
   Widget _buildBrowseTabsHeader(BuildContext context) {
     final primaryColor = Theme.of(context).primaryColor;
 
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: const Color(0xFF14141E),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.10),
-          width: 1,
-        ),
+        color: AppThemeTokens.surfaceCard,
+        borderRadius: BorderRadius.circular(AppThemeTokens.radiusCard),
+        border: Border.all(color: AppThemeTokens.surfaceBorder, width: 1),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -1187,7 +1165,7 @@ class SearchScreenState extends State<SearchScreen>
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         final crossAxisCount = width > 900 ? 4 : (width > 600 ? 3 : 2);
-        final aspectRatio = width > 600 ? 1.75 : 1.55;
+        final aspectRatio = width > 600 ? 1.75 : 1.60;
 
         return ListView(
           key: const PageStorageKey('categories_grid_view'),
@@ -1268,8 +1246,18 @@ class SearchScreenState extends State<SearchScreen>
                   badgeText: cat['badge'] as String?,
                   onTap: () {
                     HapticFeedback.lightImpact();
-                    _searchController.text = cat['title'] as String;
-                    _performSearch(cat['query'] as String);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CuratedPlaylistScreen(
+                          title: cat['title'] as String,
+                          subtitle: cat['subtitle'] as String,
+                          query: cat['query'] as String,
+                          gradientColors: cat['colors'] as List<Color>,
+                          icon: cat['icon'] as IconData,
+                        ),
+                      ),
+                    );
                   },
                 );
               },

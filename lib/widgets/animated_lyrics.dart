@@ -437,39 +437,41 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
 
     if (_displayMode == LyricsDisplayMode.dual && hasRomanized) {
       return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
             item.text,
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: isCurrent
                   ? themeColor
                   : (isPassed
-                        ? Colors.white.withValues(alpha: 0.72)
-                        : Colors.white.withValues(alpha: 0.28)),
-              fontSize: isCurrent ? 22 : 18.5,
-              fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w600,
-              height: 1.35,
+                        ? Colors.white.withValues(alpha: 0.55)
+                        : Colors.white.withValues(alpha: 0.25)),
+              fontSize: 21,
+              fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w500,
+              height: 1.4,
               shadows: isCurrent
                   ? [
                       Shadow(
-                        color: themeColor.withValues(alpha: 0.55),
-                        blurRadius: 16,
+                        color: themeColor.withValues(alpha: 0.65),
+                        blurRadius: 18,
                       ),
                     ]
                   : null,
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 4),
           Text(
             item.romanizedText,
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: isCurrent
                   ? Colors.white.withValues(alpha: 0.95)
                   : (isPassed
-                        ? Colors.white.withValues(alpha: 0.50)
-                        : Colors.white.withValues(alpha: 0.20)),
-              fontSize: isCurrent ? 16.5 : 14.5,
+                        ? Colors.white.withValues(alpha: 0.40)
+                        : Colors.white.withValues(alpha: 0.18)),
+              fontSize: 15,
               fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
               fontStyle: FontStyle.italic,
               height: 1.3,
@@ -485,28 +487,31 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
         ? item.romanizedText
         : item.text;
 
-    return AnimatedDefaultTextStyle(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOutCubic,
-      style: TextStyle(
-        color: isCurrent
-            ? themeColor
-            : (isPassed
-                  ? Colors.white.withValues(alpha: 0.72)
-                  : Colors.white.withValues(alpha: 0.28)),
-        fontSize: isCurrent ? 24 : 19.5,
-        fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w600,
-        height: 1.45,
-        shadows: isCurrent
-            ? [
-                Shadow(
-                  color: themeColor.withValues(alpha: 0.55),
-                  blurRadius: 16,
-                ),
-              ]
-            : null,
+    return Center(
+      child: AnimatedDefaultTextStyle(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: isCurrent
+              ? themeColor
+              : (isPassed
+                    ? Colors.white.withValues(alpha: 0.55)
+                    : Colors.white.withValues(alpha: 0.25)),
+          fontSize: 21,
+          fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w500,
+          height: 1.45,
+          shadows: isCurrent
+              ? [
+                  Shadow(
+                    color: themeColor.withValues(alpha: 0.65),
+                    blurRadius: 18,
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(lineText, textAlign: TextAlign.center),
       ),
-      child: Text(lineText),
     );
   }
 
@@ -517,20 +522,22 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(
               item.text,
+              textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 19,
+                fontSize: 20,
                 fontWeight: FontWeight.w600,
                 height: 1.4,
               ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 3),
             Text(
               item.romanizedText,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.70),
                 fontSize: 15,
@@ -549,16 +556,19 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
         ? item.romanizedText
         : item.text;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Text(
-        lineText,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          height: 1.55,
-          letterSpacing: 0.2,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Text(
+          lineText,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            height: 1.55,
+            letterSpacing: 0.2,
+          ),
         ),
       ),
     );

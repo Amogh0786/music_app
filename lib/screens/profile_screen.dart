@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,7 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import '../services/preferences_service.dart';
 import '../services/music_service.dart';
 import '../widgets/animated_equalizer.dart';
-import 'settings_screen.dart';
+import '../widgets/profile_avatar_helper.dart';
 import 'dilse_capsule_screen.dart';
 import 'artist_profile_screen.dart';
 import 'custom_playlist_screen.dart';
@@ -16,12 +16,11 @@ import '../layouts/desktop_layout_state.dart';
 ///
 /// Features:
 /// 1. Dynamic Ambient Hero Header with large Circular Avatar, display name, and metadata subtitle.
-/// 2. Interactive Action Bar: DilSe Capsule Glowing Pill, Edit Profile button, Settings shortcut.
+/// 2. Interactive DilSe Capsule Glowing Hero Banner & Edit Profile button.
 /// 3. Responsive 4-Column / 2-Row Metrics Cards (Total Plays, Liked Songs, Offline Cache, Top Artist).
 /// 4. Spotify-style Top Streamed Artists Circular Avatars carousel with rank badges and tap-to-profile.
 /// 5. Spotify-style Top Tracks this month list with rank numbers, album art, play count, like toggle, and Play All / Shuffle.
 /// 6. Public Playlists / Your Playlists card row with cover art and tap-to-playlist.
-/// 7. Recently Played listening history stream with quick play actions.
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -35,8 +34,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showAvatarOptionsSheet(BuildContext context, PreferencesService prefs) {
     HapticFeedback.lightImpact();
     final customImagePath = prefs.profileImagePath;
-    final hasCustomImage =
-        customImagePath != null && File(customImagePath).existsSync();
+    final hasCustomImage = hasProfileImage(customImagePath);
 
     showModalBottomSheet(
       context: context,
@@ -108,10 +106,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           type: FileType.image,
                         );
                         if (pickedFiles.isNotEmpty) {
-                          final pickedPath = pickedFiles.first.path;
-                          if (pickedPath != null &&
-                              File(pickedPath).existsSync()) {
-                            await prefs.setProfileImagePath(pickedPath);
+                          final file = pickedFiles.first;
+                          final bytes = await file.xFile.readAsBytes();
+                          if (bytes.isNotEmpty) {
+                            if (bytes.lengthInBytes > 2 * 1024 * 1024) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Please select an image smaller than 2MB.',
+                                    ),
+                                  ),
+                                );
+                              }
+                              return;
+                            }
+                            final ext = file.extension ?? 'png';
+                            final base64String = base64Encode(bytes);
+                            final dataUri =
+                                'data:image/$ext;base64,$base64String';
+                            await prefs.setProfileImagePath(dataUri);
+                          } else if (file.path != null) {
+                            await prefs.setProfileImagePath(file.path!);
                           }
                         }
                       } catch (_) {}
@@ -335,8 +351,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ? name.substring(0, 1).toUpperCase()
             : 'F';
         final customImagePath = prefs.profileImagePath;
-        final hasCustomImage =
-            customImagePath != null && File(customImagePath).existsSync();
+        final hasCustomImage = hasProfileImage(customImagePath);
 
         return Scaffold(
           backgroundColor: const Color(0xFF0B0B0F),
@@ -373,7 +388,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Quick Action Row (Capsule + Edit + Settings)
+                          // ✨ DilSe Capsule Hero Banner
+                          _buildCapsuleBanner(context),
+
+                          const SizedBox(height: 16),
+
+                          // Quick Action Row (Edit Profile)
                           _buildActionBar(context, prefs: prefs),
 
                           const SizedBox(height: 24),
@@ -419,19 +439,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                             const SizedBox(height: 36),
                           ],
-
-                          // Recently Played History
-                          if (prefs.listeningHistory.isNotEmpty) ...[
-                            _buildRecentlyPlayedSection(
-                              context,
-                              prefs: prefs,
-                              music: music,
-                            ),
-                            const SizedBox(height: 36),
-                          ],
-
-                          // Audio Preferences & Settings Tile
-                          _buildSettingsTile(context),
 
                           const SizedBox(height: 60),
                         ],
@@ -513,22 +520,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'Settings & Preferences',
-                    icon: const Icon(
-                      Icons.settings_outlined,
-                      color: Colors.white,
-                    ),
-                    onPressed: () {
-                      HapticFeedback.lightImpact();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SettingsScreen(),
-                        ),
-                      );
-                    },
-                  ),
+                  const SizedBox(width: 48),
                 ],
               ),
               const SizedBox(height: 16),
@@ -741,9 +733,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: CircleAvatar(
                 radius: radius,
                 backgroundColor: const Color(0xFF282838),
-                backgroundImage: hasCustomImage
-                    ? FileImage(File(customImagePath!))
-                    : null,
+                backgroundImage: getProfileImageProvider(customImagePath),
                 child: hasCustomImage
                     ? null
                     : Text(
@@ -775,81 +765,134 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /// Action bar beneath header (Capsule, Edit profile, Settings).
+  /// ✨ DilSe Capsule Hero Banner
+  Widget _buildCapsuleBanner(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const DilSeCapsuleScreen()),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFFE040FB).withValues(alpha: 0.22),
+              const Color(0xFF00E5FF).withValues(alpha: 0.14),
+              const Color(0xFF1DB954).withValues(alpha: 0.18),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFF00E5FF).withValues(alpha: 0.45),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFE040FB).withValues(alpha: 0.15),
+              blurRadius: 18,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFE040FB), Color(0xFF1DB954)],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFE040FB).withValues(alpha: 0.4),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      const Text(
+                        'Your DilSe Capsule',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1DB954),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'READY',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Tap to reveal your private, on-device listening journey',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: Colors.white54,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Action bar beneath header (Edit profile).
   Widget _buildActionBar(
     BuildContext context, {
     required PreferencesService prefs,
   }) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 10,
-      crossAxisAlignment: WrapCrossAlignment.center,
+    return Row(
       children: [
-        // DilSe Capsule Glowing Gradient Button
-        GestureDetector(
-          onTap: () {
-            HapticFeedback.mediumImpact();
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const DilSeCapsuleScreen()),
-            );
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFE040FB), Color(0xFF1DB954)],
-              ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFE040FB).withValues(alpha: 0.35),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.auto_awesome_rounded,
-                  color: Colors.white,
-                  size: 17,
-                ),
-                const SizedBox(width: 7),
-                const Text(
-                  'Your DilSe Capsule',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.25),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text(
-                    'READY',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-
         // Edit Profile Button
         OutlinedButton.icon(
           icon: const Icon(Icons.edit_outlined, size: 16),
@@ -1668,159 +1711,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  /// Recently Played Activity Section.
-  Widget _buildRecentlyPlayedSection(
-    BuildContext context, {
-    required PreferencesService prefs,
-    required MusicService music,
-  }) {
-    final history = prefs.listeningHistory.take(4).toList();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Recently played',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.4,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Material(
-          color: const Color(0xFF14141E),
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
-          ),
-          child: ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: history.length,
-            separatorBuilder: (context, index) => Divider(
-              color: Colors.white.withValues(alpha: 0.05),
-              height: 1,
-              indent: 68,
-            ),
-            itemBuilder: (context, index) {
-              final track = history[index];
-              return ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 2,
-                ),
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    track['thumbnail'] ?? '',
-                    width: 44,
-                    height: 44,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
-                      width: 44,
-                      height: 44,
-                      color: Colors.white12,
-                      child: const Icon(
-                        Icons.music_note,
-                        color: Colors.white54,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ),
-                title: Text(
-                  track['title'] ?? 'Unknown Track',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-                subtitle: Text(
-                  track['author'] ?? 'Artist',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.55),
-                    fontSize: 12,
-                  ),
-                ),
-                trailing: const Icon(
-                  Icons.play_circle_outline_rounded,
-                  color: Colors.white38,
-                  size: 22,
-                ),
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  music.playMostPlayedSong(
-                    track,
-                    allSongs: history,
-                    startIndex: index,
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Settings and Preferences action tile.
-  Widget _buildSettingsTile(BuildContext context) {
-    return Material(
-      color: const Color(0xFF14141E),
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
-        ),
-        title: const Text(
-          'Player & Audio Preferences',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            fontSize: 14.5,
-          ),
-        ),
-        subtitle: Text(
-          'Streaming quality, equalizers, and themes',
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.5),
-            fontSize: 12,
-          ),
-        ),
-        trailing: const Icon(
-          Icons.arrow_forward_ios_rounded,
-          color: Colors.white38,
-          size: 16,
-        ),
-        onTap: () {
-          HapticFeedback.lightImpact();
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const SettingsScreen()),
-          );
-        },
-      ),
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,7 +14,6 @@ import '../widgets/waveform_scrubber.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/equalizer_bottom_sheet.dart';
 import '../widgets/animated_lyrics.dart';
-import '../widgets/bug_report_button.dart';
 import '../services/bug_report_service.dart';
 import '../services/screen_wake_service.dart';
 import '../widgets/responsive_wrapper.dart';
@@ -21,6 +21,7 @@ import 'album_screen.dart';
 import 'artist_profile_screen.dart';
 import '../services/dynamic_artist_service.dart';
 import '../services/canonical_song_dedup.dart';
+import '../widgets/desktop/desktop_full_screen_player.dart';
 
 enum LandscapeActiveTab { none, lyrics, queue, more }
 
@@ -39,7 +40,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
   int _activePageIndex = 0;
   bool _isUserDraggingPage = false;
   bool _showLyrics = false;
+  bool _showRemainingCountdown = true;
   LandscapeActiveTab _landscapeTab = LandscapeActiveTab.none;
+  int? _doubleTapSeekDirection;
+  Timer? _doubleTapSeekTimer;
 
   @override
   void initState() {
@@ -53,19 +57,36 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _activePageIndex = initialPage;
     _pageController = PageController(
       initialPage: initialPage,
-      viewportFraction: 0.82,
+      viewportFraction: 0.80,
     );
     _pageController.addListener(_onPageScrolled);
   }
 
   @override
   void dispose() {
+    _doubleTapSeekTimer?.cancel();
     ScreenWakeService.disableWakeLock('lyrics_screen');
     _pageController.removeListener(_onPageScrolled);
     _pageController.dispose();
     _musicService.removeListener(_onStateChanged);
     _prefs.removeListener(_onStateChanged);
     super.dispose();
+  }
+
+  void _triggerDoubleTapSeek(int direction) {
+    HapticFeedback.lightImpact();
+    _musicService.seekRelative(Duration(seconds: direction * 10));
+    _doubleTapSeekTimer?.cancel();
+    setState(() {
+      _doubleTapSeekDirection = direction;
+    });
+    _doubleTapSeekTimer = Timer(const Duration(milliseconds: 650), () {
+      if (mounted) {
+        setState(() {
+          _doubleTapSeekDirection = null;
+        });
+      }
+    });
   }
 
   void _onPageScrolled() {
@@ -223,7 +244,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Drag ☰ on the left to change priority',
+                              'Swipe right to delete • Swipe left to send to bottom • Drag ☰ to reorder',
                               style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.5),
                                 fontSize: 12,
@@ -281,177 +302,277 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 song.id.value,
                               );
 
-                              return Container(
-                                key: ValueKey('${song.id.value}_$index'),
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: isCurrent
-                                      ? Theme.of(
-                                          context,
-                                        ).primaryColor.withValues(alpha: 0.16)
-                                      : const Color(0xFF1B1B26),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
+                              return Dismissible(
+                                key: ValueKey(
+                                  'queue_dismissible_${song.id.value}_$index',
+                                ),
+                                direction: isCurrent
+                                    ? DismissDirection.none
+                                    : DismissDirection.horizontal,
+                                background: Container(
+                                  margin: const EdgeInsets.symmetric(
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent.withValues(
+                                      alpha: 0.85,
+                                    ),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                  ),
+                                  alignment: Alignment.centerLeft,
+                                  child: const Row(
+                                    children: [
+                                      Icon(
+                                        Icons.delete_sweep_rounded,
+                                        color: Colors.white,
+                                        size: 22,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Remove from queue',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                secondaryBackground: Container(
+                                  margin: const EdgeInsets.symmetric(
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.indigoAccent.withValues(
+                                      alpha: 0.85,
+                                    ),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                  ),
+                                  alignment: Alignment.centerRight,
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        'Send to bottom',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      SizedBox(width: 8),
+                                      Icon(
+                                        Icons.vertical_align_bottom_rounded,
+                                        color: Colors.white,
+                                        size: 22,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                confirmDismiss: (direction) async {
+                                  if (direction ==
+                                      DismissDirection.startToEnd) {
+                                    HapticFeedback.mediumImpact();
+                                    return true;
+                                  } else if (direction ==
+                                      DismissDirection.endToStart) {
+                                    HapticFeedback.lightImpact();
+                                    _musicService.reorderQueue(
+                                      index,
+                                      playlist.length,
+                                    );
+                                    setSheetState(() {});
+                                    return false;
+                                  }
+                                  return false;
+                                },
+                                onDismissed: (direction) {
+                                  if (direction ==
+                                      DismissDirection.startToEnd) {
+                                    _musicService.removeFromQueue(index);
+                                    setSheetState(() {});
+                                  }
+                                },
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
                                     color: isCurrent
                                         ? Theme.of(
                                             context,
-                                          ).primaryColor.withValues(alpha: 0.45)
-                                        : Colors.white.withValues(alpha: 0.07),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
+                                          ).primaryColor.withValues(alpha: 0.16)
+                                        : const Color(0xFF1B1B26),
                                     borderRadius: BorderRadius.circular(14),
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      _musicService.playPlaylist(
-                                        playlist,
-                                        index,
-                                      );
-                                    },
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                        vertical: 6,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          // Far left 3-line handle for priority reordering
-                                          ReorderableDragStartListener(
-                                            index: index,
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 10,
-                                                    vertical: 12,
-                                                  ),
-                                              child: const Icon(
-                                                Icons.menu_rounded,
-                                                color: Colors.white60,
-                                                size: 20,
+                                    border: Border.all(
+                                      color: isCurrent
+                                          ? Theme.of(context).primaryColor
+                                                .withValues(alpha: 0.45)
+                                          : Colors.white.withValues(
+                                              alpha: 0.07,
+                                            ),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(14),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        _musicService.playPlaylist(
+                                          playlist,
+                                          index,
+                                        );
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                          vertical: 6,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            // Far left 3-line handle for priority reordering
+                                            ReorderableDragStartListener(
+                                              index: index,
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 12,
+                                                    ),
+                                                child: const Icon(
+                                                  Icons.menu_rounded,
+                                                  color: Colors.white60,
+                                                  size: 20,
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                          ClipRRect(
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                            child: Image.network(
-                                              hdThumbnail,
-                                              width: 44,
-                                              height: 44,
-                                              cacheWidth: 100,
-                                              cacheHeight: 100,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, _, _) =>
-                                                  Image.network(
-                                                    song.thumbnails.lowResUrl,
-                                                    width: 44,
-                                                    height: 44,
-                                                    cacheWidth: 100,
-                                                    cacheHeight: 100,
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Text(
-                                                  song.title,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    color: isCurrent
-                                                        ? Theme.of(
-                                                            context,
-                                                          ).primaryColor
-                                                        : Colors.white,
-                                                    fontWeight: isCurrent
-                                                        ? FontWeight.bold
-                                                        : FontWeight.w600,
-                                                    fontSize: 13.5,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 2),
-                                                Text(
-                                                  song.author,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    color: isCurrent
-                                                        ? Theme.of(context)
-                                                              .primaryColor
-                                                              .withValues(
-                                                                alpha: 0.8,
-                                                              )
-                                                        : Colors.white54,
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          if (isCurrent)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                right: 6,
+                                            ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              child: Image.network(
+                                                hdThumbnail,
+                                                width: 44,
+                                                height: 44,
+                                                cacheWidth: 100,
+                                                cacheHeight: 100,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, _, _) =>
+                                                    Image.network(
+                                                      song.thumbnails.lowResUrl,
+                                                      width: 44,
+                                                      height: 44,
+                                                      cacheWidth: 100,
+                                                      cacheHeight: 100,
+                                                      fit: BoxFit.cover,
+                                                    ),
                                               ),
-                                              child: Icon(
-                                                Icons.equalizer_rounded,
-                                                color: Theme.of(
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    song.title,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: isCurrent
+                                                          ? Theme.of(
+                                                              context,
+                                                            ).primaryColor
+                                                          : Colors.white,
+                                                      fontWeight: isCurrent
+                                                          ? FontWeight.bold
+                                                          : FontWeight.w600,
+                                                      fontSize: 13.5,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    song.author,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: isCurrent
+                                                          ? Theme.of(context)
+                                                                .primaryColor
+                                                                .withValues(
+                                                                  alpha: 0.8,
+                                                                )
+                                                          : Colors.white54,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            if (isCurrent)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  right: 6,
+                                                ),
+                                                child: Icon(
+                                                  Icons.equalizer_rounded,
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).primaryColor,
+                                                  size: 22,
+                                                ),
+                                              ),
+                                            IconButton(
+                                              icon: const Icon(
+                                                Icons.more_vert_rounded,
+                                                color: Colors.white38,
+                                                size: 18,
+                                              ),
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(
+                                                minWidth: 32,
+                                                minHeight: 32,
+                                              ),
+                                              onPressed: () {
+                                                showSongOptionsBottomSheet(
                                                   context,
-                                                ).primaryColor,
-                                                size: 22,
+                                                  song,
+                                                );
+                                              },
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(
+                                                Icons.close_rounded,
+                                                color: Colors.white38,
+                                                size: 18,
                                               ),
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(
+                                                minWidth: 32,
+                                                minHeight: 32,
+                                              ),
+                                              onPressed: () {
+                                                HapticFeedback.lightImpact();
+                                                _musicService.removeFromQueue(
+                                                  index,
+                                                );
+                                                setSheetState(() {});
+                                              },
                                             ),
-                                          IconButton(
-                                            icon: const Icon(
-                                              Icons.more_vert_rounded,
-                                              color: Colors.white38,
-                                              size: 18,
-                                            ),
-                                            padding: EdgeInsets.zero,
-                                            constraints: const BoxConstraints(
-                                              minWidth: 32,
-                                              minHeight: 32,
-                                            ),
-                                            onPressed: () {
-                                              showSongOptionsBottomSheet(
-                                                context,
-                                                song,
-                                              );
-                                            },
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(
-                                              Icons.close_rounded,
-                                              color: Colors.white38,
-                                              size: 18,
-                                            ),
-                                            padding: EdgeInsets.zero,
-                                            constraints: const BoxConstraints(
-                                              minWidth: 32,
-                                              minHeight: 32,
-                                            ),
-                                            onPressed: () {
-                                              HapticFeedback.lightImpact();
-                                              _musicService.removeFromQueue(
-                                                index,
-                                              );
-                                              setSheetState(() {});
-                                            },
-                                          ),
-                                          const SizedBox(width: 4),
-                                        ],
+                                            const SizedBox(width: 4),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -1311,6 +1432,28 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final vibrantColor = palette.vibrant;
     final darkVibrantColor = palette.darkVibrant;
 
+    final size = MediaQuery.of(context).size;
+    final isDesktopFullScreen =
+        (kIsWeb ||
+            defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.linux ||
+            size.width >= 800) &&
+        (size.width >= 800 && size.height >= 480);
+    if (isDesktopFullScreen) {
+      return DesktopFullScreenPlayer(
+        song: shownSong,
+        isPlaying: isPlaying,
+        isLoading: isLoading,
+        isLiked: isLiked,
+        dominantColor: dominantColor,
+        vibrantColor: vibrantColor,
+        darkVibrantColor: darkVibrantColor,
+        artworkStyle: artworkStyle,
+        onClose: () => Navigator.of(context).maybePop(),
+      );
+    }
+
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
     if (isLandscape) {
@@ -1421,79 +1564,75 @@ class _PlayerScreenState extends State<PlayerScreen> {
               maxWidth: 680,
               child: SafeArea(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: (MediaQuery.of(context).size.width * 0.05)
-                        .clamp(12.0, 24.0),
-                    vertical: 10,
-                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
                   child: Column(
                     children: [
                       // Top Grabber & Header Actions
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          IconButton(
-                            icon: const Icon(
-                              Icons.keyboard_arrow_down_rounded,
-                              color: Colors.white70,
-                              size: 34,
-                            ),
-                            onPressed: () {
-                              HapticFeedback.lightImpact();
-                              Navigator.pop(context);
-                            },
-                          ),
-                          GestureDetector(
-                            onTap: () => _showQueueSheet(context),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: (MediaQuery.of(context).size.width * 0.05)
+                              .clamp(16.0, 24.0),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            IconButton(
+                              icon: const Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                color: Colors.white70,
+                                size: 34,
                               ),
-                              color: Colors.transparent,
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                Navigator.pop(context);
+                              },
+                            ),
+                            GestureDetector(
+                              onTap: () => _showQueueSheet(context),
                               child: Container(
-                                width: 40,
-                                height: 5,
-                                decoration: BoxDecoration(
-                                  color: Colors.white24,
-                                  borderRadius: BorderRadius.circular(3),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                color: Colors.transparent,
+                                child: Container(
+                                  width: 40,
+                                  height: 5,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white24,
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const BugReportButton(size: 34),
-                              const SizedBox(width: 4),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.tune_rounded,
-                                  color: Colors.white,
-                                  size: 24,
-                                ),
-                                tooltip: 'Audio Equalizer',
-                                onPressed: () {
-                                  HapticFeedback.lightImpact();
-                                  EqualizerBottomSheet.show(context);
-                                },
+                            IconButton(
+                              icon: const Icon(
+                                Icons.tune_rounded,
+                                color: Colors.white,
+                                size: 24,
                               ),
-                            ],
-                          ),
-                        ],
+                              tooltip: 'Audio Equalizer',
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                EqualizerBottomSheet.show(context);
+                              },
+                            ),
+                          ],
+                        ),
                       ),
 
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 2),
 
                       // Center Content: Parallel Synced Album Carousel & Lyrics Stack
                       Expanded(
                         flex: 10,
-                        child: Center(
+                        child: Align(
+                          alignment: Alignment.topCenter,
                           child: LayoutBuilder(
                             builder: (context, constraints) {
                               final carouselSize = math.min(
-                                constraints.maxWidth * 0.88,
-                                constraints.maxHeight * 0.95,
+                                constraints.maxWidth * 0.80,
+                                constraints.maxHeight * 0.98,
                               );
                               final playlist = _musicService.playlist.isNotEmpty
                                   ? _musicService.playlist
@@ -1571,8 +1710,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                 final double diff =
                                                     (page - index).abs();
                                                 final double scale =
-                                                    (1.0 - (diff * 0.12)).clamp(
-                                                      0.85,
+                                                    (1.0 - (diff * 0.16)).clamp(
+                                                      0.84,
                                                       1.0,
                                                     );
                                                 final double opacity =
@@ -1590,144 +1729,279 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                 );
                                               },
                                               child: Center(
-                                                child:
-                                                    artworkStyle ==
-                                                        ArtworkStyle.vinyl
-                                                    ? VinylRecordPlayer(
-                                                        key: ValueKey(
-                                                          'vinyl_${track.id.value}',
-                                                        ),
-                                                        imageUrl:
-                                                            trackHdThumbnail,
-                                                        isPlaying:
-                                                            isCurrent &&
-                                                            isPlaying,
-                                                        dominantColor: isCurrent
-                                                            ? dominantColor
-                                                            : const Color(
-                                                                0xFF1E1E2C,
+                                                child: GestureDetector(
+                                                  behavior:
+                                                      HitTestBehavior.opaque,
+                                                  onDoubleTapDown: isCurrent
+                                                      ? (details) {
+                                                          if (details
+                                                                  .localPosition
+                                                                  .dx <
+                                                              carouselSize /
+                                                                  2) {
+                                                            _triggerDoubleTapSeek(
+                                                              -1,
+                                                            );
+                                                          } else {
+                                                            _triggerDoubleTapSeek(
+                                                              1,
+                                                            );
+                                                          }
+                                                        }
+                                                      : null,
+                                                  child: Stack(
+                                                    alignment: Alignment.center,
+                                                    children: [
+                                                      artworkStyle ==
+                                                              ArtworkStyle.vinyl
+                                                          ? VinylRecordPlayer(
+                                                              key: ValueKey(
+                                                                'vinyl_${track.id.value}',
                                                               ),
-                                                        vibrantColor: isCurrent
-                                                            ? vibrantColor
-                                                            : const Color(
-                                                                0xFFFA2D48,
-                                                              ),
-                                                        size:
-                                                            carouselSize * 0.94,
-                                                      )
-                                                    : Container(
-                                                        width: carouselSize,
-                                                        height: carouselSize,
-                                                        decoration: BoxDecoration(
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                26,
-                                                              ),
-                                                          boxShadow: [
-                                                            BoxShadow(
-                                                              color:
-                                                                  (isCurrent
-                                                                          ? dominantColor
-                                                                          : Colors.black)
-                                                                      .withValues(
-                                                                        alpha:
-                                                                            0.60,
-                                                                      ),
-                                                              blurRadius: 36,
-                                                              spreadRadius: 6,
-                                                              offset:
-                                                                  const Offset(
-                                                                    0,
-                                                                    16,
-                                                                  ),
-                                                            ),
-                                                            BoxShadow(
-                                                              color:
-                                                                  (isCurrent
-                                                                          ? vibrantColor
-                                                                          : Colors.black)
-                                                                      .withValues(
-                                                                        alpha:
-                                                                            0.35,
-                                                                      ),
-                                                              blurRadius: 48,
-                                                              spreadRadius: 8,
-                                                              offset:
-                                                                  const Offset(
-                                                                    0,
-                                                                    8,
-                                                                  ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        child: isCurrent
-                                                            ? Hero(
-                                                                tag:
-                                                                    'player_artwork_${track.id.value}',
-                                                                child: ClipRRect(
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                        26,
-                                                                      ),
-                                                                  child: Image.network(
-                                                                    trackHdThumbnail,
-                                                                    fit: BoxFit
-                                                                        .cover,
-                                                                    errorBuilder: (_, _, _) => Image.network(
-                                                                      track
-                                                                          .thumbnails
-                                                                          .highResUrl,
-                                                                      fit: BoxFit
-                                                                          .cover,
-                                                                      errorBuilder: (_, _, _) => Container(
-                                                                        color: const Color(
-                                                                          0xFF222230,
-                                                                        ),
-                                                                        child: const Icon(
-                                                                          Icons
-                                                                              .music_note,
-                                                                          color:
-                                                                              Colors.white54,
-                                                                          size:
-                                                                              64,
-                                                                        ),
-                                                                      ),
+                                                              imageUrl:
+                                                                  trackHdThumbnail,
+                                                              isPlaying:
+                                                                  isCurrent &&
+                                                                  isPlaying,
+                                                              dominantColor:
+                                                                  isCurrent
+                                                                  ? dominantColor
+                                                                  : const Color(
+                                                                      0xFF1E1E2C,
                                                                     ),
-                                                                  ),
-                                                                ),
-                                                              )
-                                                            : ClipRRect(
+                                                              vibrantColor:
+                                                                  isCurrent
+                                                                  ? vibrantColor
+                                                                  : const Color(
+                                                                      0xFFFA2D48,
+                                                                    ),
+                                                              size:
+                                                                  carouselSize *
+                                                                  0.94,
+                                                            )
+                                                          : Container(
+                                                              width:
+                                                                  carouselSize,
+                                                              height:
+                                                                  carouselSize,
+                                                              decoration: BoxDecoration(
                                                                 borderRadius:
                                                                     BorderRadius.circular(
                                                                       26,
                                                                     ),
-                                                                child: Image.network(
-                                                                  trackHdThumbnail,
-                                                                  fit: BoxFit
-                                                                      .cover,
-                                                                  errorBuilder: (_, _, _) => Image.network(
-                                                                    track
-                                                                        .thumbnails
-                                                                        .highResUrl,
-                                                                    fit: BoxFit
-                                                                        .cover,
-                                                                    errorBuilder: (_, _, _) => Container(
-                                                                      color: const Color(
-                                                                        0xFF222230,
+                                                                boxShadow: [
+                                                                  BoxShadow(
+                                                                    color:
+                                                                        (isCurrent
+                                                                                ? dominantColor
+                                                                                : Colors.black)
+                                                                            .withValues(
+                                                                              alpha: 0.60,
+                                                                            ),
+                                                                    blurRadius:
+                                                                        36,
+                                                                    spreadRadius:
+                                                                        6,
+                                                                    offset:
+                                                                        const Offset(
+                                                                          0,
+                                                                          16,
+                                                                        ),
+                                                                  ),
+                                                                  BoxShadow(
+                                                                    color:
+                                                                        (isCurrent
+                                                                                ? vibrantColor
+                                                                                : Colors.black)
+                                                                            .withValues(
+                                                                              alpha: 0.35,
+                                                                            ),
+                                                                    blurRadius:
+                                                                        48,
+                                                                    spreadRadius:
+                                                                        8,
+                                                                    offset:
+                                                                        const Offset(
+                                                                          0,
+                                                                          8,
+                                                                        ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                              child: isCurrent
+                                                                  ? Hero(
+                                                                      tag:
+                                                                          'player_artwork_${track.id.value}',
+                                                                      child: ClipRRect(
+                                                                        borderRadius:
+                                                                            BorderRadius.circular(
+                                                                              26,
+                                                                            ),
+                                                                        child: Image.network(
+                                                                          trackHdThumbnail,
+                                                                          fit: BoxFit
+                                                                              .cover,
+                                                                          errorBuilder: (_, _, _) => Image.network(
+                                                                            track.thumbnails.highResUrl,
+                                                                            fit:
+                                                                                BoxFit.cover,
+                                                                            errorBuilder:
+                                                                                (
+                                                                                  _,
+                                                                                  _,
+                                                                                  _,
+                                                                                ) => Container(
+                                                                                  color: const Color(
+                                                                                    0xFF222230,
+                                                                                  ),
+                                                                                  child: const Icon(
+                                                                                    Icons.music_note,
+                                                                                    color: Colors.white54,
+                                                                                    size: 64,
+                                                                                  ),
+                                                                                ),
+                                                                          ),
+                                                                        ),
                                                                       ),
-                                                                      child: const Icon(
-                                                                        Icons
-                                                                            .music_note,
-                                                                        color: Colors
-                                                                            .white54,
-                                                                        size:
-                                                                            64,
+                                                                    )
+                                                                  : ClipRRect(
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                            26,
+                                                                          ),
+                                                                      child: Image.network(
+                                                                        trackHdThumbnail,
+                                                                        fit: BoxFit
+                                                                            .cover,
+                                                                        errorBuilder: (_, _, _) => Image.network(
+                                                                          track
+                                                                              .thumbnails
+                                                                              .highResUrl,
+                                                                          fit: BoxFit
+                                                                              .cover,
+                                                                          errorBuilder: (_, _, _) => Container(
+                                                                            color: const Color(
+                                                                              0xFF222230,
+                                                                            ),
+                                                                            child: const Icon(
+                                                                              Icons.music_note,
+                                                                              color: Colors.white54,
+                                                                              size: 64,
+                                                                            ),
+                                                                          ),
+                                                                        ),
                                                                       ),
+                                                                    ),
+                                                            ),
+                                                      if (isCurrent &&
+                                                          _doubleTapSeekDirection !=
+                                                              null)
+                                                        Positioned.fill(
+                                                          child: IgnorePointer(
+                                                            child: AnimatedOpacity(
+                                                              duration:
+                                                                  const Duration(
+                                                                    milliseconds:
+                                                                        150,
+                                                                  ),
+                                                              opacity: 1.0,
+                                                              child: Container(
+                                                                decoration: BoxDecoration(
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        26,
+                                                                      ),
+                                                                  color: Colors
+                                                                      .black
+                                                                      .withValues(
+                                                                        alpha:
+                                                                            0.35,
+                                                                      ),
+                                                                ),
+                                                                child: Align(
+                                                                  alignment:
+                                                                      _doubleTapSeekDirection ==
+                                                                          -1
+                                                                      ? Alignment
+                                                                            .centerLeft
+                                                                      : Alignment
+                                                                            .centerRight,
+                                                                  child: Container(
+                                                                    width:
+                                                                        carouselSize *
+                                                                        0.48,
+                                                                    height:
+                                                                        carouselSize,
+                                                                    decoration: BoxDecoration(
+                                                                      borderRadius: BorderRadius.horizontal(
+                                                                        left:
+                                                                            _doubleTapSeekDirection ==
+                                                                                -1
+                                                                            ? const Radius.circular(
+                                                                                26,
+                                                                              )
+                                                                            : Radius.zero,
+                                                                        right:
+                                                                            _doubleTapSeekDirection ==
+                                                                                1
+                                                                            ? const Radius.circular(
+                                                                                26,
+                                                                              )
+                                                                            : Radius.zero,
+                                                                      ),
+                                                                      color: Colors
+                                                                          .white
+                                                                          .withValues(
+                                                                            alpha:
+                                                                                0.18,
+                                                                          ),
+                                                                    ),
+                                                                    child: Column(
+                                                                      mainAxisAlignment:
+                                                                          MainAxisAlignment
+                                                                              .center,
+                                                                      children: [
+                                                                        Icon(
+                                                                          _doubleTapSeekDirection ==
+                                                                                  -1
+                                                                              ? Icons.replay_10_rounded
+                                                                              : Icons.forward_10_rounded,
+                                                                          color:
+                                                                              Colors.white,
+                                                                          size:
+                                                                              42,
+                                                                        ),
+                                                                        const SizedBox(
+                                                                          height:
+                                                                              6,
+                                                                        ),
+                                                                        Text(
+                                                                          _doubleTapSeekDirection ==
+                                                                                  -1
+                                                                              ? '-10 sec'
+                                                                              : '+10 sec',
+                                                                          style: const TextStyle(
+                                                                            color:
+                                                                                Colors.white,
+                                                                            fontWeight:
+                                                                                FontWeight.bold,
+                                                                            fontSize:
+                                                                                13,
+                                                                            letterSpacing:
+                                                                                0.3,
+                                                                          ),
+                                                                        ),
+                                                                      ],
                                                                     ),
                                                                   ),
                                                                 ),
                                                               ),
-                                                      ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ),
                                               ),
                                             );
                                           },
@@ -1753,13 +2027,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                         ),
                                         decoration: BoxDecoration(
                                           color: Colors.black.withValues(
-                                            alpha: 0.35,
+                                            alpha: 0.22,
                                           ),
                                           borderRadius: BorderRadius.circular(
                                             24,
-                                          ),
-                                          border: Border.all(
-                                            color: Colors.white10,
                                           ),
                                         ),
                                         child: _musicService.isFetchingLyrics
@@ -1802,114 +2073,157 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 12),
 
                       // Track Info & Like Button
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Hero(
-                                  tag: 'player_title_${song.id.value}',
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: Text(
-                                      song.title,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: -0.5,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Flexible(
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: (MediaQuery.of(context).size.width * 0.05)
+                              .clamp(16.0, 24.0),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Hero(
+                                    tag: 'player_title_${song.id.value}',
+                                    child: Material(
+                                      color: Colors.transparent,
                                       child: Text(
-                                        song.author,
-                                        style: TextStyle(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.7,
-                                          ),
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w500,
+                                        song.title,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: -0.5,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.12,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            4,
-                                          ),
-                                          border: Border.all(
-                                            color: Colors.white.withValues(
-                                              alpha: 0.15,
-                                            ),
-                                            width: 0.5,
-                                          ),
-                                        ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Flexible(
                                         child: Text(
-                                          _musicService
-                                              .activeStreamInfo
-                                              .displayTag,
-                                          style: const TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 9.5,
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: 0.4,
+                                          song.author,
+                                          style: TextStyle(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.7,
+                                            ),
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.12,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                            border: Border.all(
+                                              color: Colors.white.withValues(
+                                                alpha: 0.15,
+                                              ),
+                                              width: 0.5,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            _musicService
+                                                .activeStreamInfo
+                                                .displayTag,
+                                            style: const TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: 0.4,
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              isLiked
-                                  ? Icons.favorite_rounded
-                                  : Icons.favorite_border_rounded,
-                              color: isLiked
-                                  ? const Color(0xFFFA2D48)
-                                  : Colors.white70,
-                              size: 30,
+                            // Actions: Shuffle, Repeat, Like
+                            IconButton(
+                              visualDensity: VisualDensity.compact,
+                              icon: Icon(
+                                Icons.shuffle_rounded,
+                                color: _musicService.isShuffle
+                                    ? const Color(0xFF1DB954)
+                                    : Colors.white54,
+                                size: 22,
+                              ),
+                              tooltip: 'Shuffle',
+                              onPressed: () {
+                                HapticFeedback.selectionClick();
+                                _musicService.toggleShuffle();
+                              },
                             ),
-                            onPressed: () {
-                              HapticFeedback.lightImpact();
-                              _musicService.toggleLike(song);
-                            },
-                          ),
-                        ],
+                            IconButton(
+                              visualDensity: VisualDensity.compact,
+                              icon: Icon(
+                                _musicService.loopMode == LoopMode.one
+                                    ? Icons.repeat_one_rounded
+                                    : Icons.repeat_rounded,
+                                color: _musicService.loopMode != LoopMode.off
+                                    ? const Color(0xFF1DB954)
+                                    : Colors.white54,
+                                size: 22,
+                              ),
+                              tooltip: 'Repeat',
+                              onPressed: () {
+                                HapticFeedback.selectionClick();
+                                _musicService.toggleRepeat();
+                              },
+                            ),
+                            IconButton(
+                              visualDensity: VisualDensity.compact,
+                              icon: Icon(
+                                isLiked
+                                    ? Icons.favorite_rounded
+                                    : Icons.favorite_border_rounded,
+                                color: isLiked
+                                    ? const Color(0xFFFA2D48)
+                                    : Colors.white70,
+                                size: 26,
+                              ),
+                              tooltip: isLiked ? 'Unlike' : 'Like',
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                _musicService.toggleLike(song);
+                              },
+                            ),
+                          ],
+                        ),
                       ),
 
                       const SizedBox(height: 12),
 
                       // Apple Music Style Shorter Scrubber (with generous horizontal padding)
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: (MediaQuery.of(context).size.width * 0.05)
+                              .clamp(16.0, 24.0),
+                        ),
                         child: RepaintBoundary(
                           child: StreamBuilder<Duration?>(
                             stream: _musicService.durationStream,
@@ -1954,432 +2268,285 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
                       const SizedBox(height: 8),
 
-                      // Unified Responsive Playback Controls: Shuffle, -10s, Prev, Play/Pause, Next, +10s, Repeat
+                      // Primary Playback Controls: Prev, Hero Play/Pause, Next (Symmetric 3-Column Grid)
                       Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 2,
-                          vertical: 4,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: (MediaQuery.of(context).size.width * 0.05)
+                              .clamp(16.0, 24.0),
+                          vertical: 6,
                         ),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final availableWidth = constraints.maxWidth;
-                            final bool isCompact = availableWidth < 360;
-                            final bool isUltraCompact = availableWidth < 325;
-
-                            final double playSize = isUltraCompact
-                                ? 58.0
-                                : (isCompact ? 64.0 : 72.0);
-                            final double playIconSize = isUltraCompact
-                                ? 34.0
-                                : (isCompact ? 38.0 : 42.0);
-                            final double skipIconSize = isUltraCompact
-                                ? 30.0
-                                : (isCompact ? 34.0 : 38.0);
-                            final double skipBtnSize = isUltraCompact
-                                ? 38.0
-                                : (isCompact ? 42.0 : 46.0);
-                            final double subIconSize = isUltraCompact
-                                ? 19.0
-                                : 22.0;
-                            final double subBtnSize = isUltraCompact
-                                ? 34.0
-                                : 38.0;
-                            final double skip10IconSize = isUltraCompact
-                                ? 15.0
-                                : (isCompact ? 17.0 : 19.0);
-                            final double skip10PadH = isUltraCompact
-                                ? 5.0
-                                : (isCompact ? 6.0 : 8.0);
-                            final double skip10PadV = isUltraCompact
-                                ? 4.0
-                                : (isCompact ? 5.0 : 6.0);
-
-                            // Min intrinsic width ensuring all 7 items lay out comfortably without collision
-                            final double minRequiredWidth =
-                                (subBtnSize * 2) +
-                                (((skip10IconSize + (skip10PadH * 2) + 2)) *
-                                    2) +
-                                (skipBtnSize * 2) +
-                                playSize +
-                                20.0;
-
-                            return FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.center,
-                              child: SizedBox(
-                                width: math.max(
-                                  availableWidth,
-                                  minRequiredWidth,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    IconButton(
-                                      padding: EdgeInsets.zero,
-                                      constraints: BoxConstraints(
-                                        minWidth: subBtnSize,
-                                        minHeight: subBtnSize,
-                                      ),
-                                      visualDensity: VisualDensity.compact,
-                                      icon: Icon(
-                                        Icons.shuffle_rounded,
-                                        color: _musicService.isShuffle
-                                            ? const Color(0xFF1DB954)
-                                            : Colors.white54,
-                                        size: subIconSize,
-                                      ),
-                                      onPressed: () {
-                                        HapticFeedback.selectionClick();
-                                        _musicService.toggleShuffle();
-                                      },
-                                    ),
-                                    Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(20),
-                                        onTap: () {
-                                          HapticFeedback.lightImpact();
-                                          _musicService.seekRelative(
-                                            const Duration(seconds: -10),
-                                          );
-                                        },
-                                        child: Container(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: skip10PadH,
-                                            vertical: skip10PadV,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(
-                                              alpha: 0.08,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              20,
-                                            ),
-                                            border: Border.all(
-                                              color: Colors.white.withValues(
-                                                alpha: 0.12,
-                                              ),
-                                            ),
-                                          ),
-                                          child: Icon(
-                                            Icons.replay_10_rounded,
-                                            color: Colors.white,
-                                            size: skip10IconSize,
-                                          ),
-                                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Center(
+                                child: _BorderlessScaleButton(
+                                  scaleDown: 0.88,
+                                  onTap: () {
+                                    HapticFeedback.mediumImpact();
+                                    _musicService.previousSong();
+                                  },
+                                  child: const SizedBox(
+                                    width: 58,
+                                    height: 58,
+                                    child: Center(
+                                      child: Icon(
+                                        Icons.skip_previous_rounded,
+                                        color: Colors.white,
+                                        size: 42,
                                       ),
                                     ),
-                                    // Modern Frosted Capsule Action Button - Previous
-                                    Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        customBorder: const CircleBorder(),
-                                        onTap: () {
-                                          HapticFeedback.mediumImpact();
-                                          _musicService.previousSong();
-                                        },
-                                        child: Container(
-                                          width: skipBtnSize,
-                                          height: skipBtnSize,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: Colors.white.withValues(
-                                              alpha: 0.10,
-                                            ),
-                                            border: Border.all(
-                                              color: Colors.white.withValues(
-                                                alpha: 0.16,
-                                              ),
-                                              width: 1.2,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withValues(
-                                                  alpha: 0.2,
-                                                ),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: Center(
-                                            child: Icon(
-                                              Icons.skip_previous_rounded,
-                                              color: Colors.white,
-                                              size: skipIconSize * 0.76,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    // Modern Elevated Play/Pause Button with Multi-layered Glow & Smooth Morph
-                                    Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        customBorder: const CircleBorder(),
-                                        onTap: () {
-                                          HapticFeedback.mediumImpact();
-                                          _musicService.togglePlayPause();
-                                        },
-                                        child: Container(
-                                          width: playSize,
-                                          height: playSize,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            gradient: const LinearGradient(
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                              colors: [
-                                                Color(0xFFFFFFFF),
-                                                Color(0xFFEFF2F6),
-                                              ],
-                                            ),
-                                            border: Border.all(
-                                              color: Colors.white.withValues(
-                                                alpha: 0.90,
-                                              ),
-                                              width: 1.5,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withValues(
-                                                  alpha: 0.40,
-                                                ),
-                                                blurRadius: isUltraCompact
-                                                    ? 16
-                                                    : 22,
-                                                spreadRadius: 1,
-                                                offset: const Offset(0, 6),
-                                              ),
-                                            ],
-                                          ),
-                                          child: isLoading
-                                              ? Center(
-                                                  child: SizedBox(
-                                                    width: playSize * 0.42,
-                                                    height: playSize * 0.42,
-                                                    child: const CircularProgressIndicator(
-                                                      valueColor:
-                                                          AlwaysStoppedAnimation<
-                                                            Color
-                                                          >(Color(0xFF0F141C)),
-                                                      strokeWidth: 3,
-                                                    ),
-                                                  ),
-                                                )
-                                              : Center(
-                                                  child: AnimatedSwitcher(
-                                                    duration: const Duration(
-                                                      milliseconds: 220,
-                                                    ),
-                                                    transitionBuilder:
-                                                        (
-                                                          child,
-                                                          animation,
-                                                        ) => ScaleTransition(
-                                                          scale: animation,
-                                                          child: FadeTransition(
-                                                            opacity: animation,
-                                                            child: child,
-                                                          ),
-                                                        ),
-                                                    child: Icon(
-                                                      isPlaying
-                                                          ? Icons.pause_rounded
-                                                          : Icons
-                                                                .play_arrow_rounded,
-                                                      key: ValueKey<bool>(
-                                                        isPlaying,
-                                                      ),
-                                                      color: const Color(
-                                                        0xFF0F141C,
-                                                      ),
-                                                      size: playIconSize,
-                                                    ),
-                                                  ),
-                                                ),
-                                        ),
-                                      ),
-                                    ),
-                                    // Modern Frosted Capsule Action Button - Next
-                                    Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        customBorder: const CircleBorder(),
-                                        onTap: () {
-                                          HapticFeedback.mediumImpact();
-                                          _musicService.nextSong();
-                                        },
-                                        child: Container(
-                                          width: skipBtnSize,
-                                          height: skipBtnSize,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: Colors.white.withValues(
-                                              alpha: 0.10,
-                                            ),
-                                            border: Border.all(
-                                              color: Colors.white.withValues(
-                                                alpha: 0.16,
-                                              ),
-                                              width: 1.2,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withValues(
-                                                  alpha: 0.2,
-                                                ),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: Center(
-                                            child: Icon(
-                                              Icons.skip_next_rounded,
-                                              color: Colors.white,
-                                              size: skipIconSize * 0.76,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(20),
-                                        onTap: () {
-                                          HapticFeedback.lightImpact();
-                                          _musicService.seekRelative(
-                                            const Duration(seconds: 10),
-                                          );
-                                        },
-                                        child: Container(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: skip10PadH,
-                                            vertical: skip10PadV,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(
-                                              alpha: 0.08,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              20,
-                                            ),
-                                            border: Border.all(
-                                              color: Colors.white.withValues(
-                                                alpha: 0.12,
-                                              ),
-                                            ),
-                                          ),
-                                          child: Icon(
-                                            Icons.forward_10_rounded,
-                                            color: Colors.white,
-                                            size: skip10IconSize,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    IconButton(
-                                      padding: EdgeInsets.zero,
-                                      constraints: BoxConstraints(
-                                        minWidth: subBtnSize,
-                                        minHeight: subBtnSize,
-                                      ),
-                                      visualDensity: VisualDensity.compact,
-                                      icon: Icon(
-                                        _musicService.loopMode == LoopMode.one
-                                            ? Icons.repeat_one_rounded
-                                            : Icons.repeat_rounded,
-                                        color:
-                                            _musicService.loopMode !=
-                                                LoopMode.off
-                                            ? const Color(0xFF1DB954)
-                                            : Colors.white54,
-                                        size: subIconSize,
-                                      ),
-                                      onPressed: () {
-                                        HapticFeedback.selectionClick();
-                                        _musicService.toggleRepeat();
-                                      },
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ),
-                            );
-                          },
+                            ),
+                            Expanded(
+                              child: Center(
+                                child: _BorderlessScaleButton(
+                                  scaleDown: 0.92,
+                                  onTap: () {
+                                    HapticFeedback.mediumImpact();
+                                    _musicService.togglePlayPause();
+                                  },
+                                  child: SizedBox(
+                                    width: 76,
+                                    height: 76,
+                                    child: isLoading
+                                        ? const Center(
+                                            child: SizedBox(
+                                              width: 32,
+                                              height: 32,
+                                              child: CircularProgressIndicator(
+                                                valueColor:
+                                                    AlwaysStoppedAnimation<
+                                                      Color
+                                                    >(Colors.white),
+                                                strokeWidth: 3,
+                                              ),
+                                            ),
+                                          )
+                                        : Center(
+                                            child: AnimatedSwitcher(
+                                              duration: const Duration(
+                                                milliseconds: 220,
+                                              ),
+                                              transitionBuilder:
+                                                  (child, animation) =>
+                                                      ScaleTransition(
+                                                        scale: animation,
+                                                        child: FadeTransition(
+                                                          opacity: animation,
+                                                          child: child,
+                                                        ),
+                                                      ),
+                                              child: Icon(
+                                                isPlaying
+                                                    ? Icons.pause_rounded
+                                                    : Icons.play_arrow_rounded,
+                                                key: ValueKey<bool>(isPlaying),
+                                                color: Colors.white,
+                                                size: 58,
+                                              ),
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Center(
+                                child: _BorderlessScaleButton(
+                                  scaleDown: 0.88,
+                                  onTap: () {
+                                    HapticFeedback.mediumImpact();
+                                    _musicService.nextSong();
+                                  },
+                                  child: const SizedBox(
+                                    width: 58,
+                                    height: 58,
+                                    child: Center(
+                                      child: Icon(
+                                        Icons.skip_next_rounded,
+                                        color: Colors.white,
+                                        size: 42,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
 
                       const SizedBox(height: 8),
 
-                      // Bottom Screen Options: 3 Main Static Glass Pill Buttons (Low-end static glass)
-                      Container(
-                        margin: const EdgeInsets.only(top: 4, bottom: 2),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
+                      // Secondary Actions Row: Lyrics, Queue, More (Symmetric 3-Column Grid)
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: (MediaQuery.of(context).size.width * 0.05)
+                              .clamp(16.0, 24.0),
+                          vertical: 4,
                         ),
-                        decoration: BoxDecoration(
-                          color: const Color(
-                            0xFF14141E,
-                          ).withValues(alpha: 0.90),
-                          borderRadius: BorderRadius.circular(30),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.08),
-                            width: 1.0,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.35),
-                              blurRadius: 16,
-                              offset: const Offset(0, 4),
+                        child: Row(
+                          children: [
+                            // 1. Lyrics (Aligned with Prev)
+                            Expanded(
+                              child: Center(
+                                child: _BorderlessScaleButton(
+                                  onTap: () => _toggleLyrics(song),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 6,
+                                    ),
+                                    decoration: _showLyrics
+                                        ? BoxDecoration(
+                                            color: vibrantColor.withValues(
+                                              alpha: 0.20,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                          )
+                                        : null,
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          _showLyrics
+                                              ? Icons.lyrics_rounded
+                                              : Icons.lyrics_outlined,
+                                          color: _showLyrics
+                                              ? vibrantColor
+                                              : Colors.white70,
+                                          size: 24,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Lyrics',
+                                          style: TextStyle(
+                                            color: _showLyrics
+                                                ? vibrantColor
+                                                : Colors.white60,
+                                            fontSize: 11,
+                                            fontWeight: _showLyrics
+                                                ? FontWeight.w700
+                                                : FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            // 2. Queue (Aligned with Play/Pause)
+                            Expanded(
+                              child: Center(
+                                child: _BorderlessScaleButton(
+                                  onTap: () => _showQueueSheet(context),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 6,
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Stack(
+                                          clipBehavior: Clip.none,
+                                          alignment: Alignment.center,
+                                          children: [
+                                            const Icon(
+                                              Icons.queue_music_rounded,
+                                              color: Colors.white70,
+                                              size: 24,
+                                            ),
+                                            if (_musicService.playlist.length >
+                                                1)
+                                              Positioned(
+                                                top: -4,
+                                                right: -10,
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 5,
+                                                        vertical: 1.5,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: vibrantColor,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          8,
+                                                        ),
+                                                  ),
+                                                  child: Text(
+                                                    '${_musicService.playlist.length}',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 9,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        const Text(
+                                          'Queue',
+                                          style: TextStyle(
+                                            color: Colors.white60,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            // 3. More (Aligned with Next)
+                            Expanded(
+                              child: Center(
+                                child: _BorderlessScaleButton(
+                                  onTap: () => _showCurrentSongActionsSheet(
+                                    context,
+                                    song,
+                                  ),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 6,
+                                    ),
+                                    child: const Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.more_horiz_rounded,
+                                          color: Colors.white70,
+                                          size: 24,
+                                        ),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          'More',
+                                          style: TextStyle(
+                                            color: Colors.white60,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ],
-                        ),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.center,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              // 1. Lyrics
-                              _buildBarPillButton(
-                                context: context,
-                                icon: _showLyrics
-                                    ? Icons.lyrics_rounded
-                                    : Icons.lyrics_outlined,
-                                label: 'Lyrics',
-                                isActive: _showLyrics,
-                                activeColor: vibrantColor,
-                                onTap: () => _toggleLyrics(song),
-                              ),
-
-                              // 2. Queue (Up Next)
-                              _buildBarPillButton(
-                                context: context,
-                                icon: Icons.queue_music_rounded,
-                                label: 'Queue',
-                                badgeCount: _musicService.playlist.length,
-                                isActive: false,
-                                activeColor: vibrantColor,
-                                onTap: () => _showQueueSheet(context),
-                              ),
-
-                              // 3. Three Lines (More Options Layer)
-                              _buildBarPillButton(
-                                context: context,
-                                icon: Icons.segment_rounded,
-                                label: 'More',
-                                isActive: false,
-                                activeColor: vibrantColor,
-                                onTap: () =>
-                                    _showCurrentSongActionsSheet(context, song),
-                              ),
-                            ],
-                          ),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -2452,12 +2619,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                Text(
-                  hasValidDuration ? '-${_formatDuration(remaining)}' : '--:--',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _showRemainingCountdown = !_showRemainingCountdown;
+                    });
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: 2,
+                    ),
+                    child: Text(
+                      hasValidDuration
+                          ? (_showRemainingCountdown
+                                ? '-${_formatDuration(remaining)}'
+                                : _formatDuration(duration))
+                          : '--:--',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -3900,6 +4086,43 @@ class _PlayerScreenState extends State<PlayerScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Borderless action button with subtle spring scale feedback for modern playback controls
+class _BorderlessScaleButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  final double scaleDown;
+
+  const _BorderlessScaleButton({
+    required this.child,
+    required this.onTap,
+    this.scaleDown = 0.88,
+  });
+
+  @override
+  State<_BorderlessScaleButton> createState() => _BorderlessScaleButtonState();
+}
+
+class _BorderlessScaleButtonState extends State<_BorderlessScaleButton> {
+  bool _isDown = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _isDown = true),
+      onTapUp: (_) => setState(() => _isDown = false),
+      onTapCancel: () => setState(() => _isDown = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _isDown ? widget.scaleDown : 1.0,
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOutCubic,
+        child: widget.child,
       ),
     );
   }

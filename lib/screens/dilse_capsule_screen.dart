@@ -1497,6 +1497,36 @@ class _DilSeCapsuleScreenState extends State<DilSeCapsuleScreen>
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          height: 38,
+          child: TextButton.icon(
+            icon: const Icon(
+              Icons.check_circle_outline_rounded,
+              color: Colors.white70,
+              size: 16,
+            ),
+            label: const Text(
+              'Finish & Close',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.white.withValues(alpha: 0.1),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: () {
+              HapticFeedback.mediumImpact();
+              Navigator.pop(context);
+            },
+          ),
+        ),
         const SizedBox(height: 10),
       ],
     );
