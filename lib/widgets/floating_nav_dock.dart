@@ -17,9 +17,9 @@ class FloatingNavDock extends StatelessWidget {
   Widget build(BuildContext context) {
     final tabs = [
       _NavTabItem(
-        icon: Icons.play_circle_outline_rounded,
-        activeIcon: Icons.play_circle_fill_rounded,
-        label: 'Listen Now',
+        icon: Icons.home_outlined,
+        activeIcon: Icons.home_rounded,
+        label: 'Home',
       ),
       _NavTabItem(
         icon: Icons.search_rounded,
@@ -27,14 +27,14 @@ class FloatingNavDock extends StatelessWidget {
         label: 'Search',
       ),
       _NavTabItem(
-        icon: Icons.download_outlined,
-        activeIcon: Icons.download_rounded,
-        label: 'Downloads',
-      ),
-      _NavTabItem(
         icon: Icons.library_music_outlined,
         activeIcon: Icons.library_music_rounded,
         label: 'Library',
+      ),
+      _NavTabItem(
+        icon: Icons.download_outlined,
+        activeIcon: Icons.download_rounded,
+        label: 'Downloads',
       ),
     ];
 
@@ -107,8 +107,12 @@ class FloatingNavDock extends StatelessWidget {
                               },
                               child: Container(
                                 alignment: Alignment.center,
-                                child: Row(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 2,
+                                ),
+                                child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     AnimatedScale(
                                       scale: isSelected ? 1.08 : 1.0,
@@ -120,31 +124,24 @@ class FloatingNavDock extends StatelessWidget {
                                         color: isSelected
                                             ? Colors.white
                                             : Colors.white60,
-                                        size: 22,
+                                        size: 21,
                                       ),
                                     ),
-                                    AnimatedCrossFade(
-                                      duration: const Duration(
-                                        milliseconds: 220,
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      tab.label,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: isSelected
+                                            ? Colors.white
+                                            : Colors.white60,
+                                        fontSize: 10.5,
+                                        fontWeight: isSelected
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                        letterSpacing: -0.2,
                                       ),
-                                      crossFadeState: isSelected
-                                          ? CrossFadeState.showFirst
-                                          : CrossFadeState.showSecond,
-                                      firstChild: Padding(
-                                        padding: const EdgeInsets.only(left: 5),
-                                        child: Text(
-                                          tab.label,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 11.5,
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: -0.3,
-                                          ),
-                                        ),
-                                      ),
-                                      secondChild: const SizedBox.shrink(),
                                     ),
                                   ],
                                 ),

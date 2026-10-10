@@ -1,7 +1,7 @@
-import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'profile_avatar_helper.dart';
 import '../constants/app_theme_tokens.dart';
 import '../services/preferences_service.dart';
 import '../services/device_audio_service.dart';
@@ -206,8 +206,7 @@ class ProfileSideDrawer extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context, PreferencesService prefs) {
     final customImagePath = prefs.profileImagePath;
-    final hasCustomImage =
-        customImagePath != null && File(customImagePath).existsSync();
+    final hasCustom = hasProfileImage(customImagePath);
     final userName = prefs.userName.isNotEmpty
         ? prefs.userName
         : 'Music Explorer';
@@ -237,10 +236,8 @@ class ProfileSideDrawer extends StatelessWidget {
               child: CircleAvatar(
                 radius: 24,
                 backgroundColor: const Color(0xFF1E1E28),
-                backgroundImage: hasCustomImage
-                    ? FileImage(File(customImagePath))
-                    : null,
-                child: !hasCustomImage
+                backgroundImage: getProfileImageProvider(customImagePath),
+                child: !hasCustom
                     ? const Icon(
                         Icons.person_rounded,
                         color: Colors.white,

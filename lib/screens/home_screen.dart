@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../widgets/profile_avatar_helper.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../layouts/desktop_layout_state.dart';
 import '../services/music_service.dart';
@@ -16,7 +16,6 @@ import 'album_screen.dart';
 import 'curated_playlist_screen.dart';
 import 'custom_playlist_screen.dart';
 import '../models/jio_album.dart';
-import '../models/song_item.dart';
 import '../constants/app_theme_tokens.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -45,7 +44,6 @@ class _HomeScreenState extends State<HomeScreen>
   CircadianContext? _circadianContext;
   List<DailyMixConfig> _dailyMixConfigs = [];
   bool _isLoadingCharts = true;
-  String? _loadingPlaylistId;
 
   int _selectedMoodIndex = 0;
   List<Video> _moodSongs = [];
@@ -496,14 +494,10 @@ class _HomeScreenState extends State<HomeScreen>
                           child: CircleAvatar(
                             backgroundColor: const Color(0xFF1E1E28),
                             radius: 20,
-                            backgroundImage:
-                                _prefs.profileImagePath != null &&
-                                    File(_prefs.profileImagePath!).existsSync()
-                                ? FileImage(File(_prefs.profileImagePath!))
-                                : null,
-                            child:
-                                _prefs.profileImagePath == null ||
-                                    !File(_prefs.profileImagePath!).existsSync()
+                            backgroundImage: getProfileImageProvider(
+                              _prefs.profileImagePath,
+                            ),
+                            child: !hasProfileImage(_prefs.profileImagePath)
                                 ? const Icon(
                                     Icons.person_rounded,
                                     color: Colors.white,
@@ -627,20 +621,6 @@ class _HomeScreenState extends State<HomeScreen>
                           const SizedBox(height: 24),
                         ],
 
-                        // BLOCKBUSTER SOUNDTRACKS & ALBUMS
-                        if (_trendingAlbums.isNotEmpty) ...[
-                          _buildAlbumsSection(),
-                          const SizedBox(height: 24),
-                        ],
-
-                        // FEATURED PLAYLISTS & TRENDS (Spotify-Style Curated Mixes)
-                        _buildSectionHeader(
-                          'FEATURED PLAYLISTS',
-                          'Trending & Curated Mixes',
-                        ),
-                        _buildCuratedPlaylistsSection(),
-                        const SizedBox(height: 24),
-
                         // TOP CHARTS: INDIA
                         _buildSectionHeader(
                           'TOP CHARTS: INDIA',
@@ -648,6 +628,12 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                         _buildHorizontalChartCards(_topChartsIndia),
                         const SizedBox(height: 24),
+
+                        // BLOCKBUSTER SOUNDTRACKS & ALBUMS
+                        if (_trendingAlbums.isNotEmpty) ...[
+                          _buildAlbumsSection(),
+                          const SizedBox(height: 24),
+                        ],
 
                         // MADE FOR YOU
                         if (_personalizedMixes.isNotEmpty) ...[
@@ -657,22 +643,6 @@ class _HomeScreenState extends State<HomeScreen>
                           ),
                           _buildHorizontalChartCards(_personalizedMixes),
                           const SizedBox(height: 24),
-                        ],
-
-                        // NEW RELEASES
-                        _buildSectionHeader('NEW RELEASES', 'Fresh Music'),
-                        _buildHorizontalChartCards(_newReleases),
-                        const SizedBox(height: 24),
-
-                        // TRENDING NOW
-                        _buildSectionHeader('TRENDING NOW', 'Global Pick'),
-                        _buildHorizontalChartCards(_trendingNow),
-                        const SizedBox(height: 24),
-
-                        // YOUR FAVORITES
-                        if (_musicService.likedSongs.isNotEmpty) ...[
-                          _buildSectionHeader('YOUR FAVORITES', 'Liked Tracks'),
-                          _buildLikedSongsList(),
                         ],
                       ],
                     ],
@@ -1786,400 +1756,6 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
-
-  Widget _buildLikedSongsList() {
-    final liked = _musicService.likedSongs;
-    final displayList = liked.length > 5 ? liked.sublist(0, 5) : liked;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: displayList.map((song) {
-          return Container(
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF14141D),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.05),
-                width: 1,
-              ),
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 2,
-                ),
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.network(
-                    song['thumbnail'] ??
-                        MusicService.getHdThumbnail(song['id'] ?? ''),
-                    width: 50,
-                    height: 50,
-                    fit: BoxFit.cover,
-                    cacheWidth: 120,
-                    cacheHeight: 120,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      width: 50,
-                      height: 50,
-                      color: Colors.white10,
-                      child: const Icon(
-                        Icons.music_note_rounded,
-                        color: Colors.white38,
-                      ),
-                    ),
-                  ),
-                ),
-                title: Text(
-                  song['title'] ?? 'Unknown Track',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                subtitle: Text(
-                  song['author'] ?? 'Unknown Artist',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.5),
-                    fontSize: 12,
-                  ),
-                ),
-                trailing: const Icon(
-                  Icons.favorite_rounded,
-                  color: Color(0xFFFA2D48),
-                  size: 22,
-                ),
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  final songId = song['id'] ?? '';
-                  if (songId.isEmpty) return;
-                  final video = SongItem.fromJson(song).toVideo();
-                  _musicService.playSong(video);
-                },
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  List<CuratedPlaylist> _getCuratedPlaylists() {
-    final artist = _prefs.mostPlayedArtist.isNotEmpty
-        ? _prefs.mostPlayedArtist
-        : 'Top Artists';
-    final dailyMix1 = _dailyMixConfigs.isNotEmpty ? _dailyMixConfigs[0] : null;
-    final dailyMix2 = _dailyMixConfigs.length > 1 ? _dailyMixConfigs[1] : null;
-
-    return [
-      CuratedPlaylist(
-        id: 'daily_mix_1',
-        title: dailyMix1?.title ?? 'Daily Mix 1',
-        subtitle: dailyMix1?.subtitle ?? 'Personalized mix featuring $artist',
-        query: artist,
-        gradientColors: const [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
-        icon: Icons.auto_awesome_rounded,
-        tag: 'MADE FOR YOU',
-      ),
-      CuratedPlaylist(
-        id: 'daily_mix_2',
-        title: dailyMix2?.title ?? 'Daily Mix 2',
-        subtitle: dailyMix2?.subtitle ?? 'Curated melodies for your vibe',
-        query: '$artist Melodies',
-        gradientColors: const [Color(0xFF00C6FF), Color(0xFF0072FF)],
-        icon: Icons.graphic_eq_rounded,
-        tag: 'DAILY MIX',
-      ),
-      const CuratedPlaylist(
-        id: 'global_top_50',
-        title: 'Top 50 - Global',
-        subtitle: 'The hottest chartbusters worldwide',
-        query: 'Global Top Hits',
-        gradientColors: [Color(0xFF6B11FF), Color(0xFF2B0A80)],
-        icon: Icons.public_rounded,
-        tag: 'GLOBAL TRENDS',
-      ),
-      const CuratedPlaylist(
-        id: 'trending_telugu',
-        title: 'Trending Telugu',
-        subtitle: 'Tollywood viral hits & chartbusters',
-        query: 'Telugu Top Hits',
-        gradientColors: [Color(0xFFFF3366), Color(0xFF990033)],
-        icon: Icons.trending_up_rounded,
-        tag: 'REGIONAL HITS',
-      ),
-      const CuratedPlaylist(
-        id: 'bollywood_romance',
-        title: 'Bollywood Romance',
-        subtitle: 'Heartfelt melodies with Arijit & Pritam',
-        query: 'Hindi Romantic Hits',
-        gradientColors: [Color(0xFFFF5E3A), Color(0xFFFF2A68)],
-        icon: Icons.favorite_rounded,
-        tag: 'ROMANCE',
-      ),
-      const CuratedPlaylist(
-        id: '90s_nostalgia',
-        title: '90s Nostalgia Rewind',
-        subtitle: 'Golden evergreen classics & melodies',
-        query: 'Hindi 90s Classics',
-        gradientColors: [Color(0xFF00B4DB), Color(0xFF0083B0)],
-        icon: Icons.history_rounded,
-        tag: 'RETRO CLASSICS',
-      ),
-      const CuratedPlaylist(
-        id: 'telugu_2000s',
-        title: 'Telugu 2000s Golden Era',
-        subtitle: 'DSP, Harris Jayaraj & Mani Sharma hits',
-        query: 'Telugu 2000s Hits',
-        gradientColors: [Color(0xFFF7971E), Color(0xFFFF7000)],
-        icon: Icons.album_rounded,
-        tag: 'GOLDEN ERA',
-      ),
-      const CuratedPlaylist(
-        id: 'acoustic_chill',
-        title: 'Acoustic & Coffee Chill',
-        subtitle: 'Soothing acoustic indie melodies',
-        query: 'Acoustic Pop Melodies',
-        gradientColors: [Color(0xFF11998E), Color(0xFF38EF7D)],
-        icon: Icons.coffee_rounded,
-        tag: 'CHILL MIX',
-      ),
-    ];
-  }
-
-  Widget _buildCuratedPlaylistsSection() {
-    final playlists = _getCuratedPlaylists();
-    return SizedBox(
-      height: 195,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        itemCount: playlists.length,
-        itemBuilder: (context, index) {
-          final p = playlists[index];
-          final isLoading = _loadingPlaylistId == p.id;
-
-          return GestureDetector(
-            onTap: () => _openCuratedPlaylist(p),
-            child: Container(
-              width: 190,
-              margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF161622),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.10),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.35),
-                    blurRadius: 12,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Flexible(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3.5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            p.tag,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.8,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Icon(
-                        p.icon,
-                        color: Colors.white.withValues(alpha: 0.85),
-                        size: 22,
-                      ),
-                    ],
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        p.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        p.subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.8),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          height: 1.25,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Align(
-                    alignment: Alignment.bottomRight,
-                    child: GestureDetector(
-                      onTap: () => _playCuratedPlaylist(p),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black38,
-                              blurRadius: 8,
-                              offset: Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Center(
-                          child: isLoading
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.black,
-                                    ),
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.play_arrow_rounded,
-                                  color: Colors.black,
-                                  size: 24,
-                                ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  void _openCuratedPlaylist(CuratedPlaylist playlist) {
-    HapticFeedback.lightImpact();
-    List<Video>? initialSongs;
-    if (playlist.id == 'daily_mix_1' && _dailyMix1.isNotEmpty) {
-      initialSongs = _dailyMix1;
-    } else if (playlist.id == 'daily_mix_2' && _dailyMix2.isNotEmpty) {
-      initialSongs = _dailyMix2;
-    }
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CuratedPlaylistScreen(
-          title: playlist.title,
-          subtitle: playlist.subtitle,
-          query: playlist.query,
-          initialSongs: initialSongs,
-          gradientColors: playlist.gradientColors,
-          icon: playlist.icon,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _playCuratedPlaylist(CuratedPlaylist playlist) async {
-    if (_loadingPlaylistId != null) return;
-    HapticFeedback.lightImpact();
-    setState(() {
-      _loadingPlaylistId = playlist.id;
-    });
-
-    try {
-      final tracks = await _musicService.searchSongs(playlist.query);
-      if (!mounted) return;
-      if (tracks.isNotEmpty) {
-        await _musicService.playPlaylist(tracks, 0);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Playing ${playlist.title} (${tracks.length} tracks)',
-            ),
-            duration: const Duration(seconds: 2),
-            backgroundColor: const Color(0xFF1E1E28),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error playing curated playlist: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loadingPlaylistId = null;
-        });
-      }
-    }
-  }
-}
-
-class CuratedPlaylist {
-  final String id;
-  final String title;
-  final String subtitle;
-  final String query;
-  final List<Color> gradientColors;
-  final IconData icon;
-  final String tag;
-
-  const CuratedPlaylist({
-    required this.id,
-    required this.title,
-    required this.subtitle,
-    required this.query,
-    required this.gradientColors,
-    required this.icon,
-    required this.tag,
-  });
 }
 
 class _HomeQuickAccessItem {

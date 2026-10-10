@@ -6,6 +6,7 @@ import '../services/music_service.dart';
 import '../services/preferences_service.dart';
 import '../widgets/animated_equalizer.dart';
 import '../widgets/dilse_scrollbar.dart';
+import '../widgets/mini_player.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 
 /// Full-screen Listening History Hub with real-time search, shuffle, and single-track replay.
@@ -48,6 +49,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         return Scaffold(
           backgroundColor: AppThemeTokens.oledBackground,
           body: SafeArea(
+            bottom: false,
             child: Column(
               children: [
                 _buildHeader(context, allHistory.length),
@@ -61,6 +63,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ],
             ),
           ),
+          bottomNavigationBar: const SafeArea(top: false, child: MiniPlayer()),
         );
       },
     );

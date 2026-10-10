@@ -181,15 +181,17 @@ class _StatsScreenState extends State<StatsScreen>
     );
   }
 
+  String _getCategoryTitle(double score) {
+    if (score >= 80) return 'Dilse Maestro';
+    if (score >= 60) return 'Audiophile Explorer';
+    if (score >= 40) return 'Melodic Wanderer';
+    if (score >= 20) return 'Casual Listener';
+    return 'Music Novice';
+  }
+
   Widget _buildSpeedometerCard(double rawScore) {
     final animatedScore = rawScore * _gaugeAnimation.value;
-    final ratingLabel = animatedScore > 75
-        ? 'Sonic Connoisseur'
-        : animatedScore > 45
-        ? 'Eclectic Explorer'
-        : animatedScore > 15
-        ? 'Curious Listener'
-        : 'Emerging Ear';
+    final ratingLabel = _getCategoryTitle(animatedScore);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
@@ -232,17 +234,18 @@ class _StatsScreenState extends State<StatsScreen>
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           SizedBox(
-            height: 120,
+            height: 135,
             width: double.infinity,
             child: CustomPaint(
               painter: _SpeedometerGaugePainter(
                 progress: (animatedScore / 100.0).clamp(0.0, 1.0),
               ),
-              child: Center(
+              child: Align(
+                alignment: Alignment.center,
                 child: Padding(
-                  padding: const EdgeInsets.only(top: 24),
+                  padding: const EdgeInsets.only(top: 14),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -255,13 +258,24 @@ class _StatsScreenState extends State<StatsScreen>
                           letterSpacing: -1,
                         ),
                       ),
+                      const SizedBox(height: 2),
+                      Text(
+                        ratingLabel,
+                        style: const TextStyle(
+                          color: AppThemeTokens.brandRuby,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
                       const Text(
                         'DIVERSITY INDEX',
                         style: TextStyle(
                           color: AppThemeTokens.textSecondary,
-                          fontSize: 10,
+                          fontSize: 9.5,
                           fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
+                          letterSpacing: 1.1,
                         ),
                       ),
                     ],
@@ -579,13 +593,13 @@ class _SpeedometerGaugePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height);
-    final radius = size.height * 0.95;
+    final center = Offset(size.width / 2, size.height - 4);
+    final radius = size.height * 0.78;
 
     final backgroundPaint = Paint()
       ..color = Colors.white.withValues(alpha: 0.1)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 10
+      ..strokeWidth = 9
       ..strokeCap = StrokeCap.round;
 
     // 180-degree semicircle arc (PI to 2*PI)
@@ -603,7 +617,7 @@ class _SpeedometerGaugePainter extends CustomPainter {
           colors: [Color(0xFF00C6FF), Color(0xFF1DB954), Color(0xFFFA2D48)],
         ).createShader(Rect.fromCircle(center: center, radius: radius))
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 10
+        ..strokeWidth = 9
         ..strokeCap = StrokeCap.round;
 
       canvas.drawArc(

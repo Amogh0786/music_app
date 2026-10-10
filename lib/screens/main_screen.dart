@@ -175,8 +175,8 @@ class _MainScreenState extends State<MainScreen> {
                       key: _searchScreenKey,
                       isActive: _selectedIndex == 1,
                     ),
-                    const DownloadsScreen(),
                     const LibraryScreen(),
+                    const DownloadsScreen(),
                   ],
                 ),
                 // Floating Mini Player & Floating Glass Dock stacked at the bottom
@@ -210,9 +210,9 @@ class _MainScreenState extends State<MainScreen> {
                   right: 0,
                   child: OfflineIndicatorBanner(
                     onGoToDownloads: () {
-                      setState(() => _selectedIndex = 2);
+                      setState(() => _selectedIndex = 3);
                       _pageController.animateToPage(
-                        2,
+                        3,
                         duration: const Duration(milliseconds: 320),
                         curve: Curves.easeOutCubic,
                       );

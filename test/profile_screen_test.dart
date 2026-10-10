@@ -92,8 +92,8 @@ void main() {
       expect(find.textContaining('Play All'), findsOneWidget);
       expect(find.text('Shuffle'), findsOneWidget);
 
-      // Settings Tile
-      expect(find.text('Player & Audio Preferences'), findsOneWidget);
+      // Settings Action
+      expect(find.byTooltip('Settings & Preferences'), findsOneWidget);
     });
 
     testWidgets('Renders on mobile size (390x844) without overflow', (
