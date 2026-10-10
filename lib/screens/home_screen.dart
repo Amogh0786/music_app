@@ -13,6 +13,8 @@ import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/animated_equalizer.dart';
 import '../widgets/profile_side_drawer.dart';
 import 'album_screen.dart';
+import 'curated_playlist_screen.dart';
+import 'custom_playlist_screen.dart';
 import '../models/jio_album.dart';
 import '../models/song_item.dart';
 import '../constants/app_theme_tokens.dart';
@@ -625,31 +627,9 @@ class _HomeScreenState extends State<HomeScreen>
                           const SizedBox(height: 24),
                         ],
 
-                        // Multi-Seed Daily Mix 1 (Top Artist & Friends - Multi-Row Sliding List)
-                        if (_dailyMix1.isNotEmpty &&
-                            _dailyMixConfigs.isNotEmpty) ...[
-                          _buildSectionHeader(
-                            _dailyMixConfigs[0].title.toUpperCase(),
-                            _dailyMixConfigs[0].subtitle,
-                          ),
-                          _buildSlidingSongGrid(_dailyMix1),
-                          const SizedBox(height: 24),
-                        ],
-
                         // BLOCKBUSTER SOUNDTRACKS & ALBUMS
                         if (_trendingAlbums.isNotEmpty) ...[
                           _buildAlbumsSection(),
-                          const SizedBox(height: 24),
-                        ],
-
-                        // Multi-Seed Daily Mix 2 (Top Artist Melodies - Multi-Row Sliding List)
-                        if (_dailyMix2.isNotEmpty &&
-                            _dailyMixConfigs.length > 1) ...[
-                          _buildSectionHeader(
-                            _dailyMixConfigs[1].title.toUpperCase(),
-                            _dailyMixConfigs[1].subtitle,
-                          ),
-                          _buildSlidingSongGrid(_dailyMix2),
                           const SizedBox(height: 24),
                         ],
 
@@ -669,13 +649,13 @@ class _HomeScreenState extends State<HomeScreen>
                         _buildHorizontalChartCards(_topChartsIndia),
                         const SizedBox(height: 24),
 
-                        // MADE FOR YOU (Daily Mix Style Multi-Row Sliding Grid)
+                        // MADE FOR YOU
                         if (_personalizedMixes.isNotEmpty) ...[
                           _buildSectionHeader(
                             'MADE FOR YOU',
-                            'Curated Mix for your taste',
+                            'Curated for your taste',
                           ),
-                          _buildSlidingSongGrid(_personalizedMixes),
+                          _buildHorizontalChartCards(_personalizedMixes),
                           const SizedBox(height: 24),
                         ],
 
@@ -718,11 +698,19 @@ class _HomeScreenState extends State<HomeScreen>
             ? _dailyMix1.first.thumbnails.lowResUrl
             : null,
         onTap: () {
-          if (_dailyMix1.isNotEmpty) {
-            _musicService.playPlaylist(_dailyMix1, 0);
-          } else {
-            _loadHomeFeeds();
-          }
+          HapticFeedback.lightImpact();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CuratedPlaylistScreen(
+                title: dailyMix1?.title ?? 'Daily Mix 1',
+                subtitle: dailyMix1?.subtitle ?? 'Curated for you',
+                initialSongs: _dailyMix1,
+                gradientColors: const [Color(0xFFE040FB), Color(0xFF1DB954)],
+                icon: Icons.shuffle_rounded,
+              ),
+            ),
+          );
         },
       ),
       _HomeQuickAccessItem(
@@ -733,9 +721,14 @@ class _HomeScreenState extends State<HomeScreen>
             ? _musicService.likedSongs.first['thumbnail']
             : null,
         onTap: () {
-          if (_musicService.likedSongs.isNotEmpty) {
-            _musicService.playLikedSong(_musicService.likedSongs.first);
-          }
+          HapticFeedback.lightImpact();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  const CustomPlaylistScreen(playlistId: 'liked_songs'),
+            ),
+          );
         },
       ),
       _HomeQuickAccessItem(
@@ -746,11 +739,19 @@ class _HomeScreenState extends State<HomeScreen>
             ? _dailyMix2.first.thumbnails.lowResUrl
             : null,
         onTap: () {
-          if (_dailyMix2.isNotEmpty) {
-            _musicService.playPlaylist(_dailyMix2, 0);
-          } else {
-            _loadHomeFeeds();
-          }
+          HapticFeedback.lightImpact();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CuratedPlaylistScreen(
+                title: dailyMix2?.title ?? 'Daily Mix 2',
+                subtitle: dailyMix2?.subtitle ?? 'Curated for you',
+                initialSongs: _dailyMix2,
+                gradientColors: const [Color(0xFF00C6FF), Color(0xFF0072FF)],
+                icon: Icons.graphic_eq_rounded,
+              ),
+            ),
+          );
         },
       ),
       _HomeQuickAccessItem(
@@ -761,9 +762,19 @@ class _HomeScreenState extends State<HomeScreen>
             ? _topChartsIndia.first.thumbnails.lowResUrl
             : null,
         onTap: () {
-          if (_topChartsIndia.isNotEmpty) {
-            _musicService.playPlaylist(_topChartsIndia, 0);
-          }
+          HapticFeedback.lightImpact();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CuratedPlaylistScreen(
+                title: 'Top Charts India',
+                subtitle: 'Updated Daily',
+                initialSongs: _topChartsIndia,
+                gradientColors: const [Color(0xFFFF512F), Color(0xFFDD2476)],
+                icon: Icons.trending_up_rounded,
+              ),
+            ),
+          );
         },
       ),
       _HomeQuickAccessItem(
@@ -774,9 +785,19 @@ class _HomeScreenState extends State<HomeScreen>
             ? _newReleases.first.thumbnails.lowResUrl
             : null,
         onTap: () {
-          if (_newReleases.isNotEmpty) {
-            _musicService.playPlaylist(_newReleases, 0);
-          }
+          HapticFeedback.lightImpact();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CuratedPlaylistScreen(
+                title: 'New Releases',
+                subtitle: 'Fresh Music',
+                initialSongs: _newReleases,
+                gradientColors: const [Color(0xFF11998E), Color(0xFF38EF7D)],
+                icon: Icons.fiber_new_rounded,
+              ),
+            ),
+          );
         },
       ),
       _HomeQuickAccessItem(
@@ -787,9 +808,19 @@ class _HomeScreenState extends State<HomeScreen>
             ? _trendingNow.first.thumbnails.lowResUrl
             : null,
         onTap: () {
-          if (_trendingNow.isNotEmpty) {
-            _musicService.playPlaylist(_trendingNow, 0);
-          }
+          HapticFeedback.lightImpact();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CuratedPlaylistScreen(
+                title: 'Trending Now',
+                subtitle: 'Global Pick',
+                initialSongs: _trendingNow,
+                gradientColors: const [Color(0xFFF857A6), Color(0xFFFF5858)],
+                icon: Icons.whatshot_rounded,
+              ),
+            ),
+          );
         },
       ),
     ];
@@ -1638,170 +1669,6 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  /// Multi-Row Sliding List for Daily Mixes:
-  /// Arranges songs into horizontal columns where each column has 4 songs (4 rows),
-  /// sliding smoothly horizontally to showcase large collections (40-50+ tracks) neatly.
-  Widget _buildSlidingSongGrid(List<Video> videos) {
-    if (videos.isEmpty) return const SizedBox.shrink();
-
-    const int rowsPerColumn = 4;
-    final int columnCount = (videos.length / rowsPerColumn).ceil();
-    final currentSongId = _musicService.currentSong?.id.value;
-    final isPlaying = _musicService.isPlaying;
-
-    return SizedBox(
-      height: 236,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        itemCount: columnCount,
-        itemBuilder: (context, colIndex) {
-          final startIndex = colIndex * rowsPerColumn;
-          final endIndex = (startIndex + rowsPerColumn).clamp(0, videos.length);
-          final columnVideos = videos.sublist(startIndex, endIndex);
-          final screenWidth = MediaQuery.of(context).size.width;
-          final columnWidth = (screenWidth * 0.84).clamp(300.0, 360.0);
-
-          return Container(
-            width: columnWidth,
-            margin: const EdgeInsets.symmetric(horizontal: 5),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: List.generate(columnVideos.length, (rowIdx) {
-                final globalIndex = startIndex + rowIdx;
-                final song = columnVideos[rowIdx];
-                final isCurrent = currentSongId == song.id.value;
-                final hdThumbnail = MusicService.getHdThumbnail(song.id.value);
-
-                return Material(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      _musicService.playPlaylist(videos, globalIndex);
-                    },
-                    onLongPress: () {
-                      HapticFeedback.mediumImpact();
-                      showSongOptionsBottomSheet(context, song);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 5,
-                      ),
-                      child: Row(
-                        children: [
-                          // 44x44 Album Artwork
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(9),
-                            child: SizedBox(
-                              width: 44,
-                              height: 44,
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  Image.network(
-                                    hdThumbnail,
-                                    fit: BoxFit.cover,
-                                    cacheWidth: 120,
-                                    cacheHeight: 120,
-                                    errorBuilder: (_, _, _) => Image.network(
-                                      song.thumbnails.lowResUrl,
-                                      fit: BoxFit.cover,
-                                      cacheWidth: 120,
-                                      cacheHeight: 120,
-                                    ),
-                                  ),
-                                  if (isCurrent)
-                                    Container(
-                                      color: Colors.black54,
-                                      child: Center(
-                                        child: AnimatedEqualizer(
-                                          isPlaying: isPlaying,
-                                          size: 20,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          // Title & Artist
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  song.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontWeight: isCurrent
-                                        ? FontWeight.w700
-                                        : FontWeight.w600,
-                                    fontSize: 13.5,
-                                    letterSpacing: -0.2,
-                                    color: isCurrent
-                                        ? Colors.white
-                                        : Colors.white.withValues(alpha: 0.92),
-                                  ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  song.author,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.white.withValues(alpha: 0.55),
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Subtle translucent play button
-                          IconButton(
-                            icon: Icon(
-                              isCurrent && isPlaying
-                                  ? Icons.pause_circle_filled_rounded
-                                  : Icons.play_circle_outline_rounded,
-                              color: isCurrent ? Colors.white : Colors.white38,
-                              size: 22,
-                            ),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                              minWidth: 32,
-                              minHeight: 32,
-                            ),
-                            onPressed: () {
-                              HapticFeedback.lightImpact();
-                              if (isCurrent) {
-                                _musicService.togglePlayPause();
-                              } else {
-                                _musicService.playPlaylist(videos, globalIndex);
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   Widget _buildVerticalSongList(List<Video> videos, {bool isVibe = false}) {
     if (videos.isEmpty) return const SizedBox.shrink();
 
@@ -2010,7 +1877,28 @@ class _HomeScreenState extends State<HomeScreen>
     final artist = _prefs.mostPlayedArtist.isNotEmpty
         ? _prefs.mostPlayedArtist
         : 'Top Artists';
+    final dailyMix1 = _dailyMixConfigs.isNotEmpty ? _dailyMixConfigs[0] : null;
+    final dailyMix2 = _dailyMixConfigs.length > 1 ? _dailyMixConfigs[1] : null;
+
     return [
+      CuratedPlaylist(
+        id: 'daily_mix_1',
+        title: dailyMix1?.title ?? 'Daily Mix 1',
+        subtitle: dailyMix1?.subtitle ?? 'Personalized mix featuring $artist',
+        query: artist,
+        gradientColors: const [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+        icon: Icons.auto_awesome_rounded,
+        tag: 'MADE FOR YOU',
+      ),
+      CuratedPlaylist(
+        id: 'daily_mix_2',
+        title: dailyMix2?.title ?? 'Daily Mix 2',
+        subtitle: dailyMix2?.subtitle ?? 'Curated melodies for your vibe',
+        query: '$artist Melodies',
+        gradientColors: const [Color(0xFF00C6FF), Color(0xFF0072FF)],
+        icon: Icons.graphic_eq_rounded,
+        tag: 'DAILY MIX',
+      ),
       const CuratedPlaylist(
         id: 'global_top_50',
         title: 'Top 50 - Global',
@@ -2065,15 +1953,6 @@ class _HomeScreenState extends State<HomeScreen>
         icon: Icons.coffee_rounded,
         tag: 'CHILL MIX',
       ),
-      CuratedPlaylist(
-        id: 'daily_mix_1',
-        title: 'Daily Mix 1',
-        subtitle: 'Personalized mix featuring $artist',
-        query: artist,
-        gradientColors: const [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
-        icon: Icons.auto_awesome_rounded,
-        tag: 'MADE FOR YOU',
-      ),
     ];
   }
 
@@ -2091,7 +1970,7 @@ class _HomeScreenState extends State<HomeScreen>
           final isLoading = _loadingPlaylistId == p.id;
 
           return GestureDetector(
-            onTap: () => _playCuratedPlaylist(p),
+            onTap: () => _openCuratedPlaylist(p),
             child: Container(
               width: 190,
               margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -2179,37 +2058,40 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                   Align(
                     alignment: Alignment.bottomRight,
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black38,
-                            blurRadius: 8,
-                            offset: Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: isLoading
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.black,
+                    child: GestureDetector(
+                      onTap: () => _playCuratedPlaylist(p),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black38,
+                              blurRadius: 8,
+                              offset: Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: isLoading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.black,
+                                    ),
                                   ),
+                                )
+                              : const Icon(
+                                  Icons.play_arrow_rounded,
+                                  color: Colors.black,
+                                  size: 24,
                                 ),
-                              )
-                            : const Icon(
-                                Icons.play_arrow_rounded,
-                                color: Colors.black,
-                                size: 24,
-                              ),
+                        ),
                       ),
                     ),
                   ),
@@ -2218,6 +2100,29 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _openCuratedPlaylist(CuratedPlaylist playlist) {
+    HapticFeedback.lightImpact();
+    List<Video>? initialSongs;
+    if (playlist.id == 'daily_mix_1' && _dailyMix1.isNotEmpty) {
+      initialSongs = _dailyMix1;
+    } else if (playlist.id == 'daily_mix_2' && _dailyMix2.isNotEmpty) {
+      initialSongs = _dailyMix2;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CuratedPlaylistScreen(
+          title: playlist.title,
+          subtitle: playlist.subtitle,
+          query: playlist.query,
+          initialSongs: initialSongs,
+          gradientColors: playlist.gradientColors,
+          icon: playlist.icon,
+        ),
       ),
     );
   }

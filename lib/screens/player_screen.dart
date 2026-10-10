@@ -40,6 +40,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   int _activePageIndex = 0;
   bool _isUserDraggingPage = false;
   bool _showLyrics = false;
+  bool _showRemainingCountdown = true;
   LandscapeActiveTab _landscapeTab = LandscapeActiveTab.none;
 
   @override
@@ -1876,13 +1877,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                         ),
                                         decoration: BoxDecoration(
                                           color: Colors.black.withValues(
-                                            alpha: 0.35,
+                                            alpha: 0.22,
                                           ),
                                           borderRadius: BorderRadius.circular(
                                             24,
-                                          ),
-                                          border: Border.all(
-                                            color: Colors.white10,
                                           ),
                                         ),
                                         child: _musicService.isFetchingLyrics
@@ -2158,250 +2156,137 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                         _musicService.toggleShuffle();
                                       },
                                     ),
-                                    Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(20),
-                                        onTap: () {
-                                          HapticFeedback.lightImpact();
-                                          _musicService.seekRelative(
-                                            const Duration(seconds: -10),
-                                          );
-                                        },
-                                        child: Container(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: skip10PadH,
-                                            vertical: skip10PadV,
+                                    _BorderlessScaleButton(
+                                      scaleDown: 0.90,
+                                      onTap: () {
+                                        HapticFeedback.lightImpact();
+                                        _musicService.seekRelative(
+                                          const Duration(seconds: -10),
+                                        );
+                                      },
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: skip10PadH,
+                                          vertical: skip10PadV,
+                                        ),
+                                        child: Icon(
+                                          Icons.replay_10_rounded,
+                                          color: Colors.white.withValues(
+                                            alpha: 0.85,
                                           ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(
-                                              alpha: 0.08,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              20,
-                                            ),
-                                            border: Border.all(
-                                              color: Colors.white.withValues(
-                                                alpha: 0.12,
-                                              ),
-                                            ),
-                                          ),
+                                          size: skip10IconSize,
+                                        ),
+                                      ),
+                                    ),
+                                    _BorderlessScaleButton(
+                                      scaleDown: 0.90,
+                                      onTap: () {
+                                        HapticFeedback.mediumImpact();
+                                        _musicService.previousSong();
+                                      },
+                                      child: SizedBox(
+                                        width: skipBtnSize,
+                                        height: skipBtnSize,
+                                        child: Center(
                                           child: Icon(
-                                            Icons.replay_10_rounded,
+                                            Icons.skip_previous_rounded,
                                             color: Colors.white,
-                                            size: skip10IconSize,
+                                            size: skipIconSize,
                                           ),
                                         ),
                                       ),
                                     ),
-                                    // Modern Frosted Capsule Action Button - Previous
-                                    Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        customBorder: const CircleBorder(),
-                                        onTap: () {
-                                          HapticFeedback.mediumImpact();
-                                          _musicService.previousSong();
-                                        },
-                                        child: Container(
-                                          width: skipBtnSize,
-                                          height: skipBtnSize,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: Colors.white.withValues(
-                                              alpha: 0.10,
-                                            ),
-                                            border: Border.all(
-                                              color: Colors.white.withValues(
-                                                alpha: 0.16,
-                                              ),
-                                              width: 1.2,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withValues(
-                                                  alpha: 0.2,
-                                                ),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: Center(
-                                            child: Icon(
-                                              Icons.skip_previous_rounded,
-                                              color: Colors.white,
-                                              size: skipIconSize * 0.76,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    // Modern Elevated Play/Pause Button with Multi-layered Glow & Smooth Morph
-                                    Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        customBorder: const CircleBorder(),
-                                        onTap: () {
-                                          HapticFeedback.mediumImpact();
-                                          _musicService.togglePlayPause();
-                                        },
-                                        child: Container(
-                                          width: playSize,
-                                          height: playSize,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            gradient: const LinearGradient(
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                              colors: [
-                                                Color(0xFFFFFFFF),
-                                                Color(0xFFEFF2F6),
-                                              ],
-                                            ),
-                                            border: Border.all(
-                                              color: Colors.white.withValues(
-                                                alpha: 0.90,
-                                              ),
-                                              width: 1.5,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withValues(
-                                                  alpha: 0.40,
-                                                ),
-                                                blurRadius: isUltraCompact
-                                                    ? 16
-                                                    : 22,
-                                                spreadRadius: 1,
-                                                offset: const Offset(0, 6),
-                                              ),
-                                            ],
-                                          ),
-                                          child: isLoading
-                                              ? Center(
-                                                  child: SizedBox(
-                                                    width: playSize * 0.42,
-                                                    height: playSize * 0.42,
-                                                    child: const CircularProgressIndicator(
-                                                      valueColor:
-                                                          AlwaysStoppedAnimation<
-                                                            Color
-                                                          >(Color(0xFF0F141C)),
-                                                      strokeWidth: 3,
-                                                    ),
+                                    _BorderlessScaleButton(
+                                      scaleDown: 0.92,
+                                      onTap: () {
+                                        HapticFeedback.mediumImpact();
+                                        _musicService.togglePlayPause();
+                                      },
+                                      child: SizedBox(
+                                        width: playSize,
+                                        height: playSize,
+                                        child: isLoading
+                                            ? Center(
+                                                child: SizedBox(
+                                                  width: playSize * 0.42,
+                                                  height: playSize * 0.42,
+                                                  child: const CircularProgressIndicator(
+                                                    valueColor:
+                                                        AlwaysStoppedAnimation<
+                                                          Color
+                                                        >(Colors.white),
+                                                    strokeWidth: 3,
                                                   ),
-                                                )
-                                              : Center(
-                                                  child: AnimatedSwitcher(
-                                                    duration: const Duration(
-                                                      milliseconds: 220,
-                                                    ),
-                                                    transitionBuilder:
-                                                        (
-                                                          child,
-                                                          animation,
-                                                        ) => ScaleTransition(
-                                                          scale: animation,
-                                                          child: FadeTransition(
-                                                            opacity: animation,
-                                                            child: child,
-                                                          ),
+                                                ),
+                                              )
+                                            : Center(
+                                                child: AnimatedSwitcher(
+                                                  duration: const Duration(
+                                                    milliseconds: 220,
+                                                  ),
+                                                  transitionBuilder:
+                                                      (
+                                                        child,
+                                                        animation,
+                                                      ) => ScaleTransition(
+                                                        scale: animation,
+                                                        child: FadeTransition(
+                                                          opacity: animation,
+                                                          child: child,
                                                         ),
-                                                    child: Icon(
-                                                      isPlaying
-                                                          ? Icons.pause_rounded
-                                                          : Icons
-                                                                .play_arrow_rounded,
-                                                      key: ValueKey<bool>(
-                                                        isPlaying,
                                                       ),
-                                                      color: const Color(
-                                                        0xFF0F141C,
-                                                      ),
-                                                      size: playIconSize,
+                                                  child: Icon(
+                                                    isPlaying
+                                                        ? Icons.pause_rounded
+                                                        : Icons
+                                                              .play_arrow_rounded,
+                                                    key: ValueKey<bool>(
+                                                      isPlaying,
                                                     ),
+                                                    color: Colors.white,
+                                                    size: playIconSize * 1.25,
                                                   ),
                                                 ),
-                                        ),
+                                              ),
                                       ),
                                     ),
-                                    // Modern Frosted Capsule Action Button - Next
-                                    Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        customBorder: const CircleBorder(),
-                                        onTap: () {
-                                          HapticFeedback.mediumImpact();
-                                          _musicService.nextSong();
-                                        },
-                                        child: Container(
-                                          width: skipBtnSize,
-                                          height: skipBtnSize,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: Colors.white.withValues(
-                                              alpha: 0.10,
-                                            ),
-                                            border: Border.all(
-                                              color: Colors.white.withValues(
-                                                alpha: 0.16,
-                                              ),
-                                              width: 1.2,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withValues(
-                                                  alpha: 0.2,
-                                                ),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: Center(
-                                            child: Icon(
-                                              Icons.skip_next_rounded,
-                                              color: Colors.white,
-                                              size: skipIconSize * 0.76,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(20),
-                                        onTap: () {
-                                          HapticFeedback.lightImpact();
-                                          _musicService.seekRelative(
-                                            const Duration(seconds: 10),
-                                          );
-                                        },
-                                        child: Container(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: skip10PadH,
-                                            vertical: skip10PadV,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(
-                                              alpha: 0.08,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              20,
-                                            ),
-                                            border: Border.all(
-                                              color: Colors.white.withValues(
-                                                alpha: 0.12,
-                                              ),
-                                            ),
-                                          ),
+                                    _BorderlessScaleButton(
+                                      scaleDown: 0.90,
+                                      onTap: () {
+                                        HapticFeedback.mediumImpact();
+                                        _musicService.nextSong();
+                                      },
+                                      child: SizedBox(
+                                        width: skipBtnSize,
+                                        height: skipBtnSize,
+                                        child: Center(
                                           child: Icon(
-                                            Icons.forward_10_rounded,
+                                            Icons.skip_next_rounded,
                                             color: Colors.white,
-                                            size: skip10IconSize,
+                                            size: skipIconSize,
                                           ),
+                                        ),
+                                      ),
+                                    ),
+                                    _BorderlessScaleButton(
+                                      scaleDown: 0.90,
+                                      onTap: () {
+                                        HapticFeedback.lightImpact();
+                                        _musicService.seekRelative(
+                                          const Duration(seconds: 10),
+                                        );
+                                      },
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: skip10PadH,
+                                          vertical: skip10PadV,
+                                        ),
+                                        child: Icon(
+                                          Icons.forward_10_rounded,
+                                          color: Colors.white.withValues(
+                                            alpha: 0.85,
+                                          ),
+                                          size: skip10IconSize,
                                         ),
                                       ),
                                     ),
@@ -2575,12 +2460,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                Text(
-                  hasValidDuration ? '-${_formatDuration(remaining)}' : '--:--',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _showRemainingCountdown = !_showRemainingCountdown;
+                    });
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: 2,
+                    ),
+                    child: Text(
+                      hasValidDuration
+                          ? (_showRemainingCountdown
+                                ? '-${_formatDuration(remaining)}'
+                                : _formatDuration(duration))
+                          : '--:--',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -4023,6 +3927,43 @@ class _PlayerScreenState extends State<PlayerScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Borderless action button with subtle spring scale feedback for modern playback controls
+class _BorderlessScaleButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  final double scaleDown;
+
+  const _BorderlessScaleButton({
+    required this.child,
+    required this.onTap,
+    this.scaleDown = 0.88,
+  });
+
+  @override
+  State<_BorderlessScaleButton> createState() => _BorderlessScaleButtonState();
+}
+
+class _BorderlessScaleButtonState extends State<_BorderlessScaleButton> {
+  bool _isDown = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _isDown = true),
+      onTapUp: (_) => setState(() => _isDown = false),
+      onTapCancel: () => setState(() => _isDown = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _isDown ? widget.scaleDown : 1.0,
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOutCubic,
+        child: widget.child,
       ),
     );
   }

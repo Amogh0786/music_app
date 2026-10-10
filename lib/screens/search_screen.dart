@@ -16,6 +16,7 @@ import '../widgets/artist_card.dart';
 import '../widgets/animated_equalizer.dart';
 import 'artist_profile_screen.dart';
 import 'album_screen.dart';
+import 'curated_playlist_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key, this.isActive = true});
@@ -1020,7 +1021,7 @@ class SearchScreenState extends State<SearchScreen>
     );
   }
 
-  /// Three Boxes Switcher: 'Categories', 'Albums', 'Artists' with Apple-style smooth sliding indicator
+  /// Three Boxes Switcher: 'Categories', 'Albums', 'Artists' with smooth sliding indicator
   Widget _buildBrowseTabsHeader(BuildContext context) {
     final primaryColor = Theme.of(context).primaryColor;
 
@@ -1245,8 +1246,18 @@ class SearchScreenState extends State<SearchScreen>
                   badgeText: cat['badge'] as String?,
                   onTap: () {
                     HapticFeedback.lightImpact();
-                    _searchController.text = cat['title'] as String;
-                    _performSearch(cat['query'] as String);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CuratedPlaylistScreen(
+                          title: cat['title'] as String,
+                          subtitle: cat['subtitle'] as String,
+                          query: cat['query'] as String,
+                          gradientColors: cat['colors'] as List<Color>,
+                          icon: cat['icon'] as IconData,
+                        ),
+                      ),
+                    );
                   },
                 );
               },

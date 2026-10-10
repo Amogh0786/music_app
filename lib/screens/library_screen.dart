@@ -1138,10 +1138,134 @@ class _LibraryScreenState extends State<LibraryScreen>
     );
   }
 
+  Widget _buildPinnedLikedSongsHero() {
+    final count = _musicService.likedSongs.length;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    const CustomPlaylistScreen(playlistId: 'liked_songs'),
+              ),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF161622),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.08),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF7C3AED), Color(0xFF4F46E5)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF7C3AED).withValues(alpha: 0.35),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.favorite_rounded,
+                    color: Colors.white,
+                    size: 26,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Liked Songs',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Pinned • $count tracks',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.6),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.push_pin_rounded,
+                  size: 18,
+                  color: Colors.white.withValues(alpha: 0.35),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPlaylistsSection({required bool isWide}) {
     final allPlaylists = _musicService.customPlaylists;
 
     if (allPlaylists.isEmpty) {
+      if (!isWide) {
+        return Column(
+          children: [
+            _buildPinnedLikedSongsHero(),
+            Expanded(
+              child: _buildEmptyState(
+                icon: Icons.featured_play_list_outlined,
+                title: 'No playlists yet',
+                subtitle:
+                    'Create your own playlists or import playlists from Spotify to build your collection.',
+                action: ElevatedButton.icon(
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('New Playlist'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    _showSophisticatedCreatePlaylistSheet();
+                  },
+                ),
+              ),
+            ),
+          ],
+        );
+      }
       return _buildEmptyState(
         icon: Icons.featured_play_list_outlined,
         title: 'No playlists yet',
@@ -1159,7 +1283,7 @@ class _LibraryScreenState extends State<LibraryScreen>
           ),
           onPressed: () {
             HapticFeedback.lightImpact();
-            _showCreatePlaylistDialog();
+            _showSophisticatedCreatePlaylistSheet();
           },
         ),
       );
@@ -1245,12 +1369,20 @@ class _LibraryScreenState extends State<LibraryScreen>
             }
 
             if (index == 1) {
-              return _buildPlaylistFilterPills(
-                allCount: allPlaylists.length + _prefs.savedAlbums.length,
-                personalCount: personalPlaylists.length,
-                spotifyCount: spotifyPlaylists.length,
-                albumsCount: _prefs.savedAlbums.length,
-              );
+              if (isWide) {
+                return _buildPlaylistFilterPills(
+                  allCount: allPlaylists.length + _prefs.savedAlbums.length,
+                  personalCount: personalPlaylists.length,
+                  spotifyCount: spotifyPlaylists.length,
+                  albumsCount: _prefs.savedAlbums.length,
+                );
+              } else {
+                if (activeFilter == PlaylistFilter.all ||
+                    activeFilter == PlaylistFilter.personal) {
+                  return _buildPinnedLikedSongsHero();
+                }
+                return const SizedBox.shrink();
+              }
             }
 
             if (displayedPlaylists.isEmpty) {
