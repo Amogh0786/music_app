@@ -12,6 +12,7 @@ import '../widgets/shimmer_loading.dart';
 import '../widgets/mini_player.dart';
 import '../widgets/dilse_scrollbar.dart';
 import '../layouts/desktop_layout_state.dart';
+import '../constants/app_theme_tokens.dart';
 
 /// Dedicated Artist Profile & Discography Screen with deep multi-language,
 /// movie range, and filmography filters.
@@ -272,7 +273,7 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
     final filtered = _filteredSongs;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0B0F),
+      backgroundColor: AppThemeTokens.oledBackground,
       body: Stack(
         children: [
           ResponsiveWrapper(
@@ -285,7 +286,7 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
                 slivers: [
                   // 1. Hero AppBar with Artist Avatar & Back Action
                   SliverAppBar(
-                    backgroundColor: const Color(0xFF0B0B0F),
+                    backgroundColor: AppThemeTokens.oledBackground,
                     expandedHeight: 310.0,
                     pinned: true,
                     elevation: 0,

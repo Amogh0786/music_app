@@ -1,10 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/recent_search_item.dart';
 import 'canonical_song_dedup.dart';
 import 'playlist_artist_filter.dart';
 import 'spotify_import_service.dart';
 import 'web_player_bridge.dart';
+
+export '../models/recent_search_item.dart';
 
 enum ArtworkStyle { card, vinyl }
 
@@ -223,6 +226,7 @@ class PreferencesService extends ChangeNotifier {
 
   // Search History
   List<String> _searchHistory = [];
+  List<RecentSearchItem> _structuredSearchHistory = [];
 
   // Followed Artists (Independent of Daily Mix & Listening History)
   static const String _followedArtistsKey = 'followed_artists_v1';
@@ -248,6 +252,8 @@ class PreferencesService extends ChangeNotifier {
   ];
   String _mostPlayedArtist = '';
   UserAudioProfile _audioProfile = const UserAudioProfile();
+  List<Map<String, dynamic>> _savedAlbums = [];
+  List<Map<String, dynamic>> get savedAlbums => List.unmodifiable(_savedAlbums);
 
   bool get isInitialized => _isInitialized;
   bool get crossfadeEnabled => _crossfadeEnabled;
@@ -294,6 +300,8 @@ class PreferencesService extends ChangeNotifier {
   bool get hasPromptedName => _hasPromptedName;
   String? get profileImagePath => _profileImagePath;
   List<String> get searchHistory => _searchHistory;
+  List<RecentSearchItem> get structuredSearchHistory =>
+      _structuredSearchHistory;
   List<Map<String, String>> get listeningHistory => _listeningHistory;
   List<String> get followedArtists => _followedArtists.toList(growable: false);
   List<String> get preferredLanguages => _preferredLanguages;
@@ -366,6 +374,31 @@ class PreferencesService extends ChangeNotifier {
     _customServerUrl = _prefs.getString('customServerUrl') ?? '';
     _cloudflareWorkerUrl = _prefs.getString('cloudflareWorkerUrl') ?? '';
     _searchHistory = _prefs.getStringList('searchHistory') ?? [];
+    final structuredJson = _prefs.getString('structuredSearchHistoryJson');
+    if (structuredJson != null && structuredJson.isNotEmpty) {
+      try {
+        final decoded = json.decode(structuredJson) as List<dynamic>;
+        _structuredSearchHistory = decoded
+            .map(
+              (item) => RecentSearchItem.fromJson(item as Map<String, dynamic>),
+            )
+            .where((item) => item.query.trim().isNotEmpty)
+            .toList();
+      } catch (_) {
+        _structuredSearchHistory = [];
+      }
+    }
+    if (_structuredSearchHistory.isEmpty && _searchHistory.isNotEmpty) {
+      _structuredSearchHistory = _searchHistory
+          .map(
+            (q) => RecentSearchItem(
+              query: q,
+              timestamp: DateTime.now().millisecondsSinceEpoch,
+              type: 'query',
+            ),
+          )
+          .toList();
+    }
     _mostPlayedArtist = _prefs.getString('mostPlayedArtist') ?? '';
     _userName = _prefs.getString('userName') ?? '';
     _hasPromptedName = _prefs.getBool('hasPromptedName') ?? false;
@@ -500,6 +533,17 @@ class PreferencesService extends ChangeNotifier {
     final savedManualIds = _prefs.getStringList('manual_created_playlist_ids');
     if (savedManualIds != null) {
       _manualCreatedPlaylistIds = savedManualIds.toSet();
+    }
+
+    final savedAlbumsStr = _prefs.getString('saved_albums_json');
+    if (savedAlbumsStr != null && savedAlbumsStr.isNotEmpty) {
+      try {
+        final decoded = json.decode(savedAlbumsStr) as List<dynamic>;
+        _savedAlbums = decoded
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      } catch (_) {}
     }
 
     _isInitialized = true;
@@ -1253,29 +1297,61 @@ class PreferencesService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addToSearchHistory(String query) async {
+  Future<void> addToSearchHistory(String query, {String type = 'query'}) async {
     if (!_isInitialized) return;
-    if (query.trim().isEmpty) return;
-    _searchHistory.remove(query);
-    _searchHistory.insert(0, query);
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+
+    _searchHistory.remove(trimmed);
+    _searchHistory.insert(0, trimmed);
     if (_searchHistory.length > 10) {
       _searchHistory = _searchHistory.sublist(0, 10);
     }
     await _prefs.setStringList('searchHistory', _searchHistory);
+
+    _structuredSearchHistory.removeWhere(
+      (item) => item.query.toLowerCase() == trimmed.toLowerCase(),
+    );
+    _structuredSearchHistory.insert(
+      0,
+      RecentSearchItem(
+        query: trimmed,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        type: type,
+      ),
+    );
+    if (_structuredSearchHistory.length > 10) {
+      _structuredSearchHistory = _structuredSearchHistory.sublist(0, 10);
+    }
+    await _prefs.setString(
+      'structuredSearchHistoryJson',
+      json.encode(_structuredSearchHistory.map((e) => e.toJson()).toList()),
+    );
     notifyListeners();
   }
 
   Future<void> removeFromSearchHistory(String query) async {
     if (!_isInitialized) return;
+    final trimmed = query.trim();
     _searchHistory.remove(query);
+    _searchHistory.remove(trimmed);
+    _structuredSearchHistory.removeWhere(
+      (item) => item.query.toLowerCase() == trimmed.toLowerCase(),
+    );
     await _prefs.setStringList('searchHistory', _searchHistory);
+    await _prefs.setString(
+      'structuredSearchHistoryJson',
+      json.encode(_structuredSearchHistory.map((e) => e.toJson()).toList()),
+    );
     notifyListeners();
   }
 
   Future<void> clearSearchHistory() async {
     if (!_isInitialized) return;
     _searchHistory.clear();
+    _structuredSearchHistory.clear();
     await _prefs.setStringList('searchHistory', _searchHistory);
+    await _prefs.remove('structuredSearchHistoryJson');
     notifyListeners();
   }
 
@@ -1644,6 +1720,52 @@ class PreferencesService extends ChangeNotifier {
     }
   }
 
+  bool isAlbumSaved(String albumIdOrTitle) {
+    final lower = albumIdOrTitle.toLowerCase().trim();
+    return _savedAlbums.any((a) {
+      final id = (a['id']?.toString() ?? '').toLowerCase().trim();
+      final title = (a['title']?.toString() ?? '').toLowerCase().trim();
+      return id == lower || title == lower;
+    });
+  }
+
+  Future<void> saveAlbum(Map<String, dynamic> album) async {
+    final id = album['id']?.toString() ?? '';
+    final title = album['title']?.toString() ?? '';
+    if (id.isEmpty && title.isEmpty) return;
+    if (!isAlbumSaved(id.isNotEmpty ? id : title)) {
+      _savedAlbums.insert(0, Map<String, dynamic>.from(album));
+      if (_isInitialized) {
+        await _prefs.setString('saved_albums_json', json.encode(_savedAlbums));
+      }
+      notifyListeners();
+    }
+  }
+
+  Future<void> unsaveAlbum(String albumIdOrTitle) async {
+    final lower = albumIdOrTitle.toLowerCase().trim();
+    _savedAlbums.removeWhere((a) {
+      final id = (a['id']?.toString() ?? '').toLowerCase().trim();
+      final title = (a['title']?.toString() ?? '').toLowerCase().trim();
+      return id == lower || title == lower;
+    });
+    if (_isInitialized) {
+      await _prefs.setString('saved_albums_json', json.encode(_savedAlbums));
+    }
+    notifyListeners();
+  }
+
+  Future<void> toggleSaveAlbum(Map<String, dynamic> album) async {
+    final id = album['id']?.toString() ?? '';
+    final title = album['title']?.toString() ?? '';
+    final key = id.isNotEmpty ? id : title;
+    if (isAlbumSaved(key)) {
+      await unsaveAlbum(key);
+    } else {
+      await saveAlbum(album);
+    }
+  }
+
   @visibleForTesting
   void resetForTesting() {
     _isInitialized = false;
@@ -1654,11 +1776,13 @@ class PreferencesService extends ChangeNotifier {
     _artistSkipCounts.clear();
     _listeningHistory.clear();
     _searchHistory.clear();
+    _structuredSearchHistory.clear();
     _mostPlayedSongs.clear();
     _mostPlayedArtist = '';
     _topArtistPlayCount = 0;
     _profileImagePath = null;
     _spotifyImportedPlaylistIds.clear();
     _manualCreatedPlaylistIds.clear();
+    _savedAlbums.clear();
   }
 }

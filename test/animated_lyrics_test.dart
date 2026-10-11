@@ -167,4 +167,125 @@ void main() {
       await positionController.close();
     },
   );
+
+  testWidgets(
+    'AnimatedLyrics preserves English lyrics without Telugu conversion or mode toggle',
+    (WidgetTester tester) async {
+      const englishLrc = '''
+[00:02.00]I am in love with the shape of you
+[00:05.00]We push and pull like a magnet do
+''';
+
+      final positionController = StreamController<Duration>.broadcast();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(primaryColor: const Color(0xFFFA2D48)),
+          home: Scaffold(
+            body: AnimatedLyrics(
+              rawLyrics: englishLrc,
+              songLanguage: 'english',
+              songTitle: 'Shape of You',
+              songArtist: 'Ed Sheeran',
+              positionStream: positionController.stream,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // English song should NOT show mode toggle buttons
+      expect(find.text('Original'), findsNothing);
+      expect(find.text('English'), findsNothing);
+      expect(find.text('Dual'), findsNothing);
+
+      // Lyrics should be rendered exactly as English text
+      expect(find.text('I am in love with the shape of you'), findsOneWidget);
+      expect(find.text('We push and pull like a magnet do'), findsOneWidget);
+
+      await positionController.close();
+    },
+  );
+
+  testWidgets(
+    'AnimatedLyrics does NOT transliterate Romanized Hindi lyrics into Telugu script',
+    (WidgetTester tester) async {
+      const hindiRomanizedLrc = '''
+[00:02.00]Hum tere bin ab reh nahi sakte
+[00:05.00]Tere bina kya wajood mera
+''';
+
+      final positionController = StreamController<Duration>.broadcast();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(primaryColor: const Color(0xFFFA2D48)),
+          home: Scaffold(
+            body: AnimatedLyrics(
+              rawLyrics: hindiRomanizedLrc,
+              songLanguage: 'hindi',
+              songTitle: 'Tum Hi Ho',
+              songArtist: 'Arijit Singh',
+              positionStream: positionController.stream,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Lyrics must stay in Romanized text and NOT be converted to Telugu script
+      expect(find.text('Hum tere bin ab reh nahi sakte'), findsOneWidget);
+      expect(find.text('Tere bina kya wajood mera'), findsOneWidget);
+
+      await positionController.close();
+    },
+  );
+
+  testWidgets(
+    'AnimatedLyrics correctly handles Devanagari Hindi lyrics with transliteration',
+    (WidgetTester tester) async {
+      const hindiDevanagariLrc = '''
+[00:02.00]हम तेरे बिन अब रह नहीं सकते
+[00:05.00]तेरे बिना क्या वजूद मेरा
+''';
+
+      final positionController = StreamController<Duration>.broadcast();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(primaryColor: const Color(0xFFFA2D48)),
+          home: Scaffold(
+            body: AnimatedLyrics(
+              rawLyrics: hindiDevanagariLrc,
+              songLanguage: 'hindi',
+              songTitle: 'Tum Hi Ho',
+              songArtist: 'Arijit Singh',
+              positionStream: positionController.stream,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Native Indic toggle buttons must appear
+      expect(find.text('Original'), findsOneWidget);
+      expect(find.text('English'), findsOneWidget);
+      expect(find.text('Dual'), findsOneWidget);
+
+      // Original mode shows Devanagari
+      expect(find.text('हम तेरे बिन अब रह नहीं सकते'), findsOneWidget);
+
+      // Switch to English mode
+      await tester.tap(find.text('English'));
+      await tester.pumpAndSettle();
+
+      // Transliterated Latin text should appear
+      expect(find.textContaining('Ham Tere'), findsOneWidget);
+
+      await positionController.close();
+    },
+  );
 }

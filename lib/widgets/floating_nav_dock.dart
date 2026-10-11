@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../constants/app_theme_tokens.dart';
 
 /// Apple-Style Glassmorphic Floating Bottom Navigation Dock with Sliding Indicator
 class FloatingNavDock extends StatelessWidget {
@@ -16,9 +17,9 @@ class FloatingNavDock extends StatelessWidget {
   Widget build(BuildContext context) {
     final tabs = [
       _NavTabItem(
-        icon: Icons.play_circle_outline_rounded,
-        activeIcon: Icons.play_circle_fill_rounded,
-        label: 'Listen Now',
+        icon: Icons.home_outlined,
+        activeIcon: Icons.home_rounded,
+        label: 'Home',
       ),
       _NavTabItem(
         icon: Icons.search_rounded,
@@ -30,122 +31,129 @@ class FloatingNavDock extends StatelessWidget {
         activeIcon: Icons.library_music_rounded,
         label: 'Library',
       ),
+      _NavTabItem(
+        icon: Icons.download_outlined,
+        activeIcon: Icons.download_rounded,
+        label: 'Downloads',
+      ),
     ];
 
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.only(left: 16, right: 16, top: 0, bottom: 8),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(32),
-          child: Container(
-            height: 64,
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xF2141420),
-              borderRadius: BorderRadius.circular(34),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.10),
-                width: 0.75,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.55),
-                  blurRadius: 28,
-                  offset: const Offset(0, 10),
+    return RepaintBoundary(
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 0,
+            bottom: 8,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(32),
+            child: Container(
+              height: 64,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppThemeTokens.floatingDockSurface,
+                borderRadius: BorderRadius.circular(34),
+                border: Border.all(
+                  color: AppThemeTokens.floatingDockBorder,
+                  width: 0.75,
                 ),
-              ],
-            ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final tabWidth = constraints.maxWidth / tabs.length;
-                return Stack(
-                  children: [
-                    // Smooth sliding translucent indicator pill
-                    AnimatedPositioned(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOutCubic,
-                      left: selectedIndex * tabWidth,
-                      top: 0,
-                      bottom: 0,
-                      width: tabWidth,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.18),
-                            width: 1,
+                boxShadow: AppThemeTokens.dockShadow,
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final tabWidth = constraints.maxWidth / tabs.length;
+                  return Stack(
+                    children: [
+                      // Smooth sliding translucent indicator pill
+                      AnimatedPositioned(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOutCubic,
+                        left: selectedIndex * tabWidth,
+                        top: 0,
+                        bottom: 0,
+                        width: tabWidth,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.18),
+                              width: 1,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    // Interactive tabs
-                    Row(
-                      children: List.generate(tabs.length, (index) {
-                        final tab = tabs[index];
-                        final isSelected = selectedIndex == index;
+                      // Interactive tabs
+                      Row(
+                        children: List.generate(tabs.length, (index) {
+                          final tab = tabs[index];
+                          final isSelected = selectedIndex == index;
 
-                        return Expanded(
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () {
-                              if (!isSelected) {
-                                HapticFeedback.lightImpact();
-                                onTabSelected(index);
-                              }
-                            },
-                            child: Container(
-                              alignment: Alignment.center,
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  AnimatedScale(
-                                    scale: isSelected ? 1.08 : 1.0,
-                                    duration: const Duration(milliseconds: 200),
-                                    child: Icon(
-                                      isSelected ? tab.activeIcon : tab.icon,
-                                      color: isSelected
-                                          ? Colors.white
-                                          : Colors.white60,
-                                      size: 22,
-                                    ),
-                                  ),
-                                  AnimatedCrossFade(
-                                    duration: const Duration(milliseconds: 220),
-                                    crossFadeState: isSelected
-                                        ? CrossFadeState.showFirst
-                                        : CrossFadeState.showSecond,
-                                    firstChild: Padding(
-                                      padding: const EdgeInsets.only(left: 8),
-                                      child: Text(
-                                        tab.label,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: -0.2,
-                                        ),
+                          return Expanded(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {
+                                if (!isSelected) {
+                                  HapticFeedback.lightImpact();
+                                  onTabSelected(index);
+                                }
+                              },
+                              child: Container(
+                                alignment: Alignment.center,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 2,
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    AnimatedScale(
+                                      scale: isSelected ? 1.08 : 1.0,
+                                      duration: const Duration(
+                                        milliseconds: 200,
+                                      ),
+                                      child: Icon(
+                                        isSelected ? tab.activeIcon : tab.icon,
+                                        color: isSelected
+                                            ? Colors.white
+                                            : Colors.white60,
+                                        size: 21,
                                       ),
                                     ),
-                                    secondChild: const SizedBox.shrink(),
-                                  ),
-                                ],
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      tab.label,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: isSelected
+                                            ? Colors.white
+                                            : Colors.white60,
+                                        fontSize: 10.5,
+                                        fontWeight: isSelected
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                        letterSpacing: -0.2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      }),
-                    ),
-                  ],
-                );
-              },
+                          );
+                        }),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),

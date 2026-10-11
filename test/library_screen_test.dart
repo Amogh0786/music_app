@@ -41,17 +41,11 @@ void main() {
       // Verify Add/Create playlist control is available
       expect(find.byTooltip('Create New Playlist'), findsOneWidget);
 
-      // Verify mobile horizontal pill tabs
-      expect(find.text('Playlists'), findsWidgets);
-      expect(find.text('Liked'), findsOneWidget);
-      expect(find.text('Downloaded'), findsOneWidget);
-      expect(find.text('Albums'), findsOneWidget);
-
-      await tester.scrollUntilVisible(find.text('Spotify'), 100);
-      expect(find.text('Spotify'), findsOneWidget);
-
-      await tester.scrollUntilVisible(find.text('History'), 100);
-      expect(find.text('History'), findsOneWidget);
+      // Verify mobile filter chips
+      expect(find.text('All'), findsOneWidget);
+      expect(find.text('My Playlists'), findsOneWidget);
+      expect(find.text('Imported'), findsOneWidget);
+      expect(find.text('Saved Albums'), findsOneWidget);
     },
   );
 
@@ -65,27 +59,19 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: LibraryScreen()));
     await tester.pumpAndSettle();
 
-    // Tap on Albums tab
-    await tester.tap(find.text('Albums'));
+    // Tap on Saved Albums filter chip
+    await tester.scrollUntilVisible(find.text('Saved Albums'), 100);
+    await tester.tap(find.text('Saved Albums'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
-    // Tap on Liked tab
-    await tester.scrollUntilVisible(find.text('Liked'), -100);
-    await tester.tap(find.text('Liked'));
+    // Tap on Imported filter chip
+    await tester.tap(find.text('Imported'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
-    // Tap on Spotify tab
-    await tester.scrollUntilVisible(find.text('Spotify'), 100);
-    await tester.tap(find.text('Spotify'));
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
-    expect(find.text('Import from Spotify / CSV'), findsOneWidget);
-
-    // Tap on History tab
-    await tester.scrollUntilVisible(find.text('History'), 100);
-    await tester.tap(find.text('History'));
+    // Tap on My Playlists filter chip
+    await tester.tap(find.text('My Playlists'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
@@ -319,22 +305,22 @@ void main() {
 
       // Verify filter pills exist
       expect(find.text('All'), findsOneWidget);
-      expect(find.text('Created by You'), findsOneWidget);
-      expect(find.text('Spotify Imports'), findsWidgets);
+      expect(find.text('My Playlists'), findsOneWidget);
+      expect(find.text('Imported'), findsWidgets);
 
       // In "All" tab: both playlists are visible
       expect(find.text('My Indie Faves'), findsOneWidget);
       expect(find.text('Spotify Top Hits'), findsOneWidget);
       expect(find.text('Spotify'), findsWidgets); // badge
 
-      // Tap "Created by You" filter pill
+      // Tap "My Playlists" filter pill
       await tester.tap(find.byKey(const ValueKey('filter_pill_personal')));
       await tester.pumpAndSettle();
 
       expect(find.text('My Indie Faves'), findsOneWidget);
       expect(find.text('Spotify Top Hits'), findsNothing);
 
-      // Tap "Spotify Imports" filter pill
+      // Tap "Imported" filter pill
       await tester.tap(find.byKey(const ValueKey('filter_pill_spotify')));
       await tester.pumpAndSettle();
 

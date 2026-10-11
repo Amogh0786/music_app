@@ -38,23 +38,33 @@ class DilSeImage extends StatelessWidget {
       content = errorWidget ?? _buildErrorWidget();
     } else if (cleanUrl.startsWith('http://') ||
         cleanUrl.startsWith('https://')) {
-      final memWidth = (enableMemoryCap && width != null && width! > 0)
-          ? (width! * 2).round()
-          : null;
-      final memHeight = (enableMemoryCap && height != null && height! > 0)
-          ? (height! * 2).round()
-          : null;
+      if (kIsWeb) {
+        content = Image.network(
+          cleanUrl,
+          width: width,
+          height: height,
+          fit: fit,
+          errorBuilder: (_, _, _) => errorWidget ?? _buildErrorWidget(),
+        );
+      } else {
+        final memWidth = (enableMemoryCap && width != null && width! > 0)
+            ? (width! * 2).round()
+            : null;
+        final memHeight = (enableMemoryCap && height != null && height! > 0)
+            ? (height! * 2).round()
+            : null;
 
-      content = CachedNetworkImage(
-        imageUrl: cleanUrl,
-        width: width,
-        height: height,
-        fit: fit,
-        memCacheWidth: memWidth,
-        memCacheHeight: memHeight,
-        placeholder: (_, _) => placeholder ?? _buildPlaceholder(),
-        errorWidget: (_, _, _) => errorWidget ?? _buildErrorWidget(),
-      );
+        content = CachedNetworkImage(
+          imageUrl: cleanUrl,
+          width: width,
+          height: height,
+          fit: fit,
+          memCacheWidth: memWidth,
+          memCacheHeight: memHeight,
+          placeholder: (_, _) => placeholder ?? _buildPlaceholder(),
+          errorWidget: (_, _, _) => errorWidget ?? _buildErrorWidget(),
+        );
+      }
     } else if (!kIsWeb &&
         (cleanUrl.startsWith('/') ||
             cleanUrl.startsWith('file://') ||

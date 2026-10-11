@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import '../constants/app_theme_tokens.dart';
 import '../services/music_service.dart';
 import '../screens/artist_profile_screen.dart';
 import '../screens/album_screen.dart';
@@ -88,9 +89,11 @@ void showSongOptionsBottomSheet(
       return Container(
         padding: const EdgeInsets.only(top: 12, bottom: 28),
         decoration: BoxDecoration(
-          color: const Color(0xFF14141E).withValues(alpha: 0.96),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          color: AppThemeTokens.floatingDockSurface,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppThemeTokens.radiusHero),
+          ),
+          border: Border.all(color: AppThemeTokens.surfaceBorder),
         ),
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -334,7 +337,7 @@ void showSongOptionsBottomSheet(
                 icon: isLiked
                     ? Icons.favorite_rounded
                     : Icons.favorite_border_rounded,
-                iconColor: isLiked ? const Color(0xFFFA2D48) : Colors.white,
+                iconColor: isLiked ? AppThemeTokens.brandRuby : Colors.white,
                 title: isLiked ? 'Remove from Liked' : 'Like Song',
                 subtitle: isLiked
                     ? 'Saved in your favorites'

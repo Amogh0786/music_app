@@ -162,21 +162,15 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
                 LyricsTransliterationService.isRomanizedTelugu(
                   widget.songTitle!,
                 )));
-    final bool isRomanized =
-        !hasNativeIndic &&
-        (isTeluguSong ||
-            LyricsTransliterationService.isRomanizedIndic(
-              widget.rawLyrics,
-              widget.songLanguage,
-            ));
+    final bool isRomanizedTelugu = !hasNativeIndic && isTeluguSong;
 
-    _hasIndicScript = hasNativeIndic || isRomanized;
+    _hasIndicScript = hasNativeIndic || isRomanizedTelugu;
     _hasPronunciationLyrics =
-        isRomanized ||
+        isRomanizedTelugu ||
         (widget.pronunciationLyrics != null &&
             widget.pronunciationLyrics!.trim().isNotEmpty);
 
-    _initDisplayMode(isRomanized: isRomanized);
+    _initDisplayMode(isRomanized: isRomanizedTelugu);
 
     final lines = widget.rawLyrics.split('\n');
     // Ultra-flexible regex matching: [01:23.45], [1:23.456], [01:23:45], [00:01:23.45], [ 01:23.45 ]
@@ -203,16 +197,20 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
         if (text.isEmpty) {
           originalText = '♪ ♪ ♪';
           pronunciationText = '♪ ♪ ♪';
-        } else if (isRomanized) {
+        } else if (isRomanizedTelugu) {
           // Romanized English lyrics ("Rajamandri raagamajari") are placed in the English pronunciation slot
           pronunciationText = text;
           originalText = LyricsTransliterationService.toTeluguScript(text);
-        } else {
-          // Native Indic script lyrics ("రాజమండ్రి రాగమంజరి")
+        } else if (hasNativeIndic) {
+          // Native Indic script lyrics ("రాజమండ్రి రాగమంజరి" or "तुम ही हो" or "கண்ணம்மா")
           originalText = text;
           pronunciationText = LyricsTransliterationService.transliterateText(
             text,
           );
+        } else {
+          // Standard Latin / English / other lyrics without script transformation
+          originalText = text;
+          pronunciationText = text;
         }
 
         for (final m in matches) {
@@ -273,14 +271,17 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
           final String originalText;
           final String pronunciationText;
 
-          if (isRomanized) {
+          if (isRomanizedTelugu) {
             pronunciationText = line;
             originalText = LyricsTransliterationService.toTeluguScript(line);
-          } else {
+          } else if (hasNativeIndic) {
             originalText = line;
             pronunciationText = LyricsTransliterationService.transliterateText(
               line,
             );
+          } else {
+            originalText = line;
+            pronunciationText = line;
           }
 
           cleaned.add(
@@ -436,39 +437,41 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
 
     if (_displayMode == LyricsDisplayMode.dual && hasRomanized) {
       return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
             item.text,
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: isCurrent
                   ? themeColor
                   : (isPassed
-                        ? Colors.white.withValues(alpha: 0.72)
-                        : Colors.white.withValues(alpha: 0.28)),
-              fontSize: isCurrent ? 22 : 18.5,
-              fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w600,
-              height: 1.35,
+                        ? Colors.white.withValues(alpha: 0.55)
+                        : Colors.white.withValues(alpha: 0.25)),
+              fontSize: 21,
+              fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w500,
+              height: 1.4,
               shadows: isCurrent
                   ? [
                       Shadow(
-                        color: themeColor.withValues(alpha: 0.55),
-                        blurRadius: 16,
+                        color: themeColor.withValues(alpha: 0.65),
+                        blurRadius: 18,
                       ),
                     ]
                   : null,
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 4),
           Text(
             item.romanizedText,
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: isCurrent
                   ? Colors.white.withValues(alpha: 0.95)
                   : (isPassed
-                        ? Colors.white.withValues(alpha: 0.50)
-                        : Colors.white.withValues(alpha: 0.20)),
-              fontSize: isCurrent ? 16.5 : 14.5,
+                        ? Colors.white.withValues(alpha: 0.40)
+                        : Colors.white.withValues(alpha: 0.18)),
+              fontSize: 15,
               fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
               fontStyle: FontStyle.italic,
               height: 1.3,
@@ -484,28 +487,31 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
         ? item.romanizedText
         : item.text;
 
-    return AnimatedDefaultTextStyle(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOutCubic,
-      style: TextStyle(
-        color: isCurrent
-            ? themeColor
-            : (isPassed
-                  ? Colors.white.withValues(alpha: 0.72)
-                  : Colors.white.withValues(alpha: 0.28)),
-        fontSize: isCurrent ? 24 : 19.5,
-        fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w600,
-        height: 1.45,
-        shadows: isCurrent
-            ? [
-                Shadow(
-                  color: themeColor.withValues(alpha: 0.55),
-                  blurRadius: 16,
-                ),
-              ]
-            : null,
+    return Center(
+      child: AnimatedDefaultTextStyle(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: isCurrent
+              ? themeColor
+              : (isPassed
+                    ? Colors.white.withValues(alpha: 0.55)
+                    : Colors.white.withValues(alpha: 0.25)),
+          fontSize: 21,
+          fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w500,
+          height: 1.45,
+          shadows: isCurrent
+              ? [
+                  Shadow(
+                    color: themeColor.withValues(alpha: 0.65),
+                    blurRadius: 18,
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(lineText, textAlign: TextAlign.center),
       ),
-      child: Text(lineText),
     );
   }
 
@@ -516,20 +522,22 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(
               item.text,
+              textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 19,
+                fontSize: 20,
                 fontWeight: FontWeight.w600,
                 height: 1.4,
               ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 3),
             Text(
               item.romanizedText,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.70),
                 fontSize: 15,
@@ -548,16 +556,19 @@ class _AnimatedLyricsState extends State<AnimatedLyrics> {
         ? item.romanizedText
         : item.text;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Text(
-        lineText,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          height: 1.55,
-          letterSpacing: 0.2,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Text(
+          lineText,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            height: 1.55,
+            letterSpacing: 0.2,
+          ),
         ),
       ),
     );

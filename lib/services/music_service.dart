@@ -138,6 +138,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Duration? _savedPosition;
+  Duration _lastKnownPosition = Duration.zero;
   Duration? _savedDuration;
   DateTime _lastSessionSaveTime = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -281,14 +282,15 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   bool get isPlaying =>
       kIsWeb ? WebPlayerBridge.isPlaying : _activePlayer.playing;
   Duration get position {
-    if (_isLoading) return Duration.zero;
     if (kIsWeb) {
       final p = WebPlayerBridge.currentPosition;
       if (p > Duration.zero) return p;
+      if (_lastKnownPosition > Duration.zero) return _lastKnownPosition;
       return _savedPosition ?? Duration.zero;
     }
     final p = _activePlayer.position;
     if (p > Duration.zero) return p;
+    if (_lastKnownPosition > Duration.zero) return _lastKnownPosition;
     return _savedPosition ?? Duration.zero;
   }
 
@@ -313,8 +315,20 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
   String? get currentSongLanguage {
     if (_currentSong == null) return null;
-    return CanonicalSongDedup.getSongLanguage(_currentSong!.id.value) ??
-        CanonicalSongDedup.detectLanguage(_currentSong!.title) ??
+    final registered = CanonicalSongDedup.getSongLanguage(
+      _currentSong!.id.value,
+    );
+    if (registered != null && registered.isNotEmpty) return registered;
+
+    if (_cachedLyrics != null && _cachedLyrics!.isNotEmpty) {
+      final script = CanonicalSongDedup.detectScript(
+        _cachedLyrics!,
+        minCount: 4,
+      );
+      if (script != null) return script;
+    }
+
+    return CanonicalSongDedup.detectLanguage(_currentSong!.title) ??
         CanonicalSongDedup.detectLanguage(_currentSong!.author);
   }
 
@@ -433,13 +447,20 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       targetLang ??= CanonicalSongDedup.detectLanguage(song.title);
       // 3. Check author / channel
       targetLang ??= CanonicalSongDedup.detectLanguage(song.author);
-      // 4. Check user's preferred primary language if available and not generic English
-      if (targetLang == null &&
-          PreferencesService().preferredLanguages.isNotEmpty) {
-        final pref = PreferencesService().preferredLanguages.first
-            .toLowerCase();
-        if (pref != 'english') {
-          targetLang = pref;
+      // 4. Check clean title & artist for English vocabulary or Indic artist affinity
+      if (targetLang == null) {
+        if (CanonicalSongDedup.detectLanguage('$cleanTitle $cleanArtist') ==
+            'english') {
+          targetLang = 'english';
+        } else if (CanonicalSongDedup.isKnownIndicArtist(cleanArtist)) {
+          // Known Indic artist without explicit language: check user preference
+          if (PreferencesService().preferredLanguages.isNotEmpty) {
+            final pref = PreferencesService().preferredLanguages.first
+                .toLowerCase();
+            if (pref != 'english') {
+              targetLang = pref;
+            }
+          }
         }
       }
 
@@ -632,11 +653,6 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       Map<String, dynamic>? bestSyncedCandidate;
       int bestSyncedScore = 120;
 
-      Map<String, dynamic>? bestNativeCandidate;
-      int bestNativeScore = 120;
-      Map<String, dynamic>? bestRomanizedCandidate;
-      int bestRomanizedScore = 120;
-
       for (final item in candidatePool) {
         if (item is! Map) continue;
         final map = Map<String, dynamic>.from(item);
@@ -661,62 +677,42 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         }
 
         final synced = (map['syncedLyrics'] as String?)?.trim();
-        final plain = (map['plainLyrics'] as String?)?.trim();
-        final text = (synced?.isNotEmpty == true ? synced! : (plain ?? ''))
-            .trim();
 
         if (synced != null && synced.isNotEmpty && score > bestSyncedScore) {
           bestSyncedScore = score;
           bestSyncedCandidate = map;
-        }
-
-        if (text.isNotEmpty && score > 120) {
-          final isNative = LyricsTransliterationService.hasIndicScript(text);
-          if (isNative && score > bestNativeScore) {
-            bestNativeScore = score;
-            bestNativeCandidate = map;
-          } else if (!isNative && score > bestRomanizedScore) {
-            bestRomanizedScore = score;
-            bestRomanizedCandidate = map;
-          }
         }
       }
 
       // Synced candidates ALWAYS supersede plain lyrics whenever available!
       final chosenCandidate = bestSyncedCandidate ?? bestCandidate;
 
-      if (bestNativeCandidate != null && bestRomanizedCandidate != null) {
-        final nativeSynced = (bestNativeCandidate['syncedLyrics'] as String?)
-            ?.trim();
-        final nativePlain = (bestNativeCandidate['plainLyrics'] as String?)
-            ?.trim();
-        final romanSynced = (bestRomanizedCandidate['syncedLyrics'] as String?)
-            ?.trim();
-        final romanPlain = (bestRomanizedCandidate['plainLyrics'] as String?)
-            ?.trim();
-
-        _cachedLyrics = (nativeSynced != null && nativeSynced.isNotEmpty)
-            ? nativeSynced
-            : (nativePlain != null && nativePlain.isNotEmpty
-                  ? nativePlain
-                  : null);
-        _cachedPronunciationLyrics =
-            (romanSynced != null && romanSynced.isNotEmpty)
-            ? romanSynced
-            : (romanPlain != null && romanPlain.isNotEmpty ? romanPlain : null);
-      } else if (chosenCandidate != null) {
+      if (chosenCandidate != null) {
         final synced = (chosenCandidate['syncedLyrics'] as String?)?.trim();
         final plain = (chosenCandidate['plainLyrics'] as String?)?.trim();
         final text = (synced != null && synced.isNotEmpty)
             ? synced
             : (plain != null && plain.isNotEmpty ? plain : null);
         _cachedLyrics = text;
-        if (text != null &&
-            !LyricsTransliterationService.hasIndicScript(text) &&
-            (targetLang == 'telugu' ||
-                LyricsTransliterationService.isRomanizedTelugu(text))) {
-          _cachedPronunciationLyrics = text;
+
+        if (text != null && text.isNotEmpty) {
+          if (LyricsTransliterationService.hasIndicScript(text)) {
+            // For native Indic script, auto-transliterate to phonetic English pronunciation
+            _cachedPronunciationLyrics = (synced != null && synced.isNotEmpty)
+                ? LyricsTransliterationService.transliterateLrc(synced)
+                : LyricsTransliterationService.transliterateText(text);
+          } else if (targetLang == 'telugu' ||
+              LyricsTransliterationService.isRomanizedTelugu(text)) {
+            _cachedPronunciationLyrics = text;
+          } else {
+            _cachedPronunciationLyrics = null;
+          }
+        } else {
+          _cachedPronunciationLyrics = null;
         }
+      } else {
+        _cachedLyrics = null;
+        _cachedPronunciationLyrics = null;
       }
 
       if (_cachedLyrics == null || _cachedLyrics!.isEmpty) {
@@ -826,7 +822,40 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     if (_artworkMap.containsKey(videoId) && _artworkMap[videoId]!.isNotEmpty) {
       return _artworkMap[videoId]!;
     }
-    return 'https://i.ytimg.com/vi/$videoId/maxresdefault.jpg';
+    if (CanonicalSongDedup.isLikelyYouTubeId(videoId)) {
+      return 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+    }
+    return '';
+  }
+
+  /// Resolves the human-readable album / soundtrack name for a song.
+  /// Falls back to extracted movie title, artist name, or 'Single' rather than hardcoded 'DilSe'.
+  static String resolveAlbumTitleForSong(Video song) {
+    final cached = getCachedAlbumTitle(song.id.value);
+    if (cached != null && cached.trim().isNotEmpty) return cached.trim();
+    final extracted = extractMovieOrAlbumTitle(song.title);
+    if (extracted != null && extracted.trim().isNotEmpty) {
+      return extracted.trim();
+    }
+    if (song.author.trim().isNotEmpty) return song.author.trim();
+    return 'Single';
+  }
+
+  /// Resolves a guaranteed valid, non-404 artwork URL for a song.
+  static String resolveArtworkUrl(Video song) {
+    final id = song.id.value;
+    final thumb = getHdThumbnail(id);
+    if (thumb.isNotEmpty) return thumb;
+    try {
+      final h = song.thumbnails.highResUrl;
+      if (h.isNotEmpty) return h;
+      final m = song.thumbnails.mediumResUrl;
+      if (m.isNotEmpty) return m;
+    } catch (_) {}
+    if (CanonicalSongDedup.isLikelyYouTubeId(id)) {
+      return 'https://i.ytimg.com/vi/$id/hqdefault.jpg';
+    }
+    return '';
   }
 
   static void registerArtwork(
@@ -994,8 +1023,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
               break;
             case AudioInterruptionType.pause:
             case AudioInterruptionType.unknown:
-              _wasInterruptedBySystem = true;
-              _audioPlayer.pause();
+              if (_audioPlayer.playing) {
+                _wasInterruptedBySystem = true;
+                _audioPlayer.pause();
+              }
               break;
           }
         } else {
@@ -1004,14 +1035,18 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
               _audioPlayer.setVolume(1.0);
               break;
             case AudioInterruptionType.pause:
+            case AudioInterruptionType.unknown:
               if (_wasInterruptedBySystem) {
                 _wasInterruptedBySystem = false;
                 _audioPlayer.play();
               }
               break;
-            case AudioInterruptionType.unknown:
-              break;
           }
+        }
+      });
+      session.becomingNoisyEventStream.listen((_) {
+        if (_audioPlayer.playing) {
+          _audioPlayer.pause();
         }
       });
     } catch (e) {
@@ -1025,11 +1060,13 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       _equalizerB = AndroidEqualizer();
     }
     _playerA = AudioPlayer(
+      handleInterruptions: false,
       audioPipeline: _equalizerA != null
           ? AudioPipeline(androidAudioEffects: [_equalizerA!])
           : null,
     );
     _playerB = AudioPlayer(
+      handleInterruptions: false,
       audioPipeline: _equalizerB != null
           ? AudioPipeline(androidAudioEffects: [_equalizerB!])
           : null,
@@ -1040,6 +1077,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     if (kIsWeb) {
       WebPlayerBridge.init();
       WebPlayerBridge.positionStream.listen((pos) {
+        _lastKnownPosition = pos;
         _positionBroadcaster.add(pos);
       });
       WebPlayerBridge.durationStream.listen((dur) {
@@ -1059,6 +1097,18 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       WebPlayerBridge.onError.listen((code) async {
         debugPrint('[WebPlayer] Error $code encountered. Handling recovery…');
         _isLoading = false;
+        final current = _currentSong;
+        if (current != null && _lastFailedSongId != current.id.value) {
+          // Retry current song once before auto-skipping to prevent single-tap drops
+          _lastFailedSongId = current.id.value;
+          _webStreamUrls.remove(current.id.value);
+          _showToast('Reconnecting stream…');
+          notifyListeners();
+          await Future.delayed(const Duration(milliseconds: 600));
+          await playSong(current, updateQueue: false);
+          return;
+        }
+
         _consecutivePlaybackFailures++;
         if (_consecutivePlaybackFailures >= 3) {
           debugPrint(
@@ -1082,6 +1132,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       for (final player in [_playerA, _playerB]) {
         player.positionStream.listen((pos) {
           if (identical(player, _activePlayer)) {
+            _lastKnownPosition = pos;
             _positionBroadcaster.add(pos);
             _syncWidgetPlayback();
           }
@@ -1118,23 +1169,28 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
               // Do NOT cancel active fade or wipe incoming player that is currently resolving/buffering!
               if (_isCrossfading) {
                 debugPrint(
-                  '[AudioPlayer] Outgoing player reached EOF during crossfade. Standby deck will assume playback.',
+                  '[AudioPlayer] Active player reached EOF during crossfade. Transition managed by crossfade engine.',
                 );
                 return;
               }
 
               final currentPos = player.position;
               final currentDur = player.duration;
-              if (currentDur != null &&
-                  currentDur.inSeconds > 10 &&
-                  (currentDur - currentPos).inSeconds > 8 &&
-                  currentPos.inSeconds <
-                      (currentDur.inSeconds * 0.85).round()) {
+              final bool isNearEnd =
+                  currentDur != null &&
+                  currentDur.inMilliseconds > 0 &&
+                  (currentDur - currentPos).inSeconds <= 5;
+
+              // Never advance if the song has not reached the actual end (within 5 seconds).
+              // Whether the player is playing or paused, an event when not near the end
+              // is ALWAYS false/premature (e.g. buffer exhaustion or pause flushes).
+              if (!isNearEnd) {
                 debugPrint(
-                  '[AudioPlayer] Ignoring spurious completion event at ${currentPos.inSeconds}s / ${currentDur.inSeconds}s',
+                  '[AudioPlayer] Ignoring false completion event at ${currentPos.inSeconds}s / ${currentDur?.inSeconds}s (player playing: ${player.playing})',
                 );
                 return;
               }
+
               await _handleTrackCompletion();
             }
           },
@@ -1168,7 +1224,11 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _handleTrackCompletion() async {
-    if (_isTransitioning || _isCrossfading) return;
+    if (_isTransitioning) return;
+    if (_isCrossfading) {
+      if (_standbyPlayer.playing) return;
+      _isCrossfading = false;
+    }
     _isTransitioning = true;
     try {
       if (!kIsWeb && audioHandler != null) {
@@ -1417,6 +1477,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         outgoingPlayer.processingState == ProcessingState.completed) {
       _activePlayer = incomingPlayer;
       _standbyPlayer = outgoingPlayer;
+      _lastKnownPosition = Duration.zero;
       _positionBroadcaster.add(Duration.zero);
       if (incomingPlayer.duration != null) {
         _durationBroadcaster.add(incomingPlayer.duration!);
@@ -1426,7 +1487,13 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
       try {
         await incomingPlayer.setVolume(1.0);
-        await incomingPlayer.play();
+        unawaited(
+          incomingPlayer.play().catchError((e) {
+            debugPrint(
+              '[Crossfade] Error starting incoming player directly: $e',
+            );
+          }),
+        );
       } catch (e) {
         debugPrint('[Crossfade] Error starting incoming player directly: $e');
       }
@@ -1438,7 +1505,11 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
     try {
       await incomingPlayer.setVolume(0.0);
-      await incomingPlayer.play();
+      unawaited(
+        incomingPlayer.play().catchError((e) {
+          debugPrint('[Crossfade] Error starting incoming player: $e');
+        }),
+      );
     } catch (e) {
       debugPrint('[Crossfade] Error starting incoming player: $e');
       _isCrossfading = false;
@@ -1450,6 +1521,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _activePlayer = incomingPlayer;
     _standbyPlayer = outgoingPlayer;
 
+    _lastKnownPosition = Duration.zero;
     _positionBroadcaster.add(Duration.zero);
     if (incomingPlayer.duration != null) {
       _durationBroadcaster.add(incomingPlayer.duration!);
@@ -1470,9 +1542,20 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    final dur = incomingPlayer.duration;
-    if (dur != null && dur.inSeconds > 0 && dur.inSeconds <= crossfadeSec * 2) {
-      crossfadeSec = (dur.inSeconds ~/ 2).clamp(1, 10);
+    final inDur = incomingPlayer.duration;
+    if (inDur != null &&
+        inDur.inSeconds > 0 &&
+        inDur.inSeconds <= crossfadeSec * 2) {
+      crossfadeSec = (inDur.inSeconds ~/ 2).clamp(1, 10);
+    }
+
+    final outDur = outgoingPlayer.duration;
+    final outPos = outgoingPlayer.position;
+    if (outDur != null && outDur > outPos) {
+      final outRemaining = outDur - outPos;
+      if (outRemaining.inSeconds > 0 && outRemaining.inSeconds < crossfadeSec) {
+        crossfadeSec = outRemaining.inSeconds.clamp(1, crossfadeSec);
+      }
     }
 
     await _dualDeckCrossfadeNative(
@@ -1521,8 +1604,15 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     final nextTrack = _getNextTrackCandidate();
     if (nextTrack == null) return;
 
-    // 1. Proactive URL resolution at T-25s to T-5s
-    if (remaining <= const Duration(seconds: 25) &&
+    final prefs = PreferencesService();
+    final int crossfadeSec = prefs.crossfadeEnabled
+        ? prefs.crossfadeSeconds
+        : 0;
+    final int urlPrewarmSec = (crossfadeSec + 20).clamp(25, 45);
+    final int standbyPrewarmSec = (crossfadeSec + 12).clamp(18, 35);
+
+    // 1. Proactive URL resolution
+    if (remaining <= Duration(seconds: urlPrewarmSec) &&
         remaining > const Duration(seconds: 3)) {
       final trackId = nextTrack.id.value;
       if (_webStreamUrls[trackId] == null || _webStreamUrls[trackId]!.isEmpty) {
@@ -1530,9 +1620,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    // 2. Proactive Audio Frame Pre-Buffering on Standby Deck at T-15s to T-2s
+    // 2. Proactive Audio Frame Pre-Buffering on Standby Deck
     if (!kIsWeb &&
-        remaining <= const Duration(seconds: 15) &&
+        remaining <= Duration(seconds: standbyPrewarmSec) &&
         remaining > const Duration(seconds: 2)) {
       if (_standbyBufferedTrackId != nextTrack.id.value &&
           !_isPrebufferingStandby) {
@@ -1582,18 +1672,21 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     final remaining = dur - pos;
-    // Proactively pre-resolve upcoming track 5 seconds before crossfade initiates so network delay is eliminated
-    if (remaining <= Duration(seconds: crossfadeSec + 5) &&
+    // Proactively ensure upcoming track URL and standby deck are primed before crossfade threshold
+    if (remaining <= Duration(seconds: crossfadeSec + 8) &&
         remaining > Duration(seconds: crossfadeSec)) {
-      if (_isShuffle && _shuffleHistoryPointer + 1 < _shuffleHistory.length) {
-        final nextIdx = _shuffleHistory[_shuffleHistoryPointer + 1];
-        if (nextIdx >= 0 && nextIdx < _playlist.length) {
-          _prewarmSingleTrack(_playlist[nextIdx]);
+      final nextTrack = _getNextTrackCandidate();
+      if (nextTrack != null) {
+        final trackId = nextTrack.id.value;
+        if (_webStreamUrls[trackId] == null ||
+            _webStreamUrls[trackId]!.isEmpty) {
+          _prewarmSingleTrack(nextTrack);
         }
-      } else if (_currentIndex + 1 < _playlist.length) {
-        _prewarmSingleTrack(_playlist[_currentIndex + 1]);
-      } else if (_loopMode == LoopMode.all && _playlist.isNotEmpty) {
-        _prewarmSingleTrack(_playlist[0]);
+        if (!kIsWeb &&
+            _standbyBufferedTrackId != trackId &&
+            !_isPrebufferingStandby) {
+          _primeStandbyDeckForNextTrack(nextTrack);
+        }
       }
     }
 
@@ -2216,6 +2309,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     } catch (_) {}
   }
 
+  Future<void>? _standbyPrebufferFuture;
+  String? _standbyPrebufferingTrackId;
+
   /// Primes and pre-buffers the incoming track directly onto the standby deck.
   /// When this track is subsequently requested, the engine can execute an instant 0ms handoff.
   Future<void> _primeStandbyDeckForNextTrack(Video nextTrack) async {
@@ -2223,8 +2319,24 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     final trackId = nextTrack.id.value;
     if (_standbyBufferedTrackId == trackId || _isPrebufferingStandby) return;
 
-    final token = _activePlaySessionToken;
+    _standbyPrebufferingTrackId = trackId;
     _isPrebufferingStandby = true;
+    final future = _executeStandbyDeckPrebuffer(nextTrack);
+    _standbyPrebufferFuture = future;
+    try {
+      await future;
+    } finally {
+      _isPrebufferingStandby = false;
+      if (_standbyPrebufferingTrackId == trackId) {
+        _standbyPrebufferingTrackId = null;
+        _standbyPrebufferFuture = null;
+      }
+    }
+  }
+
+  Future<void> _executeStandbyDeckPrebuffer(Video nextTrack) async {
+    final trackId = nextTrack.id.value;
+    final token = _activePlaySessionToken;
 
     try {
       if (!kIsWeb) {
@@ -2240,10 +2352,16 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           if (localFile.existsSync()) {
             final mediaItem = MediaItem(
               id: trackId,
-              album: localItem['album'] ?? 'DilSe',
+              album:
+                  (localItem['album'] != null &&
+                      (localItem['album'] as String).trim().isNotEmpty)
+                  ? localItem['album']!
+                  : resolveAlbumTitleForSong(nextTrack),
               title: nextTrack.title,
               artist: nextTrack.author,
-              artUri: Uri.tryParse(getHdThumbnail(trackId)),
+              artUri: resolveArtworkUrl(nextTrack).isNotEmpty
+                  ? Uri.tryParse(resolveArtworkUrl(nextTrack))
+                  : null,
               duration: nextTrack.duration,
             );
             await _standbyPlayer.setAudioSource(
@@ -2270,10 +2388,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       if (streamUrl != null && streamUrl.isNotEmpty) {
         final mediaItem = MediaItem(
           id: trackId,
-          album: 'DilSe',
+          album: resolveAlbumTitleForSong(nextTrack),
           title: nextTrack.title,
           artist: nextTrack.author,
-          artUri: Uri.tryParse(getHdThumbnail(trackId)),
+          artUri: resolveArtworkUrl(nextTrack).isNotEmpty
+              ? Uri.tryParse(resolveArtworkUrl(nextTrack))
+              : null,
           duration: nextTrack.duration,
         );
 
@@ -2295,8 +2415,6 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
     } catch (e) {
       debugPrint('[Gapless] Standby pre-buffering silent fail: $e');
-    } finally {
-      _isPrebufferingStandby = false;
     }
   }
 
@@ -2353,10 +2471,18 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  void seekRelative(Duration offset) {
-    final current = position;
+  Future<void> seekRelative(Duration offset) async {
+    Duration current = position;
+    if (current == Duration.zero && _lastKnownPosition > Duration.zero) {
+      current = _lastKnownPosition;
+    }
+    if (current == Duration.zero &&
+        _savedPosition != null &&
+        _savedPosition! > Duration.zero) {
+      current = _savedPosition!;
+    }
     final target = current + offset;
-    seek(target);
+    await seek(target);
   }
 
   void toggleShuffle() {
@@ -3043,6 +3169,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       _rankSearchResults(songs, rawQuery);
 
   /// Spotify-grade Search Relevance & Quality Re-ranking
+  /// Spotify-grade Search Relevance & Quality Re-ranking
   List<Video> _rankSearchResults(List<Video> songs, String rawQuery) {
     if (songs.isEmpty || rawQuery.trim().isEmpty) return songs;
 
@@ -3054,6 +3181,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
     final q = rawQuery.trim().toLowerCase();
     final cleanQ = CanonicalSongDedup.cleanTitle(rawQuery);
+    final cleanQCompact = cleanQ.replaceAll(RegExp(r'\s+'), '');
     final queryTokens = q
         .split(RegExp(r'\s+'))
         .where((t) => t.isNotEmpty)
@@ -3066,8 +3194,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       final song = dedupedSongs[i];
       final title = song.title.toLowerCase();
       final cleanT = CanonicalSongDedup.cleanTitle(song.title);
+      final cleanTCompact = cleanT.replaceAll(RegExp(r'\s+'), '');
       final author = song.author.toLowerCase();
       final cleanA = CanonicalSongDedup.cleanArtist(song.author);
+      final cleanACompact = cleanA.replaceAll(RegExp(r'\s+'), '');
 
       final dedupKey = '$cleanT|$cleanA';
       if (!seenKeys.add(dedupKey)) {
@@ -3076,41 +3206,99 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
       double score = 0.0;
 
-      // 1. Exact Title Match (e.g. "Perfect" == "perfect")
-      if (cleanT == cleanQ || title == q) {
-        score += 1000.0;
-      } else if (cleanT.startsWith(cleanQ)) {
-        score += 500.0;
-      } else if (cleanT.contains(cleanQ)) {
-        score += 250.0;
+      // 0. Compound Title + Artist Match:
+      // When the user specifies both the song title AND the artist (e.g. "perfect ed sheeran", "perfect edsheeran", "shape of you ed sheeran")
+      final songTitleTokens = cleanT
+          .split(RegExp(r'\s+'))
+          .where((t) => t.isNotEmpty)
+          .toSet();
+      final songArtistTokens = cleanA
+          .split(RegExp(r'\s+'))
+          .where((t) => t.isNotEmpty)
+          .toSet();
+
+      final bool hasTitleMatch =
+          (cleanT.isNotEmpty && cleanQ.contains(cleanT)) ||
+          (cleanTCompact.isNotEmpty && cleanQCompact.contains(cleanTCompact)) ||
+          (songTitleTokens.isNotEmpty &&
+              songTitleTokens.every(
+                (t) => cleanQ.contains(t) || queryTokens.contains(t),
+              ));
+
+      final bool hasArtistMatch =
+          (cleanA.isNotEmpty && cleanQ.contains(cleanA)) ||
+          (cleanACompact.isNotEmpty && cleanQCompact.contains(cleanACompact)) ||
+          (songArtistTokens.isNotEmpty &&
+              songArtistTokens.every(
+                (t) => cleanQ.contains(t) || queryTokens.contains(t),
+              ));
+
+      if (hasTitleMatch && hasArtistMatch) {
+        score += 2500.0;
       }
 
-      // 2. Token overlap score
+      // 1. Exact Title Match (e.g. "Perfect" == "perfect")
+      if (cleanT == cleanQ || title == q) {
+        score += 1200.0;
+      } else if (cleanT.startsWith(cleanQ)) {
+        score += 600.0;
+      } else if (cleanT.contains(cleanQ)) {
+        score += 300.0;
+      }
+
+      // 2. Token overlap score (both Title and Artist tokens)
       for (final token in queryTokens) {
-        if (cleanT.contains(token) || title.contains(token)) {
-          score += 100.0;
+        if (token.length >= 2) {
+          if (cleanT.contains(token) || title.contains(token)) {
+            score += 100.0;
+          }
+          if (cleanA.contains(token) || author.contains(token)) {
+            score += 80.0;
+          }
         }
       }
 
       // 3. Artist Match (user searched artist name e.g. "Ed Sheeran", "SPB")
       if (cleanA == cleanQ || author == q) {
-        score += 600.0;
-      } else if (cleanA.contains(cleanQ) || author.contains(q)) {
-        score += 300.0;
+        score += 800.0;
+      } else if (cleanA.contains(cleanQ) ||
+          author.contains(q) ||
+          (cleanA.isNotEmpty && cleanQ.contains(cleanA))) {
+        score += 400.0;
       }
 
-      // 4. Standalone Song vs Movie Tag penalty:
+      // 4. Standalone Song vs Movie Tag / Remix / Version penalty:
       // If user searched a simple standalone title like "perfect", penalize noisy tags like (From "...")
-      if (cleanQ.split(' ').length <= 2) {
-        if (title.contains('from "') ||
-            title.contains("from '") ||
-            title.contains('soundtrack')) {
-          score -= 150.0;
+      final isMovieTag =
+          title.contains('from "') ||
+          title.contains("from '") ||
+          title.contains('soundtrack') ||
+          title.contains('ost');
+      if (isMovieTag) {
+        final hasMovieQuery = queryTokens.any(
+          (t) =>
+              t.length > 2 &&
+              title.contains(t) &&
+              !cleanT.contains(t) &&
+              !cleanA.contains(t),
+        );
+        if (!hasMovieQuery) {
+          score -= 300.0;
         }
-        if (title.contains('remix') ||
-            title.contains('dj mix') ||
-            title.contains('dsp mix')) {
-          score -= 100.0;
+      }
+
+      final isAlternativeVersion =
+          title.contains('remix') ||
+          title.contains('dj mix') ||
+          title.contains('dsp mix') ||
+          title.contains('acoustic') ||
+          title.contains('cover');
+      if (isAlternativeVersion) {
+        final hasVersionQuery = queryTokens.any(
+          (t) => t == 'remix' || t == 'acoustic' || t == 'cover' || t == 'mix',
+        );
+        if (!hasVersionQuery) {
+          score -= 200.0;
         }
       }
 
@@ -3118,12 +3306,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       final lengthPenalty = (cleanT.length - cleanQ.length).clamp(0, 50) * 2.0;
       score -= lengthPenalty;
 
-      // 6. Studio Quality Bonus: JioSaavn 320k studio tracks get overwhelming priority
+      // 6. Studio Quality Bonus: JioSaavn 320k studio tracks get quality priority when relevance is equal
       final bool isJioStudio =
           _artworkMap.containsKey(song.id.value) ||
           _webStreamUrls.containsKey(song.id.value);
       if (isJioStudio) {
-        score += 800.0;
+        score += 350.0;
       }
 
       // 7. Video Noise Penalty: Heavily penalize YouTube video uploads and non-music clips
@@ -3158,15 +3346,18 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     String query, {
     int limit = 8,
   }) async {
-    if (query.trim().isEmpty) return [];
+    final cleanQ = query.trim();
+    if (cleanQ.isEmpty) return [];
 
     final suggestions = <SearchSuggestion>[];
-    final qLower = query.toLowerCase().trim();
+    final seen = <String>{};
+    final qLower = cleanQ.toLowerCase();
 
     // 1. Instant Local Search History (🕒)
     final history = PreferencesService().searchHistory;
     for (final item in history) {
-      if (item.toLowerCase().contains(qLower)) {
+      final itemLower = item.toLowerCase();
+      if (itemLower.contains(qLower) && seen.add(itemLower)) {
         suggestions.add(
           SearchSuggestion(
             text: item,
@@ -3178,10 +3369,11 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    // 2. Instant Local Top Artists (👤)
+    // 2. Instant Curated & Listening Top Artists (👤)
     final topArtists = PreferencesService().getTopArtists(limit: 10);
     for (final artist in topArtists) {
-      if (artist.toLowerCase().contains(qLower)) {
+      final aLower = artist.toLowerCase();
+      if (aLower.contains(qLower) && seen.add(aLower)) {
         suggestions.add(
           SearchSuggestion(
             text: artist,
@@ -3193,61 +3385,64 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    // 3. JioSaavn Autocomplete API (clean entity categorization)
-    try {
-      final response = await http
-          .get(ApiConfig.jioSuggestionsUri(query, limit: limit))
-          .timeout(const Duration(seconds: 3));
-      if (response.statusCode == 200) {
-        final List<dynamic> jsonList = json.decode(response.body);
-        for (var item in jsonList) {
-          final text = item.toString().trim();
-          if (text.isEmpty ||
-              suggestions.any(
-                (s) => s.text.toLowerCase() == text.toLowerCase(),
-              )) {
-            continue;
-          }
+    // Also check DynamicArtistService curated catalog for instant artist match
+    final matchedArtist = DynamicArtistService().findArtist(cleanQ);
+    if (matchedArtist != null && seen.add(matchedArtist.name.toLowerCase())) {
+      suggestions.insert(
+        suggestions.length > 2 ? 2 : suggestions.length,
+        SearchSuggestion(
+          text: matchedArtist.name,
+          subtitle: 'Artist • ${matchedArtist.genre}',
+          type: SearchSuggestionType.artist,
+        ),
+      );
+    }
 
-          final isArtist = topArtists.any(
-            (a) => a.toLowerCase() == text.toLowerCase(),
-          );
+    // 3. Dynamic Global Suggestions (Google/YouTube & JioSaavn Edge)
+    if (suggestions.length < limit) {
+      final remaining = limit - suggestions.length;
+      final rawSuggestions = await fetchSuggestions(
+        cleanQ,
+        limit: remaining * 2,
+      );
+      for (final text in rawSuggestions) {
+        final textLower = text.toLowerCase();
+        if (text.isEmpty || !seen.add(textLower)) continue;
+
+        final isKnownArtist =
+            DynamicArtistService().isKnownArtist(text) ||
+            topArtists.any((a) => a.toLowerCase() == textLower);
+
+        if (isKnownArtist) {
           suggestions.add(
             SearchSuggestion(
               text: text,
-              subtitle: isArtist ? 'Artist' : 'Song',
-              type: isArtist
-                  ? SearchSuggestionType.artist
-                  : SearchSuggestionType.song,
+              subtitle: 'Artist',
+              type: SearchSuggestionType.artist,
             ),
           );
-          if (suggestions.length >= limit) break;
+        } else if (textLower.contains('song') ||
+            textLower.contains('lyrics') ||
+            textLower.contains('track')) {
+          suggestions.add(
+            SearchSuggestion(
+              text: text,
+              subtitle: 'Song',
+              type: SearchSuggestionType.song,
+            ),
+          );
+        } else {
+          suggestions.add(
+            SearchSuggestion(
+              text: text,
+              subtitle: 'Search',
+              type: SearchSuggestionType.query,
+            ),
+          );
         }
-      }
-    } catch (_) {}
 
-    // 4. Fill with YouTube suggestions if still sparse
-    if (suggestions.length < limit) {
-      try {
-        final rawStrings = await fetchSuggestions(
-          query,
-          limit: limit - suggestions.length,
-        );
-        for (final str in rawStrings) {
-          if (!suggestions.any(
-            (s) => s.text.toLowerCase() == str.toLowerCase(),
-          )) {
-            suggestions.add(
-              SearchSuggestion(
-                text: str,
-                subtitle: 'Search',
-                type: SearchSuggestionType.query,
-              ),
-            );
-            if (suggestions.length >= limit) break;
-          }
-        }
-      } catch (_) {}
+        if (suggestions.length >= limit) break;
+      }
     }
 
     return suggestions;
@@ -3255,34 +3450,87 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Live query suggestions while typing (up to [limit] suggestions)
   Future<List<String>> fetchSuggestions(String query, {int limit = 8}) async {
-    if (query.trim().isEmpty) return [];
+    final cleanQ = query.trim();
+    if (cleanQ.isEmpty) return [];
 
-    // 1. Primary: JioSaavn Instant Edge Suggestions (both Mobile and Web)
+    final suggestionsSet = <String>{};
+
+    // Parallel fetch: Google/YouTube Instant Complete + JioSaavn Edge
     try {
-      final response = await http
-          .get(ApiConfig.jioSuggestionsUri(query, limit: limit))
-          .timeout(const Duration(seconds: 4));
-      if (response.statusCode == 200) {
-        final List<dynamic> jsonList = json.decode(response.body);
-        final list = jsonList.map((e) => e.toString()).toList();
-        if (list.isNotEmpty) return list;
+      final futures = await Future.wait([
+        // 1. Google / YouTube Complete Search (global catalog, keyless, <50ms)
+        http
+            .get(
+              Uri.parse(
+                'https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=${Uri.encodeComponent(cleanQ)}',
+              ),
+            )
+            .timeout(const Duration(seconds: 3))
+            .then((res) {
+              if (res.statusCode == 200) {
+                final List<dynamic> jsonList = json.decode(res.body);
+                if (jsonList.length > 1 && jsonList[1] is List) {
+                  return (jsonList[1] as List)
+                      .map((e) => e.toString().trim())
+                      .toList();
+                }
+              }
+              return <String>[];
+            })
+            .catchError((_) => <String>[]),
+
+        // 2. JioSaavn Instant Edge Suggestions (Indian catalog supplement)
+        http
+            .get(ApiConfig.jioSuggestionsUri(cleanQ, limit: limit))
+            .timeout(const Duration(seconds: 3))
+            .then((res) {
+              if (res.statusCode == 200) {
+                final List<dynamic> jsonList = json.decode(res.body);
+                return jsonList.map((e) => e.toString().trim()).toList();
+              }
+              return <String>[];
+            })
+            .catchError((_) => <String>[]),
+      ]);
+
+      final List<String> ytList = futures[0];
+      final List<String> jioList = futures[1];
+
+      // Interleave/merge ensuring high relevance and no duplicates
+      for (final item in ytList) {
+        if (item.isNotEmpty && suggestionsSet.length < limit) {
+          suggestionsSet.add(item);
+        }
       }
-    } catch (e) {
-      debugPrint('jioSuggestions error: $e');
+      for (final item in jioList) {
+        if (item.isNotEmpty && suggestionsSet.length < limit) {
+          suggestionsSet.add(item);
+        }
+      }
+    } catch (_) {}
+
+    if (suggestionsSet.isNotEmpty) {
+      return suggestionsSet.toList();
     }
 
-    // 2. Secondary fallback
-    try {
-      final response = await http
-          .get(ApiConfig.suggestionsUri(query, limit: limit))
-          .timeout(const Duration(seconds: 4));
-      if (response.statusCode == 200) {
-        final List<dynamic> jsonList = json.decode(response.body);
-        return jsonList.map((e) => e.toString()).toList();
+    // 3. Fallback: Secondary cloud backend if configured
+    if (PreferencesService().customServerUrl.isNotEmpty) {
+      try {
+        final response = await http
+            .get(ApiConfig.suggestionsUri(cleanQ, limit: limit))
+            .timeout(const Duration(seconds: 3));
+        if (response.statusCode == 200) {
+          final List<dynamic> jsonList = json.decode(response.body);
+          return jsonList
+              .map((e) => e.toString().trim())
+              .where((s) => s.isNotEmpty)
+              .toList();
+        }
+      } catch (e) {
+        debugPrint('fetchSuggestions fallback error: $e');
       }
-    } catch (e) {
-      debugPrint('fetchSuggestions error: $e');
     }
+
     return [];
   }
 
@@ -3725,7 +3973,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     if (index < 0 || index >= _playlist.length) return;
     if (_currentIndex == index && isPlaying) return;
     if (_isCrossfading) {
-      _isCrossfading = false;
+      _cancelActiveFade();
       unawaited(_setVolume(1.0));
     }
     _currentIndex = index;
@@ -4181,9 +4429,24 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
     _savedPosition = null;
     _savedDuration = null;
+    _lastKnownPosition = Duration.zero;
     _positionBroadcaster.add(Duration.zero);
     if (song.duration != null && song.duration! > Duration.zero) {
       _durationBroadcaster.add(song.duration);
+    }
+
+    // If standby deck is actively finishing its prebuffer for this track, wait for it briefly
+    if (!kIsWeb &&
+        _isPrebufferingStandby &&
+        _standbyPrebufferingTrackId == song.id.value) {
+      debugPrint(
+        '[Gapless] Waiting for active standby deck prebuffering to complete for "${song.title}"…',
+      );
+      try {
+        await _standbyPrebufferFuture?.timeout(
+          const Duration(milliseconds: 2500),
+        );
+      } catch (_) {}
     }
 
     // ⚡ Check if standby deck already has this exact song pre-buffered
@@ -4195,7 +4458,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       _standbyBufferedTrackId = null;
 
       _isLoading = false;
-      _isCrossfading = false;
+      if (!isCrossfade) {
+        _isCrossfading = false;
+      }
       _hasRepeatedOnce = false;
 
       if (!_isNavigatingHistory &&
@@ -4226,10 +4491,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
       final mediaItem = MediaItem(
         id: song.id.value,
-        album: 'DilSe',
+        album: resolveAlbumTitleForSong(song),
         title: song.title,
         artist: song.author,
-        artUri: Uri.tryParse(getHdThumbnail(song.id.value)),
+        artUri: resolveArtworkUrl(song).isNotEmpty
+            ? Uri.tryParse(resolveArtworkUrl(song))
+            : null,
         duration: song.duration,
       );
       if (!kIsWeb && audioHandler != null) {
@@ -4343,10 +4610,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
     final mediaItem = MediaItem(
       id: song.id.value,
-      album: 'DilSe',
+      album: resolveAlbumTitleForSong(song),
       title: song.title,
       artist: song.author,
-      artUri: Uri.tryParse(getHdThumbnail(song.id.value)),
+      artUri: resolveArtworkUrl(song).isNotEmpty
+          ? Uri.tryParse(resolveArtworkUrl(song))
+          : null,
       duration: song.duration,
     );
 
@@ -4584,7 +4853,8 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             videoId: webVideoId,
             title: song.title,
             artist: song.author,
-            artworkUrl: getHdThumbnail(song.id.value),
+            artworkUrl: resolveArtworkUrl(song),
+            album: resolveAlbumTitleForSong(song),
             streamUrl: directStreamUrl,
             crossfadeSeconds: crossfadeSec,
           );
@@ -4595,7 +4865,8 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             webVideoId,
             title: song.title,
             artist: song.author,
-            artworkUrl: getHdThumbnail(song.id.value),
+            artworkUrl: resolveArtworkUrl(song),
+            album: resolveAlbumTitleForSong(song),
             streamUrl: directStreamUrl,
           );
         }
@@ -4652,7 +4923,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           } else {
             await _startPlaybackWithFade(
               isCrossfade: false,
-              playAction: () async => await targetPlayer.play(),
+              playAction: () async => unawaited(targetPlayer.play()),
             );
           }
           _activeStreamInfo = ActiveStreamInfo(
@@ -4920,6 +5191,21 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       if (!playbackSourceSet) {
+        if (_lastFailedSongId != song.id.value) {
+          // Attempt 1 immediate retry for the selected track (evicting cached stream)
+          _lastFailedSongId = song.id.value;
+          _webStreamUrls.remove(song.id.value);
+          debugPrint(
+            '[Play] Initial resolution failed for "${song.title}". Retrying once…',
+          );
+          await Future.delayed(const Duration(milliseconds: 300));
+          if (_currentSong?.id.value == song.id.value &&
+              sessionToken == _activePlaySessionToken) {
+            await playSong(song, updateQueue: false);
+            return;
+          }
+        }
+
         _consecutivePlaybackFailures++;
         _isLoading = false;
         _isCrossfading = false;
@@ -4952,10 +5238,13 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       } else {
         await _startPlaybackWithFade(
           isCrossfade: false,
-          playAction: () async => await targetPlayer.play(),
+          playAction: () async => unawaited(targetPlayer.play()),
         );
       }
       if (sessionToken != _activePlaySessionToken) return;
+      if (!kIsWeb && audioHandler is DilSeAudioHandler) {
+        (audioHandler as DilSeAudioHandler).bindPlayer(_activePlayer);
+      }
       _isLoading = false;
       notifyListeners();
       persistPlaybackSession(force: true);
@@ -6098,15 +6387,26 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     if (_isCrossfading) {
       _cancelActiveFade();
     }
-    _savedPosition = position;
+    final totalDuration = duration ?? Duration.zero;
+    final maxSeek = (totalDuration > const Duration(milliseconds: 500))
+        ? totalDuration - const Duration(milliseconds: 500)
+        : totalDuration;
+    final clamped = (position < Duration.zero)
+        ? Duration.zero
+        : (position > maxSeek && maxSeek > Duration.zero ? maxSeek : position);
+
+    _savedPosition = clamped;
+    _lastKnownPosition = clamped;
+    _positionBroadcaster.add(clamped);
     if (kIsWeb) {
-      WebPlayerBridge.seek(position);
+      WebPlayerBridge.seek(clamped);
       notifyListeners();
-      PreferencesService().updateLastPlaybackPosition(position.inMilliseconds);
+      PreferencesService().updateLastPlaybackPosition(clamped.inMilliseconds);
       return;
     }
-    await _audioPlayer.seek(position);
-    PreferencesService().updateLastPlaybackPosition(position.inMilliseconds);
+    await _audioPlayer.seek(clamped);
+    notifyListeners();
+    PreferencesService().updateLastPlaybackPosition(clamped.inMilliseconds);
   }
 
   void togglePlayPause() {
@@ -6133,7 +6433,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           (pState == ProcessingState.idle ||
               pState == ProcessingState.completed ||
               _audioPlayer.audioSource == null)) {
-        playSong(_currentSong!, updateQueue: false);
+        final resumePos = position;
+        playSong(_currentSong!, updateQueue: false).then((_) {
+          if (resumePos > Duration.zero) {
+            seek(resumePos);
+          }
+        });
         return;
       }
       if (_currentSong == null && _playlist.isNotEmpty) {
@@ -6274,8 +6579,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
       if (posMs > 0) {
         _savedPosition = Duration(milliseconds: posMs);
+        _lastKnownPosition = _savedPosition!;
       } else {
         _savedPosition = Duration.zero;
+        _lastKnownPosition = Duration.zero;
       }
 
       if (durMs > 0) {
@@ -6397,6 +6704,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _currentIndex = 0;
     _savedPosition = null;
     _savedDuration = null;
+    _lastKnownPosition = Duration.zero;
     _activePlaySessionToken = 0;
     _standbyBufferedTrackId = null;
     _isPrebufferingStandby = false;

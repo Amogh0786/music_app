@@ -528,14 +528,30 @@ class CanonicalSongDedup {
     if (RegExp(r'\b(english)\b').hasMatch(lower)) return 'english';
 
     // Channel / Record Label language associations
-    if (lower.contains('aditya music') || lower.contains('madhura audio')) {
+    if (lower.contains('aditya music') ||
+        lower.contains('madhura audio') ||
+        lower.contains('mango music') ||
+        lower.contains('lahari music telugu')) {
       return 'telugu';
     }
-    if (lower.contains('think music')) return 'tamil';
+    if (lower.contains('think music') || lower.contains('sony music south')) {
+      return 'tamil';
+    }
+    if (lower.contains('zee music telugu') ||
+        lower.contains('t-series telugu') ||
+        lower.contains('tseries telugu')) {
+      return 'telugu';
+    }
+    if (lower.contains('t-series') ||
+        lower.contains('tseries') ||
+        lower.contains('yrf') ||
+        lower.contains('tips official') ||
+        lower.contains('zee music')) {
+      return 'hindi';
+    }
 
     // Check Romanized Indic scripts
     if (LyricsTransliterationService.isRomanizedTelugu(text)) return 'telugu';
-    if (LyricsTransliterationService.isRomanizedIndic(text)) return 'telugu';
 
     // If text contains recognized English vocabulary and is not Romanized Indic
     if (_commonEnglishWords.hasMatch(lower)) {
@@ -546,7 +562,7 @@ class CanonicalSongDedup {
   }
 
   static final RegExp _commonEnglishWords = RegExp(
-    r'\b(?:the|of|and|in|to|a|is|that|for|you|it|with|on|as|are|at|be|this|have|from|or|one|had|by|word|but|not|what|all|were|we|when|your|can|said|there|use|an|each|which|she|do|how|their|if|will|up|other|about|out|many|then|them|these|so|some|her|would|make|like|him|into|time|has|look|two|more|write|go|see|number|no|way|could|people|my|than|first|water|been|call|who|oil|its|now|find|long|down|day|did|get|come|made|may|part|love|night|heart|tonight|girl|baby|never|forever|lights|star|dream|world|sun|rain|feel|away|home|life|eyes|sweet|mind|hold|dance|summer|kiss|die|fly|run|fall|again|sky|fire|magic|alone|together|perfect|shape|bad|habits|believer|blinding|closer|dynamite|senorita|stay|memories|peaches|industry|levitating|save|tears|prayer|choir|sailor|deadpool|wolverine|ed|sheeran|bruno|mars|taylor|swift|billie|eilish|coldplay|dua|lipa|justin|bieber|eminem|drake|gigi|perez|weekend|pop|rock|soundtrack|version|remix|acoustic|original|hit|hits|song|tracks|queen|beatles|adele|rihanna|shakira|post|malone|maroon|chainsmokers|imagine|dragons|alan|walker|sia|charlie|puth)\b',
+    r'\b(?:the|of|and|in|to|a|is|that|for|you|it|with|on|as|are|at|be|this|have|from|or|one|had|by|word|but|not|what|all|were|we|when|your|can|said|there|use|an|each|which|she|do|how|their|if|will|up|other|about|out|many|then|them|these|so|some|her|would|make|like|him|into|time|has|look|two|more|write|go|see|number|no|way|could|people|my|than|first|water|been|call|who|oil|its|now|find|long|down|day|did|get|come|made|may|part|love|night|heart|tonight|girl|baby|never|forever|lights|star|dream|world|sun|rain|feel|away|home|life|eyes|sweet|mind|hold|dance|summer|kiss|die|fly|run|fall|again|sky|fire|magic|alone|together|perfect|shape|bad|habits|believer|blinding|closer|dynamite|senorita|stay|memories|peaches|industry|levitating|save|tears|prayer|choir|sailor|deadpool|wolverine|ed|sheeran|bruno|mars|taylor|swift|billie|eilish|coldplay|dua|lipa|justin|bieber|eminem|drake|gigi|perez|weekend|pop|rock|soundtrack|version|remix|acoustic|original|hit|hits|song|tracks|queen|beatles|adele|rihanna|shakira|post|malone|maroon|chainsmokers|imagine|dragons|alan|walker|sia|charlie|puth|faded|spectre|darkside|lily|heroes|attention|dangerously|left|right|counting|stars|sugar|payphone|maps|animals|locked|heaven|uptown|funk|treasure|grenade|moon|versace|smile|feather|espresso|cardigan|willow|lover|style|karma|vampire|drivers|license|starboy|hills|waterfall|sunflower|circles|rockstar|diamonds|unholy)\b',
     caseSensitive: false,
   );
 
@@ -608,8 +624,19 @@ class CanonicalSongDedup {
     final tLang = targetLang?.toLowerCase().trim();
     int score = 0;
 
-    // 1. Strict script compatibility
-    if (tLang != null && tLang.isNotEmpty) {
+    // 1. Strict script and language compatibility
+    if (tLang == 'english') {
+      if (script != null) return -9999;
+      if (LyricsTransliterationService.isRomanizedTelugu(cleanLyrics)) {
+        return -9999;
+      }
+      if (metaLang != null && metaLang != 'english') return -9999;
+      if (!isKnownIndicArtist(targetArtist) &&
+          cArtist.isNotEmpty &&
+          isKnownIndicArtist(cArtist)) {
+        return -9999;
+      }
+    } else if (tLang != null && tLang.isNotEmpty) {
       if (script != null) {
         if (script != tLang) {
           // Hard reject conflicting script (e.g. Malayalam or Tamil lyrics for Telugu song)
@@ -617,21 +644,31 @@ class CanonicalSongDedup {
         } else {
           score += 500;
         }
-      } else if (tLang == 'english' && script != null) {
-        return -9999;
       }
-    }
-
-    // 2. Strict metadata language compatibility
-    if (tLang != null &&
-        tLang.isNotEmpty &&
-        metaLang != null &&
-        metaLang != 'english') {
-      if (metaLang != tLang) {
+      if (metaLang != null && metaLang != 'english' && metaLang != tLang) {
         // Hard reject conflicting dubbed album tags
         return -9999;
-      } else {
+      } else if (metaLang == tLang) {
         score += 300;
+      }
+      if (tLang != 'telugu' &&
+          LyricsTransliterationService.isRomanizedTelugu(cleanLyrics)) {
+        return -9999;
+      }
+    } else {
+      // tLang is unassigned: check if song is English based on title & artist
+      final inferredTargetLang = detectLanguage('$targetTitle $targetArtist');
+      if (inferredTargetLang == 'english') {
+        if (script != null) return -9999;
+        if (LyricsTransliterationService.isRomanizedTelugu(cleanLyrics)) {
+          return -9999;
+        }
+        if (metaLang != null && metaLang != 'english') return -9999;
+        if (!isKnownIndicArtist(targetArtist) &&
+            cArtist.isNotEmpty &&
+            isKnownIndicArtist(cArtist)) {
+          return -9999;
+        }
       }
     }
 
@@ -675,14 +712,16 @@ class CanonicalSongDedup {
     if (targetDuration != null && targetDuration > 0 && cDur > 0) {
       final diff = (cDur - targetDuration).abs();
       final ratio = diff / targetDuration;
-      if (diff <= 4) {
+      if (diff > 60 || ratio > 0.35) {
+        return -9999; // Completely different song length
+      } else if (diff <= 4) {
         score += 120;
       } else if (diff <= 10) {
         score += 60;
       } else if (diff > 25 || ratio > 0.15) {
         score -= 300; // Large discrepancy
       } else if (diff > 45 || ratio > 0.25) {
-        score -= 600; // Completely different song length
+        score -= 600; // Large discrepancy
       }
     }
 

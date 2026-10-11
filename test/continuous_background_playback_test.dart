@@ -129,5 +129,65 @@ void main() {
         expect(config.androidStopForegroundOnPause, isFalse);
       },
     );
+
+    test('seekRelative accurately offsets from current position', () {
+      final music = MusicService();
+      music.seek(const Duration(seconds: 45));
+      expect(music.position, equals(const Duration(seconds: 45)));
+
+      music.seekRelative(const Duration(seconds: 10));
+      expect(music.position, equals(const Duration(seconds: 55)));
+
+      music.seekRelative(const Duration(seconds: -20));
+      expect(music.position, equals(const Duration(seconds: 35)));
+    });
+
+    test(
+      'seek immediately updates position and emits to positionStream',
+      () async {
+        final music = MusicService();
+        Duration? streamedPosition;
+        final sub = music.positionStream.listen((pos) {
+          streamedPosition = pos;
+        });
+
+        await music.seek(const Duration(seconds: 72));
+        await Future<void>.delayed(Duration.zero);
+        expect(music.position, equals(const Duration(seconds: 72)));
+        expect(streamedPosition, equals(const Duration(seconds: 72)));
+
+        await music.seekRelative(const Duration(seconds: 10));
+        await Future<void>.delayed(Duration.zero);
+        expect(music.position, equals(const Duration(seconds: 82)));
+        expect(streamedPosition, equals(const Duration(seconds: 82)));
+
+        await sub.cancel();
+      },
+    );
+
+    test(
+      'DilSeAudioHandler seekForward and seekBackward execute discretely',
+      () async {
+        final handler = DilSeAudioHandler();
+        final music = MusicService();
+        await music.seek(const Duration(seconds: 30));
+
+        await handler.seekForward(true);
+        expect(music.position, equals(const Duration(seconds: 40)));
+
+        await handler.seekBackward(true);
+        expect(music.position, equals(const Duration(seconds: 30)));
+
+        // begin = false should be a no-op
+        await handler.seekForward(false);
+        expect(music.position, equals(const Duration(seconds: 30)));
+      },
+    );
+
+    test('DilSeAudioHandler play and pause execute without error', () async {
+      final handler = DilSeAudioHandler();
+      await handler.play();
+      await handler.pause();
+    });
   });
 }

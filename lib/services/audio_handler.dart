@@ -91,7 +91,9 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
               ProcessingState.completed: AudioProcessingState.completed,
             }[_player.processingState]!,
             playing: playing,
-            updatePosition: _player.position,
+            updatePosition: (_player.position > Duration.zero)
+                ? _player.position
+                : MusicService().position,
             bufferedPosition: _player.bufferedPosition,
             speed: _player.speed,
             queueIndex: event.currentIndex,
@@ -116,16 +118,52 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> play() => _player.play();
+  Future<void> play() async {
+    if (!MusicService().isPlaying) {
+      MusicService().togglePlayPause();
+    } else {
+      try {
+        await _player.play();
+      } catch (_) {}
+    }
+  }
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() async {
+    if (MusicService().isPlaying) {
+      MusicService().togglePlayPause();
+    } else {
+      try {
+        await _player.pause();
+      } catch (_) {}
+    }
+  }
 
   @override
-  Future<void> seek(Duration position) => _player.seek(position);
+  Future<void> seek(Duration position) async {
+    await MusicService().seek(position);
+  }
 
   @override
-  Future<void> stop() => _player.stop();
+  Future<void> stop() async {
+    playbackState.add(
+      playbackState.value.copyWith(
+        processingState: AudioProcessingState.idle,
+        playing: false,
+      ),
+    );
+    await _player.stop();
+    await super.stop();
+  }
+
+  @override
+  Future<void> onTaskRemoved() async {
+    // When app is swiped away from Android recent tasks, dismiss ghost notification if paused
+    if (!MusicService().isPlaying) {
+      await stop();
+    }
+    await super.onTaskRemoved();
+  }
 
   @override
   Future<void> skipToNext() async {
@@ -138,9 +176,26 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> fastForward() =>
-      seek(_player.position + const Duration(seconds: 10));
+  Future<void> fastForward() async {
+    await MusicService().seekRelative(const Duration(seconds: 10));
+  }
 
   @override
-  Future<void> rewind() => seek(_player.position - const Duration(seconds: 10));
+  Future<void> rewind() async {
+    await MusicService().seekRelative(const Duration(seconds: -10));
+  }
+
+  @override
+  Future<void> seekForward(bool begin) async {
+    if (begin) {
+      await fastForward();
+    }
+  }
+
+  @override
+  Future<void> seekBackward(bool begin) async {
+    if (begin) {
+      await rewind();
+    }
+  }
 }
