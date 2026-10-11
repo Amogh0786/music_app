@@ -175,13 +175,16 @@ class DilSeMusicWidgetProvider : AppWidgetProvider() {
     }
 
     private fun sendMediaKeyEvent(context: Context, keyCode: Int) {
+        val mediaReceiver = ComponentName(context, "com.ryanheise.audioservice.MediaButtonReceiver")
         val downIntent = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+            component = mediaReceiver
             setPackage(context.packageName)
             putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
         }
         context.sendBroadcast(downIntent)
 
         val upIntent = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+            component = mediaReceiver
             setPackage(context.packageName)
             putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_UP, keyCode))
         }

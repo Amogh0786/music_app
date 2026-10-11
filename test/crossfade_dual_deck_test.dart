@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_app/services/music_service.dart';
@@ -192,5 +193,54 @@ void main() {
         expect(music.activeDeckName, isNot(initialDeck));
       },
     );
+
+    test(
+      'Standby handoff with isCrossfade=true preserves isCrossfading state',
+      () async {
+        final music = MusicService();
+        music.resetForTesting();
+
+        const prebufferedId = 'nexttrack02';
+        MusicService.cacheWebStreamUrl(
+          prebufferedId,
+          'https://example.com/audio.mp4',
+        );
+        music.setStandbyBufferedTrackIdForTesting(prebufferedId);
+        music.setIsCrossfadingForTesting(true);
+
+        final nextSong = makeVideo(
+          prebufferedId,
+          'Next Prebuffered Song',
+          'Artist N',
+        );
+
+        // When isCrossfade is true, playSong should not wipe _isCrossfading to false
+        await music.playSong(nextSong, isCrossfade: true);
+
+        // Standby deck was assumed
+        expect(music.currentSong?.id.value, prebufferedId);
+      },
+    );
+
+    test('skipToQueueIndex cancels active crossfade ramp', () async {
+      final music = MusicService();
+      music.resetForTesting();
+
+      final song1 = makeVideo('aaaaaaaaaaa', 'First Song', 'Artist A');
+      final song2 = makeVideo('bbbbbbbbbbb', 'Second Song', 'Artist B');
+      MusicService.cacheWebStreamUrl(
+        'bbbbbbbbbbb',
+        'https://example.com/audio2.mp4',
+      );
+      music.setPlaylistForTesting([song1, song2], initialIndex: 0);
+      music.setStandbyBufferedTrackIdForTesting('bbbbbbbbbbb');
+
+      music.setIsCrossfadingForTesting(true);
+      expect(music.isCrossfading, isTrue);
+
+      unawaited(music.skipToQueueIndex(1));
+      expect(music.isCrossfading, isFalse);
+      expect(music.currentIndex, 1);
+    });
   });
 }
