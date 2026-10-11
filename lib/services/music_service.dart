@@ -3581,6 +3581,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         darkVibrant,
       );
       notifyListeners();
+      _syncWidgetPlayback();
     } catch (e) {
       debugPrint('[Palette] Extraction error: $e');
       if (_currentSong != null && _currentSong?.id.value == videoId) {
@@ -3589,6 +3590,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         _vibrantColor = palette.vibrant;
         _darkVibrantColor = palette.darkVibrant;
         notifyListeners();
+        _syncWidgetPlayback();
       }
     }
   }
@@ -6629,6 +6631,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     WidgetUpdateService().initWidgetActionHandler(
       onToggleShuffle: () => toggleShuffle(),
       onToggleRepeat: () => toggleRepeat(),
+      onSeekTo: (pos) => seek(pos),
       onPlayPlaylist: (index, id, query) =>
           playPlaylistFromWidget(index, id, query),
     );
