@@ -1168,18 +1168,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
               // If a crossfade was initiated, outgoing player reaching EOF is expected.
               // Do NOT cancel active fade or wipe incoming player that is currently resolving/buffering!
               if (_isCrossfading) {
-                if (_standbyPlayer.playing) {
-                  debugPrint(
-                    '[AudioPlayer] Outgoing player reached EOF during crossfade. Standby deck assuming playback.',
-                  );
-                  return;
-                } else {
-                  // Standby deck didn't start playing yet! Transition cleanly so auto-advance doesn't stall.
-                  debugPrint(
-                    '[AudioPlayer] Outgoing player reached EOF but standby deck is not playing. Re-enabling auto-advance.',
-                  );
-                  _isCrossfading = false;
-                }
+                debugPrint(
+                  '[AudioPlayer] Active player reached EOF during crossfade. Transition managed by crossfade engine.',
+                );
+                return;
               }
 
               final currentPos = player.position;
@@ -1195,14 +1187,6 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
               if (!isNearEnd) {
                 debugPrint(
                   '[AudioPlayer] Ignoring false completion event at ${currentPos.inSeconds}s / ${currentDur?.inSeconds}s (player playing: ${player.playing})',
-                );
-                return;
-              }
-
-              // Also, a track can NEVER naturally finish if the player is paused.
-              if (!player.playing) {
-                debugPrint(
-                  '[AudioPlayer] Ignoring completion event while paused at ${currentPos.inSeconds}s',
                 );
                 return;
               }
@@ -1503,7 +1487,13 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
       try {
         await incomingPlayer.setVolume(1.0);
-        await incomingPlayer.play();
+        unawaited(
+          incomingPlayer.play().catchError((e) {
+            debugPrint(
+              '[Crossfade] Error starting incoming player directly: $e',
+            );
+          }),
+        );
       } catch (e) {
         debugPrint('[Crossfade] Error starting incoming player directly: $e');
       }
@@ -1515,7 +1505,11 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
     try {
       await incomingPlayer.setVolume(0.0);
-      await incomingPlayer.play();
+      unawaited(
+        incomingPlayer.play().catchError((e) {
+          debugPrint('[Crossfade] Error starting incoming player: $e');
+        }),
+      );
     } catch (e) {
       debugPrint('[Crossfade] Error starting incoming player: $e');
       _isCrossfading = false;
@@ -1548,9 +1542,20 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    final dur = incomingPlayer.duration;
-    if (dur != null && dur.inSeconds > 0 && dur.inSeconds <= crossfadeSec * 2) {
-      crossfadeSec = (dur.inSeconds ~/ 2).clamp(1, 10);
+    final inDur = incomingPlayer.duration;
+    if (inDur != null &&
+        inDur.inSeconds > 0 &&
+        inDur.inSeconds <= crossfadeSec * 2) {
+      crossfadeSec = (inDur.inSeconds ~/ 2).clamp(1, 10);
+    }
+
+    final outDur = outgoingPlayer.duration;
+    final outPos = outgoingPlayer.position;
+    if (outDur != null && outDur > outPos) {
+      final outRemaining = outDur - outPos;
+      if (outRemaining.inSeconds > 0 && outRemaining.inSeconds < crossfadeSec) {
+        crossfadeSec = outRemaining.inSeconds.clamp(1, crossfadeSec);
+      }
     }
 
     await _dualDeckCrossfadeNative(
@@ -1599,8 +1604,15 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     final nextTrack = _getNextTrackCandidate();
     if (nextTrack == null) return;
 
-    // 1. Proactive URL resolution at T-25s to T-5s
-    if (remaining <= const Duration(seconds: 25) &&
+    final prefs = PreferencesService();
+    final int crossfadeSec = prefs.crossfadeEnabled
+        ? prefs.crossfadeSeconds
+        : 0;
+    final int urlPrewarmSec = (crossfadeSec + 20).clamp(25, 45);
+    final int standbyPrewarmSec = (crossfadeSec + 12).clamp(18, 35);
+
+    // 1. Proactive URL resolution
+    if (remaining <= Duration(seconds: urlPrewarmSec) &&
         remaining > const Duration(seconds: 3)) {
       final trackId = nextTrack.id.value;
       if (_webStreamUrls[trackId] == null || _webStreamUrls[trackId]!.isEmpty) {
@@ -1608,9 +1620,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    // 2. Proactive Audio Frame Pre-Buffering on Standby Deck at T-15s to T-2s
+    // 2. Proactive Audio Frame Pre-Buffering on Standby Deck
     if (!kIsWeb &&
-        remaining <= const Duration(seconds: 15) &&
+        remaining <= Duration(seconds: standbyPrewarmSec) &&
         remaining > const Duration(seconds: 2)) {
       if (_standbyBufferedTrackId != nextTrack.id.value &&
           !_isPrebufferingStandby) {
@@ -1660,18 +1672,21 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     final remaining = dur - pos;
-    // Proactively pre-resolve upcoming track 5 seconds before crossfade initiates so network delay is eliminated
-    if (remaining <= Duration(seconds: crossfadeSec + 5) &&
+    // Proactively ensure upcoming track URL and standby deck are primed before crossfade threshold
+    if (remaining <= Duration(seconds: crossfadeSec + 8) &&
         remaining > Duration(seconds: crossfadeSec)) {
-      if (_isShuffle && _shuffleHistoryPointer + 1 < _shuffleHistory.length) {
-        final nextIdx = _shuffleHistory[_shuffleHistoryPointer + 1];
-        if (nextIdx >= 0 && nextIdx < _playlist.length) {
-          _prewarmSingleTrack(_playlist[nextIdx]);
+      final nextTrack = _getNextTrackCandidate();
+      if (nextTrack != null) {
+        final trackId = nextTrack.id.value;
+        if (_webStreamUrls[trackId] == null ||
+            _webStreamUrls[trackId]!.isEmpty) {
+          _prewarmSingleTrack(nextTrack);
         }
-      } else if (_currentIndex + 1 < _playlist.length) {
-        _prewarmSingleTrack(_playlist[_currentIndex + 1]);
-      } else if (_loopMode == LoopMode.all && _playlist.isNotEmpty) {
-        _prewarmSingleTrack(_playlist[0]);
+        if (!kIsWeb &&
+            _standbyBufferedTrackId != trackId &&
+            !_isPrebufferingStandby) {
+          _primeStandbyDeckForNextTrack(nextTrack);
+        }
       }
     }
 
@@ -2294,6 +2309,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     } catch (_) {}
   }
 
+  Future<void>? _standbyPrebufferFuture;
+  String? _standbyPrebufferingTrackId;
+
   /// Primes and pre-buffers the incoming track directly onto the standby deck.
   /// When this track is subsequently requested, the engine can execute an instant 0ms handoff.
   Future<void> _primeStandbyDeckForNextTrack(Video nextTrack) async {
@@ -2301,8 +2319,24 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     final trackId = nextTrack.id.value;
     if (_standbyBufferedTrackId == trackId || _isPrebufferingStandby) return;
 
-    final token = _activePlaySessionToken;
+    _standbyPrebufferingTrackId = trackId;
     _isPrebufferingStandby = true;
+    final future = _executeStandbyDeckPrebuffer(nextTrack);
+    _standbyPrebufferFuture = future;
+    try {
+      await future;
+    } finally {
+      _isPrebufferingStandby = false;
+      if (_standbyPrebufferingTrackId == trackId) {
+        _standbyPrebufferingTrackId = null;
+        _standbyPrebufferFuture = null;
+      }
+    }
+  }
+
+  Future<void> _executeStandbyDeckPrebuffer(Video nextTrack) async {
+    final trackId = nextTrack.id.value;
+    final token = _activePlaySessionToken;
 
     try {
       if (!kIsWeb) {
@@ -2381,8 +2415,6 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
     } catch (e) {
       debugPrint('[Gapless] Standby pre-buffering silent fail: $e');
-    } finally {
-      _isPrebufferingStandby = false;
     }
   }
 
@@ -3941,7 +3973,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     if (index < 0 || index >= _playlist.length) return;
     if (_currentIndex == index && isPlaying) return;
     if (_isCrossfading) {
-      _isCrossfading = false;
+      _cancelActiveFade();
       unawaited(_setVolume(1.0));
     }
     _currentIndex = index;
@@ -4403,6 +4435,20 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       _durationBroadcaster.add(song.duration);
     }
 
+    // If standby deck is actively finishing its prebuffer for this track, wait for it briefly
+    if (!kIsWeb &&
+        _isPrebufferingStandby &&
+        _standbyPrebufferingTrackId == song.id.value) {
+      debugPrint(
+        '[Gapless] Waiting for active standby deck prebuffering to complete for "${song.title}"…',
+      );
+      try {
+        await _standbyPrebufferFuture?.timeout(
+          const Duration(milliseconds: 2500),
+        );
+      } catch (_) {}
+    }
+
     // ⚡ Check if standby deck already has this exact song pre-buffered
     final bool isPrebufferedOnStandby =
         !kIsWeb && _standbyBufferedTrackId == song.id.value;
@@ -4412,7 +4458,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       _standbyBufferedTrackId = null;
 
       _isLoading = false;
-      _isCrossfading = false;
+      if (!isCrossfade) {
+        _isCrossfading = false;
+      }
       _hasRepeatedOnce = false;
 
       if (!_isNavigatingHistory &&
@@ -4875,7 +4923,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           } else {
             await _startPlaybackWithFade(
               isCrossfade: false,
-              playAction: () async => await targetPlayer.play(),
+              playAction: () async => unawaited(targetPlayer.play()),
             );
           }
           _activeStreamInfo = ActiveStreamInfo(
@@ -5190,7 +5238,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       } else {
         await _startPlaybackWithFade(
           isCrossfade: false,
-          playAction: () async => await targetPlayer.play(),
+          playAction: () async => unawaited(targetPlayer.play()),
         );
       }
       if (sessionToken != _activePlaySessionToken) return;
