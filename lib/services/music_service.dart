@@ -1008,6 +1008,16 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _ensureAudioSessionActive() async {
+    if (kIsWeb) return;
+    try {
+      final session = await AudioSession.instance;
+      await session.setActive(true);
+    } catch (e) {
+      debugPrint('[AudioSession] Ensure active error: $e');
+    }
+  }
+
   Future<void> _initAudioSession() async {
     try {
       final session = await AudioSession.instance;
@@ -1017,7 +1027,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         if (event.begin) {
           switch (event.type) {
             case AudioInterruptionType.duck:
-              _audioPlayer.setVolume(0.3);
+              _audioPlayer.setVolume(0.5);
               break;
             case AudioInterruptionType.pause:
             case AudioInterruptionType.unknown:
@@ -1485,18 +1495,11 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         (audioHandler as DilSeAudioHandler).bindPlayer(_activePlayer);
       }
       try {
-        await incomingPlayer.setVolume(0.3);
+        await incomingPlayer.setVolume(1.0);
         unawaited(
           incomingPlayer.play().catchError((e) {
             debugPrint('[Crossfade] Error starting incoming player: $e');
           }),
-        );
-        unawaited(
-          _fadeVolume(
-            from: 0.3,
-            to: 1.0,
-            duration: const Duration(milliseconds: 600),
-          ),
         );
       } catch (e) {
         debugPrint('[Crossfade] Error starting incoming player directly: $e');
@@ -1722,9 +1725,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     final prefs = PreferencesService();
     final shouldFade = isCrossfade || prefs.fadeInOnStartEnabled;
 
+    await _ensureAudioSessionActive();
+
     if (!shouldFade) {
       await _setVolume(1.0);
       await playAction();
+      unawaited(_setVolume(1.0));
       return;
     }
 
@@ -2348,6 +2354,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
               AudioSource.uri(Uri.file(localFile.path), tag: mediaItem),
               preload: true,
             );
+            await _standbyPlayer.setVolume(1.0);
             if (token == _activePlaySessionToken) {
               _standbyBufferedTrackId = trackId;
               debugPrint(
@@ -2383,6 +2390,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         );
 
         await _standbyPlayer.setAudioSource(source, preload: true);
+        await _standbyPlayer.setVolume(1.0);
         if (token == _activePlaySessionToken) {
           _standbyBufferedTrackId = trackId;
           debugPrint(
@@ -4398,6 +4406,8 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }) async {
     final int sessionToken = ++_activePlaySessionToken;
 
+    unawaited(_ensureAudioSessionActive());
+
     _savedPosition = null;
     _savedDuration = null;
     _positionBroadcaster.add(Duration.zero);
@@ -4476,11 +4486,17 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           await outgoingPlayer.stop();
         } catch (_) {}
 
+        await incomingPlayer.setVolume(1.0);
         unawaited(
           incomingPlayer.play().catchError((e) {
             debugPrint('[Gapless] Error starting incoming player: $e');
           }),
         );
+      }
+
+      _positionBroadcaster.add(Duration.zero);
+      if (song.duration != null && song.duration! > Duration.zero) {
+        _durationBroadcaster.add(song.duration);
       }
 
       _syncWidgetPlayback();
@@ -4525,6 +4541,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             await _activePlayer.stop();
           } catch (_) {}
         }
+      }
+      if (!kIsWeb && audioHandler is DilSeAudioHandler) {
+        (audioHandler as DilSeAudioHandler).bindPlayer(_activePlayer);
       }
       unawaited(_setVolume(1.0));
     } else {
@@ -4891,6 +4910,11 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
                 activeQualityPreset == AudioQualityPreset.high,
           );
           _isLoading = false;
+          _positionBroadcaster.add(targetPlayer.position);
+          if (targetPlayer.duration != null &&
+              targetPlayer.duration! > Duration.zero) {
+            _durationBroadcaster.add(targetPlayer.duration);
+          }
           _consecutivePlaybackFailures = 0;
           _lastFailedSongId = null;
           _songRetryCount = 0;
@@ -5199,6 +5223,11 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
       if (sessionToken != _activePlaySessionToken) return;
       _isLoading = false;
+      _positionBroadcaster.add(targetPlayer.position);
+      if (targetPlayer.duration != null &&
+          targetPlayer.duration! > Duration.zero) {
+        _durationBroadcaster.add(targetPlayer.duration);
+      }
       notifyListeners();
       persistPlaybackSession(force: true);
       _syncWidgetPlayback();
@@ -6400,6 +6429,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       if (!_isCrossfading) {
         unawaited(_setVolume(1.0));
       }
+      unawaited(_ensureAudioSessionActive());
       _audioPlayer.play();
       if (_isCrossfading) {
         _standbyPlayer.play();
@@ -6588,6 +6618,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     if (songMap == null) return;
     restoreLastPlaybackSession();
     if (_currentSong != null) {
+      unawaited(_ensureAudioSessionActive());
       final posMs = prefs.lastPlayedPositionMs;
       await playSong(_currentSong!, updateQueue: false);
       if (posMs > 0) {
