@@ -3,9 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
+import '../services/preferences_service.dart';
+import '../services/canonical_song_dedup.dart';
 import '../screens/player_screen.dart';
 import '../constants/app_theme_tokens.dart';
+import 'dilse_image.dart';
 
 class MiniPlayer extends StatefulWidget {
   const MiniPlayer({super.key});
@@ -27,20 +31,60 @@ class MiniPlayer extends StatefulWidget {
   State<MiniPlayer> createState() => _MiniPlayerState();
 }
 
-class _MiniPlayerState extends State<MiniPlayer> {
+class _MiniPlayerState extends State<MiniPlayer> with WidgetsBindingObserver {
   final MusicService _musicService = MusicService();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _musicService.addListener(_onMusicStateChanged);
     MiniPlayer.isVisible.addListener(_onVisibilityChanged);
+    PreferencesService().addListener(_onPreferencesChanged);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      setState(() {});
+    }
+  }
+
+  void _onPreferencesChanged() {
+    if (mounted) setState(() {});
+  }
+
+  String _resolveArtwork(Video? song) {
+    if (song == null) return '';
+    final hdThumbnail = MusicService.getHdThumbnail(song.id.value);
+    if (hdThumbnail.isNotEmpty &&
+        !hdThumbnail.startsWith('https://i.ytimg.com/')) {
+      return hdThumbnail;
+    }
+    final resolved = MusicService.resolveArtworkUrl(song);
+    if (resolved.isNotEmpty && !resolved.startsWith('https://i.ytimg.com/')) {
+      return resolved;
+    }
+    try {
+      final h = song.thumbnails.highResUrl;
+      if (h.isNotEmpty) return h;
+      final m = song.thumbnails.mediumResUrl;
+      if (m.isNotEmpty) return m;
+    } catch (_) {}
+    if (hdThumbnail.isNotEmpty) return hdThumbnail;
+    if (resolved.isNotEmpty) return resolved;
+    if (CanonicalSongDedup.isLikelyYouTubeId(song.id.value)) {
+      return 'https://i.ytimg.com/vi/${song.id.value}/hqdefault.jpg';
+    }
+    return '';
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _musicService.removeListener(_onMusicStateChanged);
     MiniPlayer.isVisible.removeListener(_onVisibilityChanged);
+    PreferencesService().removeListener(_onPreferencesChanged);
     super.dispose();
   }
 
@@ -115,9 +159,9 @@ class _MiniPlayerState extends State<MiniPlayer> {
         (processingState == ProcessingState.buffering ||
             processingState == ProcessingState.loading);
     final isLoading = !isPlaying && (_musicService.isLoading || isBuffering);
-    final hdThumbnail = song != null
-        ? MusicService.getHdThumbnail(song.id.value)
-        : '';
+    final thumbUrl = _resolveArtwork(song);
+
+    final accentColor = PreferencesService().legibleThemeColor;
 
     if (song == null && !isLoading) {
       return const SizedBox.shrink();
@@ -153,7 +197,9 @@ class _MiniPlayerState extends State<MiniPlayer> {
               AppThemeTokens.radiusFloatingDock,
             ),
             border: Border.all(
-              color: AppThemeTokens.floatingDockBorder,
+              color: isPlaying
+                  ? accentColor.withValues(alpha: 0.28)
+                  : AppThemeTokens.floatingDockBorder,
               width: 1,
             ),
             boxShadow: AppThemeTokens.dockShadow,
@@ -177,19 +223,49 @@ class _MiniPlayerState extends State<MiniPlayer> {
                         child: SizedBox(
                           width: 44,
                           height: 44,
-                          child: (hdThumbnail.isNotEmpty)
-                              ? Image.network(
-                                  hdThumbnail,
-                                  fit: BoxFit.cover,
-                                  cacheWidth: 120,
-                                  cacheHeight: 120,
-                                  errorBuilder: (_, _, _) => Container(
-                                    color: const Color(0xFF1E1E28),
-                                    child: const Icon(
-                                      Icons.music_note_rounded,
-                                      color: Colors.white38,
-                                      size: 20,
-                                    ),
+                          child: thumbUrl.isNotEmpty
+                              ? Transform.scale(
+                                  // YouTube audio uploads often have letterbox/pillarbox margins; crop flush to fill the 44x44 square
+                                  scale:
+                                      thumbUrl.startsWith(
+                                        'https://i.ytimg.com/',
+                                      )
+                                      ? 1.35
+                                      : 1.0,
+                                  child: DilSeImage(
+                                    key: ValueKey(thumbUrl),
+                                    imageUrl: thumbUrl,
+                                    width: 44,
+                                    height: 44,
+                                    fit: BoxFit.cover,
+                                    errorWidget:
+                                        (song != null &&
+                                            song.id.value.isNotEmpty &&
+                                            thumbUrl !=
+                                                'https://i.ytimg.com/vi/${song.id.value}/hqdefault.jpg')
+                                        ? Image.network(
+                                            'https://i.ytimg.com/vi/${song.id.value}/hqdefault.jpg',
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, _, _) =>
+                                                Container(
+                                                  color: const Color(
+                                                    0xFF1E1E28,
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.music_note_rounded,
+                                                    color: Colors.white38,
+                                                    size: 20,
+                                                  ),
+                                                ),
+                                          )
+                                        : Container(
+                                            color: const Color(0xFF1E1E28),
+                                            child: const Icon(
+                                              Icons.music_note_rounded,
+                                              color: Colors.white38,
+                                              size: 20,
+                                            ),
+                                          ),
                                   ),
                                 )
                               : Container(
@@ -247,7 +323,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                                     ? Icons.favorite_rounded
                                     : Icons.favorite_border_rounded,
                                 color: _musicService.isLiked(song.id.value)
-                                    ? AppThemeTokens.brandRuby
+                                    ? accentColor
                                     : Colors.white60,
                                 size: 20,
                               ),
@@ -265,8 +341,8 @@ class _MiniPlayerState extends State<MiniPlayer> {
                             ),
                           const SizedBox(width: 2),
                           isLoading
-                              ? const Padding(
-                                  padding: EdgeInsets.symmetric(
+                              ? Padding(
+                                  padding: const EdgeInsets.symmetric(
                                     horizontal: 6.0,
                                   ),
                                   child: SizedBox(
@@ -274,7 +350,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                                     height: 20,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Colors.white,
+                                      color: accentColor,
                                     ),
                                   ),
                                 )
@@ -352,9 +428,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                             widthFactor: progress,
                             child: Container(
                               height: 2.0,
-                              decoration: const BoxDecoration(
-                                color: AppThemeTokens.brandRuby,
-                              ),
+                              decoration: BoxDecoration(color: accentColor),
                             ),
                           );
                         },

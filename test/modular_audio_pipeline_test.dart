@@ -9,7 +9,6 @@ import 'package:music_app/services/audio/audio_engine_factory.dart';
 import 'package:music_app/services/audio/mobile_audio_engine.dart';
 import 'package:music_app/services/audio/web_audio_engine.dart';
 import 'package:music_app/services/update_service.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

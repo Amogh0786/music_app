@@ -152,6 +152,7 @@ class WebPlayerBridge {
     String? title,
     String? artist,
     String? artworkUrl,
+    String? album,
     double startSeconds = 0,
     String? streamUrl,
   }) {
@@ -181,17 +182,19 @@ class WebPlayerBridge {
         (title ?? 'DilSe Song').toJS,
         (artist ?? 'DilSe Music').toJS,
         (artworkUrl ?? '').toJS,
+        (album ?? '').toJS,
       );
     }
 
     if (globalWindow.hasProperty('dilsePlay'.toJS).toDart) {
-      globalWindow.callMethod(
-        'dilsePlay'.toJS,
+      globalWindow.callMethodVarArgs('dilsePlay'.toJS, [
         videoId.toJS,
         startSeconds.toJS,
         (title ?? '').toJS,
         (artist ?? '').toJS,
-      );
+        (artworkUrl ?? '').toJS,
+        (streamUrl ?? '').toJS,
+      ]);
     }
   }
 
@@ -236,6 +239,7 @@ class WebPlayerBridge {
     String? title,
     String? artist,
     String? artworkUrl,
+    String? album,
     String? streamUrl,
     int crossfadeSeconds = 4,
   }) {
@@ -266,6 +270,7 @@ class WebPlayerBridge {
         (title ?? 'DilSe Song').toJS,
         (artist ?? 'DilSe Music').toJS,
         (artworkUrl ?? '').toJS,
+        (album ?? '').toJS,
       );
     }
 
@@ -283,6 +288,7 @@ class WebPlayerBridge {
         title: title,
         artist: artist,
         artworkUrl: artworkUrl,
+        album: album,
         streamUrl: streamUrl,
       );
     }

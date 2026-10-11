@@ -17,6 +17,7 @@ import '../widgets/animated_lyrics.dart';
 import '../services/bug_report_service.dart';
 import '../services/screen_wake_service.dart';
 import '../widgets/responsive_wrapper.dart';
+import '../constants/app_theme_tokens.dart';
 import 'album_screen.dart';
 import 'artist_profile_screen.dart';
 import '../services/dynamic_artist_service.dart';
@@ -44,6 +45,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   LandscapeActiveTab _landscapeTab = LandscapeActiveTab.none;
   int? _doubleTapSeekDirection;
   Timer? _doubleTapSeekTimer;
+  int _doubleTapSeekCounter = 0;
+  double? _sliderDragValue;
 
   @override
   void initState() {
@@ -79,6 +82,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _doubleTapSeekTimer?.cancel();
     setState(() {
       _doubleTapSeekDirection = direction;
+      _doubleTapSeekCounter++;
     });
     _doubleTapSeekTimer = Timer(const Duration(milliseconds: 650), () {
       if (mounted) {
@@ -1506,7 +1510,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       ),
                       Color.alphaBlend(
                         darkVibrantColor.withValues(alpha: 0.20),
-                        const Color(0xFF07070A),
+                        AppThemeTokens.oledBackground,
                       ),
                     ],
                     stops: const [0.0, 0.52, 1.0],
@@ -1956,42 +1960,91 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                                                 0.18,
                                                                           ),
                                                                     ),
-                                                                    child: Column(
-                                                                      mainAxisAlignment:
-                                                                          MainAxisAlignment
-                                                                              .center,
-                                                                      children: [
-                                                                        Icon(
-                                                                          _doubleTapSeekDirection ==
-                                                                                  -1
-                                                                              ? Icons.replay_10_rounded
-                                                                              : Icons.forward_10_rounded,
-                                                                          color:
-                                                                              Colors.white,
-                                                                          size:
-                                                                              42,
-                                                                        ),
-                                                                        const SizedBox(
-                                                                          height:
-                                                                              6,
-                                                                        ),
-                                                                        Text(
-                                                                          _doubleTapSeekDirection ==
-                                                                                  -1
-                                                                              ? '-10 sec'
-                                                                              : '+10 sec',
-                                                                          style: const TextStyle(
+                                                                    child: TweenAnimationBuilder<double>(
+                                                                      key: ValueKey(
+                                                                        'seek_${_doubleTapSeekDirection}_$_doubleTapSeekCounter',
+                                                                      ),
+                                                                      tween: Tween<double>(
+                                                                        begin:
+                                                                            0.0,
+                                                                        end:
+                                                                            1.0,
+                                                                      ),
+                                                                      duration: const Duration(
+                                                                        milliseconds:
+                                                                            320,
+                                                                      ),
+                                                                      curve: Curves
+                                                                          .easeOutBack,
+                                                                      builder:
+                                                                          (
+                                                                            context,
+                                                                            animValue,
+                                                                            child,
+                                                                          ) {
+                                                                            final dir =
+                                                                                _doubleTapSeekDirection ==
+                                                                                    -1
+                                                                                ? -1.0
+                                                                                : 1.0;
+                                                                            final slideX =
+                                                                                dir *
+                                                                                (1.0 -
+                                                                                    animValue) *
+                                                                                14.0;
+                                                                            final scale =
+                                                                                0.82 +
+                                                                                (0.18 *
+                                                                                    animValue);
+                                                                            return Transform.translate(
+                                                                              offset: Offset(
+                                                                                slideX,
+                                                                                0,
+                                                                              ),
+                                                                              child: Transform.scale(
+                                                                                scale: scale,
+                                                                                child: Opacity(
+                                                                                  opacity: animValue.clamp(
+                                                                                    0.0,
+                                                                                    1.0,
+                                                                                  ),
+                                                                                  child: child,
+                                                                                ),
+                                                                              ),
+                                                                            );
+                                                                          },
+                                                                      child: Column(
+                                                                        mainAxisAlignment:
+                                                                            MainAxisAlignment.center,
+                                                                        children: [
+                                                                          Icon(
+                                                                            _doubleTapSeekDirection ==
+                                                                                    -1
+                                                                                ? Icons.replay_10_rounded
+                                                                                : Icons.forward_10_rounded,
                                                                             color:
                                                                                 Colors.white,
-                                                                            fontWeight:
-                                                                                FontWeight.bold,
-                                                                            fontSize:
-                                                                                13,
-                                                                            letterSpacing:
-                                                                                0.3,
+                                                                            size:
+                                                                                42,
                                                                           ),
-                                                                        ),
-                                                                      ],
+                                                                          const SizedBox(
+                                                                            height:
+                                                                                6,
+                                                                          ),
+                                                                          Text(
+                                                                            _doubleTapSeekDirection ==
+                                                                                    -1
+                                                                                ? '-10 sec'
+                                                                                : '+10 sec',
+                                                                            style: const TextStyle(
+                                                                              color: Colors.white,
+                                                                              fontWeight: FontWeight.bold,
+                                                                              fontSize: 13,
+                                                                              letterSpacing: 0.3,
+                                                                            ),
+                                                                          ),
+                                                                        ],
+                                                                      ),
                                                                     ),
                                                                   ),
                                                                 ),
@@ -2277,103 +2330,95 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                         child: Row(
                           children: [
-                            Expanded(
-                              child: Center(
-                                child: _BorderlessScaleButton(
-                                  scaleDown: 0.88,
-                                  onTap: () {
-                                    HapticFeedback.mediumImpact();
-                                    _musicService.previousSong();
-                                  },
-                                  child: const SizedBox(
-                                    width: 58,
-                                    height: 58,
-                                    child: Center(
-                                      child: Icon(
-                                        Icons.skip_previous_rounded,
-                                        color: Colors.white,
-                                        size: 42,
-                                      ),
-                                    ),
+                            const Spacer(flex: 2),
+                            _BorderlessScaleButton(
+                              scaleDown: 0.88,
+                              onTap: () {
+                                HapticFeedback.mediumImpact();
+                                _musicService.previousSong();
+                              },
+                              child: const SizedBox(
+                                width: 54,
+                                height: 54,
+                                child: Center(
+                                  child: Icon(
+                                    Icons.skip_previous_rounded,
+                                    color: Colors.white,
+                                    size: 42,
                                   ),
                                 ),
                               ),
                             ),
-                            Expanded(
-                              child: Center(
-                                child: _BorderlessScaleButton(
-                                  scaleDown: 0.92,
-                                  onTap: () {
-                                    HapticFeedback.mediumImpact();
-                                    _musicService.togglePlayPause();
-                                  },
-                                  child: SizedBox(
-                                    width: 76,
-                                    height: 76,
-                                    child: isLoading
-                                        ? const Center(
-                                            child: SizedBox(
-                                              width: 32,
-                                              height: 32,
-                                              child: CircularProgressIndicator(
-                                                valueColor:
-                                                    AlwaysStoppedAnimation<
-                                                      Color
-                                                    >(Colors.white),
-                                                strokeWidth: 3,
-                                              ),
-                                            ),
-                                          )
-                                        : Center(
-                                            child: AnimatedSwitcher(
-                                              duration: const Duration(
-                                                milliseconds: 220,
-                                              ),
-                                              transitionBuilder:
-                                                  (child, animation) =>
-                                                      ScaleTransition(
-                                                        scale: animation,
-                                                        child: FadeTransition(
-                                                          opacity: animation,
-                                                          child: child,
-                                                        ),
-                                                      ),
-                                              child: Icon(
-                                                isPlaying
-                                                    ? Icons.pause_rounded
-                                                    : Icons.play_arrow_rounded,
-                                                key: ValueKey<bool>(isPlaying),
-                                                color: Colors.white,
-                                                size: 58,
-                                              ),
-                                            ),
+                            const Spacer(flex: 1),
+                            _BorderlessScaleButton(
+                              scaleDown: 0.92,
+                              onTap: () {
+                                HapticFeedback.mediumImpact();
+                                _musicService.togglePlayPause();
+                              },
+                              child: SizedBox(
+                                width: 84,
+                                height: 84,
+                                child: isLoading
+                                    ? const Center(
+                                        child: SizedBox(
+                                          width: 36,
+                                          height: 36,
+                                          child: CircularProgressIndicator(
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                  Colors.white,
+                                                ),
+                                            strokeWidth: 3,
                                           ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Center(
-                                child: _BorderlessScaleButton(
-                                  scaleDown: 0.88,
-                                  onTap: () {
-                                    HapticFeedback.mediumImpact();
-                                    _musicService.nextSong();
-                                  },
-                                  child: const SizedBox(
-                                    width: 58,
-                                    height: 58,
-                                    child: Center(
-                                      child: Icon(
-                                        Icons.skip_next_rounded,
-                                        color: Colors.white,
-                                        size: 42,
+                                        ),
+                                      )
+                                    : Center(
+                                        child: AnimatedSwitcher(
+                                          duration: const Duration(
+                                            milliseconds: 220,
+                                          ),
+                                          transitionBuilder:
+                                              (child, animation) =>
+                                                  ScaleTransition(
+                                                    scale: animation,
+                                                    child: FadeTransition(
+                                                      opacity: animation,
+                                                      child: child,
+                                                    ),
+                                                  ),
+                                          child: Icon(
+                                            isPlaying
+                                                ? Icons.pause_rounded
+                                                : Icons.play_arrow_rounded,
+                                            key: ValueKey<bool>(isPlaying),
+                                            color: Colors.white,
+                                            size: 68,
+                                          ),
+                                        ),
                                       ),
-                                    ),
+                              ),
+                            ),
+                            const Spacer(flex: 1),
+                            _BorderlessScaleButton(
+                              scaleDown: 0.88,
+                              onTap: () {
+                                HapticFeedback.mediumImpact();
+                                _musicService.nextSong();
+                              },
+                              child: const SizedBox(
+                                width: 54,
+                                height: 54,
+                                child: Center(
+                                  child: Icon(
+                                    Icons.skip_next_rounded,
+                                    color: Colors.white,
+                                    size: 42,
                                   ),
                                 ),
                               ),
                             ),
+                            const Spacer(flex: 2),
                           ],
                         ),
                       ),
@@ -2572,8 +2617,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final curMs = hasValidDuration
         ? position.inMilliseconds.clamp(0, duration.inMilliseconds).toDouble()
         : 0.0;
-    final remaining = hasValidDuration && duration > position
-        ? duration - position
+    final sliderVal = (_sliderDragValue ?? curMs).clamp(0.0, maxMs);
+    final displayPos = _sliderDragValue != null
+        ? Duration(milliseconds: _sliderDragValue!.toInt())
+        : position;
+    final remaining = hasValidDuration && duration > displayPos
+        ? duration - displayPos
         : Duration.zero;
 
     return Padding(
@@ -2595,13 +2644,30 @@ class _PlayerScreenState extends State<PlayerScreen> {
               overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
             ),
             child: Slider(
-              value: curMs,
+              value: sliderVal,
               min: 0,
               max: maxMs,
+              onChangeStart: hasValidDuration
+                  ? (val) {
+                      setState(() {
+                        _sliderDragValue = val;
+                      });
+                    }
+                  : null,
               onChanged: hasValidDuration
+                  ? (val) {
+                      setState(() {
+                        _sliderDragValue = val;
+                      });
+                    }
+                  : null,
+              onChangeEnd: hasValidDuration
                   ? (val) {
                       HapticFeedback.selectionClick();
                       _musicService.seek(Duration(milliseconds: val.toInt()));
+                      setState(() {
+                        _sliderDragValue = null;
+                      });
                     }
                   : null,
             ),
@@ -2612,7 +2678,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  _formatDuration(position),
+                  _formatDuration(displayPos),
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.6),
                     fontSize: 12,
@@ -2689,7 +2755,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     ),
                     Color.alphaBlend(
                       darkVibrantColor.withValues(alpha: 0.20),
-                      const Color(0xFF07070A),
+                      AppThemeTokens.oledBackground,
                     ),
                   ],
                   stops: const [0.0, 0.52, 1.0],
@@ -3677,12 +3743,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       .toDouble()
                 : 0.0;
 
+            final sliderVal = (_sliderDragValue ?? curMs).clamp(0.0, maxMs);
+            final displayPos = _sliderDragValue != null
+                ? Duration(milliseconds: _sliderDragValue!.toInt())
+                : position;
+
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Row(
                 children: [
                   Text(
-                    _formatDuration(position),
+                    _formatDuration(displayPos),
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.65),
                       fontSize: 12,
@@ -3708,15 +3779,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                       ),
                       child: Slider(
-                        value: curMs,
+                        value: sliderVal,
                         min: 0,
                         max: maxMs,
+                        onChangeStart: hasValidDuration
+                            ? (val) {
+                                setState(() {
+                                  _sliderDragValue = val;
+                                });
+                              }
+                            : null,
                         onChanged: hasValidDuration
+                            ? (val) {
+                                setState(() {
+                                  _sliderDragValue = val;
+                                });
+                              }
+                            : null,
+                        onChangeEnd: hasValidDuration
                             ? (val) {
                                 HapticFeedback.selectionClick();
                                 _musicService.seek(
                                   Duration(milliseconds: val.toInt()),
                                 );
+                                setState(() {
+                                  _sliderDragValue = null;
+                                });
                               }
                             : null,
                       ),
@@ -3764,12 +3852,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       .toDouble()
                 : 0.0;
 
+            final sliderVal = (_sliderDragValue ?? curMs).clamp(0.0, maxMs);
+            final displayPos = _sliderDragValue != null
+                ? Duration(milliseconds: _sliderDragValue!.toInt())
+                : position;
+
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Row(
                 children: [
                   Text(
-                    _formatDuration(position),
+                    _formatDuration(displayPos),
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.5),
                       fontSize: 10,
@@ -3795,15 +3888,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ),
                       ),
                       child: Slider(
-                        value: curMs,
+                        value: sliderVal,
                         min: 0,
                         max: maxMs,
+                        onChangeStart: hasValidDuration
+                            ? (val) {
+                                setState(() {
+                                  _sliderDragValue = val;
+                                });
+                              }
+                            : null,
                         onChanged: hasValidDuration
+                            ? (val) {
+                                setState(() {
+                                  _sliderDragValue = val;
+                                });
+                              }
+                            : null,
+                        onChangeEnd: hasValidDuration
                             ? (val) {
                                 HapticFeedback.selectionClick();
                                 _musicService.seek(
                                   Duration(milliseconds: val.toInt()),
                                 );
+                                setState(() {
+                                  _sliderDragValue = null;
+                                });
                               }
                             : null,
                       ),

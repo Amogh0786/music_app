@@ -1424,9 +1424,37 @@ class _LibraryScreenState extends State<LibraryScreen>
               playlist['songs'] ?? [],
             );
             final id = (playlist['id'] as String?) ?? '';
-            final firstThumbnail = songs.isNotEmpty
-                ? songs.first['thumbnail'] as String?
-                : null;
+            String? playlistCover;
+            if (playlist['thumbnail'] is String &&
+                (playlist['thumbnail'] as String).isNotEmpty) {
+              playlistCover = playlist['thumbnail'] as String;
+            } else if (songs.isNotEmpty) {
+              for (final s in songs.take(15)) {
+                final sId = (s['id'] as String?) ?? '';
+                final sThumb = (s['thumbnail'] as String?) ?? '';
+                final hd = sId.isNotEmpty
+                    ? MusicService.getHdThumbnail(sId)
+                    : '';
+                if (hd.isNotEmpty && !hd.startsWith('https://i.ytimg.com/')) {
+                  playlistCover = hd;
+                  break;
+                }
+                if (sThumb.isNotEmpty &&
+                    !sThumb.startsWith('https://i.ytimg.com/')) {
+                  playlistCover = sThumb;
+                  break;
+                }
+              }
+              if (playlistCover == null) {
+                final firstSongId = (songs.first['id'] as String?) ?? '';
+                final hd = firstSongId.isNotEmpty
+                    ? MusicService.getHdThumbnail(firstSongId)
+                    : '';
+                playlistCover = hd.isNotEmpty
+                    ? hd
+                    : (songs.first['thumbnail'] as String?);
+              }
+            }
             final isSpotify = _isSpotifyPlaylist(playlist);
 
             return ListTile(
@@ -1436,34 +1464,36 @@ class _LibraryScreenState extends State<LibraryScreen>
                 vertical: 4,
               ),
               leading: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(8),
                 child: Container(
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(
-                    color: isSpotify
-                        ? const Color(0xFF1DB954).withValues(alpha: 0.16)
-                        : _prefs.themeColor.withValues(alpha: 0.16),
+                    color: const Color(0xFF1E1E28),
+                    borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: isSpotify
-                          ? const Color(0xFF1DB954).withValues(alpha: 0.35)
-                          : Colors.white.withValues(alpha: 0.08),
+                      color: Colors.white.withValues(alpha: 0.08),
                       width: 1,
                     ),
-                    borderRadius: BorderRadius.circular(10),
                   ),
-                  child: firstThumbnail != null && firstThumbnail.isNotEmpty
-                      ? Image.network(
-                          firstThumbnail,
-                          fit: BoxFit.cover,
-                          cacheWidth: 120,
-                          cacheHeight: 120,
-                          errorBuilder: (_, _, _) => Icon(
-                            Icons.queue_music_rounded,
-                            color: isSpotify
-                                ? const Color(0xFF1DB954)
-                                : _prefs.themeColor.withValues(alpha: 0.85),
-                            size: 26,
+                  child: playlistCover != null && playlistCover.isNotEmpty
+                      ? Transform.scale(
+                          scale:
+                              playlistCover.startsWith('https://i.ytimg.com/')
+                              ? 1.35
+                              : 1.0,
+                          child: Image.network(
+                            playlistCover,
+                            fit: BoxFit.cover,
+                            cacheWidth: 120,
+                            cacheHeight: 120,
+                            errorBuilder: (_, _, _) => Icon(
+                              Icons.queue_music_rounded,
+                              color: isSpotify
+                                  ? const Color(0xFF1DB954)
+                                  : _prefs.themeColor.withValues(alpha: 0.85),
+                              size: 24,
+                            ),
                           ),
                         )
                       : Icon(
@@ -1471,7 +1501,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                           color: isSpotify
                               ? const Color(0xFF1DB954)
                               : _prefs.themeColor.withValues(alpha: 0.85),
-                          size: 26,
+                          size: 24,
                         ),
                 ),
               ),

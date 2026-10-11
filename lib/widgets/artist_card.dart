@@ -145,44 +145,53 @@ class _ArtistCardState extends State<ArtistCard> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               // Frosted Artist Pill Badge
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.45),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.20),
-                                    width: 0.8,
+                              Flexible(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
                                   ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      widget.artist.isFromUserHistory
-                                          ? Icons.star_rounded
-                                          : Icons.local_fire_department_rounded,
-                                      size: 11,
-                                      color: widget.artist.isFromUserHistory
-                                          ? const Color(0xFFFFD700)
-                                          : Colors.white.withValues(
-                                              alpha: 0.95,
-                                            ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      widget.artist.badge,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 0.6,
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.45),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.20,
                                       ),
+                                      width: 0.8,
                                     ),
-                                  ],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        widget.artist.isFromUserHistory
+                                            ? Icons.star_rounded
+                                            : Icons
+                                                  .local_fire_department_rounded,
+                                        size: 11,
+                                        color: widget.artist.isFromUserHistory
+                                            ? const Color(0xFFFFD700)
+                                            : Colors.white.withValues(
+                                                alpha: 0.95,
+                                              ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Flexible(
+                                        child: Text(
+                                          widget.artist.badge,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 0.6,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
 

@@ -28,6 +28,7 @@
   let currentTitle = '';
   let currentArtist = '';
   let currentArtwork = '';
+  let currentAlbum = '';
   let lastReportedPos = 0;
   let lastReportedDur = 0;
   let fallbackTimer = null;
@@ -769,13 +770,6 @@
   window.addEventListener('focus', attemptAutoResumeAfterInterruption);
   window.addEventListener('pageshow', attemptAutoResumeAfterInterruption);
 
-  // Periodic poll to resume immediately once the reel or call finishes (only when visible to avoid notification glitch)
-  setInterval(() => {
-    if (isInterrupted && !isUserPaused && document.visibilityState === 'visible') {
-      attemptAutoResumeAfterInterruption();
-    }
-  }, 2000);
-
   // Background tab CPU & thermal optimization: throttle background tickers, snap UI on focus
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
@@ -874,7 +868,7 @@
     broadcastState('buffering');
 
     // Update MediaSession with initial metadata
-    window.dilseSetMetadata(currentTitle, currentArtist, currentArtwork);
+    window.dilseSetMetadata(currentTitle, currentArtist, currentArtwork, currentAlbum);
 
     isUserPaused = false;
     isInterrupted = false;
@@ -1038,7 +1032,8 @@
             window.dilseSetMetadata(
               jioSong.title || title,
               jioSong.artist || artist,
-              jioSong.artwork || artworkUrl
+              jioSong.artwork || artworkUrl,
+              jioSong.album || currentAlbum
             );
 
             audioEl.play().then(() => {
@@ -1089,7 +1084,7 @@
     isInterrupted = false;
     wasPlayingBeforeInterruption = true;
 
-    window.dilseSetMetadata(currentTitle, currentArtist, currentArtwork);
+    window.dilseSetMetadata(currentTitle, currentArtist, currentArtwork, currentAlbum);
 
     function startRamp() {
       // Toggle active deck
@@ -1156,7 +1151,11 @@
     }
   };
 
-  function cleanUpOnAppExit() {
+  function cleanUpOnAppExit(event) {
+    // Only cleanup when the page is being permanently unloaded/closed by the user.
+    // NEVER destroy audio elements on pagehide, which fires when backgrounding or switching to other apps.
+    if (event && (event.type === 'pagehide' || event.persisted)) return;
+
     stopBgAudio();
     cancelCrossfade();
     clearFallbackTimer();
@@ -1167,32 +1166,19 @@
     }
     if (deckA) {
       try {
-        deckA.muted = true;
         deckA.pause();
-        deckA.removeAttribute('src');
-        deckA.load();
       } catch (_) {}
     }
     if (deckB) {
       try {
-        deckB.muted = true;
         deckB.pause();
-        deckB.removeAttribute('src');
-        deckB.load();
       } catch (_) {}
     }
     if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
       try { ytPlayer.stopVideo(); } catch (_) {}
     }
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.playbackState = 'none';
-      if (typeof navigator.mediaSession.setPositionState === 'function') {
-        try { navigator.mediaSession.setPositionState(null); } catch (_) {}
-      }
-    }
   }
 
-  window.addEventListener('pagehide', cleanUpOnAppExit);
   window.addEventListener('beforeunload', cleanUpOnAppExit);
 
   window.dilsePause = function () {
@@ -1215,15 +1201,13 @@
       }
     }
 
-    // 2. Mute decks before pausing to avoid driver buffer clicks/repeats
+    // 2. Pause active decks without muting (muting can cause mobile browsers to drop background MediaSession permissions)
     if (deckA) {
-      deckA.muted = true;
       try {
         deckA.pause();
       } catch (_) {}
     }
     if (deckB) {
-      deckB.muted = true;
       try {
         deckB.pause();
       } catch (_) {}
@@ -1234,7 +1218,7 @@
       } catch (_) {}
     }
 
-    // 3. Suspend AudioContext to stop Web Audio loop completely
+    // 3. Suspend AudioContext to save power, but keep audio element src and MediaSession fully intact
     if (audioCtx && audioCtx.state === 'running') {
       try {
         audioCtx.suspend().catch(() => {});
@@ -1317,19 +1301,24 @@
     }
   };
 
-  window.dilseSetMetadata = function (title, artist, artworkUrl) {
+  window.dilseSetMetadata = function (title, artist, artworkUrl, album) {
     if (!('mediaSession' in navigator)) return;
 
     try {
+      if (album && album !== 'DilSe') currentAlbum = album;
+      const resolvedAlbum = (currentAlbum && currentAlbum !== 'DilSe')
+        ? currentAlbum
+        : (artist || 'Single');
+
       navigator.mediaSession.metadata = new MediaMetadata({
         title: title || 'DilSe Song',
         artist: artist || 'DilSe Music',
-        album: 'DilSe',
+        album: resolvedAlbum,
         artwork: artworkUrl
           ? [
-              { src: artworkUrl, sizes: '96x96', type: 'image/jpeg' },
-              { src: artworkUrl, sizes: '192x192', type: 'image/jpeg' },
-              { src: artworkUrl, sizes: '512x512', type: 'image/jpeg' },
+              { src: artworkUrl, sizes: '96x96' },
+              { src: artworkUrl, sizes: '192x192' },
+              { src: artworkUrl, sizes: '512x512' },
             ]
           : [],
       });
@@ -1339,6 +1328,10 @@
         window.dispatchEvent(new CustomEvent('dilse_remote_play'));
       });
       navigator.mediaSession.setActionHandler('pause', () => {
+        window.dilsePause();
+        window.dispatchEvent(new CustomEvent('dilse_remote_pause'));
+      });
+      navigator.mediaSession.setActionHandler('stop', () => {
         window.dilsePause();
         window.dispatchEvent(new CustomEvent('dilse_remote_pause'));
       });
