@@ -1180,18 +1180,29 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
               final currentPos = player.position;
               final currentDur = player.duration;
-              if (currentDur != null &&
-                  currentDur.inSeconds > 10 &&
-                  (currentDur - currentPos).inSeconds > 8 &&
-                  currentPos.inSeconds <
-                      (currentDur.inSeconds * 0.85).round()) {
+              final bool isNearEnd =
+                  currentDur != null &&
+                  currentDur.inMilliseconds > 0 &&
+                  (currentDur - currentPos).inSeconds <= 5;
+
+              // Never advance if the song has not reached the actual end (within 5 seconds).
+              // Whether the player is playing or paused, an event when not near the end
+              // is ALWAYS false/premature (e.g. buffer exhaustion or pause flushes).
+              if (!isNearEnd) {
                 debugPrint(
-                  '[AudioPlayer] Ignoring premature completion event at ${currentPos.inSeconds}s / ${currentDur.inSeconds}s (player playing: ${player.playing})',
+                  '[AudioPlayer] Ignoring false completion event at ${currentPos.inSeconds}s / ${currentDur?.inSeconds}s (player playing: ${player.playing})',
                 );
-                if (player.playing) {
-                  return;
-                }
+                return;
               }
+
+              // Also, a track can NEVER naturally finish if the player is paused.
+              if (!player.playing) {
+                debugPrint(
+                  '[AudioPlayer] Ignoring completion event while paused at ${currentPos.inSeconds}s',
+                );
+                return;
+              }
+
               await _handleTrackCompletion();
             }
           },
@@ -2423,9 +2434,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void seekRelative(Duration offset) {
-    final current = (!kIsWeb && _activePlayer.position > Duration.zero)
-        ? _activePlayer.position
-        : (_savedPosition ?? position);
+    final current = position;
     final target = current + offset;
     seek(target);
   }
@@ -6359,7 +6368,12 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           (pState == ProcessingState.idle ||
               pState == ProcessingState.completed ||
               _audioPlayer.audioSource == null)) {
-        playSong(_currentSong!, updateQueue: false);
+        final resumePos = position;
+        playSong(_currentSong!, updateQueue: false).then((_) {
+          if (resumePos > Duration.zero) {
+            seek(resumePos);
+          }
+        });
         return;
       }
       if (_currentSong == null && _playlist.isNotEmpty) {

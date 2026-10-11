@@ -119,6 +119,10 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> play() async {
     if (!MusicService().isPlaying) {
       MusicService().togglePlayPause();
+    } else {
+      try {
+        await _player.play();
+      } catch (_) {}
     }
   }
 
@@ -126,6 +130,10 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> pause() async {
     if (MusicService().isPlaying) {
       MusicService().togglePlayPause();
+    } else {
+      try {
+        await _player.pause();
+      } catch (_) {}
     }
   }
 

@@ -64,6 +64,7 @@
   let isUserPaused = false;
   let isInterrupted = false;
   let wasPlayingBeforeInterruption = false;
+  let streamNeedsReconnect = false;
 
   // Dual-Deck HTML5 Native Audio Elements (Deck A & Deck B for true overlapping crossfades)
   let deckA = null;
@@ -371,6 +372,13 @@
     el.addEventListener('error', (e) => {
       if (activeEngine === ENGINE_AUDIO && !switchingEngines && el === getActiveDeck()) {
         console.warn(`[DilSe Web Player] Direct audio error (${id}):`, e);
+        // If element is paused, in background, or interrupted (e.g. CDN socket dropped during idle/pause):
+        // Flag for reconnection on resume rather than triggering YouTube IFrame fallback (which fails in iOS background).
+        if (el.paused || isUserPaused || isInterrupted || document.visibilityState === 'hidden') {
+          console.log('[DilSe Web Player] Socket closed while paused/backgrounded; will reconnect on resume');
+          streamNeedsReconnect = true;
+          return;
+        }
         triggerFallback();
       }
     });
@@ -727,24 +735,7 @@
   function attemptAutoResumeAfterInterruption() {
     if (isInterrupted && !isUserPaused && document.visibilityState === 'visible') {
       console.log('[DilSe Web Player] Attempting auto-resume after interruption...');
-      if (activeEngine === ENGINE_AUDIO && audioEl && audioEl.paused) {
-        audioEl.muted = false;
-        audioEl.volume = 1.0;
-        audioEl.play().then(() => {
-          console.log('[DilSe Web Player] Successfully auto-resumed playback after interruption');
-          isInterrupted = false;
-          wasPlayingBeforeInterruption = true;
-          unlockAudioContext();
-        }).catch((err) => {
-          console.log('[DilSe Web Player] Auto-resume deferred:', err.message);
-        });
-      } else if (activeEngine === ENGINE_IFRAME && ytPlayer && typeof ytPlayer.playVideo === 'function') {
-        try {
-          ytPlayer.playVideo();
-          isInterrupted = false;
-          wasPlayingBeforeInterruption = true;
-        } catch (_) {}
-      }
+      window.dilseResume();
     }
   }
 
@@ -1249,13 +1240,59 @@
     if (activeEngine === ENGINE_AUDIO) {
       const active = getActiveDeck();
       if (active) {
-        try {
-          active.muted = false;
-          active.volume = 1.0;
-          active.play().then(() => {
+        active.muted = false;
+        active.volume = 1.0;
+
+        const posToResume = (active.currentTime > 0) ? active.currentTime : (lastReportedPos || 0);
+
+        // If the socket disconnected during a background pause (>30-60s) or error occurred:
+        if (streamNeedsReconnect || active.readyState < 2 || active.networkState === 3 || active.error) {
+          console.log('[DilSe Web Player] Reconnecting dropped stream at position:', posToResume);
+          streamNeedsReconnect = false;
+          const currentSrc = active.src;
+          if (currentSrc) {
+            active.src = currentSrc;
+            active.load();
+            if (posToResume > 0) {
+              const applyPosition = () => {
+                try { active.currentTime = posToResume; } catch (_) {}
+              };
+              active.addEventListener('loadedmetadata', applyPosition, { once: true });
+            }
+          }
+        }
+
+        const playPromise = active.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
             unlockAudioContext();
-          }).catch(() => {});
-        } catch (_) {}
+            broadcastState('playing');
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+          }).catch((err) => {
+            console.warn('[DilSe Web Player] Resume play rejected, forcing stream reload:', err);
+            const currentSrc = active.src;
+            if (currentSrc) {
+              active.src = currentSrc;
+              active.load();
+              if (posToResume > 0) {
+                const applyPosition = () => {
+                  try { active.currentTime = posToResume; } catch (_) {}
+                };
+                active.addEventListener('loadedmetadata', applyPosition, { once: true });
+              }
+              active.play().then(() => {
+                unlockAudioContext();
+                broadcastState('playing');
+                if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+              }).catch((e) => {
+                console.error('[DilSe Web Player] Direct audio resume failed:', e);
+                if (document.visibilityState === 'visible') {
+                  triggerFallback();
+                }
+              });
+            }
+          });
+        }
       }
     } else if (activeEngine === ENGINE_IFRAME && ytPlayer && typeof ytPlayer.playVideo === 'function') {
       try {
