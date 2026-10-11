@@ -91,7 +91,9 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
               ProcessingState.completed: AudioProcessingState.completed,
             }[_player.processingState]!,
             playing: playing,
-            updatePosition: _player.position,
+            updatePosition: (_player.position > Duration.zero)
+                ? _player.position
+                : MusicService().position,
             bufferedPosition: _player.bufferedPosition,
             speed: _player.speed,
             queueIndex: event.currentIndex,
@@ -175,11 +177,25 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> fastForward() async {
-    MusicService().seekRelative(const Duration(seconds: 10));
+    await MusicService().seekRelative(const Duration(seconds: 10));
   }
 
   @override
   Future<void> rewind() async {
-    MusicService().seekRelative(const Duration(seconds: -10));
+    await MusicService().seekRelative(const Duration(seconds: -10));
+  }
+
+  @override
+  Future<void> seekForward(bool begin) async {
+    if (begin) {
+      await fastForward();
+    }
+  }
+
+  @override
+  Future<void> seekBackward(bool begin) async {
+    if (begin) {
+      await rewind();
+    }
   }
 }

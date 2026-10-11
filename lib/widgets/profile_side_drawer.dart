@@ -393,7 +393,7 @@ class ProfileSideDrawer extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'DilSe Music • v3.9.2',
+            'DilSe Music • v3.9.3',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.25),
               fontSize: 11,

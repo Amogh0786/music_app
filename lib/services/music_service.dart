@@ -138,6 +138,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Duration? _savedPosition;
+  Duration _lastKnownPosition = Duration.zero;
   Duration? _savedDuration;
   DateTime _lastSessionSaveTime = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -281,14 +282,15 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   bool get isPlaying =>
       kIsWeb ? WebPlayerBridge.isPlaying : _activePlayer.playing;
   Duration get position {
-    if (_isLoading) return Duration.zero;
     if (kIsWeb) {
       final p = WebPlayerBridge.currentPosition;
       if (p > Duration.zero) return p;
+      if (_lastKnownPosition > Duration.zero) return _lastKnownPosition;
       return _savedPosition ?? Duration.zero;
     }
     final p = _activePlayer.position;
     if (p > Duration.zero) return p;
+    if (_lastKnownPosition > Duration.zero) return _lastKnownPosition;
     return _savedPosition ?? Duration.zero;
   }
 
@@ -1075,6 +1077,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     if (kIsWeb) {
       WebPlayerBridge.init();
       WebPlayerBridge.positionStream.listen((pos) {
+        _lastKnownPosition = pos;
         _positionBroadcaster.add(pos);
       });
       WebPlayerBridge.durationStream.listen((dur) {
@@ -1129,6 +1132,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       for (final player in [_playerA, _playerB]) {
         player.positionStream.listen((pos) {
           if (identical(player, _activePlayer)) {
+            _lastKnownPosition = pos;
             _positionBroadcaster.add(pos);
             _syncWidgetPlayback();
           }
@@ -1489,6 +1493,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         outgoingPlayer.processingState == ProcessingState.completed) {
       _activePlayer = incomingPlayer;
       _standbyPlayer = outgoingPlayer;
+      _lastKnownPosition = Duration.zero;
       _positionBroadcaster.add(Duration.zero);
       if (incomingPlayer.duration != null) {
         _durationBroadcaster.add(incomingPlayer.duration!);
@@ -1522,6 +1527,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _activePlayer = incomingPlayer;
     _standbyPlayer = outgoingPlayer;
 
+    _lastKnownPosition = Duration.zero;
     _positionBroadcaster.add(Duration.zero);
     if (incomingPlayer.duration != null) {
       _durationBroadcaster.add(incomingPlayer.duration!);
@@ -2433,10 +2439,18 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  void seekRelative(Duration offset) {
-    final current = position;
+  Future<void> seekRelative(Duration offset) async {
+    Duration current = position;
+    if (current == Duration.zero && _lastKnownPosition > Duration.zero) {
+      current = _lastKnownPosition;
+    }
+    if (current == Duration.zero &&
+        _savedPosition != null &&
+        _savedPosition! > Duration.zero) {
+      current = _savedPosition!;
+    }
     final target = current + offset;
-    seek(target);
+    await seek(target);
   }
 
   void toggleShuffle() {
@@ -4383,6 +4397,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
     _savedPosition = null;
     _savedDuration = null;
+    _lastKnownPosition = Duration.zero;
     _positionBroadcaster.add(Duration.zero);
     if (song.duration != null && song.duration! > Duration.zero) {
       _durationBroadcaster.add(song.duration);
@@ -6333,6 +6348,8 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         : (position > maxSeek && maxSeek > Duration.zero ? maxSeek : position);
 
     _savedPosition = clamped;
+    _lastKnownPosition = clamped;
+    _positionBroadcaster.add(clamped);
     if (kIsWeb) {
       WebPlayerBridge.seek(clamped);
       notifyListeners();
@@ -6514,8 +6531,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
       if (posMs > 0) {
         _savedPosition = Duration(milliseconds: posMs);
+        _lastKnownPosition = _savedPosition!;
       } else {
         _savedPosition = Duration.zero;
+        _lastKnownPosition = Duration.zero;
       }
 
       if (durMs > 0) {
@@ -6637,6 +6656,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _currentIndex = 0;
     _savedPosition = null;
     _savedDuration = null;
+    _lastKnownPosition = Duration.zero;
     _activePlaySessionToken = 0;
     _standbyBufferedTrackId = null;
     _isPrebufferingStandby = false;
