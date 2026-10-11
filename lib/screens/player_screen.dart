@@ -88,6 +88,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (mounted) {
         setState(() {
           _doubleTapSeekDirection = null;
+          _doubleTapSeekCounter = 0;
         });
       }
     });
@@ -2032,10 +2033,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                                                 6,
                                                                           ),
                                                                           Text(
-                                                                            _doubleTapSeekDirection ==
-                                                                                    -1
-                                                                                ? '-10 sec'
-                                                                                : '+10 sec',
+                                                                            '${_doubleTapSeekDirection == -1 ? '-' : '+'}${(_doubleTapSeekCounter.clamp(1, 99)) * 10} sec',
                                                                             style: const TextStyle(
                                                                               color: Colors.white,
                                                                               fontWeight: FontWeight.bold,

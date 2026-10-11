@@ -1058,11 +1058,13 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       _equalizerB = AndroidEqualizer();
     }
     _playerA = AudioPlayer(
+      handleInterruptions: false,
       audioPipeline: _equalizerA != null
           ? AudioPipeline(androidAudioEffects: [_equalizerA!])
           : null,
     );
     _playerB = AudioPlayer(
+      handleInterruptions: false,
       audioPipeline: _equalizerB != null
           ? AudioPipeline(androidAudioEffects: [_equalizerB!])
           : null,
@@ -1223,7 +1225,11 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _handleTrackCompletion() async {
-    if (_isTransitioning || _isCrossfading) return;
+    if (_isTransitioning) return;
+    if (_isCrossfading) {
+      if (_standbyPlayer.playing) return;
+      _isCrossfading = false;
+    }
     _isTransitioning = true;
     try {
       if (!kIsWeb && audioHandler != null) {
@@ -2417,7 +2423,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void seekRelative(Duration offset) {
-    final current = position;
+    final current = (!kIsWeb && _activePlayer.position > Duration.zero)
+        ? _activePlayer.position
+        : (_savedPosition ?? position);
     final target = current + offset;
     seek(target);
   }
@@ -5162,6 +5170,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         );
       }
       if (sessionToken != _activePlaySessionToken) return;
+      if (!kIsWeb && audioHandler is DilSeAudioHandler) {
+        (audioHandler as DilSeAudioHandler).bindPlayer(_activePlayer);
+      }
       _isLoading = false;
       notifyListeners();
       persistPlaybackSession(force: true);

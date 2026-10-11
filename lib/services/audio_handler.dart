@@ -15,7 +15,7 @@ Future<void> initAudioService() async {
           'com.example.music_app.channel.audio_playback_v3',
       androidNotificationChannelName: 'DilSe Music Playback',
       androidNotificationOngoing: false,
-      androidStopForegroundOnPause: true,
+      androidStopForegroundOnPause: false,
       androidShowNotificationBadge: true,
       androidNotificationIcon: 'drawable/ic_stat_music',
       notificationColor: Color(0xFFFA2D48),
@@ -116,24 +116,22 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> play() => _player.play();
+  Future<void> play() async {
+    if (!MusicService().isPlaying) {
+      MusicService().togglePlayPause();
+    }
+  }
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() async {
+    if (MusicService().isPlaying) {
+      MusicService().togglePlayPause();
+    }
+  }
 
   @override
   Future<void> seek(Duration position) async {
-    final dur = _player.duration ?? mediaItem.value?.duration;
-    Duration target = position;
-    if (target < Duration.zero) {
-      target = Duration.zero;
-    } else if (dur != null && dur > Duration.zero) {
-      final maxSeek = dur - const Duration(milliseconds: 500);
-      if (target > maxSeek) {
-        target = maxSeek > Duration.zero ? maxSeek : Duration.zero;
-      }
-    }
-    await _player.seek(target);
+    await MusicService().seek(position);
   }
 
   @override
@@ -151,7 +149,7 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> onTaskRemoved() async {
     // When app is swiped away from Android recent tasks, dismiss ghost notification if paused
-    if (!_player.playing) {
+    if (!MusicService().isPlaying) {
       await stop();
     }
     await super.onTaskRemoved();
@@ -169,20 +167,11 @@ class DilSeAudioHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> fastForward() async {
-    final pos = _player.position;
-    final dur = _player.duration ?? mediaItem.value?.duration;
-    if (dur != null && dur > Duration.zero) {
-      final maxSeek = dur - const Duration(milliseconds: 500);
-      final target = pos + const Duration(seconds: 10);
-      await seek(target > maxSeek ? maxSeek : target);
-    } else {
-      await seek(pos + const Duration(seconds: 10));
-    }
+    MusicService().seekRelative(const Duration(seconds: 10));
   }
 
   @override
   Future<void> rewind() async {
-    final target = _player.position - const Duration(seconds: 10);
-    await seek(target < Duration.zero ? Duration.zero : target);
+    MusicService().seekRelative(const Duration(seconds: -10));
   }
 }
