@@ -33,7 +33,6 @@ class MiniPlayer extends StatefulWidget {
 
 class _MiniPlayerState extends State<MiniPlayer> with WidgetsBindingObserver {
   final MusicService _musicService = MusicService();
-  String? _lastEnrichedSongId;
 
   @override
   void initState() {
@@ -42,38 +41,17 @@ class _MiniPlayerState extends State<MiniPlayer> with WidgetsBindingObserver {
     _musicService.addListener(_onMusicStateChanged);
     MiniPlayer.isVisible.addListener(_onVisibilityChanged);
     PreferencesService().addListener(_onPreferencesChanged);
-    _maybeEnrichArtwork();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _lastEnrichedSongId = null;
-      _maybeEnrichArtwork();
-      if (mounted) setState(() {});
+    if (state == AppLifecycleState.resumed && mounted) {
+      setState(() {});
     }
   }
 
   void _onPreferencesChanged() {
     if (mounted) setState(() {});
-  }
-
-  void _maybeEnrichArtwork() {
-    final isTesting = WidgetsBinding.instance.runtimeType.toString().contains(
-      'Test',
-    );
-    if (isTesting) return;
-
-    final song = _musicService.currentSong;
-    if (song != null) {
-      final hdThumbnail = MusicService.getHdThumbnail(song.id.value);
-      if ((hdThumbnail.isEmpty ||
-              hdThumbnail.startsWith('https://i.ytimg.com/')) &&
-          _lastEnrichedSongId != song.id.value) {
-        _lastEnrichedSongId = song.id.value;
-        _musicService.enrichArtworkForSongs([song]);
-      }
-    }
   }
 
   String _resolveArtwork(Video? song) {
@@ -86,17 +64,6 @@ class _MiniPlayerState extends State<MiniPlayer> with WidgetsBindingObserver {
     final resolved = MusicService.resolveArtworkUrl(song);
     if (resolved.isNotEmpty && !resolved.startsWith('https://i.ytimg.com/')) {
       return resolved;
-    }
-    final lastSong = PreferencesService().lastPlayedSong;
-    if (lastSong != null) {
-      final lastId = (lastSong['id'] as String?) ?? '';
-      final lastThumb = (lastSong['thumbnail'] as String?) ?? '';
-      if (lastThumb.isNotEmpty &&
-          (lastId == song.id.value ||
-              song.id.value.startsWith(lastId) ||
-              lastId.startsWith(song.id.value))) {
-        return lastThumb;
-      }
     }
     try {
       final h = song.thumbnails.highResUrl;
@@ -136,7 +103,6 @@ class _MiniPlayerState extends State<MiniPlayer> with WidgetsBindingObserver {
   }
 
   void _onMusicStateChanged() {
-    _maybeEnrichArtwork();
     if (mounted) setState(() {});
   }
 

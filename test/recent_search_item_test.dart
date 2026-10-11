@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_app/models/recent_search_item.dart';
 import 'package:music_app/services/preferences_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

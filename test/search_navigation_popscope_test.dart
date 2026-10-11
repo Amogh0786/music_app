@@ -41,7 +41,7 @@ void main() {
     );
 
     testWidgets(
-      'Typing in search field morphs prefix icon to back button and reveals AppBar back button',
+      'Typing in search field keeps search icon in prefix and reveals AppBar back button in search tab',
       (WidgetTester tester) async {
         await tester.pumpWidget(const MaterialApp(home: SearchScreen()));
         await tester.pumpAndSettle();
@@ -50,13 +50,13 @@ void main() {
         await tester.enterText(find.byType(TextField), 'KavalanSongQuery');
         await tester.pumpAndSettle();
 
-        // Both AppBar back button and search field leading back button should now be visible
+        // AppBar back button is visible in search tab, search field maintains search icon
         expect(
           find.byKey(const ValueKey('search_appbar_back_btn')),
           findsOneWidget,
         );
         expect(
-          find.byKey(const ValueKey('search_field_back_btn')),
+          find.byKey(const ValueKey('search_field_search_icon')),
           findsOneWidget,
         );
 
@@ -69,36 +69,6 @@ void main() {
           find.byKey(const ValueKey('search_appbar_back_btn')),
           findsNothing,
         );
-        expect(
-          find.byKey(const ValueKey('search_field_search_icon')),
-          findsOneWidget,
-        );
-        expect(find.text('Browse Categories'), findsOneWidget);
-      },
-    );
-
-    testWidgets(
-      'Tapping search field leading back button collapses search and unfocuses',
-      (WidgetTester tester) async {
-        await tester.pumpWidget(const MaterialApp(home: SearchScreen()));
-        await tester.pumpAndSettle();
-
-        // Focus and enter text
-        final textField = find.byType(TextField);
-        await tester.tap(textField);
-        await tester.enterText(textField, 'RockstarSearch');
-        await tester.pumpAndSettle();
-
-        expect(
-          find.byKey(const ValueKey('search_field_back_btn')),
-          findsOneWidget,
-        );
-
-        // Tap field back button
-        await tester.tap(find.byKey(const ValueKey('search_field_back_btn')));
-        await tester.pumpAndSettle();
-
-        expect(find.text('RockstarSearch'), findsNothing);
         expect(
           find.byKey(const ValueKey('search_field_search_icon')),
           findsOneWidget,
@@ -133,6 +103,37 @@ void main() {
 
         expect(searchKey.currentState!.isSearchActive, isFalse);
         expect(find.text('Browse Categories'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'Tapping a suggestion submits search, updates text field, and clears suggestion list',
+      (WidgetTester tester) async {
+        final GlobalKey<SearchScreenState> searchKey =
+            GlobalKey<SearchScreenState>();
+
+        await tester.pumpWidget(
+          MaterialApp(home: SearchScreen(key: searchKey)),
+        );
+        await tester.pumpAndSettle();
+
+        // Enter text matching history item 'Sid Sriram'
+        await tester.enterText(find.byType(TextField), 'Sid');
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pumpAndSettle();
+
+        // Suggestion for 'Sid Sriram' should appear
+        expect(find.text('Sid Sriram'), findsWidgets);
+
+        // Tap on suggestion
+        await tester.tap(find.text('Sid Sriram').first);
+        await tester.pump();
+        await tester.pumpAndSettle();
+
+        // Text field is updated to 'Sid Sriram'
+        final textField = tester.widget<TextField>(find.byType(TextField));
+        expect(textField.controller?.text, 'Sid Sriram');
+        expect(searchKey.currentState!.isSearchActive, isTrue);
       },
     );
   });

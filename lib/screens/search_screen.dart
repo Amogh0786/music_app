@@ -57,6 +57,7 @@ class SearchScreenState extends State<SearchScreen>
 
   void clearSearchAndDismiss() {
     _debounceTimer?.cancel();
+    _isSubmittingSearch = false;
     _searchController.clear();
     _searchFocusNode.unfocus();
     FocusScope.of(context).unfocus();
@@ -85,6 +86,7 @@ class SearchScreenState extends State<SearchScreen>
   List<SearchSuggestion> _suggestions = [];
   Timer? _debounceTimer;
   bool _isSearching = false;
+  bool _isSubmittingSearch = false;
   bool _isLoadingMore = false;
   bool _hasMore = true;
   bool _isArtistSearchActive = false;
@@ -227,6 +229,7 @@ class SearchScreenState extends State<SearchScreen>
 
   void _onSearchChanged() {
     setState(() {});
+    if (_isSubmittingSearch || _isSearching) return;
     _debounceTimer?.cancel();
     final query = _searchController.text.trim();
     if (query.isEmpty) {
@@ -238,17 +241,55 @@ class SearchScreenState extends State<SearchScreen>
 
     if (query != _currentQuery) {
       _debounceTimer = Timer(const Duration(milliseconds: 250), () async {
-        if (!mounted) return;
+        if (!mounted || _isSubmittingSearch || _isSearching) return;
         final results = await _musicService.fetchEntitySuggestions(
           query,
           limit: 10,
         );
-        if (mounted && _searchController.text.trim() == query) {
+        if (mounted &&
+            !_isSubmittingSearch &&
+            !_isSearching &&
+            _searchController.text.trim() == query) {
           setState(() {
             _suggestions = results;
           });
         }
       });
+    }
+  }
+
+  void _onSuggestionTapped(SearchSuggestion suggestion) {
+    HapticFeedback.lightImpact();
+    _isSubmittingSearch = true;
+    _debounceTimer?.cancel();
+    _searchFocusNode.unfocus();
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _suggestions.clear();
+    });
+
+    if (suggestion.type == SearchSuggestionType.artist) {
+      _isSubmittingSearch = false;
+      if (kIsWeb && MediaQuery.of(context).size.width >= 1024) {
+        DesktopLayoutState.openArtist(suggestion.text);
+      } else {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ArtistProfileScreen(artistName: suggestion.text),
+          ),
+        );
+      }
+    } else {
+      _searchController.text = suggestion.text;
+      _searchController.selection = TextSelection.collapsed(
+        offset: suggestion.text.length,
+      );
+      _performSearch(
+        suggestion.text,
+        isArtist: false,
+        type: suggestion.type == SearchSuggestionType.album ? 'album' : null,
+      );
     }
   }
 
@@ -276,15 +317,16 @@ class SearchScreenState extends State<SearchScreen>
     String? type,
   }) async {
     if (query.trim().isEmpty) return;
+    _isSubmittingSearch = true;
     _debounceTimer?.cancel();
 
     final bool isArtistSearch = isArtist || _artistService.isKnownArtist(query);
     final String resolvedType = type ?? (isArtistSearch ? 'artist' : 'query');
-    await _prefs.addToSearchHistory(query, type: resolvedType);
-
     final String effectiveQuery = isArtistSearch
         ? (_artistService.findArtist(query)?.name ?? query)
         : query;
+
+    unawaited(_prefs.addToSearchHistory(query, type: resolvedType));
 
     if (_connectivity.isOffline) {
       setState(() {
@@ -293,6 +335,7 @@ class SearchScreenState extends State<SearchScreen>
         _searchResults.clear();
         _albumResults.clear();
       });
+      _isSubmittingSearch = false;
       return;
     }
 
@@ -308,24 +351,36 @@ class SearchScreenState extends State<SearchScreen>
       _searchTabIndex = resolvedType == 'album' ? 1 : 0;
     });
 
-    // Fire song search + album search in parallel
-    final futures = await Future.wait([
-      isArtistSearch
-          ? _musicService.fetchArtistDiscography(effectiveQuery, page: 1)
-          : _musicService.searchSongs(effectiveQuery, page: 1, limit: 50),
-      if (!isArtistSearch)
-        _musicService.searchAlbums(effectiveQuery, limit: 12)
-      else
-        Future.value(<JioAlbum>[]),
-    ]);
+    try {
+      // Fire song search + album search in parallel
+      final futures = await Future.wait([
+        isArtistSearch
+            ? _musicService.fetchArtistDiscography(effectiveQuery, page: 1)
+            : _musicService.searchSongs(effectiveQuery, page: 1, limit: 50),
+        if (!isArtistSearch)
+          _musicService.searchAlbums(effectiveQuery, limit: 12)
+        else
+          Future.value(<JioAlbum>[]),
+      ]);
 
-    if (mounted) {
-      setState(() {
-        _searchResults = futures[0] as List<Video>;
-        _albumResults = futures[1] as List<JioAlbum>;
-        _isSearching = false;
-        _hasMore = _searchResults.isNotEmpty;
-      });
+      if (mounted) {
+        setState(() {
+          _searchResults = futures[0] as List<Video>;
+          _albumResults = futures[1] as List<JioAlbum>;
+          _isSearching = false;
+          _hasMore = _searchResults.isNotEmpty;
+        });
+      }
+    } catch (e) {
+      debugPrint('[SearchScreen] Search failed for $effectiveQuery: $e');
+      if (mounted) {
+        setState(() {
+          _isSearching = false;
+          _hasMore = false;
+        });
+      }
+    } finally {
+      _isSubmittingSearch = false;
     }
   }
 
@@ -475,8 +530,11 @@ class SearchScreenState extends State<SearchScreen>
                             )
                           : (_searchController.text.trim().isNotEmpty &&
                                 _suggestions.isNotEmpty &&
+                                !_isSubmittingSearch &&
                                 _searchController.text.trim() != _currentQuery)
                           ? ListView.builder(
+                              keyboardDismissBehavior:
+                                  ScrollViewKeyboardDismissBehavior.onDrag,
                               padding: const EdgeInsets.only(bottom: 160),
                               itemCount: _suggestions.length,
                               itemBuilder: (context, index) {
@@ -513,34 +571,7 @@ class SearchScreenState extends State<SearchScreen>
                                     color: Colors.white38,
                                     size: 18,
                                   ),
-                                  onTap: () {
-                                    HapticFeedback.lightImpact();
-                                    if (suggestion.type ==
-                                        SearchSuggestionType.artist) {
-                                      if (kIsWeb &&
-                                          MediaQuery.of(context).size.width >=
-                                              1024) {
-                                        DesktopLayoutState.openArtist(
-                                          suggestion.text,
-                                        );
-                                      } else {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => ArtistProfileScreen(
-                                              artistName: suggestion.text,
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                    } else {
-                                      _searchController.text = suggestion.text;
-                                      _performSearch(
-                                        suggestion.text,
-                                        isArtist: false,
-                                      );
-                                    }
-                                  },
+                                  onTap: () => _onSuggestionTapped(suggestion),
                                 );
                               },
                             )
@@ -837,6 +868,48 @@ class SearchScreenState extends State<SearchScreen>
                                 ),
                               ],
                             )
+                          : (_currentQuery.isNotEmpty && !_isSearching)
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 32,
+                                  vertical: 40,
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.search_off_rounded,
+                                      size: 56,
+                                      color: Colors.white.withValues(
+                                        alpha: 0.3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'No results for "$_currentQuery"',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Try checking for spelling or searching for another song or artist.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.5,
+                                        ),
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
                           : const SizedBox.shrink(),
                     ),
                   ],
@@ -862,6 +935,12 @@ class SearchScreenState extends State<SearchScreen>
         focusNode: _searchFocusNode,
         onSubmitted: (val) {
           HapticFeedback.lightImpact();
+          _isSubmittingSearch = true;
+          _searchFocusNode.unfocus();
+          FocusScope.of(context).unfocus();
+          setState(() {
+            _suggestions.clear();
+          });
           _performSearch(val);
         },
         textInputAction: TextInputAction.search,
@@ -872,41 +951,11 @@ class SearchScreenState extends State<SearchScreen>
             color: Colors.white.withValues(alpha: 0.38),
             fontSize: 14,
           ),
-          prefixIcon: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            transitionBuilder: (child, anim) => FadeTransition(
-              opacity: anim,
-              child: ScaleTransition(scale: anim, child: child),
-            ),
-            child: (isSearchActive || _searchFocusNode.hasFocus)
-                ? IconButton(
-                    key: const ValueKey('search_field_back_btn'),
-                    icon: const Icon(
-                      Icons.arrow_back_rounded,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                    tooltip: 'Back to Browse',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 48,
-                      minHeight: 48,
-                    ),
-                    onPressed: () {
-                      HapticFeedback.lightImpact();
-                      clearSearchAndDismiss();
-                    },
-                  )
-                : const SizedBox(
-                    key: ValueKey('search_field_search_icon'),
-                    width: 48,
-                    height: 48,
-                    child: Icon(
-                      Icons.search_rounded,
-                      color: Colors.white60,
-                      size: 22,
-                    ),
-                  ),
+          prefixIcon: const SizedBox(
+            key: ValueKey('search_field_search_icon'),
+            width: 48,
+            height: 48,
+            child: Icon(Icons.search_rounded, color: Colors.white60, size: 22),
           ),
           suffixIcon: _searchController.text.isNotEmpty
               ? IconButton(
@@ -1011,7 +1060,16 @@ class SearchScreenState extends State<SearchScreen>
                   borderRadius: BorderRadius.circular(18),
                   onTap: () {
                     HapticFeedback.lightImpact();
+                    _isSubmittingSearch = true;
+                    _searchFocusNode.unfocus();
+                    FocusScope.of(context).unfocus();
+                    setState(() {
+                      _suggestions.clear();
+                    });
                     _searchController.text = item.query;
+                    _searchController.selection = TextSelection.collapsed(
+                      offset: item.query.length,
+                    );
                     _performSearch(
                       item.query,
                       isArtist: item.type == 'artist',
