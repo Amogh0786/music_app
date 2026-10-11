@@ -187,13 +187,14 @@ class WebPlayerBridge {
     }
 
     if (globalWindow.hasProperty('dilsePlay'.toJS).toDart) {
-      globalWindow.callMethod(
-        'dilsePlay'.toJS,
+      globalWindow.callMethodVarArgs('dilsePlay'.toJS, [
         videoId.toJS,
         startSeconds.toJS,
         (title ?? '').toJS,
         (artist ?? '').toJS,
-      );
+        (artworkUrl ?? '').toJS,
+        (streamUrl ?? '').toJS,
+      ]);
     }
   }
 

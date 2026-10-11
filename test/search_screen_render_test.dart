@@ -156,4 +156,57 @@ void main() {
       expect(find.text('MOVIE & ERA RANGE'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'SearchScreen embeds Browse tabs in NestedScrollView for unified screen scrolling',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(const MaterialApp(home: SearchScreen()));
+      await tester.pumpAndSettle();
+
+      // Verify NestedScrollView is present in Browse mode
+      expect(find.byType(NestedScrollView), findsOneWidget);
+      expect(find.text('Browse Categories'), findsOneWidget);
+      expect(find.text('Recent Searches'), findsOneWidget);
+
+      // Drag up on categories content - outer scroll view scrolls header up
+      await tester.drag(find.text('Browse Categories'), const Offset(0, -150));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      // Drag back down - outer scroll view pulls header back down into view
+      await tester.drag(find.text('Browse Categories'), const Offset(0, 150));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      // Switch to Albums and verify full scrolling
+      await tester.tap(find.widgetWithText(InkWell, 'Albums'));
+      await tester.pumpAndSettle();
+      expect(find.text('Soundtracks & Albums'), findsOneWidget);
+      await tester.drag(
+        find.text('Soundtracks & Albums'),
+        const Offset(0, -100),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      // Pull Albums back down
+      await tester.drag(
+        find.text('Soundtracks & Albums'),
+        const Offset(0, 100),
+      );
+      await tester.pumpAndSettle();
+
+      // Switch to Artists and verify full scrolling
+      await tester.tap(find.widgetWithText(InkWell, 'Artists'));
+      await tester.pumpAndSettle();
+      expect(find.text('Featured Artists'), findsOneWidget);
+      await tester.drag(find.text('Featured Artists'), const Offset(0, -100));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

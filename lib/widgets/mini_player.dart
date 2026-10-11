@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
 import '../services/preferences_service.dart';
+import '../services/canonical_song_dedup.dart';
 import '../screens/player_screen.dart';
 import '../constants/app_theme_tokens.dart';
 import 'dilse_image.dart';
@@ -29,17 +31,27 @@ class MiniPlayer extends StatefulWidget {
   State<MiniPlayer> createState() => _MiniPlayerState();
 }
 
-class _MiniPlayerState extends State<MiniPlayer> {
+class _MiniPlayerState extends State<MiniPlayer> with WidgetsBindingObserver {
   final MusicService _musicService = MusicService();
   String? _lastEnrichedSongId;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _musicService.addListener(_onMusicStateChanged);
     MiniPlayer.isVisible.addListener(_onVisibilityChanged);
     PreferencesService().addListener(_onPreferencesChanged);
     _maybeEnrichArtwork();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _lastEnrichedSongId = null;
+      _maybeEnrichArtwork();
+      if (mounted) setState(() {});
+    }
   }
 
   void _onPreferencesChanged() {
@@ -53,18 +65,56 @@ class _MiniPlayerState extends State<MiniPlayer> {
     if (isTesting) return;
 
     final song = _musicService.currentSong;
-    if (song != null && song.id.value != _lastEnrichedSongId) {
-      _lastEnrichedSongId = song.id.value;
+    if (song != null) {
       final hdThumbnail = MusicService.getHdThumbnail(song.id.value);
-      if (hdThumbnail.isEmpty ||
-          hdThumbnail.startsWith('https://i.ytimg.com/')) {
+      if ((hdThumbnail.isEmpty ||
+              hdThumbnail.startsWith('https://i.ytimg.com/')) &&
+          _lastEnrichedSongId != song.id.value) {
+        _lastEnrichedSongId = song.id.value;
         _musicService.enrichArtworkForSongs([song]);
       }
     }
   }
 
+  String _resolveArtwork(Video? song) {
+    if (song == null) return '';
+    final hdThumbnail = MusicService.getHdThumbnail(song.id.value);
+    if (hdThumbnail.isNotEmpty &&
+        !hdThumbnail.startsWith('https://i.ytimg.com/')) {
+      return hdThumbnail;
+    }
+    final resolved = MusicService.resolveArtworkUrl(song);
+    if (resolved.isNotEmpty && !resolved.startsWith('https://i.ytimg.com/')) {
+      return resolved;
+    }
+    final lastSong = PreferencesService().lastPlayedSong;
+    if (lastSong != null) {
+      final lastId = (lastSong['id'] as String?) ?? '';
+      final lastThumb = (lastSong['thumbnail'] as String?) ?? '';
+      if (lastThumb.isNotEmpty &&
+          (lastId == song.id.value ||
+              song.id.value.startsWith(lastId) ||
+              lastId.startsWith(song.id.value))) {
+        return lastThumb;
+      }
+    }
+    try {
+      final h = song.thumbnails.highResUrl;
+      if (h.isNotEmpty) return h;
+      final m = song.thumbnails.mediumResUrl;
+      if (m.isNotEmpty) return m;
+    } catch (_) {}
+    if (hdThumbnail.isNotEmpty) return hdThumbnail;
+    if (resolved.isNotEmpty) return resolved;
+    if (CanonicalSongDedup.isLikelyYouTubeId(song.id.value)) {
+      return 'https://i.ytimg.com/vi/${song.id.value}/hqdefault.jpg';
+    }
+    return '';
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _musicService.removeListener(_onMusicStateChanged);
     MiniPlayer.isVisible.removeListener(_onVisibilityChanged);
     PreferencesService().removeListener(_onPreferencesChanged);
@@ -143,12 +193,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
         (processingState == ProcessingState.buffering ||
             processingState == ProcessingState.loading);
     final isLoading = !isPlaying && (_musicService.isLoading || isBuffering);
-    final hdThumbnail = song != null
-        ? MusicService.getHdThumbnail(song.id.value)
-        : '';
-    final thumbUrl = hdThumbnail.isNotEmpty
-        ? hdThumbnail
-        : (song?.thumbnails.highResUrl ?? '');
+    final thumbUrl = _resolveArtwork(song);
 
     final accentColor = PreferencesService().legibleThemeColor;
 
@@ -227,14 +272,34 @@ class _MiniPlayerState extends State<MiniPlayer> {
                                     width: 44,
                                     height: 44,
                                     fit: BoxFit.cover,
-                                    errorWidget: Container(
-                                      color: const Color(0xFF1E1E28),
-                                      child: const Icon(
-                                        Icons.music_note_rounded,
-                                        color: Colors.white38,
-                                        size: 20,
-                                      ),
-                                    ),
+                                    errorWidget:
+                                        (song != null &&
+                                            song.id.value.isNotEmpty &&
+                                            thumbUrl !=
+                                                'https://i.ytimg.com/vi/${song.id.value}/hqdefault.jpg')
+                                        ? Image.network(
+                                            'https://i.ytimg.com/vi/${song.id.value}/hqdefault.jpg',
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, _, _) =>
+                                                Container(
+                                                  color: const Color(
+                                                    0xFF1E1E28,
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.music_note_rounded,
+                                                    color: Colors.white38,
+                                                    size: 20,
+                                                  ),
+                                                ),
+                                          )
+                                        : Container(
+                                            color: const Color(0xFF1E1E28),
+                                            child: const Icon(
+                                              Icons.music_note_rounded,
+                                              color: Colors.white38,
+                                              size: 20,
+                                            ),
+                                          ),
                                   ),
                                 )
                               : Container(
