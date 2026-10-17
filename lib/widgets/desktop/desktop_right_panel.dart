@@ -23,39 +23,39 @@ class DesktopRightPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      margin: const EdgeInsets.fromLTRB(0.0, 8.0, 8.0, 8.0),
       decoration: BoxDecoration(
-        color: const Color(0xFF0B0B0F),
-        border: Border(
-          left: BorderSide(
-            color: Colors.white.withValues(alpha: 0.08),
-            width: 1.0,
-          ),
-        ),
+        color: const Color(0xFF121212),
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(color: const Color(0xFF1E1E1E), width: 1.0),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 1. Sticky Header Strip
-          const _DesktopPanelHeader(),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 1. Sticky Header Strip
+            const _DesktopPanelHeader(),
 
-          // 2. Contextual Content Body
-          Expanded(
-            child: ValueListenableBuilder<DesktopContextTab>(
-              valueListenable: DesktopLayoutState.contextTab,
-              builder: (context, activeTab, _) {
-                switch (activeTab) {
-                  case DesktopContextTab.lyrics:
-                    return const _DesktopLyricsTab();
-                  case DesktopContextTab.queue:
-                    return const _DesktopQueueTab();
-                  case DesktopContextTab.nowPlaying:
-                  case DesktopContextTab.chords:
-                    return const _DesktopNowPlayingTab();
-                }
-              },
+            // 2. Contextual Content Body
+            Expanded(
+              child: ValueListenableBuilder<DesktopContextTab>(
+                valueListenable: DesktopLayoutState.contextTab,
+                builder: (context, activeTab, _) {
+                  switch (activeTab) {
+                    case DesktopContextTab.lyrics:
+                      return const _DesktopLyricsTab();
+                    case DesktopContextTab.queue:
+                      return const _DesktopQueueTab();
+                    case DesktopContextTab.nowPlaying:
+                    case DesktopContextTab.chords:
+                      return const _DesktopNowPlayingTab();
+                  }
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -86,12 +86,9 @@ class _DesktopPanelHeader extends StatelessWidget {
         return Container(
           height: 52.0,
           padding: const EdgeInsets.symmetric(horizontal: 14.0),
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             border: Border(
-              bottom: BorderSide(
-                color: Colors.white.withValues(alpha: 0.06),
-                width: 1.0,
-              ),
+              bottom: BorderSide(color: Color(0xFF1E1E1E), width: 1.0),
             ),
           ),
           child: Row(
@@ -498,12 +495,9 @@ class _DesktopLyricsPreviewBoxState extends State<_DesktopLyricsPreviewBox> {
       child: Container(
         padding: const EdgeInsets.all(14.0),
         decoration: BoxDecoration(
-          color: const Color(0xFF161622),
+          color: const Color(0xFF181818),
           borderRadius: BorderRadius.circular(10.0),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.08),
-            width: 1.0,
-          ),
+          border: Border.all(color: const Color(0xFF1E1E1E), width: 1.0),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -620,12 +614,9 @@ class _DesktopAboutArtistCard extends StatelessWidget {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF161622),
+          color: const Color(0xFF181818),
           borderRadius: BorderRadius.circular(10.0),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.08),
-            width: 1.0,
-          ),
+          border: Border.all(color: const Color(0xFF1E1E1E), width: 1.0),
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
@@ -757,12 +748,9 @@ class _DesktopNextInQueueCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12.0),
       decoration: BoxDecoration(
-        color: const Color(0xFF161622),
+        color: const Color(0xFF181818),
         borderRadius: BorderRadius.circular(10.0),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
-          width: 1.0,
-        ),
+        border: Border.all(color: const Color(0xFF1E1E1E), width: 1.0),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

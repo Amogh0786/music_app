@@ -137,12 +137,9 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
           margin: const EdgeInsets.fromLTRB(8.0, 8.0, 0.0, 8.0),
           padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
           decoration: BoxDecoration(
-            color: const Color(0xFF16161E),
+            color: const Color(0xFF121212),
             borderRadius: BorderRadius.circular(12.0),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.08),
-              width: 1.0,
-            ),
+            border: Border.all(color: const Color(0xFF1E1E1E), width: 1.0),
           ),
           child: Column(
             children: [
@@ -161,8 +158,8 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
               ),
 
               const SizedBox(height: 6.0),
-              Divider(
-                color: Colors.white.withValues(alpha: 0.08),
+              const Divider(
+                color: Color(0xFF1E1E1E),
                 height: 1.0,
                 indent: 6.0,
                 endIndent: 6.0,
@@ -336,12 +333,9 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
           margin: const EdgeInsets.fromLTRB(8.0, 8.0, 0.0, 0.0),
           padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 12.0),
           decoration: BoxDecoration(
-            color: const Color(0xFF16161E),
+            color: const Color(0xFF121212),
             borderRadius: BorderRadius.circular(10.0),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.08),
-              width: 1.0,
-            ),
+            border: Border.all(color: const Color(0xFF1E1E1E), width: 1.0),
           ),
           child: ValueListenableBuilder<DesktopNavTab>(
             valueListenable: DesktopLayoutState.activeNavTab,
@@ -376,12 +370,9 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
           child: Container(
             margin: const EdgeInsets.fromLTRB(8.0, 0.0, 0.0, 8.0),
             decoration: BoxDecoration(
-              color: const Color(0xFF16161E),
+              color: const Color(0xFF121212),
               borderRadius: BorderRadius.circular(10.0),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.08),
-                width: 1.0,
-              ),
+              border: Border.all(color: const Color(0xFF1E1E1E), width: 1.0),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -544,7 +535,7 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                                 horizontal: 8.0,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF282836),
+                                color: const Color(0xFF1E1E1E),
                                 borderRadius: BorderRadius.circular(6.0),
                               ),
                               child: Row(

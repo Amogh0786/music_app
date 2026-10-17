@@ -176,17 +176,21 @@ class DesktopLayoutState {
     String playlistId, {
     required String title,
     required String subtitle,
+    String? query,
     dynamic initialSongs,
     dynamic gradientColors,
     dynamic icon,
+    String? imageUrl,
   }) {
     activePlaylistId.value = playlistId;
     activeCuratedPlaylistData.value = {
       'title': title,
       'subtitle': subtitle,
+      'query': query,
       'initialSongs': initialSongs,
       'gradientColors': gradientColors,
       'icon': icon,
+      'imageUrl': imageUrl,
     };
     activeArtistName.value = null;
     activeAlbumData.value = null;
@@ -223,6 +227,16 @@ class DesktopLayoutState {
     activeNavTab.value = DesktopNavTab.album;
   }
 
+  /// Opens the settings screen inside the central desktop viewport while keeping side panels docked.
+  static void openSettings() {
+    setNavTab(DesktopNavTab.settings);
+  }
+
+  /// Opens the profile screen inside the central desktop viewport while keeping side panels docked.
+  static void openProfile() {
+    setNavTab(DesktopNavTab.profile);
+  }
+
   /// Closes the detail view and returns to the home/library view.
   static void closeDetailView() {
     activePlaylistId.value = null;
@@ -231,7 +245,9 @@ class DesktopLayoutState {
     activeAlbumData.value = null;
     if (activeNavTab.value == DesktopNavTab.customPlaylist ||
         activeNavTab.value == DesktopNavTab.artistProfile ||
-        activeNavTab.value == DesktopNavTab.album) {
+        activeNavTab.value == DesktopNavTab.album ||
+        activeNavTab.value == DesktopNavTab.settings ||
+        activeNavTab.value == DesktopNavTab.profile) {
       activeNavTab.value = DesktopNavTab.home;
     }
   }

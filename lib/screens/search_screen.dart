@@ -105,7 +105,8 @@ class SearchScreenState extends State<SearchScreen>
       'query': 'Bollywood Top Hits 2026',
       'colors': [const Color(0xFFFF416C), const Color(0xFFFF4B2B)],
       'icon': Icons.whatshot_rounded,
-      'badge': 'HOT',
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300&q=80',
     },
     {
       'title': 'Telugu Beats',
@@ -113,7 +114,8 @@ class SearchScreenState extends State<SearchScreen>
       'query': 'Telugu Top Songs',
       'colors': [const Color(0xFF8E2DE2), const Color(0xFF4A00E0)],
       'icon': Icons.music_note_rounded,
-      'badge': 'VIRAL',
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=300&q=80',
     },
     {
       'title': 'Pop & Global',
@@ -121,7 +123,8 @@ class SearchScreenState extends State<SearchScreen>
       'query': 'Global Pop Hits',
       'colors': [const Color(0xFF00c6ff), const Color(0xFF0072ff)],
       'icon': Icons.public_rounded,
-      'badge': 'GLOBAL',
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&q=80',
     },
     {
       'title': 'Punjabi Hits',
@@ -129,7 +132,8 @@ class SearchScreenState extends State<SearchScreen>
       'query': 'Punjabi Top Hits',
       'colors': [const Color(0xFFf857a6), const Color(0xFFff5858)],
       'icon': Icons.speaker_group_rounded,
-      'badge': 'BEATS',
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=300&q=80',
     },
     {
       'title': 'Lo-Fi & Chill',
@@ -137,7 +141,8 @@ class SearchScreenState extends State<SearchScreen>
       'query': 'Lofi Chill Beats',
       'colors': [const Color(0xFF11998e), const Color(0xFF38ef7d)],
       'icon': Icons.bedtime_rounded,
-      'badge': 'CHILL',
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=300&q=80',
     },
     {
       'title': 'Workout Energy',
@@ -145,7 +150,8 @@ class SearchScreenState extends State<SearchScreen>
       'query': 'Workout Music Beats',
       'colors': [const Color(0xFFFF8008), const Color(0xFFFFC837)],
       'icon': Icons.bolt_rounded,
-      'badge': 'PUMP',
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=300&q=80',
     },
     {
       'title': 'Romance & Love',
@@ -153,7 +159,8 @@ class SearchScreenState extends State<SearchScreen>
       'query': 'Romantic Hindi Songs',
       'colors': [const Color(0xFFee9ca7), const Color(0xFFff758c)],
       'icon': Icons.favorite_rounded,
-      'badge': 'LOVE',
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=300&q=80',
     },
     {
       'title': 'Hip-Hop & Rap',
@@ -161,7 +168,8 @@ class SearchScreenState extends State<SearchScreen>
       'query': 'Hip Hop Hits',
       'colors': [const Color(0xFF3A1C71), const Color(0xFFD76D77)],
       'icon': Icons.mic_external_on_rounded,
-      'badge': 'FLOW',
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=300&q=80',
     },
     {
       'title': 'Party & Dance',
@@ -169,7 +177,8 @@ class SearchScreenState extends State<SearchScreen>
       'query': 'Party Dance Club Hits',
       'colors': [const Color(0xFFFA2D48), const Color(0xFFF7971E)],
       'icon': Icons.celebration_rounded,
-      'badge': 'PARTY',
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=300&q=80',
     },
     {
       'title': 'Indie & Acoustic',
@@ -177,7 +186,8 @@ class SearchScreenState extends State<SearchScreen>
       'query': 'Indian Indie Acoustic Songs',
       'colors': [const Color(0xFF4776E6), const Color(0xFF8E54E9)],
       'icon': Icons.audiotrack_rounded,
-      'badge': 'RAW',
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=300&q=80',
     },
   ];
 
@@ -1334,8 +1344,10 @@ class SearchScreenState extends State<SearchScreen>
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final crossAxisCount = width > 900 ? 4 : (width > 600 ? 3 : 2);
-        final aspectRatio = width > 600 ? 1.60 : 1.40;
+        final crossAxisCount = width > 1100
+            ? 5
+            : (width > 800 ? 4 : (width > 550 ? 3 : 2));
+        const aspectRatio = 1.60;
 
         return ListView(
           key: const PageStorageKey('categories_grid_view'),
@@ -1409,25 +1421,43 @@ class SearchScreenState extends State<SearchScreen>
                 final cat = _categories[index];
                 return CategoryCard(
                   title: cat['title'] as String,
-                  subtitle: cat['subtitle'] as String,
+                  subtitle: cat['subtitle'] as String?,
                   query: cat['query'] as String,
-                  colors: cat['colors'] as List<Color>,
-                  icon: cat['icon'] as IconData,
-                  badgeText: cat['badge'] as String?,
+                  colors: cat['colors'] as List<Color>?,
+                  icon: cat['icon'] as IconData?,
+                  thumbnailUrl: cat['thumbnailUrl'] as String?,
                   onTap: () {
                     HapticFeedback.lightImpact();
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CuratedPlaylistScreen(
-                          title: cat['title'] as String,
-                          subtitle: cat['subtitle'] as String,
-                          query: cat['query'] as String,
-                          gradientColors: cat['colors'] as List<Color>,
-                          icon: cat['icon'] as IconData,
+                    final isDesktop = constraints.maxWidth >= 600 || kIsWeb;
+                    if (isDesktop &&
+                        (kIsWeb ||
+                            defaultTargetPlatform == TargetPlatform.windows ||
+                            defaultTargetPlatform == TargetPlatform.macOS ||
+                            defaultTargetPlatform == TargetPlatform.linux)) {
+                      DesktopLayoutState.openCuratedPlaylist(
+                        'category_${cat['title']}',
+                        title: cat['title'] as String,
+                        subtitle: cat['subtitle'] as String,
+                        query: cat['query'] as String,
+                        gradientColors: cat['colors'] as List<Color>?,
+                        icon: cat['icon'] as IconData?,
+                        imageUrl: cat['thumbnailUrl'] as String?,
+                      );
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CuratedPlaylistScreen(
+                            title: cat['title'] as String,
+                            subtitle: cat['subtitle'] as String,
+                            query: cat['query'] as String,
+                            gradientColors: cat['colors'] as List<Color>?,
+                            icon: cat['icon'] as IconData?,
+                            imageUrl: cat['thumbnailUrl'] as String?,
+                          ),
                         ),
-                      ),
-                    );
+                      );
+                    }
                   },
                 );
               },

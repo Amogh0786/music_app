@@ -3,8 +3,6 @@ import 'package:flutter/services.dart';
 import '../../layouts/desktop_layout_state.dart';
 import '../../services/preferences_service.dart';
 import '../../screens/dilse_capsule_screen.dart';
-import '../../screens/settings_screen.dart';
-import '../../screens/profile_screen.dart';
 
 /// Spotify-grade 64px Desktop Top Global Navigation Bar (#global-nav-bar).
 ///
@@ -93,13 +91,10 @@ class _DesktopTopNavBarState extends State<DesktopTopNavBar> {
           return Container(
             height: 64.0,
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0B0B0F),
+            decoration: const BoxDecoration(
+              color: Color(0xFF000000),
               border: Border(
-                bottom: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.08),
-                  width: 1.0,
-                ),
+                bottom: BorderSide(color: Color(0xFF1E1E1E), width: 1.0),
               ),
             ),
             child: LayoutBuilder(
@@ -431,12 +426,7 @@ class _DesktopTopNavBarState extends State<DesktopTopNavBar> {
                               size: 20.0,
                             ),
                             onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const SettingsScreen(),
-                                ),
-                              );
+                              DesktopLayoutState.openSettings();
                             },
                           ),
                         ),
@@ -465,21 +455,16 @@ class _DesktopTopNavBarState extends State<DesktopTopNavBar> {
                           message: 'Profile',
                           child: GestureDetector(
                             onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const ProfileScreen(),
-                                ),
-                              );
+                              DesktopLayoutState.openProfile();
                             },
                             child: Container(
                               width: 32.0,
                               height: 32.0,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF1E1E2C),
+                                color: const Color(0xFF181818),
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.15),
+                                  color: const Color(0xFF1E1E1E),
                                   width: 1.0,
                                 ),
                               ),

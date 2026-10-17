@@ -27,14 +27,9 @@ class DesktopNowPlayingBar extends StatelessWidget {
     return Container(
       height: 90.0,
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0B0B0F),
-        border: Border(
-          top: BorderSide(
-            color: Colors.white.withValues(alpha: 0.08),
-            width: 1.0,
-          ),
-        ),
+      decoration: const BoxDecoration(
+        color: Color(0xFF000000),
+        border: Border(top: BorderSide(color: Color(0xFF1E1E1E), width: 1.0)),
       ),
       child: const Row(
         children: [
