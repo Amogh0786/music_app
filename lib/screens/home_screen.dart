@@ -662,6 +662,56 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildQuickAccessGrid() {
     final dailyMix1 = _dailyMixConfigs.isNotEmpty ? _dailyMixConfigs[0] : null;
     final dailyMix2 = _dailyMixConfigs.length > 1 ? _dailyMixConfigs[1] : null;
+    final isDesktop = MediaQuery.of(context).size.width >= 640;
+
+    void openCurated({
+      required String playlistId,
+      required String title,
+      required String subtitle,
+      required List<Video> initialSongs,
+      required List<Color> gradientColors,
+      required IconData icon,
+    }) {
+      HapticFeedback.lightImpact();
+      if (isDesktop) {
+        DesktopLayoutState.openCuratedPlaylist(
+          playlistId,
+          title: title,
+          subtitle: subtitle,
+          initialSongs: initialSongs,
+          gradientColors: gradientColors,
+          icon: icon,
+        );
+      } else {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CuratedPlaylistScreen(
+              title: title,
+              subtitle: subtitle,
+              initialSongs: initialSongs,
+              gradientColors: gradientColors,
+              icon: icon,
+            ),
+          ),
+        );
+      }
+    }
+
+    void openLikedSongs() {
+      HapticFeedback.lightImpact();
+      if (isDesktop) {
+        DesktopLayoutState.openPlaylist('liked_songs');
+      } else {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                const CustomPlaylistScreen(playlistId: 'liked_songs'),
+          ),
+        );
+      }
+    }
 
     final items = <_HomeQuickAccessItem>[
       _HomeQuickAccessItem(
@@ -671,21 +721,14 @@ class _HomeScreenState extends State<HomeScreen>
         imageUrl: _dailyMix1.isNotEmpty
             ? _dailyMix1.first.thumbnails.lowResUrl
             : null,
-        onTap: () {
-          HapticFeedback.lightImpact();
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CuratedPlaylistScreen(
-                title: dailyMix1?.title ?? 'Daily Mix 1',
-                subtitle: dailyMix1?.subtitle ?? 'Curated for you',
-                initialSongs: _dailyMix1,
-                gradientColors: const [Color(0xFFE040FB), Color(0xFF1DB954)],
-                icon: Icons.shuffle_rounded,
-              ),
-            ),
-          );
-        },
+        onTap: () => openCurated(
+          playlistId: 'daily_mix_1',
+          title: dailyMix1?.title ?? 'Daily Mix 1',
+          subtitle: dailyMix1?.subtitle ?? 'Curated for you',
+          initialSongs: _dailyMix1,
+          gradientColors: const [Color(0xFFE040FB), Color(0xFF1DB954)],
+          icon: Icons.shuffle_rounded,
+        ),
       ),
       _HomeQuickAccessItem(
         title: 'Liked Songs',
@@ -694,16 +737,7 @@ class _HomeScreenState extends State<HomeScreen>
         imageUrl: _musicService.likedSongs.isNotEmpty
             ? _musicService.likedSongs.first['thumbnail']
             : null,
-        onTap: () {
-          HapticFeedback.lightImpact();
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  const CustomPlaylistScreen(playlistId: 'liked_songs'),
-            ),
-          );
-        },
+        onTap: openLikedSongs,
       ),
       _HomeQuickAccessItem(
         title: dailyMix2?.title ?? 'Daily Mix 2',
@@ -712,21 +746,14 @@ class _HomeScreenState extends State<HomeScreen>
         imageUrl: _dailyMix2.isNotEmpty
             ? _dailyMix2.first.thumbnails.lowResUrl
             : null,
-        onTap: () {
-          HapticFeedback.lightImpact();
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CuratedPlaylistScreen(
-                title: dailyMix2?.title ?? 'Daily Mix 2',
-                subtitle: dailyMix2?.subtitle ?? 'Curated for you',
-                initialSongs: _dailyMix2,
-                gradientColors: const [Color(0xFF00C6FF), Color(0xFF0072FF)],
-                icon: Icons.graphic_eq_rounded,
-              ),
-            ),
-          );
-        },
+        onTap: () => openCurated(
+          playlistId: 'daily_mix_2',
+          title: dailyMix2?.title ?? 'Daily Mix 2',
+          subtitle: dailyMix2?.subtitle ?? 'Curated for you',
+          initialSongs: _dailyMix2,
+          gradientColors: const [Color(0xFF00C6FF), Color(0xFF0072FF)],
+          icon: Icons.graphic_eq_rounded,
+        ),
       ),
       _HomeQuickAccessItem(
         title: 'Top Charts',
@@ -735,21 +762,14 @@ class _HomeScreenState extends State<HomeScreen>
         imageUrl: _topChartsIndia.isNotEmpty
             ? _topChartsIndia.first.thumbnails.lowResUrl
             : null,
-        onTap: () {
-          HapticFeedback.lightImpact();
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CuratedPlaylistScreen(
-                title: 'Top Charts India',
-                subtitle: 'Updated Daily',
-                initialSongs: _topChartsIndia,
-                gradientColors: const [Color(0xFFFF512F), Color(0xFFDD2476)],
-                icon: Icons.trending_up_rounded,
-              ),
-            ),
-          );
-        },
+        onTap: () => openCurated(
+          playlistId: 'top_charts_india',
+          title: 'Top Charts India',
+          subtitle: 'Updated Daily',
+          initialSongs: _topChartsIndia,
+          gradientColors: const [Color(0xFFFF512F), Color(0xFFDD2476)],
+          icon: Icons.trending_up_rounded,
+        ),
       ),
       _HomeQuickAccessItem(
         title: 'New Releases',
@@ -758,21 +778,14 @@ class _HomeScreenState extends State<HomeScreen>
         imageUrl: _newReleases.isNotEmpty
             ? _newReleases.first.thumbnails.lowResUrl
             : null,
-        onTap: () {
-          HapticFeedback.lightImpact();
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CuratedPlaylistScreen(
-                title: 'New Releases',
-                subtitle: 'Fresh Music',
-                initialSongs: _newReleases,
-                gradientColors: const [Color(0xFF11998E), Color(0xFF38EF7D)],
-                icon: Icons.fiber_new_rounded,
-              ),
-            ),
-          );
-        },
+        onTap: () => openCurated(
+          playlistId: 'new_releases',
+          title: 'New Releases',
+          subtitle: 'Fresh Music',
+          initialSongs: _newReleases,
+          gradientColors: const [Color(0xFF11998E), Color(0xFF38EF7D)],
+          icon: Icons.fiber_new_rounded,
+        ),
       ),
       _HomeQuickAccessItem(
         title: 'Trending',
@@ -781,21 +794,14 @@ class _HomeScreenState extends State<HomeScreen>
         imageUrl: _trendingNow.isNotEmpty
             ? _trendingNow.first.thumbnails.lowResUrl
             : null,
-        onTap: () {
-          HapticFeedback.lightImpact();
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CuratedPlaylistScreen(
-                title: 'Trending Now',
-                subtitle: 'Global Pick',
-                initialSongs: _trendingNow,
-                gradientColors: const [Color(0xFFF857A6), Color(0xFFFF5858)],
-                icon: Icons.whatshot_rounded,
-              ),
-            ),
-          );
-        },
+        onTap: () => openCurated(
+          playlistId: 'trending_now',
+          title: 'Trending Now',
+          subtitle: 'Global Pick',
+          initialSongs: _trendingNow,
+          gradientColors: const [Color(0xFFF857A6), Color(0xFFFF5858)],
+          icon: Icons.whatshot_rounded,
+        ),
       ),
     ];
 

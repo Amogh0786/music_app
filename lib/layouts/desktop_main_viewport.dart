@@ -5,6 +5,8 @@ import '../screens/library_screen.dart';
 import '../screens/custom_playlist_screen.dart';
 import '../screens/artist_profile_screen.dart';
 import '../screens/album_screen.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import '../screens/curated_playlist_screen.dart';
 import '../models/jio_album.dart';
 import 'desktop_layout_state.dart';
 
@@ -41,6 +43,19 @@ class DesktopMainViewport extends StatelessWidget {
                 builder: (context, playlistId, _) {
                   if (playlistId == null || playlistId.isEmpty) {
                     return _buildIndexedStack(DesktopNavTab.home);
+                  }
+                  final curatedData =
+                      DesktopLayoutState.activeCuratedPlaylistData.value;
+                  if (curatedData != null) {
+                    return CuratedPlaylistScreen(
+                      key: ValueKey('desktop_curated_$playlistId'),
+                      title: curatedData['title'] as String,
+                      subtitle: curatedData['subtitle'] as String,
+                      initialSongs: curatedData['initialSongs'] as List<Video>?,
+                      gradientColors:
+                          curatedData['gradientColors'] as List<Color>?,
+                      icon: curatedData['icon'] as IconData?,
+                    );
                   }
                   return CustomPlaylistScreen(
                     key: ValueKey('desktop_playlist_$playlistId'),

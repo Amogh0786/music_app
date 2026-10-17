@@ -7,6 +7,7 @@ import '../widgets/mini_player.dart';
 import '../widgets/animated_equalizer.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/dilse_scrollbar.dart';
+import '../layouts/desktop_layout_state.dart';
 import 'album_screen.dart';
 
 class CuratedPlaylistScreen extends StatefulWidget {
@@ -180,7 +181,13 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
                                 color: Colors.white,
                                 size: 18,
                               ),
-                              onPressed: () => Navigator.pop(context),
+                              onPressed: () {
+                                if (Navigator.canPop(context)) {
+                                  Navigator.pop(context);
+                                } else {
+                                  DesktopLayoutState.closeDetailView();
+                                }
+                              },
                             ),
                           ),
                           Text(
@@ -579,7 +586,8 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
           ),
 
           // Mini Player
-          const Positioned(left: 0, right: 0, bottom: 0, child: MiniPlayer()),
+          if (MediaQuery.of(context).size.width < 640)
+            const Positioned(left: 0, right: 0, bottom: 0, child: MiniPlayer()),
         ],
       ),
     );

@@ -29,6 +29,13 @@ class DesktopLayoutState {
     null,
   );
 
+  /// Alias for activePlaylistId.
+  static ValueNotifier<String?> get selectedPlaylistId => activePlaylistId;
+
+  /// Active curated playlist data rendered inside the central desktop viewport.
+  static final ValueNotifier<Map<String, dynamic>?> activeCuratedPlaylistData =
+      ValueNotifier<Map<String, dynamic>?>(null);
+
   /// Active artist name rendered inside the central desktop viewport.
   static final ValueNotifier<String?> activeArtistName = ValueNotifier<String?>(
     null,
@@ -124,6 +131,29 @@ class DesktopLayoutState {
   /// Opens a custom playlist inside the central desktop viewport while keeping side panels docked.
   static void openPlaylist(String playlistId) {
     activePlaylistId.value = playlistId;
+    activeCuratedPlaylistData.value = null;
+    activeArtistName.value = null;
+    activeAlbumData.value = null;
+    activeNavTab.value = DesktopNavTab.customPlaylist;
+  }
+
+  /// Opens a curated playlist inside the central desktop viewport while keeping side panels docked.
+  static void openCuratedPlaylist(
+    String playlistId, {
+    required String title,
+    required String subtitle,
+    dynamic initialSongs,
+    dynamic gradientColors,
+    dynamic icon,
+  }) {
+    activePlaylistId.value = playlistId;
+    activeCuratedPlaylistData.value = {
+      'title': title,
+      'subtitle': subtitle,
+      'initialSongs': initialSongs,
+      'gradientColors': gradientColors,
+      'icon': icon,
+    };
     activeArtistName.value = null;
     activeAlbumData.value = null;
     activeNavTab.value = DesktopNavTab.customPlaylist;
@@ -133,6 +163,7 @@ class DesktopLayoutState {
   static void openArtist(String artistName) {
     activeArtistName.value = artistName;
     activePlaylistId.value = null;
+    activeCuratedPlaylistData.value = null;
     activeAlbumData.value = null;
     activeNavTab.value = DesktopNavTab.artistProfile;
   }
@@ -153,6 +184,7 @@ class DesktopLayoutState {
       'albumArtist': albumArtist,
     };
     activePlaylistId.value = null;
+    activeCuratedPlaylistData.value = null;
     activeArtistName.value = null;
     activeNavTab.value = DesktopNavTab.album;
   }
@@ -160,6 +192,7 @@ class DesktopLayoutState {
   /// Closes the detail view and returns to the home/library view.
   static void closeDetailView() {
     activePlaylistId.value = null;
+    activeCuratedPlaylistData.value = null;
     activeArtistName.value = null;
     activeAlbumData.value = null;
     if (activeNavTab.value == DesktopNavTab.customPlaylist ||
