@@ -234,6 +234,10 @@ class PreferencesService extends ChangeNotifier {
   static const String _followedArtistsKey = 'followed_artists_v1';
   final Set<String> _followedArtists = {};
 
+  // Pinned Playlists (Stored in PreferencesService)
+  static const String _pinnedPlaylistIdsKey = 'pinned_playlist_ids';
+  final Set<String> _pinnedPlaylistIds = {};
+
   // Listening History
   List<Map<String, String>> _listeningHistory = [];
 
@@ -445,6 +449,11 @@ class PreferencesService extends ChangeNotifier {
     _followedArtists
       ..clear()
       ..addAll(followedList);
+
+    final pinnedList = _prefs.getStringList(_pinnedPlaylistIdsKey) ?? [];
+    _pinnedPlaylistIds
+      ..clear()
+      ..addAll(pinnedList);
 
     final playsJson = _prefs.getString('artistPlayCountsJson');
     if (playsJson != null && playsJson.isNotEmpty) {
