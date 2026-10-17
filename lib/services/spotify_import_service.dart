@@ -550,6 +550,38 @@ class SpotifyImportService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Parses standard Exportify, Soundiiz, TuneMyMusic, or custom CSV text content into a list of normalized maps.
+  Future<List<Map<String, String>>> parseExportifyCsvString(
+    String csvContent,
+  ) async {
+    final tracks = ExportifyCsvParser.parse(csvContent);
+    return tracks.map((t) {
+      return <String, String>{
+        'spotifyId': t.spotifyId,
+        'trackName': t.trackName,
+        'artistName': t.artistName,
+        'albumName': t.albumName,
+        'durationMs': t.durationMs.toString(),
+        'Track Name': t.trackName,
+        'Artist Name(s)': t.artistName,
+        'Album Name': t.albumName,
+        'Track Duration (ms)': t.durationMs.toString(),
+      };
+    }).toList();
+  }
+
+  /// High-performance resolver with Web concurrency throttle (4 items max) and artist token accuracy filter.
+  Future<List<Video>> resolveTracks(
+    List<ExportifyTrack> tracks, {
+    void Function(int completed, String songTitle)? onProgress,
+    void Function(List<Video> currentResolvedSongs)? onSongsUpdated,
+  }) => resolveTracksConcurrently(
+    tracks: tracks,
+    concurrency: kIsWeb ? 4 : 8,
+    onProgress: onProgress,
+    onSongsUpdated: onSongsUpdated,
+  );
+
   static String _normalizeTrackKey(String title, String artist) {
     final cleanTitle = title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
     final cleanArtist = artist.toLowerCase().replaceAll(

@@ -11,6 +11,7 @@ import '../services/music_service.dart';
 import '../services/preferences_service.dart';
 import '../services/spotify_import_service.dart';
 import 'spotify_import_screen.dart';
+import '../widgets/desktop/desktop_import_modal.dart';
 import 'custom_playlist_screen.dart';
 import '../widgets/animated_equalizer.dart';
 import '../widgets/playlist_action_menu.dart';
@@ -1445,7 +1446,11 @@ class _LibraryScreenState extends State<LibraryScreen>
                             ),
                           ),
                           onPressed: () {
-                            _selectedSection.value = LibrarySection.spotify;
+                            if (isWide || kIsWeb) {
+                              showDesktopImportModal(context);
+                            } else {
+                              _selectedSection.value = LibrarySection.spotify;
+                            }
                           },
                         )
                       : null,
@@ -2773,12 +2778,16 @@ class _LibraryScreenState extends State<LibraryScreen>
                 ),
                 onPressed: () {
                   HapticFeedback.lightImpact();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SpotifyImportScreen(),
-                    ),
-                  );
+                  if (isWide || kIsWeb) {
+                    showDesktopImportModal(context);
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SpotifyImportScreen(),
+                      ),
+                    );
+                  }
                 },
               ),
             ],
@@ -2809,12 +2818,16 @@ class _LibraryScreenState extends State<LibraryScreen>
                     ),
                     onPressed: () {
                       HapticFeedback.lightImpact();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SpotifyImportScreen(),
-                        ),
-                      );
+                      if (isWide || kIsWeb) {
+                        showDesktopImportModal(context);
+                      } else {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SpotifyImportScreen(),
+                          ),
+                        );
+                      }
                     },
                   ),
                 )

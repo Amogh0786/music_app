@@ -7,6 +7,7 @@ import '../../services/dynamic_artist_service.dart';
 import '../playlist_action_menu.dart';
 import '../dilse_tooltip.dart';
 import 'desktop_context_menu.dart';
+import 'desktop_import_modal.dart';
 
 /// Spotify-grade dual-mode Left Sidebar (#Desktop_LeftSidebar_Id).
 ///
@@ -173,11 +174,11 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                 onTap: () => DesktopLayoutState.toggleLeftSidebar(),
               ),
 
-              // 3. Create Playlist Action
+              // 3. Create / Import Playlist Action
               _buildCompactNavIcon(
                 icon: Icons.add_rounded,
-                label: 'Create Playlist',
-                onTap: _showCreatePlaylistDialog,
+                label: 'Create or Import Playlist',
+                onTap: _showPlaylistAddOrImportMenu,
               ),
 
               const SizedBox(height: 6.0),
@@ -383,58 +384,136 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: 'Collapse sidebar',
-                            visualDensity: VisualDensity.compact,
-                            constraints: const BoxConstraints(
-                              minWidth: 28,
-                              minHeight: 28,
-                            ),
-                            padding: EdgeInsets.zero,
-                            icon: const Icon(
-                              Icons.view_sidebar_rounded,
-                              color: Colors.white70,
-                              size: 20.0,
-                            ),
-                            onPressed: () =>
-                                DesktopLayoutState.toggleLeftSidebar(),
-                          ),
-                          const SizedBox(width: 6.0),
-                          MouseRegion(
-                            cursor: SystemMouseCursors.click,
-                            child: GestureDetector(
-                              onTap: () =>
+                      Flexible(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Collapse sidebar',
+                              visualDensity: VisualDensity.compact,
+                              constraints: const BoxConstraints(
+                                minWidth: 28,
+                                minHeight: 28,
+                              ),
+                              padding: EdgeInsets.zero,
+                              icon: const Icon(
+                                Icons.view_sidebar_rounded,
+                                color: Colors.white70,
+                                size: 20.0,
+                              ),
+                              onPressed: () =>
                                   DesktopLayoutState.toggleLeftSidebar(),
-                              child: const Text(
-                                'Your Library',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14.0,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: -0.2,
+                            ),
+                            const SizedBox(width: 6.0),
+                            Flexible(
+                              child: MouseRegion(
+                                cursor: SystemMouseCursors.click,
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      DesktopLayoutState.toggleLeftSidebar(),
+                                  child: const Text(
+                                    'Your Library',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14.0,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                      IconButton(
-                        tooltip: 'Create playlist',
-                        visualDensity: VisualDensity.compact,
-                        constraints: const BoxConstraints(
-                          minWidth: 28,
-                          minHeight: 28,
+                      Theme(
+                        data: Theme.of(context).copyWith(
+                          hoverColor: Colors.white.withValues(alpha: 0.08),
                         ),
-                        padding: EdgeInsets.zero,
-                        icon: const Icon(
-                          Icons.add_rounded,
-                          color: Colors.white70,
-                          size: 22.0,
+                        child: PopupMenuButton<String>(
+                          tooltip: 'Add or import playlist',
+                          padding: EdgeInsets.zero,
+                          color: const Color(0xFF18181F),
+                          elevation: 10,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: const BorderSide(color: Color(0xFF282836)),
+                          ),
+                          offset: const Offset(0, 36),
+                          onSelected: (val) {
+                            if (val == 'create') {
+                              _showCreatePlaylistDialog();
+                            } else if (val == 'import') {
+                              showDesktopImportModal(context);
+                            }
+                          },
+                          constraints: const BoxConstraints(
+                            minWidth: 280.0,
+                            maxWidth: 320.0,
+                          ),
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.add_rounded,
+                              color: Colors.white70,
+                              size: 22.0,
+                            ),
+                          ),
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'create',
+                              height: 42,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.playlist_add_rounded,
+                                    color: Colors.white,
+                                    size: 19,
+                                  ),
+                                  SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'Create New Playlist',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'import',
+                              height: 42,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.file_download_outlined,
+                                    color: Color(0xFF1DB954),
+                                    size: 19,
+                                  ),
+                                  SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'Import Playlist (Spotify / Exportify)',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        onPressed: _showCreatePlaylistDialog,
                       ),
                     ],
                   ),
@@ -665,17 +744,116 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
 
                       final playlists = _getFilteredPlaylists();
                       final showLiked = _shouldShowLikedSongs();
+                      final isImportedFilter = filters.contains(
+                        'Imported from Spotify',
+                      );
+
+                      if (isImportedFilter && playlists.isEmpty) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20.0,
+                              vertical: 24.0,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFF1DB954,
+                                    ).withValues(alpha: 0.12),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.file_download_outlined,
+                                    color: Color(0xFF1DB954),
+                                    size: 22,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  'No imported playlists yet',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Transfer Exportify CSV files or Spotify playlists into DilSe.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                    fontSize: 11.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                OutlinedButton.icon(
+                                  icon: const Icon(
+                                    Icons.file_download_outlined,
+                                    size: 15,
+                                  ),
+                                  label: const Text(
+                                    'Import from Exportify / Spotify',
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: BorderSide(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.2,
+                                      ),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    textStyle: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  onPressed: () =>
+                                      showDesktopImportModal(context),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+
+                      final showImportHeader =
+                          isImportedFilter && playlists.isNotEmpty;
+                      final extraCount =
+                          (showLiked ? 1 : 0) + (showImportHeader ? 1 : 0);
 
                       return ListView.builder(
                         padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                        itemCount: (showLiked ? 1 : 0) + playlists.length,
+                        itemCount: extraCount + playlists.length,
                         itemBuilder: (context, index) {
+                          var effectiveIndex = index;
+                          if (showImportHeader) {
+                            if (effectiveIndex == 0) {
+                              return _buildImportNewHeader(context);
+                            }
+                            effectiveIndex--;
+                          }
+
                           // Row 0: Liked Songs Row
-                          if (showLiked && index == 0) {
+                          if (showLiked && effectiveIndex == 0) {
                             return _buildLikedSongsRow(context);
                           }
 
-                          final plIndex = showLiked ? index - 1 : index;
+                          final plIndex = showLiked
+                              ? effectiveIndex - 1
+                              : effectiveIndex;
                           final pl = playlists[plIndex];
                           return _buildPlaylistRow(context, pl);
                         },
@@ -787,10 +965,127 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
     if (filters.contains('Playlists')) return true;
     if (filters.contains('Albums') ||
         filters.contains('History') ||
-        filters.contains('Artists')) {
+        filters.contains('Artists') ||
+        filters.contains('Imported from Spotify')) {
       return false;
     }
     return true;
+  }
+
+  Widget _buildImportNewHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4.0, 2.0, 4.0, 6.0),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8.0),
+        onTap: () => showDesktopImportModal(context),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 7.0),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1DB954).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8.0),
+            border: Border.all(
+              color: const Color(0xFF1DB954).withValues(alpha: 0.25),
+            ),
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.file_download_outlined,
+                color: Color(0xFF1DB954),
+                size: 16.0,
+              ),
+              SizedBox(width: 8.0),
+              Text(
+                'Import New (Spotify / Exportify)',
+                style: TextStyle(
+                  color: Color(0xFF1DB954),
+                  fontSize: 12.0,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPlaylistAddOrImportMenu() async {
+    final renderBox = context.findRenderObject() as RenderBox?;
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (renderBox == null || overlay == null) return;
+
+    final targetPosition = renderBox.localToGlobal(const Offset(64, 120));
+    final selected = await showMenu<String>(
+      context: context,
+      color: const Color(0xFF18181F),
+      elevation: 10,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: const BorderSide(color: Color(0xFF282836)),
+      ),
+      position: RelativeRect.fromRect(
+        targetPosition & const Size(40, 40),
+        Offset.zero & overlay.size,
+      ),
+      constraints: const BoxConstraints(minWidth: 280.0, maxWidth: 320.0),
+      items: const [
+        PopupMenuItem(
+          value: 'create',
+          height: 42,
+          child: Row(
+            children: [
+              Icon(Icons.playlist_add_rounded, color: Colors.white, size: 19),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Create New Playlist',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'import',
+          height: 42,
+          child: Row(
+            children: [
+              Icon(
+                Icons.file_download_outlined,
+                color: Color(0xFF1DB954),
+                size: 19,
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Import Playlist (Spotify / Exportify)',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (!mounted) return;
+
+    if (selected == 'create') {
+      _showCreatePlaylistDialog();
+    } else if (selected == 'import') {
+      showDesktopImportModal(context);
+    }
   }
 
   List<Map<String, dynamic>> _getFilteredPlaylists() {
