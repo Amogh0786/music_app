@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
@@ -137,5 +138,100 @@ void main() {
       expect(DesktopPlayerTab.values, contains(DesktopPlayerTab.queue));
       expect(DesktopPlayerTab.values.length, 3);
     });
+
+    testWidgets('Toggles volume mute and unmute via speaker icon button', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DesktopFullScreenPlayer(
+              song: mockSong,
+              isPlaying: true,
+              isLoading: false,
+              isLiked: false,
+              dominantColor: const Color(0xFF1E3A8A),
+              vibrantColor: const Color(0xFF3B82F6),
+              darkVibrantColor: const Color(0xFF0F172A),
+              artworkStyle: ArtworkStyle.card,
+              onClose: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Initially unmuted at 100%
+      expect(find.byTooltip('Mute'), findsOneWidget);
+      expect(find.text('100%'), findsOneWidget);
+
+      // Tap Mute button
+      await tester.tap(find.byTooltip('Mute'));
+      await tester.pump();
+
+      // Now muted at 0% with volume_off icon and Unmute tooltip
+      expect(find.byTooltip('Unmute'), findsOneWidget);
+      expect(find.byIcon(Icons.volume_off_rounded), findsOneWidget);
+      expect(find.text('0%'), findsOneWidget);
+
+      // Tap Unmute button
+      await tester.tap(find.byTooltip('Unmute'));
+      await tester.pump();
+
+      // Restored back to 100%
+      expect(find.byTooltip('Mute'), findsOneWidget);
+      expect(find.text('100%'), findsOneWidget);
+    });
+
+    testWidgets(
+      'Adjusts volume and mutes via keyboard shortcuts in fullscreen',
+      (tester) async {
+        tester.view.physicalSize = const Size(1280, 800);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DesktopFullScreenPlayer(
+                song: mockSong,
+                isPlaying: true,
+                isLoading: false,
+                isLiked: false,
+                dominantColor: const Color(0xFF1E3A8A),
+                vibrantColor: const Color(0xFF3B82F6),
+                darkVibrantColor: const Color(0xFF0F172A),
+                artworkStyle: ArtworkStyle.card,
+                onClose: () {},
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        // Initial state is 100%
+        expect(find.text('100%'), findsOneWidget);
+
+        // Press ArrowDown key to decrease volume by 5%
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pump();
+        expect(find.text('95%'), findsOneWidget);
+
+        // Press 'M' key to toggle mute
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyM);
+        await tester.pump();
+        expect(find.text('0%'), findsOneWidget);
+        expect(find.byIcon(Icons.volume_off_rounded), findsOneWidget);
+
+        // Press 'M' key again to unmute
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyM);
+        await tester.pump();
+        expect(find.text('95%'), findsOneWidget);
+      },
+    );
   });
 }
