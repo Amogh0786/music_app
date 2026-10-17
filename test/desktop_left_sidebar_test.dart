@@ -223,8 +223,8 @@ void main() {
           ),
         );
 
-        expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
-        await tester.tap(find.byIcon(Icons.favorite_rounded));
+        expect(find.byIcon(Icons.favorite), findsOneWidget);
+        await tester.tap(find.byIcon(Icons.favorite));
         await tester.pump();
 
         expect(

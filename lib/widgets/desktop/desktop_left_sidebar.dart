@@ -130,7 +130,6 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
         DesktopLayoutState.activePlaylistId,
       ]),
       builder: (context, _) {
-        final accentColor = prefs.legibleThemeColor;
         final activeTab = DesktopLayoutState.activeNavTab.value;
         final activePlaylistId = DesktopLayoutState.activePlaylistId.value;
 
@@ -1413,7 +1412,7 @@ class _CompactPlaylistTileState extends State<_CompactPlaylistTile> {
                             fit: BoxFit.cover,
                             cacheWidth: 96,
                             cacheHeight: 96,
-                            errorBuilder: (_, __, ___) => _buildFallback(),
+                            errorBuilder: (_, _, _) => _buildFallback(),
                             loadingBuilder: (context, child, loadingProgress) {
                               if (loadingProgress == null) return child;
                               return Container(
