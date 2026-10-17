@@ -5,7 +5,6 @@ import 'package:music_app/services/preferences_service.dart';
 import 'package:music_app/widgets/desktop/desktop_context_menu.dart';
 import 'package:music_app/widgets/song_options_bottom_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
