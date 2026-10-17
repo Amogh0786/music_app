@@ -166,16 +166,16 @@ void main() {
           expect(find.byType(DesktopTopNavBar), findsOneWidget);
           expect(find.byType(DesktopRightPanel), findsOneWidget);
 
-          // Verify sidebar toggle exists in top nav bar and left sidebar
-          expect(find.byTooltip('Collapse sidebar'), findsAtLeastNWidgets(2));
-          await tester.tap(find.byTooltip('Collapse sidebar').first);
+          // Verify single authoritative sidebar toggle in left sidebar
+          expect(find.byTooltip('Collapse sidebar'), findsOneWidget);
+          await tester.tap(find.byTooltip('Collapse sidebar'));
           await tester.pump();
           expect(DesktopLayoutState.isLeftSidebarCollapsed.value, true);
           expect(DesktopLayoutState.leftSidebarWidth.value, 72.0);
 
           // Reopen via expand button
-          expect(find.byTooltip('Expand sidebar'), findsAtLeastNWidgets(2));
-          await tester.tap(find.byTooltip('Expand sidebar').first);
+          expect(find.byTooltip('Expand sidebar'), findsOneWidget);
+          await tester.tap(find.byTooltip('Expand sidebar'));
           await tester.pump();
           expect(DesktopLayoutState.isLeftSidebarCollapsed.value, false);
           expect(DesktopLayoutState.leftSidebarWidth.value, 280.0);

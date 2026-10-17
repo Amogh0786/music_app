@@ -112,36 +112,10 @@ class _DesktopTopNavBarState extends State<DesktopTopNavBar> {
 
                 return Row(
                   children: [
-                    // 1. LEADING: SIDEBAR TOGGLE + DILSE BRAND LOGO + HOME NAV
+                    // 1. LEADING: DILSE BRAND LOGO + HOME NAV
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        ValueListenableBuilder<double>(
-                          valueListenable: DesktopLayoutState.leftSidebarWidth,
-                          builder: (context, sidebarWidth, _) {
-                            final isCollapsed = sidebarWidth <= 72.0;
-                            return Tooltip(
-                              message: isCollapsed
-                                  ? 'Expand sidebar'
-                                  : 'Collapse sidebar',
-                              child: IconButton(
-                                visualDensity: VisualDensity.compact,
-                                icon: Icon(
-                                  isCollapsed
-                                      ? Icons.menu_rounded
-                                      : Icons.menu_open_rounded,
-                                  color: isCollapsed
-                                      ? accentColor
-                                      : Colors.white.withValues(alpha: 0.75),
-                                  size: 20.0,
-                                ),
-                                onPressed: () =>
-                                    DesktopLayoutState.toggleLeftSidebar(),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(width: 4.0),
                         InkWell(
                           borderRadius: BorderRadius.circular(8.0),
                           onTap: _navigateToHome,

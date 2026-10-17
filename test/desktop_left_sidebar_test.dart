@@ -32,15 +32,15 @@ void main() {
           ),
         );
 
-        // Verify top expand control and compact navigation icons exist
-        expect(find.byIcon(Icons.menu_open_rounded), findsOneWidget);
+        // Verify authoritative Library expand control and compact navigation icons exist
+        expect(find.byIcon(Icons.view_sidebar_rounded), findsOneWidget);
         expect(find.byIcon(Icons.home_filled), findsOneWidget);
         expect(find.byIcon(Icons.search_rounded), findsOneWidget);
         expect(find.byIcon(Icons.add_rounded), findsOneWidget);
-        expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
+        expect(find.byIcon(Icons.favorite), findsOneWidget);
 
-        // Test expanding sidebar from compact mode via top expand control
-        await tester.tap(find.byIcon(Icons.menu_open_rounded));
+        // Test expanding sidebar from compact mode via Library expand control
+        await tester.tap(find.byIcon(Icons.view_sidebar_rounded));
         await tester.pump();
         expect(DesktopLayoutState.isLeftSidebarCollapsed.value, false);
         expect(DesktopLayoutState.leftSidebarWidth.value, 280.0);
@@ -71,7 +71,7 @@ void main() {
 
       // Card 2 Library Header
       expect(find.text('Your Library'), findsOneWidget);
-      expect(find.byIcon(Icons.menu_open_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.view_sidebar_rounded), findsOneWidget);
       expect(find.byIcon(Icons.add_rounded), findsOneWidget);
 
       // Filter Chips
@@ -95,7 +95,7 @@ void main() {
       expect(find.text('Liked Songs'), findsOneWidget);
 
       // Test collapsing sidebar via collapse button
-      await tester.tap(find.byIcon(Icons.menu_open_rounded));
+      await tester.tap(find.byIcon(Icons.view_sidebar_rounded));
       await tester.pump();
       expect(DesktopLayoutState.isLeftSidebarCollapsed.value, true);
       expect(DesktopLayoutState.leftSidebarWidth.value, 72.0);
