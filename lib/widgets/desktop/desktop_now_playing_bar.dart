@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
@@ -687,15 +688,35 @@ class _DesktopUtilitiesSectionState extends State<_DesktopUtilitiesSection> {
   final MusicService _musicService = MusicService();
   double _lastVolume = 1.0;
   double _currentVolume = 1.0;
+  StreamSubscription<double>? _volumeSubscription;
+  bool _isDraggingVolume = false;
 
   @override
   void initState() {
     super.initState();
     DesktopFullscreenHelper.init();
     _currentVolume = _musicService.audioPlayer.volume;
-    if (_currentVolume > 0) {
+    if (_currentVolume > 0.001) {
       _lastVolume = _currentVolume;
     }
+    _volumeSubscription = _musicService.audioPlayer.volumeStream.listen((vol) {
+      if (!_isDraggingVolume &&
+          mounted &&
+          (vol - _currentVolume).abs() > 0.001) {
+        setState(() {
+          _currentVolume = vol;
+          if (vol > 0.001) {
+            _lastVolume = vol;
+          }
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _volumeSubscription?.cancel();
+    super.dispose();
   }
 
   void _applyVolume(double val) {
@@ -706,6 +727,18 @@ class _DesktopUtilitiesSectionState extends State<_DesktopUtilitiesSection> {
     _musicService.audioPlayer.setVolume(clamped);
     if (kIsWeb) {
       WebPlayerBridge.setVolume(clamped);
+    }
+  }
+
+  void _toggleMute() {
+    final current = _currentVolume;
+    final isMuted = current <= 0.001;
+    if (isMuted) {
+      final restoreVol = _lastVolume > 0.05 ? _lastVolume : 1.0;
+      _applyVolume(restoreVol);
+    } else {
+      _lastVolume = current > 0.001 ? current : 1.0;
+      _applyVolume(0.0);
     }
   }
 
@@ -806,83 +839,74 @@ class _DesktopUtilitiesSectionState extends State<_DesktopUtilitiesSection> {
               const SizedBox(width: 2.0),
 
               // Volume Mute / Unmute Button & Slider
-              StreamBuilder<double>(
-                stream: _musicService.audioPlayer.volumeStream,
-                initialData: _currentVolume,
-                builder: (context, snapshot) {
-                  final volume = snapshot.data ?? _currentVolume;
-                  final isMuted = volume <= 0.001;
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.all(4.0),
+                    constraints: const BoxConstraints(
+                      minWidth: 28.0,
+                      minHeight: 28.0,
+                    ),
+                    tooltip: _currentVolume <= 0.001 ? 'Unmute' : 'Mute',
+                    icon: Icon(
+                      _currentVolume <= 0.001
+                          ? Icons.volume_off_rounded
+                          : (_currentVolume < 0.5
+                                ? Icons.volume_down_rounded
+                                : Icons.volume_up_rounded),
+                      color: _currentVolume <= 0.001
+                          ? Colors.white.withValues(alpha: 0.4)
+                          : Colors.white.withValues(alpha: 0.75),
+                      size: 19.0,
+                    ),
+                    onPressed: _toggleMute,
+                  ),
 
-                  return Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.all(4.0),
-                        constraints: const BoxConstraints(
-                          minWidth: 28.0,
-                          minHeight: 28.0,
+                  // Sleek 72px Volume Slider
+                  SizedBox(
+                    width: 72.0,
+                    child: SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 3.5,
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 4.5,
                         ),
-                        tooltip: isMuted ? 'Unmute' : 'Mute',
-                        icon: Icon(
-                          isMuted
-                              ? Icons.volume_off_rounded
-                              : (volume < 0.5
-                                    ? Icons.volume_down_rounded
-                                    : Icons.volume_up_rounded),
-                          color: isMuted
-                              ? Colors.white.withValues(alpha: 0.4)
-                              : Colors.white.withValues(alpha: 0.75),
-                          size: 19.0,
+                        overlayShape: const RoundSliderOverlayShape(
+                          overlayRadius: 8.0,
                         ),
-                        onPressed: () {
-                          if (isMuted) {
-                            final restoreVol = _lastVolume > 0
-                                ? _lastVolume
-                                : 1.0;
-                            _applyVolume(restoreVol);
-                          } else {
-                            _lastVolume = volume > 0 ? volume : 1.0;
-                            _applyVolume(0.0);
+                        activeTrackColor: Colors.white,
+                        inactiveTrackColor: Colors.white.withValues(
+                          alpha: 0.15,
+                        ),
+                        thumbColor: Colors.white,
+                        overlayColor: Colors.white.withValues(alpha: 0.15),
+                      ),
+                      child: Slider(
+                        value: _currentVolume.clamp(0.0, 1.0),
+                        min: 0.0,
+                        max: 1.0,
+                        onChangeStart: (_) {
+                          _isDraggingVolume = true;
+                        },
+                        onChangeEnd: (val) {
+                          _isDraggingVolume = false;
+                          if (val > 0.001) {
+                            _lastVolume = val;
                           }
+                          _applyVolume(val);
+                        },
+                        onChanged: (val) {
+                          if (val > 0.001) {
+                            _lastVolume = val;
+                          }
+                          _applyVolume(val);
                         },
                       ),
-
-                      // Sleek 72px Volume Slider
-                      SizedBox(
-                        width: 72.0,
-                        child: SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            trackHeight: 3.5,
-                            thumbShape: const RoundSliderThumbShape(
-                              enabledThumbRadius: 4.5,
-                            ),
-                            overlayShape: const RoundSliderOverlayShape(
-                              overlayRadius: 8.0,
-                            ),
-                            activeTrackColor: Colors.white,
-                            inactiveTrackColor: Colors.white.withValues(
-                              alpha: 0.15,
-                            ),
-                            thumbColor: Colors.white,
-                            overlayColor: Colors.white.withValues(alpha: 0.15),
-                          ),
-                          child: Slider(
-                            value: volume.clamp(0.0, 1.0),
-                            min: 0.0,
-                            max: 1.0,
-                            onChanged: (val) {
-                              if (val > 0) {
-                                _lastVolume = val;
-                              }
-                              _applyVolume(val);
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
+                    ),
+                  ),
+                ],
               ),
 
               const SizedBox(width: 2.0),

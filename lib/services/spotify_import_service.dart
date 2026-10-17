@@ -597,15 +597,216 @@ class SpotifyImportService extends ChangeNotifier {
         searchResults = await _musicService.searchSongs(cleanTrack, page: 1);
       }
       if (searchResults.isNotEmpty) {
-        song = searchResults.firstWhere(
-          (v) => CanonicalSongDedup.isGenuineSong(v),
-          orElse: () => searchResults.first,
-        );
+        Video? bestMatch;
+        double highestScore = -1.0;
+
+        for (final candidate in searchResults) {
+          if (!_isValidMatchCandidate(candidate, track)) continue;
+
+          double score = 1.0;
+          final cleanTarget = CanonicalSongDedup.cleanTitle(track.trackName);
+          final cleanCandidate = CanonicalSongDedup.cleanTitle(candidate.title);
+          score += CanonicalSongDedup.stringSimilarity(
+            cleanTarget,
+            cleanCandidate,
+          );
+
+          final candidateLower = candidate.title.toLowerCase();
+          if (candidateLower.contains('official audio') ||
+              candidateLower.contains('official music video') ||
+              candidateLower.contains('original audio') ||
+              candidate.author.toLowerCase().contains('topic')) {
+            score += 0.5;
+          }
+
+          if (score > highestScore) {
+            highestScore = score;
+            bestMatch = candidate;
+          }
+        }
+
+        song = bestMatch;
+        if (song == null) {
+          final first = searchResults.first;
+          if (CanonicalSongDedup.isGenuineSong(first) &&
+              CanonicalSongDedup.areDuplicateSongs(
+                titleA: track.trackName,
+                artistA: track.artistName,
+                titleB: first.title,
+                artistB: first.author,
+              )) {
+            song = first;
+          }
+        }
       }
     } catch (e) {
       debugPrint('[SpotifyImport] Search error for "$primaryQuery": $e');
     }
     return song;
+  }
+
+  /// Validates whether a candidate search result matches the requested Exportify track,
+  /// strictly enforcing:
+  /// 1. Genuine song validation (via [CanonicalSongDedup.isGenuineSong]).
+  /// 2. Live, karaoke, or unwanted cover rejection (unless target explicitly requested).
+  /// 3. Title Levenshtein similarity / token overlap check.
+  /// 4. Strict artist token overlap check.
+  static bool _isValidMatchCandidate(Video candidate, ExportifyTrack track) {
+    if (!CanonicalSongDedup.isGenuineSong(candidate)) return false;
+
+    final targetTitle = track.trackName.trim();
+    final targetArtist = track.artistName.trim();
+    final candidateTitle = candidate.title.trim();
+    final candidateAuthor = candidate.author.trim();
+
+    final targetTitleLower = targetTitle.toLowerCase();
+    final candidateTitleLower = candidateTitle.toLowerCase();
+
+    // 1. Rejection of unwanted live, karaoke, or cover tracks:
+    final targetHasLive = RegExp(
+      r'\b(live|concert)\b',
+      caseSensitive: false,
+    ).hasMatch(targetTitleLower);
+    if (!targetHasLive &&
+        RegExp(
+          r'\b(live\s+(?:in|at|performance|version|session|stream)|live$|\(live\)|\[live\])\b',
+          caseSensitive: false,
+        ).hasMatch(candidateTitleLower)) {
+      return false;
+    }
+
+    final targetHasKaraoke = RegExp(
+      r'\b(karaoke|instrumental)\b',
+      caseSensitive: false,
+    ).hasMatch(targetTitleLower);
+    if (!targetHasKaraoke &&
+        RegExp(
+          r'\b(karaoke|instrumental|minus\s+one|backing\s+track)\b',
+          caseSensitive: false,
+        ).hasMatch(candidateTitleLower)) {
+      return false;
+    }
+
+    final targetHasCover = RegExp(
+      r'\b(cover)\b',
+      caseSensitive: false,
+    ).hasMatch(targetTitleLower);
+    if (!targetHasCover &&
+        RegExp(
+          r'\b(cover\s+by|acoustic\s+cover|guitar\s+cover|piano\s+cover|song\s+cover|\(cover\)|\[cover\])\b',
+          caseSensitive: false,
+        ).hasMatch(candidateTitleLower)) {
+      return false;
+    }
+
+    // 2. Strict Title Levenshtein / Token Overlap Check
+    final cleanTargetTitle = CanonicalSongDedup.cleanTitle(targetTitle);
+    final cleanCandidateTitle = CanonicalSongDedup.cleanTitle(candidateTitle);
+
+    if (cleanTargetTitle.isEmpty || cleanCandidateTitle.isEmpty) return false;
+
+    final titleSimilarity = CanonicalSongDedup.stringSimilarity(
+      cleanTargetTitle,
+      cleanCandidateTitle,
+    );
+    final targetTokens = CanonicalSongDedup.tokenize(cleanTargetTitle);
+    final candidateTokens = CanonicalSongDedup.tokenize(cleanCandidateTitle);
+    final jaccard = CanonicalSongDedup.jaccardSimilarity(
+      targetTokens,
+      candidateTokens,
+    );
+
+    bool titleMatches = false;
+    if (cleanTargetTitle == cleanCandidateTitle) {
+      titleMatches = true;
+    } else if (titleSimilarity >= 0.70) {
+      titleMatches = true;
+    } else if (jaccard >= 0.65) {
+      titleMatches = true;
+    } else if (cleanCandidateTitle.contains(cleanTargetTitle) &&
+        cleanTargetTitle.length >= 4) {
+      titleMatches = true;
+    } else if (cleanTargetTitle.contains(cleanCandidateTitle) &&
+        cleanCandidateTitle.length >= 4) {
+      titleMatches = true;
+    } else if (targetTokens.isNotEmpty &&
+        targetTokens.intersection(candidateTokens).length ==
+            targetTokens.length) {
+      titleMatches = true;
+    }
+
+    if (!titleMatches) return false;
+
+    // 3. Strict Artist Token Overlap Check (when target artist is known)
+    if (targetArtist.isNotEmpty) {
+      final cleanTargetArtist = CanonicalSongDedup.cleanArtist(targetArtist);
+      final cleanCandidateAuthor = CanonicalSongDedup.cleanArtist(
+        candidateAuthor,
+      );
+
+      if (cleanTargetArtist.isNotEmpty) {
+        final targetArtistTokens = CanonicalSongDedup.tokenize(
+          cleanTargetArtist,
+        );
+        final candidateAuthorTokens = CanonicalSongDedup.tokenize(
+          cleanCandidateAuthor,
+        );
+
+        final hasDirectArtistOverlap = targetArtistTokens
+            .intersection(candidateAuthorTokens)
+            .isNotEmpty;
+
+        final candidateTitleTokens = CanonicalSongDedup.tokenize(
+          candidateTitleLower,
+        );
+        final hasArtistInTitle = targetArtistTokens
+            .intersection(candidateTitleTokens)
+            .isNotEmpty;
+
+        final hasArtistSubstring =
+            (cleanCandidateAuthor.isNotEmpty &&
+                (cleanCandidateAuthor.contains(cleanTargetArtist) ||
+                    cleanTargetArtist.contains(cleanCandidateAuthor))) ||
+            candidateTitleLower.contains(cleanTargetArtist);
+
+        bool hasFuzzyArtistMatch = false;
+        if (!hasDirectArtistOverlap &&
+            !hasArtistInTitle &&
+            !hasArtistSubstring) {
+          for (final tToken in targetArtistTokens) {
+            if (tToken.length < 3) continue;
+            for (final cToken in candidateAuthorTokens) {
+              if (cToken.length < 3) continue;
+              if (CanonicalSongDedup.stringSimilarity(tToken, cToken) >= 0.80) {
+                hasFuzzyArtistMatch = true;
+                break;
+              }
+            }
+            if (hasFuzzyArtistMatch) break;
+          }
+        }
+
+        final artistMatches =
+            hasDirectArtistOverlap ||
+            hasArtistInTitle ||
+            hasArtistSubstring ||
+            hasFuzzyArtistMatch;
+
+        if (!artistMatches) {
+          final isDup = CanonicalSongDedup.areDuplicateSongs(
+            titleA: targetTitle,
+            artistA: targetArtist,
+            titleB: candidateTitle,
+            artistB: candidateAuthor,
+          );
+          if (!isDup) {
+            return false;
+          }
+        }
+      }
+    }
+
+    return true;
   }
 
   /// High-performance concurrent resolver with in-memory caching and order preservation.
