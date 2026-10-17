@@ -203,9 +203,14 @@ class SearchScreenState extends State<SearchScreen>
     DesktopLayoutState.globalSearchQuery.addListener(
       _onGlobalSearchQueryChanged,
     );
-    if (DesktopLayoutState.globalSearchQuery.value.isNotEmpty) {
+    DesktopLayoutState.submittedSearchQuery.addListener(
+      _onSubmittedSearchQueryChanged,
+    );
+    if (DesktopLayoutState.submittedSearchQuery.value.isNotEmpty) {
+      _searchController.text = DesktopLayoutState.submittedSearchQuery.value;
+      _performSearch(DesktopLayoutState.submittedSearchQuery.value);
+    } else if (DesktopLayoutState.globalSearchQuery.value.isNotEmpty) {
       _searchController.text = DesktopLayoutState.globalSearchQuery.value;
-      _performSearch(DesktopLayoutState.globalSearchQuery.value);
     }
   }
 
@@ -213,9 +218,27 @@ class SearchScreenState extends State<SearchScreen>
     final query = DesktopLayoutState.globalSearchQuery.value;
     if (query.isNotEmpty && _searchController.text != query) {
       _searchController.text = query;
-      _performSearch(query);
+      // Do NOT trigger heavy _performSearch while typing!
+      // Setting _searchController.text triggers _onSearchChanged()
+      // which fetches lightweight autocomplete suggestions.
     } else if (query.isEmpty && _searchController.text.isNotEmpty) {
+      _debounceTimer?.cancel();
       clearSearchAndDismiss();
+    }
+  }
+
+  void _onSubmittedSearchQueryChanged() {
+    final query = DesktopLayoutState.submittedSearchQuery.value;
+    if (query.isNotEmpty) {
+      _searchController.text = query;
+      _debounceTimer?.cancel();
+      _isSubmittingSearch = true;
+      _searchFocusNode.unfocus();
+      FocusScope.of(context).unfocus();
+      setState(() {
+        _suggestions.clear();
+      });
+      _performSearch(query);
     }
   }
 
@@ -297,6 +320,9 @@ class SearchScreenState extends State<SearchScreen>
   void dispose() {
     DesktopLayoutState.globalSearchQuery.removeListener(
       _onGlobalSearchQueryChanged,
+    );
+    DesktopLayoutState.submittedSearchQuery.removeListener(
+      _onSubmittedSearchQueryChanged,
     );
     _debounceTimer?.cancel();
     _prefs.removeListener(_onPrefsChanged);
@@ -780,14 +806,31 @@ class SearchScreenState extends State<SearchScreen>
                                                   height: 52,
                                                   fit: BoxFit.cover,
                                                   errorBuilder: (_, _, _) =>
-                                                      Image.network(
-                                                        video
-                                                            .thumbnails
-                                                            .lowResUrl,
-                                                        width: 52,
-                                                        height: 52,
-                                                        fit: BoxFit.cover,
-                                                      ),
+                                                      CanonicalSongDedup.isLikelyYouTubeId(
+                                                        video.id.value,
+                                                      )
+                                                      ? Image.network(
+                                                          video
+                                                              .thumbnails
+                                                              .lowResUrl,
+                                                          width: 52,
+                                                          height: 52,
+                                                          fit: BoxFit.cover,
+                                                        )
+                                                      : Container(
+                                                          width: 52,
+                                                          height: 52,
+                                                          color: const Color(
+                                                            0xFF1E1E2C,
+                                                          ),
+                                                          child: const Icon(
+                                                            Icons
+                                                                .music_note_rounded,
+                                                            color:
+                                                                Colors.white24,
+                                                            size: 24,
+                                                          ),
+                                                        ),
                                                 ),
                                               ),
                                               title: Text(

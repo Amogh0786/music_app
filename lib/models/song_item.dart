@@ -1,4 +1,5 @@
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import '../services/canonical_song_dedup.dart';
 
 /// Canonical, immutable model representing a song across all platforms.
 /// Replaces ad-hoc `Map<String, String>` serialization and raw Video dependencies.
@@ -46,7 +47,9 @@ class SongItem {
       author: (json['author'] ?? json['artist'] ?? 'Unknown Artist').toString(),
       thumbnailUrl: rawThumb.isNotEmpty
           ? rawThumb
-          : 'https://img.youtube.com/vi/$rawId/hqdefault.jpg',
+          : (CanonicalSongDedup.isLikelyYouTubeId(rawId)
+                ? 'https://img.youtube.com/vi/$rawId/hqdefault.jpg'
+                : ''),
       streamUrl: (json['streamUrl'] ?? '').toString(),
       duration: parsedDuration,
       album: (json['album'] ?? 'DilSe').toString(),
@@ -62,10 +65,12 @@ class SongItem {
     String? source,
   }) {
     String thumb = '';
-    try {
-      thumb = video.thumbnails.highResUrl;
-    } catch (_) {
-      thumb = 'https://img.youtube.com/vi/${video.id.value}/hqdefault.jpg';
+    if (CanonicalSongDedup.isLikelyYouTubeId(video.id.value)) {
+      try {
+        thumb = video.thumbnails.highResUrl;
+      } catch (_) {
+        thumb = 'https://img.youtube.com/vi/${video.id.value}/hqdefault.jpg';
+      }
     }
 
     return SongItem(

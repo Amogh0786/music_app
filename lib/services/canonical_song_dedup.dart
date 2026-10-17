@@ -507,7 +507,7 @@ class CanonicalSongDedup {
   }
 
   /// Detects language from title or metadata tags (e.g. Telugu, Hindi, Tamil, English)
-  static String? detectLanguage(String text) {
+  static String? detectLanguage(String text, {String? artist}) {
     if (text.isEmpty) return null;
 
     // 1. Check native Unicode script first
@@ -553,8 +553,26 @@ class CanonicalSongDedup {
     // Check Romanized Indic scripts
     if (LyricsTransliterationService.isRomanizedTelugu(text)) return 'telugu';
 
-    // If text contains recognized English vocabulary and is not Romanized Indic
-    if (_commonEnglishWords.hasMatch(lower)) {
+    // Strip parenthetical and bracketed film/production metadata before checking English vocabulary
+    // e.g. "(From "They Call Him OG")", "[Original Motion Picture Soundtrack]", "(Slowed + Reverb)"
+    final coreTitle = lower
+        .replaceAll(
+          RegExp(
+            r'[\(\[][^\)\]]*(?:from|feat|ft\.|soundtrack|audio|video|slowed|reverb|version|remix|original|motion|picture|lyric|prod|full|official)[^\)\]]*[\)\]]',
+            caseSensitive: false,
+          ),
+          ' ',
+        )
+        .trim();
+
+    // If artist is known Indic, do not classify as English unless explicitly titled as English Version
+    final isIndicArtist =
+        artist != null && artist.isNotEmpty && isKnownIndicArtist(artist);
+
+    // If core text contains recognized English vocabulary and is not Romanized Indic
+    if (!isIndicArtist &&
+        coreTitle.isNotEmpty &&
+        _commonEnglishWords.hasMatch(coreTitle)) {
       return 'english';
     }
 
@@ -572,7 +590,8 @@ class CanonicalSongDedup {
     r'ar\s+rahman|vishal|shekhar|badshah|honey\s+singh|diljit|jass\s+manak|sidhu\s+moose|'
     r'shankar\s+mahadevan|hariharan|karthik|armaan\s+malik|mickey\s+j\s+meyer|gopi\s+sundar|'
     r'santosh\s+narayanan|yuvan|ilaiyaraaja|harris\s+jayaraj|dhee|santhosh|sushin\s+shyam|'
-    r'kasarla\s+shyam|jangi\s+reddy|penchal\s+das|bheems|vijay\s+prakash)\b',
+    r'kasarla\s+shyam|jangi\s+reddy|penchal\s+das|bheems|vijay\s+prakash|sruthi\s+ranjani|'
+    r'kalyan\s+chakravarthy)\b',
     caseSensitive: false,
   );
 

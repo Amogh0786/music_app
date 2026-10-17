@@ -250,6 +250,7 @@ export default {
     if (url.pathname === '/ytm/radio' || url.pathname === '/radio') {
       const videoId = url.searchParams.get('v') || '';
       const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') || '30')));
+      const visitorData = url.searchParams.get('visitorData') || '';
 
       if (!videoId) {
         return new Response(JSON.stringify([]), {
@@ -258,7 +259,7 @@ export default {
       }
 
       try {
-        const results = await fetchYtmRadio(videoId, limit);
+        const results = await fetchYtmRadio(videoId, limit, visitorData);
         return new Response(JSON.stringify(results), {
           headers: {
             'Content-Type': 'application/json',
@@ -1262,13 +1263,21 @@ function parseDurationSec(str) {
   return 0;
 }
 
-async function fetchYtmRadio(videoId, limit = 40) {
+async function fetchYtmRadio(videoId, limit = 40, visitorData = '') {
   try {
+    const headers = { ...YTM_HEADERS };
+    if (visitorData) {
+      headers['X-Goog-Visitor-Id'] = visitorData;
+    }
+    const context = JSON.parse(JSON.stringify(YTM_CONTEXT));
+    if (visitorData) {
+      context.client.visitorData = visitorData;
+    }
     const resp = await fetch('https://music.youtube.com/youtubei/v1/next', {
       method: 'POST',
-      headers: YTM_HEADERS,
+      headers: headers,
       body: JSON.stringify({
-        context: YTM_CONTEXT,
+        context: context,
         videoId: videoId,
         playlistId: `RDAMVM${videoId}`,
       }),

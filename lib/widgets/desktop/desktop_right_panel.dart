@@ -230,10 +230,7 @@ class _DesktopNowPlayingTab extends StatelessWidget {
           );
         }
 
-        final hdThumbnail = MusicService.getHdThumbnail(song.id.value);
-        final artworkUrl = hdThumbnail.isNotEmpty
-            ? hdThumbnail
-            : song.thumbnails.highResUrl;
+        final artworkUrl = MusicService.resolveArtworkUrl(song);
         final isLiked = musicService.isLiked(song.id.value);
 
         return ListView(
@@ -812,23 +809,37 @@ class _DesktopNextInQueueCard extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(6.0),
-                  child: Image.network(
-                    MusicService.getHdThumbnail(nextTrack.id.value).isNotEmpty
-                        ? MusicService.getHdThumbnail(nextTrack.id.value)
-                        : nextTrack.thumbnails.lowResUrl,
-                    width: 44.0,
-                    height: 44.0,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
-                      width: 44.0,
-                      height: 44.0,
-                      color: const Color(0xFF282836),
-                      child: const Icon(
-                        Icons.music_note_rounded,
-                        color: Colors.white30,
-                        size: 20,
-                      ),
-                    ),
+                  child: Builder(
+                    builder: (context) {
+                      final art = MusicService.resolveArtworkUrl(nextTrack);
+                      return art.isNotEmpty
+                          ? Image.network(
+                              art,
+                              width: 44.0,
+                              height: 44.0,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => Container(
+                                width: 44.0,
+                                height: 44.0,
+                                color: const Color(0xFF282836),
+                                child: const Icon(
+                                  Icons.music_note_rounded,
+                                  color: Colors.white30,
+                                  size: 20,
+                                ),
+                              ),
+                            )
+                          : Container(
+                              width: 44.0,
+                              height: 44.0,
+                              color: const Color(0xFF282836),
+                              child: const Icon(
+                                Icons.music_note_rounded,
+                                color: Colors.white30,
+                                size: 20,
+                              ),
+                            );
+                    },
                   ),
                 ),
                 const SizedBox(width: 10.0),
@@ -1039,12 +1050,7 @@ class _DesktopQueueTabState extends State<_DesktopQueueTab> {
                 itemBuilder: (context, index) {
                   final track = playlist[index];
                   final isCurrent = index == currentIndex;
-                  final hdThumbnail = MusicService.getHdThumbnail(
-                    track.id.value,
-                  );
-                  final artwork = hdThumbnail.isNotEmpty
-                      ? hdThumbnail
-                      : track.thumbnails.lowResUrl;
+                  final artwork = MusicService.resolveArtworkUrl(track);
 
                   return Material(
                     key: ValueKey('desktop_queue_${track.id.value}_$index'),
@@ -1077,22 +1083,33 @@ class _DesktopQueueTabState extends State<_DesktopQueueTab> {
                             ),
                             ClipRRect(
                               borderRadius: BorderRadius.circular(6),
-                              child: Image.network(
-                                artwork,
-                                width: 38,
-                                height: 38,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => Container(
-                                  width: 38,
-                                  height: 38,
-                                  color: const Color(0xFF282836),
-                                  child: const Icon(
-                                    Icons.music_note_rounded,
-                                    color: Colors.white24,
-                                    size: 18,
-                                  ),
-                                ),
-                              ),
+                              child: artwork.isNotEmpty
+                                  ? Image.network(
+                                      artwork,
+                                      width: 38,
+                                      height: 38,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) => Container(
+                                        width: 38,
+                                        height: 38,
+                                        color: const Color(0xFF282836),
+                                        child: const Icon(
+                                          Icons.music_note_rounded,
+                                          color: Colors.white24,
+                                          size: 18,
+                                        ),
+                                      ),
+                                    )
+                                  : Container(
+                                      width: 38,
+                                      height: 38,
+                                      color: const Color(0xFF282836),
+                                      child: const Icon(
+                                        Icons.music_note_rounded,
+                                        color: Colors.white24,
+                                        size: 18,
+                                      ),
+                                    ),
                             ),
                             const SizedBox(width: 10.0),
                             Expanded(

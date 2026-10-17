@@ -215,10 +215,12 @@ class PreferencesService extends ChangeNotifier {
   double _cacheSizeMB = 500.0;
   String _customServerUrl = '';
   String _cloudflareWorkerUrl = '';
+  String _visitorDataToken = '';
   ArtworkStyle _artworkStyle = ArtworkStyle.card;
   ScrubberStyle _scrubberStyle = ScrubberStyle.waveform;
   AudioQualityPreset _audioQuality = AudioQualityPreset.balanced;
   AudioFormatPreference _audioFormat = AudioFormatPreference.auto;
+  bool _pureDjFlowEnabled = true; // Pure YouTube AI flow by default
   String _lyricsDisplayMode = 'original'; // 'original', 'pronunciation', 'dual'
   String _userName = '';
   bool _hasPromptedName = false;
@@ -290,10 +292,12 @@ class PreferencesService extends ChangeNotifier {
   double get cacheSizeMB => _cacheSizeMB;
   String get customServerUrl => _customServerUrl;
   String get cloudflareWorkerUrl => _cloudflareWorkerUrl;
+  String get visitorDataToken => _visitorDataToken;
   ArtworkStyle get artworkStyle => _artworkStyle;
   ScrubberStyle get scrubberStyle => _scrubberStyle;
   AudioQualityPreset get audioQuality => _audioQuality;
   AudioFormatPreference get audioFormat => _audioFormat;
+  bool get pureDjFlowEnabled => _pureDjFlowEnabled;
   String get lyricsDisplayMode => _lyricsDisplayMode;
   String get userName => _userName.isEmpty ? 'Friend' : _userName;
   bool get hasCustomName => _userName.isNotEmpty;
@@ -353,6 +357,7 @@ class PreferencesService extends ChangeNotifier {
       _crossfadeSeconds = _prefs.getInt('crossfadeSeconds') ?? 4;
     }
     _smartCrossfadeEnabled = _prefs.getBool('smartCrossfade') ?? true;
+    _pureDjFlowEnabled = _prefs.getBool('pureDjFlowEnabled') ?? true;
     _fadeInOnStartEnabled = _prefs.getBool('fadeInOnStart') ?? false;
     _equalizerEnabled = _prefs.getBool('equalizerEnabled') ?? false;
     _equalizerPreset = _prefs.getString('equalizerPreset') ?? 'Flat';
@@ -373,6 +378,7 @@ class PreferencesService extends ChangeNotifier {
     _cacheSizeMB = _prefs.getDouble('cacheSizeMB') ?? 500.0;
     _customServerUrl = _prefs.getString('customServerUrl') ?? '';
     _cloudflareWorkerUrl = _prefs.getString('cloudflareWorkerUrl') ?? '';
+    _visitorDataToken = _prefs.getString('visitorDataToken') ?? '';
     _searchHistory = _prefs.getStringList('searchHistory') ?? [];
     final structuredJson = _prefs.getString('structuredSearchHistoryJson');
     if (structuredJson != null && structuredJson.isNotEmpty) {
@@ -1294,6 +1300,22 @@ class PreferencesService extends ChangeNotifier {
     if (!_isInitialized) return;
     _cloudflareWorkerUrl = url.trim();
     await _prefs.setString('cloudflareWorkerUrl', _cloudflareWorkerUrl);
+    notifyListeners();
+  }
+
+  Future<void> setVisitorDataToken(String token) async {
+    final trimmed = token.trim();
+    if (trimmed.isEmpty || trimmed == _visitorDataToken) return;
+    _visitorDataToken = trimmed;
+    if (_isInitialized) {
+      await _prefs.setString('visitorDataToken', _visitorDataToken);
+    }
+  }
+
+  Future<void> setPureDjFlowEnabled(bool value) async {
+    if (!_isInitialized || _pureDjFlowEnabled == value) return;
+    _pureDjFlowEnabled = value;
+    await _prefs.setBool('pureDjFlowEnabled', value);
     notifyListeners();
   }
 

@@ -215,6 +215,12 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     // 2. Background Refresh / Initial Load
+    // On Web, if cache was already successfully hydrated, skip flooding all 6 browser sockets
+    // so sockets remain 100% available for instant playback and neural queue generation.
+    if (kIsWeb && hadCache) {
+      return;
+    }
+
     try {
       final primaryLang = _prefs.preferredLanguages.isNotEmpty
           ? _prefs.preferredLanguages.first
@@ -353,6 +359,10 @@ class _HomeScreenState extends State<HomeScreen>
         final streamUrl = m['streamUrl'] as String?;
         if (streamUrl != null && streamUrl.isNotEmpty) {
           MusicService.cacheWebStreamUrl(id, streamUrl);
+        }
+        final thumb = (m['thumbnail'] as String?) ?? '';
+        if (thumb.isNotEmpty) {
+          MusicService.registerArtwork(id, thumb);
         }
         return Video(
           VideoId(id),
@@ -669,7 +679,9 @@ class _HomeScreenState extends State<HomeScreen>
         icon: Icons.shuffle_rounded,
         iconGradient: const [Color(0xFFE040FB), Color(0xFF1DB954)],
         imageUrl: _dailyMix1.isNotEmpty
-            ? _dailyMix1.first.thumbnails.lowResUrl
+            ? (MusicService.resolveArtworkUrl(_dailyMix1.first).isNotEmpty
+                  ? MusicService.resolveArtworkUrl(_dailyMix1.first)
+                  : null)
             : null,
         onTap: () {
           HapticFeedback.lightImpact();
@@ -710,7 +722,9 @@ class _HomeScreenState extends State<HomeScreen>
         icon: Icons.graphic_eq_rounded,
         iconGradient: const [Color(0xFF00C6FF), Color(0xFF0072FF)],
         imageUrl: _dailyMix2.isNotEmpty
-            ? _dailyMix2.first.thumbnails.lowResUrl
+            ? (MusicService.resolveArtworkUrl(_dailyMix2.first).isNotEmpty
+                  ? MusicService.resolveArtworkUrl(_dailyMix2.first)
+                  : null)
             : null,
         onTap: () {
           HapticFeedback.lightImpact();
@@ -733,7 +747,9 @@ class _HomeScreenState extends State<HomeScreen>
         icon: Icons.trending_up_rounded,
         iconGradient: const [Color(0xFFFF512F), Color(0xFFDD2476)],
         imageUrl: _topChartsIndia.isNotEmpty
-            ? _topChartsIndia.first.thumbnails.lowResUrl
+            ? (MusicService.resolveArtworkUrl(_topChartsIndia.first).isNotEmpty
+                  ? MusicService.resolveArtworkUrl(_topChartsIndia.first)
+                  : null)
             : null,
         onTap: () {
           HapticFeedback.lightImpact();
@@ -756,7 +772,9 @@ class _HomeScreenState extends State<HomeScreen>
         icon: Icons.fiber_new_rounded,
         iconGradient: const [Color(0xFF11998E), Color(0xFF38EF7D)],
         imageUrl: _newReleases.isNotEmpty
-            ? _newReleases.first.thumbnails.lowResUrl
+            ? (MusicService.resolveArtworkUrl(_newReleases.first).isNotEmpty
+                  ? MusicService.resolveArtworkUrl(_newReleases.first)
+                  : null)
             : null,
         onTap: () {
           HapticFeedback.lightImpact();
@@ -779,7 +797,9 @@ class _HomeScreenState extends State<HomeScreen>
         icon: Icons.whatshot_rounded,
         iconGradient: const [Color(0xFFF857A6), Color(0xFFFF5858)],
         imageUrl: _trendingNow.isNotEmpty
-            ? _trendingNow.first.thumbnails.lowResUrl
+            ? (MusicService.resolveArtworkUrl(_trendingNow.first).isNotEmpty
+                  ? MusicService.resolveArtworkUrl(_trendingNow.first)
+                  : null)
             : null,
         onTap: () {
           HapticFeedback.lightImpact();
@@ -1579,18 +1599,39 @@ class _HomeScreenState extends State<HomeScreen>
                                 hdThumbnail.startsWith('https://i.ytimg.com/')
                                 ? 1.35
                                 : 1.0,
-                            child: Image.network(
-                              hdThumbnail,
-                              fit: BoxFit.cover,
-                              cacheWidth: 320,
-                              cacheHeight: 320,
-                              errorBuilder: (_, _, _) => Image.network(
-                                song.thumbnails.highResUrl,
-                                fit: BoxFit.cover,
-                                cacheWidth: 320,
-                                cacheHeight: 320,
-                              ),
-                            ),
+                            child: hdThumbnail.isNotEmpty
+                                ? Image.network(
+                                    hdThumbnail,
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 320,
+                                    cacheHeight: 320,
+                                    errorBuilder: (_, _, _) =>
+                                        CanonicalSongDedup.isLikelyYouTubeId(
+                                          song.id.value,
+                                        )
+                                        ? Image.network(
+                                            song.thumbnails.highResUrl,
+                                            fit: BoxFit.cover,
+                                            cacheWidth: 320,
+                                            cacheHeight: 320,
+                                          )
+                                        : Container(
+                                            color: const Color(0xFF1E1E2C),
+                                            child: const Icon(
+                                              Icons.music_note_rounded,
+                                              color: Colors.white24,
+                                              size: 48,
+                                            ),
+                                          ),
+                                  )
+                                : Container(
+                                    color: const Color(0xFF1E1E2C),
+                                    child: const Icon(
+                                      Icons.music_note_rounded,
+                                      color: Colors.white24,
+                                      size: 48,
+                                    ),
+                                  ),
                           ),
                           Positioned(
                             bottom: 8,
@@ -1683,22 +1724,47 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 leading: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.network(
-                    hdThumbnail,
-                    width: 50,
-                    height: 50,
-                    fit: BoxFit.cover,
-                    cacheWidth: 120,
-                    cacheHeight: 120,
-                    errorBuilder: (_, _, _) => Image.network(
-                      song.thumbnails.lowResUrl,
-                      width: 50,
-                      height: 50,
-                      fit: BoxFit.cover,
-                      cacheWidth: 120,
-                      cacheHeight: 120,
-                    ),
-                  ),
+                  child: hdThumbnail.isNotEmpty
+                      ? Image.network(
+                          hdThumbnail,
+                          width: 50,
+                          height: 50,
+                          fit: BoxFit.cover,
+                          cacheWidth: 120,
+                          cacheHeight: 120,
+                          errorBuilder: (_, _, _) =>
+                              CanonicalSongDedup.isLikelyYouTubeId(
+                                song.id.value,
+                              )
+                              ? Image.network(
+                                  song.thumbnails.lowResUrl,
+                                  width: 50,
+                                  height: 50,
+                                  fit: BoxFit.cover,
+                                  cacheWidth: 120,
+                                  cacheHeight: 120,
+                                )
+                              : Container(
+                                  width: 50,
+                                  height: 50,
+                                  color: const Color(0xFF1E1E2C),
+                                  child: const Icon(
+                                    Icons.music_note_rounded,
+                                    color: Colors.white24,
+                                    size: 24,
+                                  ),
+                                ),
+                        )
+                      : Container(
+                          width: 50,
+                          height: 50,
+                          color: const Color(0xFF1E1E2C),
+                          child: const Icon(
+                            Icons.music_note_rounded,
+                            color: Colors.white24,
+                            size: 24,
+                          ),
+                        ),
                 ),
                 title: Text(
                   song.title,

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/jio_album.dart';
 import '../services/music_service.dart';
+import '../services/canonical_song_dedup.dart';
 import '../widgets/mini_player.dart';
 import '../widgets/animated_equalizer.dart';
 import '../widgets/song_options_bottom_sheet.dart';
@@ -478,25 +479,39 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
                                         height: 46,
                                         fit: BoxFit.cover,
                                         errorBuilder: (_, _, _) =>
-                                            Image.network(
-                                              video.thumbnails.lowResUrl,
-                                              width: 46,
-                                              height: 46,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, _, _) =>
-                                                  Container(
-                                                    width: 46,
-                                                    height: 46,
-                                                    color: const Color(
-                                                      0xFF161622,
+                                            CanonicalSongDedup.isLikelyYouTubeId(
+                                              video.id.value,
+                                            )
+                                            ? Image.network(
+                                                video.thumbnails.lowResUrl,
+                                                width: 46,
+                                                height: 46,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, _, _) =>
+                                                    Container(
+                                                      width: 46,
+                                                      height: 46,
+                                                      color: const Color(
+                                                        0xFF161622,
+                                                      ),
+                                                      child: const Icon(
+                                                        Icons
+                                                            .music_note_rounded,
+                                                        size: 20,
+                                                        color: Colors.white38,
+                                                      ),
                                                     ),
-                                                    child: const Icon(
-                                                      Icons.music_note_rounded,
-                                                      size: 20,
-                                                      color: Colors.white38,
-                                                    ),
-                                                  ),
-                                            ),
+                                              )
+                                            : Container(
+                                                width: 46,
+                                                height: 46,
+                                                color: const Color(0xFF161622),
+                                                child: const Icon(
+                                                  Icons.music_note_rounded,
+                                                  size: 20,
+                                                  color: Colors.white38,
+                                                ),
+                                              ),
                                       ),
                                     ),
                                   ),

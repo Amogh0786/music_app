@@ -65,12 +65,14 @@ class _MiniPlayerState extends State<MiniPlayer> with WidgetsBindingObserver {
     if (resolved.isNotEmpty && !resolved.startsWith('https://i.ytimg.com/')) {
       return resolved;
     }
-    try {
-      final h = song.thumbnails.highResUrl;
-      if (h.isNotEmpty) return h;
-      final m = song.thumbnails.mediumResUrl;
-      if (m.isNotEmpty) return m;
-    } catch (_) {}
+    if (CanonicalSongDedup.isLikelyYouTubeId(song.id.value)) {
+      try {
+        final h = song.thumbnails.highResUrl;
+        if (h.isNotEmpty) return h;
+        final m = song.thumbnails.mediumResUrl;
+        if (m.isNotEmpty) return m;
+      } catch (_) {}
+    }
     if (hdThumbnail.isNotEmpty) return hdThumbnail;
     if (resolved.isNotEmpty) return resolved;
     if (CanonicalSongDedup.isLikelyYouTubeId(song.id.value)) {
@@ -241,6 +243,9 @@ class _MiniPlayerState extends State<MiniPlayer> with WidgetsBindingObserver {
                                     errorWidget:
                                         (song != null &&
                                             song.id.value.isNotEmpty &&
+                                            CanonicalSongDedup.isLikelyYouTubeId(
+                                              song.id.value,
+                                            ) &&
                                             thumbUrl !=
                                                 'https://i.ytimg.com/vi/${song.id.value}/hqdefault.jpg')
                                         ? Image.network(

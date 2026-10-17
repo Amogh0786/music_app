@@ -53,6 +53,7 @@ class DynamicArtistService {
 
   /// Runtime memory cache for dynamically fetched artist images.
   final Map<String, String> _artistImageCache = {};
+  final Set<String> _attemptedArtistFetches = {};
 
   /// Pre-verified, high-resolution artist catalog with verified 500x500 CDN URLs
   /// covering diverse languages (Telugu, Tamil, Hindi, Punjabi, English, Malayalam).
@@ -793,7 +794,18 @@ class DynamicArtistService {
   /// Background fetch for unknown artist from JioSaavn official catalog
   Future<void> _fetchArtistImageAsync(String artistName) async {
     final key = artistName.toLowerCase();
-    if (_artistImageCache.containsKey(key)) return;
+    if (_artistImageCache.containsKey(key) ||
+        _attemptedArtistFetches.contains(key)) {
+      return;
+    }
+    _attemptedArtistFetches.add(key);
+
+    // On Web, direct fetches to www.jiosaavn.com are blocked by CORS policy.
+    // Immediately assign avatar placeholder to avoid connection clogging and console errors.
+    if (kIsWeb) {
+      _artistImageCache[key] = _generateAvatarPlaceholder(artistName);
+      return;
+    }
 
     try {
       final url = Uri.parse(
@@ -816,11 +828,14 @@ class DynamicArtistService {
                   .replaceAll('50x50', '500x500')
                   .replaceAll('150x150', '500x500');
               _artistImageCache[key] = img;
+              return;
             }
           }
         }
       }
+      _artistImageCache[key] = _generateAvatarPlaceholder(artistName);
     } catch (e) {
+      _artistImageCache[key] = _generateAvatarPlaceholder(artistName);
       debugPrint(
         '[DynamicArtistService] Image fetch error for $artistName: $e',
       );

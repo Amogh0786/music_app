@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -5,6 +6,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'api_config.dart';
 import 'canonical_song_dedup.dart';
 import 'music_service.dart';
+import 'preferences_service.dart';
 
 /// Lightweight, keyless client for YouTube Music's InnerTube API (`WEB_REMIX`).
 /// Provides studio release songs, clean album art, and Google's 50-track radio mixes.
@@ -23,14 +25,30 @@ class YouTubeMusicClient {
     'Referer': 'https://music.youtube.com/',
   };
 
-  static const Map<String, dynamic> _context = {
-    'client': {
-      'clientName': 'WEB_REMIX',
-      'clientVersion': '1.20240101.01.00',
-      'hl': 'en',
-      'gl': 'IN',
-    },
-  };
+  static Map<String, String> _buildHeaders() {
+    final headers = Map<String, String>.from(_headers);
+    final token = PreferencesService().visitorDataToken;
+    if (token.isNotEmpty) {
+      headers['X-Goog-Visitor-Id'] = token;
+    }
+    return headers;
+  }
+
+  static Map<String, dynamic> _buildContext() {
+    final ctx = {
+      'client': {
+        'clientName': 'WEB_REMIX',
+        'clientVersion': '1.20240101.01.00',
+        'hl': 'en',
+        'gl': 'IN',
+      },
+    };
+    final token = PreferencesService().visitorDataToken;
+    if (token.isNotEmpty) {
+      (ctx['client'] as Map<String, dynamic>)['visitorData'] = token;
+    }
+    return ctx;
+  }
 
   /// Searches YouTube Music specifically for official studio songs (no video sketches or dialogue)
   Future<List<Video>> searchSongs(String query, {int limit = 20}) async {
@@ -42,7 +60,7 @@ class YouTubeMusicClient {
         final edgeUri = ApiConfig.ytmSearchUri(query, limit: limit);
         final resp = await http
             .get(edgeUri)
-            .timeout(const Duration(seconds: 5));
+            .timeout(const Duration(seconds: 8));
         if (resp.statusCode == 200) {
           final List<dynamic> list = json.decode(resp.body);
           final parsed = _parseJsonTracks(list);
@@ -63,14 +81,14 @@ class YouTubeMusicClient {
     try {
       final uri = Uri.parse('$_baseUrl/search');
       final payload = {
-        'context': _context,
+        'context': _buildContext(),
         'query': query.trim(),
         // Song filter parameter to restrict to official studio releases
         'params': 'Eg-KAQwIABAAGAEgASgAMABqChAMEAMQBBAJEAo%3D',
       };
 
       final response = await http
-          .post(uri, headers: _headers, body: json.encode(payload))
+          .post(uri, headers: _buildHeaders(), body: json.encode(payload))
           .timeout(const Duration(seconds: 8));
 
       if (response.statusCode != 200) {
@@ -79,6 +97,14 @@ class YouTubeMusicClient {
       }
 
       final data = json.decode(response.body);
+
+      // Extract and persist Google Visitor ID for ongoing session learning
+      final newVisitorToken =
+          data['responseContext']?['visitorData'] as String?;
+      if (newVisitorToken != null && newVisitorToken.isNotEmpty) {
+        unawaited(PreferencesService().setVisitorDataToken(newVisitorToken));
+      }
+
       final List<Video> songs = [];
 
       // Navigate through InnerTube sections to extract musicResponsiveListItemRenderer items
@@ -111,56 +137,68 @@ class YouTubeMusicClient {
     }
   }
 
+  final Map<String, Future<List<Video>>> _inFlightRadio = {};
+
   /// Fetches Google's 50-track smart radio automix for a given [videoId]
-  Future<List<Video>> fetchRadioTracks(String videoId, {int limit = 50}) async {
-    if (videoId.trim().isEmpty) return [];
-
-    // 1. First try Cloudflare Edge Worker / Cloud Proxy (guarantees CORS bypass on Web & 0ms cold start)
-    try {
-      final proxyUri = ApiConfig.radioUri(videoId, limit: limit);
-      final resp = await http.get(proxyUri).timeout(const Duration(seconds: 5));
-      if (resp.statusCode == 200) {
-        final List<dynamic> list = json.decode(resp.body);
-        if (list.isNotEmpty) {
-          final serverTracks = _parseJsonTracks(list, excludeId: videoId);
-          if (serverTracks.isNotEmpty) {
-            debugPrint(
-              '[YTM] Retrieved ${serverTracks.length} clean radio tracks via edge proxy',
-            );
-            return serverTracks;
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('[YTM] Edge radio proxy failed, trying fallback: $e');
+  Future<List<Video>> fetchRadioTracks(String videoId, {int limit = 50}) {
+    final cleanId = videoId.trim();
+    if (cleanId.isEmpty) return Future.value([]);
+    if (_inFlightRadio.containsKey(cleanId)) {
+      return _inFlightRadio[cleanId]!;
     }
+    final future = _fetchRadioTracksImpl(cleanId, limit: limit);
+    _inFlightRadio[cleanId] = future;
+    return future.whenComplete(() => _inFlightRadio.remove(cleanId));
+  }
 
-    // 2. On Web: if Edge Worker returned empty, try Render backend radio
+  Future<List<Video>> _fetchRadioTracksImpl(
+    String videoId, {
+    int limit = 50,
+  }) async {
+    final visitorToken = PreferencesService().visitorDataToken;
+
+    // 1. On Flutter Web: Route through Cloudflare Edge Worker to bypass browser CORS
     if (kIsWeb) {
       try {
-        final renderUri = ApiConfig.renderRadioUri(videoId, limit: limit);
+        final proxyUri = ApiConfig.radioUri(
+          videoId,
+          limit: limit,
+          visitorData: visitorToken.isNotEmpty ? visitorToken : null,
+        );
         final resp = await http
-            .get(renderUri)
-            .timeout(const Duration(seconds: 6));
+            .get(proxyUri)
+            .timeout(const Duration(seconds: 8));
         if (resp.statusCode == 200) {
           final List<dynamic> list = json.decode(resp.body);
-          return _parseJsonTracks(list, excludeId: videoId);
+          if (list.isNotEmpty) {
+            final serverTracks = _parseJsonTracks(list, excludeId: videoId);
+            if (serverTracks.isNotEmpty) {
+              debugPrint(
+                '[YTM] Retrieved ${serverTracks.length} clean radio tracks via edge proxy',
+              );
+              return serverTracks;
+            }
+          }
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[YTM] Edge radio proxy: $e');
+      }
+
       return [];
     }
 
-    // 3. Direct client-side InnerTube fallback (Mobile / Desktop)
+    // 2. Direct client-side InnerTube for Mobile & Desktop (Native high performance + dynamic visitor session)
     try {
       final uri = Uri.parse('$_baseUrl/next');
       final payload = {
-        'context': _context,
+        'context': _buildContext(),
         'videoId': videoId,
         'playlistId': 'RDAMVM$videoId',
+        'enablePersistentPlaylistPanel': true,
       };
 
       final response = await http
-          .post(uri, headers: _headers, body: json.encode(payload))
+          .post(uri, headers: _buildHeaders(), body: json.encode(payload))
           .timeout(const Duration(seconds: 8));
 
       if (response.statusCode != 200) {
@@ -169,6 +207,13 @@ class YouTubeMusicClient {
       }
 
       final data = json.decode(response.body);
+
+      // Extract and persist Google Visitor ID for ongoing session learning
+      final newVisitorToken =
+          data['responseContext']?['visitorData'] as String?;
+      if (newVisitorToken != null && newVisitorToken.isNotEmpty) {
+        unawaited(PreferencesService().setVisitorDataToken(newVisitorToken));
+      }
       final tabs =
           data['contents']?['singleColumnMusicWatchNextResultsRenderer']?['tabbedRenderer']?['watchNextTabbedResultsRenderer']?['tabs'] ??
           [];

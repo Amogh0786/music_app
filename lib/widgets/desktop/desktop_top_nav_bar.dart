@@ -59,15 +59,21 @@ class _DesktopTopNavBarState extends State<DesktopTopNavBar> {
     }
   }
 
+  void _onSearchSubmitted(String query) {
+    DesktopLayoutState.submitSearch(query);
+  }
+
   void _openBrowseCategories() {
     _searchController.clear();
     DesktopLayoutState.globalSearchQuery.value = '';
+    DesktopLayoutState.submittedSearchQuery.value = '';
     DesktopLayoutState.setNavTab(DesktopNavTab.search);
   }
 
   void _navigateToHome() {
     _searchController.clear();
     DesktopLayoutState.globalSearchQuery.value = '';
+    DesktopLayoutState.submittedSearchQuery.value = '';
     DesktopLayoutState.setNavTab(DesktopNavTab.home);
   }
 
@@ -247,7 +253,15 @@ class _DesktopTopNavBarState extends State<DesktopTopNavBar> {
                                   color: Colors.white.withValues(alpha: 0.65),
                                   size: 20.0,
                                 ),
-                                onPressed: _focusSearch,
+                                onPressed: () {
+                                  if (_searchController.text
+                                      .trim()
+                                      .isNotEmpty) {
+                                    _onSearchSubmitted(_searchController.text);
+                                  } else {
+                                    _focusSearch();
+                                  }
+                                },
                               ),
                               const SizedBox(width: 6.0),
                               Expanded(
@@ -273,7 +287,7 @@ class _DesktopTopNavBarState extends State<DesktopTopNavBar> {
                                   ),
                                   onChanged: _onSearchChanged,
                                   onSubmitted: (query) {
-                                    _onSearchChanged(query);
+                                    _onSearchSubmitted(query);
                                   },
                                 ),
                               ),
@@ -281,6 +295,10 @@ class _DesktopTopNavBarState extends State<DesktopTopNavBar> {
                                 GestureDetector(
                                   onTap: () {
                                     _searchController.clear();
+                                    DesktopLayoutState
+                                            .submittedSearchQuery
+                                            .value =
+                                        '';
                                     _onSearchChanged('');
                                   },
                                   child: Padding(

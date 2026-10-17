@@ -143,9 +143,10 @@ class ApiConfig {
   /// Google YouTube Music radio automix via Cloudflare Edge Worker (< 150ms latency, zero cold start).
   static Uri radioUri(
     String videoId, {
-    int limit = 30,
+    int limit = 50,
     String? title,
     String? artist,
+    String? visitorData,
   }) {
     final customUrl = PreferencesService().customServerUrl;
     final base = customUrl.isNotEmpty
@@ -153,12 +154,18 @@ class ApiConfig {
               ? customUrl.substring(0, customUrl.length - 1)
               : customUrl)
         : cloudflareWorkerUrl;
-    final buffer = StringBuffer('$base/ytm/radio?v=$videoId&limit=$limit');
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final buffer = StringBuffer(
+      '$base/ytm/radio?v=$videoId&limit=$limit&t=$ts',
+    );
     if (title != null && title.isNotEmpty) {
       buffer.write('&title=${Uri.encodeComponent(title)}');
     }
     if (artist != null && artist.isNotEmpty) {
       buffer.write('&artist=${Uri.encodeComponent(artist)}');
+    }
+    if (visitorData != null && visitorData.isNotEmpty) {
+      buffer.write('&visitorData=${Uri.encodeComponent(visitorData)}');
     }
     return Uri.parse(buffer.toString());
   }

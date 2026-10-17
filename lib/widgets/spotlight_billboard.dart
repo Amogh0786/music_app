@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../services/music_service.dart';
+import '../services/canonical_song_dedup.dart';
 
 /// Featured Spotlight Billboard carousel showcasing top trending hits with widescreen artwork.
 class SpotlightBillboard extends StatefulWidget {
@@ -88,10 +89,15 @@ class _SpotlightBillboardState extends State<SpotlightBillboard> {
                           Image.network(
                             hdThumbnail,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Image.network(
-                              song.thumbnails.highResUrl,
-                              fit: BoxFit.cover,
-                            ),
+                            errorBuilder: (_, _, _) =>
+                                CanonicalSongDedup.isLikelyYouTubeId(
+                                  song.id.value,
+                                )
+                                ? Image.network(
+                                    song.thumbnails.highResUrl,
+                                    fit: BoxFit.cover,
+                                  )
+                                : const SizedBox.shrink(),
                           ),
 
                           // Dramatic Cinematic Dark Gradient Overlay

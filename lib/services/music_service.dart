@@ -846,13 +846,13 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     final id = song.id.value;
     final thumb = getHdThumbnail(id);
     if (thumb.isNotEmpty) return thumb;
-    try {
-      final h = song.thumbnails.highResUrl;
-      if (h.isNotEmpty) return h;
-      final m = song.thumbnails.mediumResUrl;
-      if (m.isNotEmpty) return m;
-    } catch (_) {}
     if (CanonicalSongDedup.isLikelyYouTubeId(id)) {
+      try {
+        final h = song.thumbnails.highResUrl;
+        if (h.isNotEmpty) return h;
+        final m = song.thumbnails.mediumResUrl;
+        if (m.isNotEmpty) return m;
+      } catch (_) {}
       return 'https://i.ytimg.com/vi/$id/hqdefault.jpg';
     }
     return '';
@@ -887,21 +887,28 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   ///
   /// Rate-limited to one resolve per 80ms so the edge worker is not flooded.
   Future<void> enrichArtworkForSongs(List<Video> songs) async {
-    // Collect songs that need artwork or stream enrichment
+    // Collect songs that need artwork or stream enrichment (capped to 6 to prevent connection flooding)
     final needsEnrich = <Video>[];
     for (final s in songs) {
       final id = s.id.value;
       final current = _artworkMap[id];
       final isCompilation =
           current != null && _compilationArtworks.contains(current);
+      // Google user content / YTM studio release artwork is official 1:1 label art, NOT a fallback
       final isYtFallback =
           current == null ||
           current.isEmpty ||
-          current.startsWith('https://i.ytimg.com/');
+          (current.startsWith('https://i.ytimg.com/') &&
+              !current.contains('googleusercontent'));
+      // Pre-warming direct 320k stream URL is only required on Web; native desktop/mobile resolves natively
       final needsStream =
-          _webStreamUrls[id] == null || _webStreamUrls[id]!.isEmpty;
+          kIsWeb && (_webStreamUrls[id] == null || _webStreamUrls[id]!.isEmpty);
       if (isCompilation || isYtFallback || needsStream) {
         needsEnrich.add(s);
+        final maxEnrich = kIsWeb ? 2 : 6;
+        if (needsEnrich.length >= maxEnrich) {
+          break; // Concurrency cap: Never flood background requests
+        }
       }
     }
     if (needsEnrich.isEmpty) return;
@@ -954,6 +961,22 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
               _artworkMap[song.id.value] = artwork;
               debugPrint('[ArtworkEnrich] ✓ ${song.title} → $album (artwork)');
               notifyListeners();
+            }
+
+            // Register enriched language from JioSaavn response or artwork URL
+            final artworkLangMatch = RegExp(
+              r'-(Telugu|Hindi|Tamil|Kannada|Malayalam|Punjabi|Bengali|Marathi|Bhojpuri|Gujarati)-',
+              caseSensitive: false,
+            ).firstMatch(artwork);
+            final enrichedLang =
+                (data?['language'] as String?)?.isNotEmpty == true
+                ? (data!['language'] as String).toLowerCase()
+                : artworkLangMatch?.group(1)?.toLowerCase();
+            if (enrichedLang != null && enrichedLang.isNotEmpty) {
+              CanonicalSongDedup.registerSongLanguage(
+                song.id.value,
+                enrichedLang,
+              );
             }
 
             // Pre-warm direct 320k JioSaavn stream URL for immediate playback
@@ -2911,11 +2934,13 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   /// queries Google's Radio Automix, and re-ranks candidates via TasteMatrixScorer.
   Future<List<Video>> fetchRadioTracksForSong(
     Video seed, {
-    int limit = 35,
+    int limit = 50,
     String? targetLanguage,
   }) async {
     final lang =
-        targetLanguage ?? CanonicalSongDedup.detectLanguage(seed.title);
+        targetLanguage ??
+        CanonicalSongDedup.getSongLanguage(seed.id.value) ??
+        CanonicalSongDedup.detectLanguage(seed.title, artist: seed.author);
     List<Video> rawCandidates = [];
 
     // 1. Resolve 11-char YouTube Video ID
@@ -2934,55 +2959,58 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         final query = '$cleanT $cleanA';
         final ytmMatch = await YouTubeMusicClient()
             .searchSongs(query, limit: 1)
-            .timeout(const Duration(seconds: 4));
+            .timeout(const Duration(seconds: 8));
         if (ytmMatch.isNotEmpty && ytmMatch.first.id.value.length == 11) {
           ytmVideoId = ytmMatch.first.id.value;
         }
       } catch (e) {
-        debugPrint('[RadioBridge] YTM ID lookup failed: $e');
+        debugPrint('[RadioBridge] YTM ID lookup skipped ($e)');
       }
     }
 
-    // 2. Fetch Radio Automix from YouTube Music Graph
+    // 2. Fetch Pure Google YouTube Music Neural Automix (RDAMVM collaborative filtering graph)
     if (ytmVideoId != null) {
       try {
         rawCandidates = await YouTubeMusicClient()
-            .fetchRadioTracks(ytmVideoId, limit: 40)
-            .timeout(const Duration(seconds: 6));
+            .fetchRadioTracks(ytmVideoId, limit: 50)
+            .timeout(const Duration(seconds: 8));
       } catch (e) {
-        debugPrint('[RadioBridge] Radio tracks fetch failed: $e');
+        debugPrint('[RadioBridge] Radio tracks fetch skipped ($e)');
       }
     }
 
-    // 3. Fallback: Query JioSaavn / YTM search if radio graph returned empty
-    if (rawCandidates.isEmpty) {
-      final cleanArtist = CanonicalSongDedup.cleanArtist(seed.author);
-      final fallbackQuery = cleanArtist.isNotEmpty
-          ? (lang != null ? '$cleanArtist $lang hits' : '$cleanArtist hits')
-          : (lang != null ? '$lang top songs' : 'Top Hits 2026');
+    // 3. Neural Continuation Chaining:
+    // If the primary neural automix returned fewer than 35 genuine tracks,
+    // seamlessly chain to the next neural graph node using the last recommended song
+    // (Infinite YouTube DJ graph continuity — zero hardcoded keyword queries).
+    if (rawCandidates.isNotEmpty && rawCandidates.length < 35) {
       try {
-        final jioFallback = await http
-            .get(ApiConfig.jioSearchUri(fallbackQuery, limit: 25))
-            .timeout(const Duration(seconds: 4))
-            .then((res) => _parseJioResults(res.body))
-            .catchError((_) => <Video>[]);
-        rawCandidates.addAll(jioFallback);
+        final nextSeed = rawCandidates.last;
+        if (CanonicalSongDedup.isLikelyYouTubeId(nextSeed.id.value)) {
+          final chained = await YouTubeMusicClient()
+              .fetchRadioTracks(nextSeed.id.value, limit: 35)
+              .timeout(const Duration(seconds: 6));
+          rawCandidates.addAll(chained);
+        }
       } catch (_) {}
     }
 
-    // 4. Client-Side Re-Ranking via TasteMatrixScorer
-    final likedTitles = likedSongs
-        .map((s) => (s['title'] ?? '').toString())
+    // 4. Pure YouTube DJ Flow: 100% untouched acoustic transition curve from YouTube
+    // Zero taste matrix interference for online radio.
+    final genuineCandidates = CanonicalSongDedup.deduplicateList(rawCandidates)
+        .where(CanonicalSongDedup.isGenuineSong)
+        .where((track) {
+          if (lang != null &&
+              !CanonicalSongDedup.isLanguageCompatible(lang, track.title)) {
+            return false;
+          }
+          return true;
+        })
+        .take(limit)
         .toList();
-    final scored = TasteMatrixScorer().scoreAndRankCandidates(
-      rawCandidates,
-      targetLanguage: lang,
-      likedSongTitles: likedTitles,
-      maxResults: limit,
-    );
     // Fire background artwork enrichment — upgrades compilation/YT covers to original album art
-    unawaited(enrichArtworkForSongs(scored));
-    return scored;
+    unawaited(enrichArtworkForSongs(genuineCandidates));
+    return genuineCandidates;
   }
 
   /// Tier 1: JioSaavn (320kbps studio releases with pristine album covers)
@@ -3237,13 +3265,28 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         score += 2500.0;
       }
 
-      // 1. Exact Title Match (e.g. "Perfect" == "perfect")
+      // 1. Exact or Fuzzy Title Match (e.g. "Perfect" == "perfect", "namo re" ~ "namo rey")
       if (cleanT == cleanQ || title == q) {
         score += 1200.0;
-      } else if (cleanT.startsWith(cleanQ)) {
-        score += 600.0;
+      } else if (cleanT.startsWith(cleanQ) || cleanQ.startsWith(cleanT)) {
+        score += 800.0;
       } else if (cleanT.contains(cleanQ)) {
-        score += 300.0;
+        score += 500.0;
+      }
+
+      // 1b. Multi-token Title Match (handles typos & minor variations like "namo re" vs "namo rey")
+      final cleanTTokens = cleanT
+          .split(RegExp(r'\s+'))
+          .where((t) => t.isNotEmpty)
+          .toList();
+      final bool hasStrongTitleTokenMatch =
+          cleanTTokens.isNotEmpty &&
+          cleanTTokens.every(
+            (t) =>
+                queryTokens.any((qt) => qt.startsWith(t) || t.startsWith(qt)),
+          );
+      if (hasStrongTitleTokenMatch && cleanT != cleanQ) {
+        score += 900.0;
       }
 
       // 2. Token overlap score (both Title and Artist tokens)
@@ -3283,7 +3326,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
               !cleanA.contains(t),
         );
         if (!hasMovieQuery) {
-          score -= 300.0;
+          score -= 150.0;
         }
       }
 
@@ -3459,25 +3502,28 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     try {
       final futures = await Future.wait([
         // 1. Google / YouTube Complete Search (global catalog, keyless, <50ms)
-        http
-            .get(
-              Uri.parse(
-                'https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=${Uri.encodeComponent(cleanQ)}',
-              ),
-            )
-            .timeout(const Duration(seconds: 3))
-            .then((res) {
-              if (res.statusCode == 200) {
-                final List<dynamic> jsonList = json.decode(res.body);
-                if (jsonList.length > 1 && jsonList[1] is List) {
-                  return (jsonList[1] as List)
-                      .map((e) => e.toString().trim())
-                      .toList();
-                }
-              }
-              return <String>[];
-            })
-            .catchError((_) => <String>[]),
+        // On Web, suggestqueries.google.com blocks cross-origin requests via browser CORS policy.
+        !kIsWeb
+            ? http
+                  .get(
+                    Uri.parse(
+                      'https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=${Uri.encodeComponent(cleanQ)}',
+                    ),
+                  )
+                  .timeout(const Duration(seconds: 3))
+                  .then((res) {
+                    if (res.statusCode == 200) {
+                      final List<dynamic> jsonList = json.decode(res.body);
+                      if (jsonList.length > 1 && jsonList[1] is List) {
+                        return (jsonList[1] as List)
+                            .map((e) => e.toString().trim())
+                            .toList();
+                      }
+                    }
+                    return <String>[];
+                  })
+                  .catchError((_) => <String>[])
+            : Future.value(<String>[]),
 
         // 2. JioSaavn Instant Edge Suggestions (Indian catalog supplement)
         http
@@ -3611,7 +3657,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       final thumbUrl = getHdThumbnail(videoId);
       final imageUrl = thumbUrl.isNotEmpty
           ? thumbUrl
-          : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+          : (CanonicalSongDedup.isLikelyYouTubeId(videoId)
+                ? 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg'
+                : '');
+      if (imageUrl.isEmpty) return;
       final palette = await PaletteGenerator.fromImageProvider(
         NetworkImage(imageUrl),
         size: const Size(100, 100),
@@ -3753,8 +3802,14 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     // When repeat mode is on (all or one), do not append recommendations to the queue
     if (_loopMode == LoopMode.all || _loopMode == LoopMode.one) return;
 
+    // Guard against race condition: do not preload while a queue generation or preload is in flight
+    if (_isGeneratingQueue || _isFetchingNextQueue) return;
+
     // When 5 or fewer songs remain after current playing song, silently load next recommendations
-    if ((_playlist.length - (_currentIndex + 1)) <= 5 && _currentSong != null) {
+    // Guard: Only preload if queue has already been populated with > 5 songs to avoid racing initial queue generation
+    if (_playlist.length > 5 &&
+        (_playlist.length - (_currentIndex + 1)) <= 5 &&
+        _currentSong != null) {
       final seedSong = _playlist.isNotEmpty ? _playlist.last : _currentSong!;
       _fetchNextRecommendations(seedSong);
     }
@@ -5283,10 +5338,58 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   void _preloadUpcomingTracks() {
     if (_playlist.isEmpty) return;
     final nextTracks = _playlist.skip(_currentIndex + 1).take(2);
+    final activeQualityPreset = PreferencesService().audioQuality;
+
     for (final track in nextTracks) {
+      // 1. Edge worker network prefetch
       http
           .get(ApiConfig.preloadUri(track.id.value))
           .catchError((_) => http.Response('', 500));
+
+      // 2. Proactive 320kbps JioSaavn studio stream resolution for standby deck
+      if (_webStreamUrls[track.id.value] == null ||
+          _webStreamUrls[track.id.value]!.isEmpty) {
+        final cleanT = CanonicalSongDedup.cleanTitle(track.title);
+        final cleanA = CanonicalSongDedup.cleanArtist(track.author);
+        if (cleanT.isNotEmpty) {
+          final q = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
+          http
+              .get(ApiConfig.jioSearchUri(q, limit: 3))
+              .timeout(const Duration(seconds: 4))
+              .then((resp) {
+                if (resp.statusCode == 200) {
+                  final List<dynamic> list = json.decode(resp.body);
+                  for (final item in list) {
+                    final itemTitle = item['title'] as String? ?? '';
+                    final itemArtist = item['author'] as String? ?? '';
+                    final itemStream = item['streamUrl'] as String? ?? '';
+                    if (itemStream.isEmpty) continue;
+                    if (_isCoverOrKaraokeTrack(itemTitle, itemArtist)) continue;
+
+                    if (CanonicalSongDedup.areDuplicateSongs(
+                      titleA: track.title,
+                      artistA: track.author,
+                      titleB: itemTitle,
+                      artistB: itemArtist,
+                    )) {
+                      final adaptedStream = adaptJioSaavnBitrate(
+                        itemStream,
+                        activeQualityPreset,
+                      );
+                      _webStreamUrls[track.id.value] = adaptedStream;
+                      cacheWebStreamUrl(track.id.value, adaptedStream);
+                      final itemThumb = item['thumbnail'] as String? ?? '';
+                      if (itemThumb.isNotEmpty) {
+                        _artworkMap[track.id.value] = itemThumb;
+                      }
+                      break;
+                    }
+                  }
+                }
+              })
+              .catchError((_) {});
+        }
+      }
     }
   }
 
@@ -5605,17 +5708,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       final progressiveQueue = <Video>[seed];
       final seenKeys = <String>{CanonicalSongDedup.cleanTitle(seed.title)};
 
-      final seedLanguage = CanonicalSongDedup.detectLanguage(seed.title);
-
-      // Extract movie/soundtrack name if present e.g. (From "Nagabandham") or (From 'Movie')
-      String? movieName;
-      final movieMatch = RegExp(
-        r'''from\s+["']([^"']+)["']''',
-        caseSensitive: false,
-      ).firstMatch(seed.title);
-      if (movieMatch != null) {
-        movieName = movieMatch.group(1)?.trim();
-      }
+      final seedLanguage =
+          CanonicalSongDedup.getSongLanguage(seed.id.value) ??
+          CanonicalSongDedup.detectLanguage(seed.title, artist: seed.author);
 
       void addTracks(List<Video> tracks, {String? targetLang}) {
         for (final track in tracks) {
@@ -5647,110 +5742,55 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           if (key.isNotEmpty && !seenKeys.contains(key)) {
             seenKeys.add(key);
             progressiveQueue.add(track);
-            if (progressiveQueue.length >= 51) break;
+            if (progressiveQueue.length >= 50) break;
           }
         }
       }
 
-      // 1. Stage 1 (TOP PRIORITY): Pull matching tracks directly from user's 12k imported library
+      // 1. Stage 1 (TOP MASTER BRAIN): Pure Google YouTube Music Neural Automix
+      // Leverages Google's 50-track collaborative filtering graph with persistent guest session learning
+      final radioTracks = await fetchRadioTracksForSong(
+        seed,
+        limit: 50,
+        targetLanguage: seedLanguage,
+      );
+      addTracks(radioTracks, targetLang: seedLanguage);
+
+      // 2. Stage 2 (Local Affinity): Interleave matching favorites from user's imported library
       final libraryMatches = _getLibraryRecommendationsForSeed(seed);
       addTracks(libraryMatches, targetLang: seedLanguage);
 
-      // 2. Stage 2 (Primary Studio Recommendations): Query JioSaavn Recommendations & Hits
-      if (progressiveQueue.length < 51) {
-        final cleanArtist = CanonicalSongDedup.cleanArtist(seed.author);
-        final leadArtist = PreferencesService.extractSingleLeadArtist(
-          cleanArtist,
-        );
-        final jioRecFutures = <Future<List<Video>>>[];
-
-        jioRecFutures.add(
-          http
-              .get(ApiConfig.jioRecommendationsUri(seed.title, limit: 30))
-              .timeout(const Duration(seconds: 5))
-              .then(
-                (res) => res.statusCode == 200
-                    ? _parseJioResults(res.body)
-                    : <Video>[],
-              )
-              .catchError((_) => <Video>[]),
-        );
-
-        if (leadArtist.isNotEmpty) {
-          final query = seedLanguage != null
-              ? '$leadArtist $seedLanguage hits'
-              : '$leadArtist hits';
-          jioRecFutures.add(
-            http
-                .get(ApiConfig.jioSearchUri(query, limit: 25))
-                .timeout(const Duration(seconds: 5))
-                .then(
-                  (res) => res.statusCode == 200
-                      ? _parseJioResults(res.body)
-                      : <Video>[],
-                )
-                .catchError((_) => <Video>[]),
+      // 3. Stage 3 (Neural Continuation Chaining):
+      // If queue is still under 50 songs, chain from the latest track in the queue
+      // through YouTube's neural collaborative graph to reach a full 50-track queue.
+      // 100% pure Google Neural Engine — zero hardcoded keyword searches.
+      if (progressiveQueue.length < 50 && progressiveQueue.length > 1) {
+        final lastCandidate = progressiveQueue.last;
+        if (CanonicalSongDedup.isLikelyYouTubeId(lastCandidate.id.value)) {
+          final chainedTracks = await fetchRadioTracksForSong(
+            lastCandidate,
+            limit: 50 - progressiveQueue.length + 5,
+            targetLanguage: seedLanguage,
           );
-        }
-
-        final jioRecLists = await Future.wait(jioRecFutures);
-        for (final list in jioRecLists) {
-          addTracks(list, targetLang: seedLanguage);
-        }
-      }
-
-      // 3. Stage 3 (Secondary Discovery): Universal Reverse YTM Seed Bridge + TasteMatrixScorer
-      if (progressiveQueue.length < 40) {
-        final radioTracks = await fetchRadioTracksForSong(
-          seed,
-          limit: 35,
-          targetLanguage: seedLanguage,
-        );
-        addTracks(radioTracks, targetLang: seedLanguage);
-      }
-
-      // 3. Stage 3 (Secondary): Movie Soundtrack Affinity if available
-      if (progressiveQueue.length < 51 &&
-          movieName != null &&
-          movieName.isNotEmpty) {
-        final movieResults = await http
-            .get(ApiConfig.jioSearchUri('$movieName songs', limit: 15))
-            .timeout(const Duration(seconds: 4))
-            .then((res) => _parseJioResults(res.body))
-            .catchError((_) => <Video>[]);
-        addTracks(movieResults, targetLang: seedLanguage);
-      }
-
-      // 4. Stage 4: User Top Taste Matrix Artists if still under 30
-      if (progressiveQueue.length < 30) {
-        final favArtists = PreferencesService().getTopArtists();
-        for (final fav in favArtists) {
-          if (progressiveQueue.length >= 40) break;
-          final cleanFav = CanonicalSongDedup.cleanArtist(fav);
-          if (cleanFav.isEmpty) continue;
-          final favQuery = seedLanguage != null
-              ? '$cleanFav $seedLanguage hits'
-              : '$cleanFav hits';
-          final favResults = await http
-              .get(ApiConfig.jioSearchUri(favQuery, limit: 10))
-              .timeout(const Duration(seconds: 4))
-              .then((res) => _parseJioResults(res.body))
-              .catchError((_) => <Video>[]);
-          addTracks(favResults, targetLang: seedLanguage);
+          addTracks(chainedTracks, targetLang: seedLanguage);
         }
       }
 
       if (_currentSong?.id.value != seed.id.value) return;
 
+      final boundedQueue = progressiveQueue.length > 50
+          ? progressiveQueue.take(50).toList()
+          : progressiveQueue;
+
       // Balance artist distribution while preserving rank
-      if (progressiveQueue.length > 2) {
-        final upcoming = progressiveQueue.sublist(1);
+      if (boundedQueue.length > 2) {
+        final upcoming = boundedQueue.sublist(1);
         final balancedUpcoming = CanonicalSongDedup.balanceArtistDistribution(
           upcoming,
         );
         _playlist = [seed, ...balancedUpcoming];
       } else {
-        _playlist = progressiveQueue;
+        _playlist = boundedQueue;
       }
 
       debugPrint(
@@ -5766,7 +5806,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _fetchNextRecommendations(Video song) async {
-    if (_isFetchingNextQueue) return;
+    if (_isFetchingNextQueue || _isGeneratingQueue) return;
     _isFetchingNextQueue = true;
     try {
       debugPrint(
@@ -5776,129 +5816,76 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       // 1. Detect dominant language across the active playlist (fallback to seed song)
       final langCounts = <String, int>{};
       for (final s in _playlist) {
-        final l = CanonicalSongDedup.detectLanguage(s.title);
+        final l =
+            CanonicalSongDedup.getSongLanguage(s.id.value) ??
+            CanonicalSongDedup.detectLanguage(s.title, artist: s.author);
         if (l != null) langCounts[l] = (langCounts[l] ?? 0) + 1;
       }
       final dominantLang = langCounts.isNotEmpty
           ? langCounts.entries.reduce((a, b) => a.value >= b.value ? a : b).key
-          : CanonicalSongDedup.detectLanguage(song.title);
+          : (CanonicalSongDedup.getSongLanguage(song.id.value) ??
+                CanonicalSongDedup.detectLanguage(
+                  song.title,
+                  artist: song.author,
+                ));
 
       // 2. Extract distinct artists from the active playlist
       final allPlaylistArtists = _getEffectivePlaylistArtists();
       List<Video> candidates = [];
 
-      if (dominantLang == 'english') {
-        // English track playback: query JioSaavn hits & recommendations AND YouTube Music radio
-        debugPrint(
-          '[Queue] Fetching English recommendations for: "${song.title}"',
-        );
-        final cleanArtist = CanonicalSongDedup.cleanArtist(song.author);
-        final jioRecFutures = <Future<List<Video>>>[];
-        if (cleanArtist.isNotEmpty) {
-          jioRecFutures.add(
-            http
-                .get(ApiConfig.jioSearchUri('$cleanArtist hits', limit: 15))
-                .timeout(const Duration(seconds: 4))
-                .then((res) => _parseJioResults(res.body))
-                .catchError((_) => <Video>[]),
-          );
-        }
-        jioRecFutures.add(
-          http
-              .get(ApiConfig.jioRecommendationsUri(song.title, limit: 15))
-              .timeout(const Duration(seconds: 4))
-              .then((res) => _parseJioResults(res.body))
-              .catchError((_) => <Video>[]),
-        );
+      debugPrint(
+        '[Queue] Fetching Neural Radio Automix for: "${song.title}" (Language: $dominantLang)',
+      );
 
-        final jioLists = await Future.wait(jioRecFutures);
-        for (final list in jioLists) {
-          candidates.addAll(list);
-        }
+      // 1. Stage 1 (TOP MASTER BRAIN): Universal YouTube Music Neural Automix + TasteMatrixScorer
+      // Leverages Google's neural graph specifically trained on acoustic compatibility and song transitions
+      final radioTracks = await fetchRadioTracksForSong(
+        song,
+        limit: 25,
+        targetLanguage: dominantLang,
+      );
+      candidates.addAll(radioTracks);
 
-        if (song.id.value.length == 11) {
-          final radioTracks = await YouTubeMusicClient()
-              .fetchRadioTracks(song.id.value, limit: 20)
-              .catchError((_) => <Video>[]);
-          candidates.addAll(radioTracks);
-        }
-        if (candidates.length < 15 && cleanArtist.isNotEmpty) {
-          final artistTracks = await YouTubeMusicClient()
-              .searchSongs('$cleanArtist hits', limit: 15)
-              .catchError((_) => <Video>[]);
-          candidates.addAll(artistTracks);
-        }
-        if (candidates.length < 10) {
-          final popHits = await YouTubeMusicClient()
-              .searchSongs('Top Pop Hits 2026', limit: 15)
-              .catchError((_) => <Video>[]);
-          candidates.addAll(popHits);
-        }
-      } else if (allPlaylistArtists.length > 1) {
-        // Multi-artist playlist: Fetch popular hit songs from all/multiple artists in the playlist
-        // Select up to 6 distinct artists per batch, rotating across batches so all artists get recommended
-        final int batchSize = min(6, allPlaylistArtists.length);
-        final selectedArtists = <String>[];
-        for (int i = 0; i < batchSize; i++) {
-          final idx =
-              (_playlistArtistRecommendationOffset + i) %
-              allPlaylistArtists.length;
-          selectedArtists.add(allPlaylistArtists[idx]);
-        }
-        _playlistArtistRecommendationOffset =
-            (_playlistArtistRecommendationOffset + batchSize) %
-            allPlaylistArtists.length;
-
-        debugPrint(
-          '[Queue] Blending popular recommendations from artists: ${selectedArtists.join(', ')} (Language: $dominantLang)',
-        );
-
-        // Step A: Pull matching tracks directly from user's 12k imported library for all selected artists
-        final libraryMatches = _getLibraryRecommendationsForArtists(
-          selectedArtists,
-          targetLang: dominantLang,
-        );
-        candidates.addAll(libraryMatches);
-
-        // Step B: Query JioSaavn concurrently for popular studio hits for each selected artist
-        final artistQueries = selectedArtists.map((artist) {
-          final query = dominantLang != null
-              ? '$artist $dominantLang hits'
-              : '$artist hits';
-          return http
-              .get(ApiConfig.jioSearchUri(query, limit: 8))
-              .timeout(const Duration(seconds: 4))
-              .then((res) => _parseJioResults(res.body))
-              .catchError((_) => <Video>[]);
-        }).toList();
-
-        final artistTrackLists = await Future.wait(artistQueries);
-
-        // Round-robin interleave results so the queue contains an even mix of all playlist artists
-        int maxLen = 0;
-        for (final list in artistTrackLists) {
-          if (list.length > maxLen) maxLen = list.length;
-        }
-        for (int i = 0; i < maxLen; i++) {
-          for (final list in artistTrackLists) {
-            if (i < list.length) {
-              candidates.add(list[i]);
-            }
+      // 2. Stage 2 (Secondary Enrichment): If radio returned < 10, supplement with library matches
+      if (candidates.length < 10) {
+        if (allPlaylistArtists.length > 1) {
+          final int batchSize = min(6, allPlaylistArtists.length);
+          final selectedArtists = <String>[];
+          for (int i = 0; i < batchSize; i++) {
+            final idx =
+                (_playlistArtistRecommendationOffset + i) %
+                allPlaylistArtists.length;
+            selectedArtists.add(allPlaylistArtists[idx]);
           }
-        }
-      } else {
-        // Single-artist or single-track playback: Universal Reverse YTM Seed Bridge + TasteMatrixScorer
-        final radioMatches = await fetchRadioTracksForSong(
-          song,
-          limit: 20,
-          targetLanguage: dominantLang,
-        );
-        candidates.addAll(radioMatches);
+          _playlistArtistRecommendationOffset =
+              (_playlistArtistRecommendationOffset + batchSize) %
+              allPlaylistArtists.length;
 
-        // 2. Secondary: Library tracks from matching artist / taste matrix
-        if (candidates.length < 10) {
+          final libraryMatches = _getLibraryRecommendationsForArtists(
+            selectedArtists,
+            targetLang: dominantLang,
+          );
+          candidates.addAll(libraryMatches);
+        } else {
           final libraryMatches = _getLibraryRecommendationsForSeed(song);
           candidates.addAll(libraryMatches);
+        }
+      }
+
+      // 3. Stage 3 (Emergency Safety Fallback): If still under 8 tracks, supplement with clean lead artist hits
+      if (candidates.length < 8) {
+        final cleanArtist = CanonicalSongDedup.cleanArtist(song.author);
+        final leadArtist = PreferencesService.extractSingleLeadArtist(
+          cleanArtist,
+        );
+        if (leadArtist.isNotEmpty) {
+          final query = (dominantLang != null && dominantLang != 'english')
+              ? '$leadArtist $dominantLang hits'
+              : '$leadArtist hits';
+          final artistTracks = await YouTubeMusicClient()
+              .searchSongs(query, limit: 10)
+              .catchError((_) => <Video>[]);
+          candidates.addAll(artistTracks);
         }
       }
 
@@ -6116,7 +6103,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     // Load ALL downloaded songs into queue so Next and Prev work seamlessly!
-    _playlist = _downloadedSongs
+    final allDownloaded = _downloadedSongs
         .map(
           (item) => Video(
             VideoId(item['id']!),
@@ -6136,10 +6123,29 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         )
         .toList();
 
-    _currentIndex = _downloadedSongs.indexWhere(
-      (item) => item['id'] == songData['id'],
-    );
-    if (_currentIndex == -1) _currentIndex = 0;
+    if (_isShuffle && allDownloaded.length > 2) {
+      // Offline Smart Shuffle via TasteMatrix: prioritize favorite artists and liked tracks
+      final startTrack = allDownloaded.firstWhere(
+        (v) => v.id.value == songData['id'],
+        orElse: () => allDownloaded.first,
+      );
+      final remaining = allDownloaded
+          .where((v) => v.id.value != startTrack.id.value)
+          .toList();
+      final smartRemaining = TasteMatrixScorer().scoreAndRankCandidates(
+        remaining,
+        maxResults: remaining.length,
+        preserveOriginalOrder: false, // Offline Taste Matrix Shuffle
+      );
+      _playlist = [startTrack, ...smartRemaining];
+      _currentIndex = 0;
+    } else {
+      _playlist = allDownloaded;
+      _currentIndex = _downloadedSongs.indexWhere(
+        (item) => item['id'] == songData['id'],
+      );
+      if (_currentIndex == -1) _currentIndex = 0;
+    }
     if (_playlist.isNotEmpty) {
       await playSong(_playlist[_currentIndex], updateQueue: false);
     }
@@ -6199,6 +6205,20 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         songList.indexWhere((item) => item['id'] == songData['id']);
 
     if (_currentIndex == -1) _currentIndex = 0;
+    if (_isShuffle && _playlist.length > 2) {
+      // Offline Smart Shuffle via TasteMatrix: prioritize favorite artists and liked tracks
+      final startTrack = _playlist[_currentIndex];
+      final remaining = _playlist
+          .where((v) => v.id.value != startTrack.id.value)
+          .toList();
+      final smartRemaining = TasteMatrixScorer().scoreAndRankCandidates(
+        remaining,
+        maxResults: remaining.length,
+        preserveOriginalOrder: false, // Offline Taste Matrix Shuffle
+      );
+      _playlist = [startTrack, ...smartRemaining];
+      _currentIndex = 0;
+    }
     if (_playlist.isNotEmpty) {
       await playSong(_playlist[_currentIndex], updateQueue: false);
     }

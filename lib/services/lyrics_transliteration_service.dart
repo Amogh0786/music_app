@@ -418,6 +418,7 @@ class LyricsTransliterationService {
     'asalu',
     'subhanallah',
     'annaavu',
+    'suvvi',
   };
 
   /// Checks if Latin text contains characteristic Romanized Telugu (Tenglish) vocabulary

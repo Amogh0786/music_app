@@ -109,7 +109,7 @@ class _AlbumScreenState extends State<AlbumScreen>
                     'title': v.title,
                     'author': v.author,
                     'album': title,
-                    'thumbnail': v.thumbnails.highResUrl,
+                    'thumbnail': MusicService.resolveArtworkUrl(v),
                     'duration': v.duration?.inSeconds ?? 0,
                     'trackNumber': 0,
                   },

@@ -38,10 +38,25 @@ class DesktopLayoutState {
   static final ValueNotifier<Map<String, dynamic>?> activeAlbumData =
       ValueNotifier<Map<String, dynamic>?>(null);
 
-  /// Global search query from the top navigation bar.
+  /// Global search query from the top navigation bar (for live typing / suggestions).
   static final ValueNotifier<String> globalSearchQuery = ValueNotifier<String>(
     '',
   );
+
+  /// Explicitly submitted search query (triggered only on Enter, search button, or suggestion click).
+  static final ValueNotifier<String> submittedSearchQuery =
+      ValueNotifier<String>('');
+
+  /// Explicitly triggers a search query execution.
+  static void submitSearch(String query) {
+    final clean = query.trim();
+    if (clean.isEmpty) return;
+    globalSearchQuery.value = clean;
+    submittedSearchQuery.value = clean;
+    if (activeNavTab.value != DesktopNavTab.search) {
+      setNavTab(DesktopNavTab.search);
+    }
+  }
 
   /// Width of the resizable left library sidebar (clamped between 72.0 and 398.0).
   static final ValueNotifier<double> leftSidebarWidth = ValueNotifier<double>(

@@ -471,14 +471,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                 cacheHeight: 100,
                                                 fit: BoxFit.cover,
                                                 errorBuilder: (_, _, _) =>
-                                                    Image.network(
-                                                      song.thumbnails.lowResUrl,
-                                                      width: 44,
-                                                      height: 44,
-                                                      cacheWidth: 100,
-                                                      cacheHeight: 100,
-                                                      fit: BoxFit.cover,
-                                                    ),
+                                                    CanonicalSongDedup.isLikelyYouTubeId(
+                                                      song.id.value,
+                                                    )
+                                                    ? Image.network(
+                                                        song
+                                                            .thumbnails
+                                                            .lowResUrl,
+                                                        width: 44,
+                                                        height: 44,
+                                                        cacheWidth: 100,
+                                                        cacheHeight: 100,
+                                                        fit: BoxFit.cover,
+                                                      )
+                                                    : Container(
+                                                        width: 44,
+                                                        height: 44,
+                                                        color: const Color(
+                                                          0xFF1E1E2C,
+                                                        ),
+                                                        child: const Icon(
+                                                          Icons
+                                                              .music_note_rounded,
+                                                          color: Colors.white24,
+                                                          size: 20,
+                                                        ),
+                                                      ),
                                               ),
                                             ),
                                             const SizedBox(width: 12),
@@ -1846,16 +1864,30 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                                           trackHdThumbnail,
                                                                           fit: BoxFit
                                                                               .cover,
-                                                                          errorBuilder: (_, _, _) => Image.network(
-                                                                            track.thumbnails.highResUrl,
-                                                                            fit:
-                                                                                BoxFit.cover,
-                                                                            errorBuilder:
-                                                                                (
-                                                                                  _,
-                                                                                  _,
-                                                                                  _,
-                                                                                ) => Container(
+                                                                          errorBuilder: (_, _, _) =>
+                                                                              CanonicalSongDedup.isLikelyYouTubeId(
+                                                                                track.id.value,
+                                                                              )
+                                                                              ? Image.network(
+                                                                                  track.thumbnails.highResUrl,
+                                                                                  fit: BoxFit.cover,
+                                                                                  errorBuilder:
+                                                                                      (
+                                                                                        _,
+                                                                                        _,
+                                                                                        _,
+                                                                                      ) => Container(
+                                                                                        color: const Color(
+                                                                                          0xFF222230,
+                                                                                        ),
+                                                                                        child: const Icon(
+                                                                                          Icons.music_note,
+                                                                                          color: Colors.white54,
+                                                                                          size: 64,
+                                                                                        ),
+                                                                                      ),
+                                                                                )
+                                                                              : Container(
                                                                                   color: const Color(
                                                                                     0xFF222230,
                                                                                   ),
@@ -1865,7 +1897,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                                                                     size: 64,
                                                                                   ),
                                                                                 ),
-                                                                          ),
                                                                         ),
                                                                       ),
                                                                     )
@@ -2931,20 +2962,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   fit: BoxFit.cover,
                                   cacheWidth: 600,
                                   cacheHeight: 600,
-                                  errorBuilder: (_, _, _) => Image.network(
-                                    song.thumbnails.highResUrl,
-                                    fit: BoxFit.cover,
-                                    cacheWidth: 600,
-                                    cacheHeight: 600,
-                                    errorBuilder: (_, _, _) => Container(
-                                      color: const Color(0xFF222230),
-                                      child: const Icon(
-                                        Icons.music_note,
-                                        color: Colors.white54,
-                                        size: 50,
-                                      ),
-                                    ),
-                                  ),
+                                  errorBuilder: (_, _, _) =>
+                                      CanonicalSongDedup.isLikelyYouTubeId(
+                                        song.id.value,
+                                      )
+                                      ? Image.network(
+                                          song.thumbnails.highResUrl,
+                                          fit: BoxFit.cover,
+                                          cacheWidth: 600,
+                                          cacheHeight: 600,
+                                          errorBuilder: (_, _, _) => Container(
+                                            color: const Color(0xFF222230),
+                                            child: const Icon(
+                                              Icons.music_note,
+                                              color: Colors.white54,
+                                              size: 50,
+                                            ),
+                                          ),
+                                        )
+                                      : Container(
+                                          color: const Color(0xFF222230),
+                                          child: const Icon(
+                                            Icons.music_note,
+                                            color: Colors.white54,
+                                            size: 50,
+                                          ),
+                                        ),
                                 ),
                               ),
                             ),

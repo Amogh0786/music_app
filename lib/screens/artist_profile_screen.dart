@@ -1074,14 +1074,28 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
                               fit: BoxFit.cover,
                               cacheWidth: 120,
                               cacheHeight: 120,
-                              errorBuilder: (_, _, _) => Image.network(
-                                song.thumbnails.lowResUrl,
-                                width: 50,
-                                height: 50,
-                                fit: BoxFit.cover,
-                                cacheWidth: 120,
-                                cacheHeight: 120,
-                              ),
+                              errorBuilder: (_, _, _) =>
+                                  CanonicalSongDedup.isLikelyYouTubeId(
+                                    song.id.value,
+                                  )
+                                  ? Image.network(
+                                      song.thumbnails.lowResUrl,
+                                      width: 50,
+                                      height: 50,
+                                      fit: BoxFit.cover,
+                                      cacheWidth: 120,
+                                      cacheHeight: 120,
+                                    )
+                                  : Container(
+                                      width: 50,
+                                      height: 50,
+                                      color: const Color(0xFF1E1E2C),
+                                      child: const Icon(
+                                        Icons.music_note_rounded,
+                                        color: Colors.white24,
+                                        size: 24,
+                                      ),
+                                    ),
                             ),
                           ),
                           title: Text(

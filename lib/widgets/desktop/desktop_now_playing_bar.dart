@@ -127,28 +127,33 @@ class _DesktopTrackInfoSection extends StatelessWidget {
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.history_rounded,
-                                      size: 11.0,
-                                      color: Colors.white.withValues(
-                                        alpha: 0.6,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4.0),
-                                    Text(
-                                      'JUMP BACK IN',
-                                      style: TextStyle(
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.history_rounded,
+                                        size: 11.0,
                                         color: Colors.white.withValues(
                                           alpha: 0.6,
                                         ),
-                                        fontSize: 10.0,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 0.8,
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(width: 4.0),
+                                      Text(
+                                        'JUMP BACK IN',
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.6,
+                                          ),
+                                          fontSize: 10.0,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 0.8,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                                 const SizedBox(height: 2.0),
                                 Text(
@@ -234,12 +239,7 @@ class _DesktopTrackInfoSection extends StatelessWidget {
           );
         }
 
-        final hdThumbnail = MusicService.getHdThumbnail(song.id.value);
-        final artworkUrl = hdThumbnail.isNotEmpty
-            ? hdThumbnail
-            : (song.thumbnails.lowResUrl.isNotEmpty
-                  ? song.thumbnails.lowResUrl
-                  : '');
+        final artworkUrl = MusicService.resolveArtworkUrl(song);
         final isLiked = musicService.isLiked(song.id.value);
 
         return Row(

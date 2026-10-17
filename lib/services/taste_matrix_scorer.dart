@@ -24,6 +24,7 @@ class TasteMatrixScorer {
     String? targetLanguage,
     List<String>? likedSongTitles,
     int maxResults = 30,
+    bool preserveOriginalOrder = false,
   }) {
     if (candidates.isEmpty) return [];
 
@@ -32,6 +33,42 @@ class TasteMatrixScorer {
 
     final prefs = PreferencesService();
     final matrix = prefs.getTasteMatrix();
+
+    // 1. Pure DJ Flow Mode (Keeps Google's native acoustic transition sequence 100% intact)
+    // Applies genuine song verification, deduplication, and filters out heavily skipped artists.
+    if (preserveOriginalOrder) {
+      final result = <Video>[];
+      final seenTitles = <String>{};
+
+      for (final track in dedupedCandidates) {
+        if (!CanonicalSongDedup.isGenuineSong(track)) continue;
+
+        final cleanT = CanonicalSongDedup.cleanTitle(track.title);
+        if (cleanT.isEmpty || seenTitles.contains(cleanT)) continue;
+
+        // Skip artist only if heavily penalized by explicit user skips (affinity < -6.0)
+        final cleanAuthor = CanonicalSongDedup.cleanArtist(track.author);
+        final rawAffinity = matrix.artistAffinities[cleanAuthor] ?? 0.0;
+        if (rawAffinity < -6.0) continue;
+
+        // Mild fatigue limiter (max 2 songs per artist in sliding window of 5)
+        final recentWindow = result.length >= 4
+            ? result.sublist(result.length - 4)
+            : result;
+        final countInRecent = recentWindow.where((r) {
+          return CanonicalSongDedup.cleanArtist(r.author).toLowerCase() ==
+              cleanAuthor.toLowerCase();
+        }).length;
+        if (countInRecent >= 2) continue;
+
+        seenTitles.add(cleanT);
+        result.add(track);
+        if (result.length >= maxResults) break;
+      }
+      return result;
+    }
+
+    // 2. Full Personal Taste Matrix Re-ranking Mode (Preserved & handy for Daily Mixes & Power Users)
     final preferredLangs = prefs.preferredLanguages
         .map((l) => l.toLowerCase())
         .toList();
