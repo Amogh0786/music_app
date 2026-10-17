@@ -13,6 +13,8 @@ enum ArtworkStyle { card, vinyl }
 
 enum ScrubberStyle { waveform, classic }
 
+enum ProgressLineStyle { wave, classic }
+
 enum AudioQualityPreset {
   studioMaster, // 320 kbps (Direct JioSaavn 320k CDN / max bitrate)
   high, // 160 kbps (High Fidelity Opus / 160k AAC)
@@ -292,6 +294,10 @@ class PreferencesService extends ChangeNotifier {
   String get cloudflareWorkerUrl => _cloudflareWorkerUrl;
   ArtworkStyle get artworkStyle => _artworkStyle;
   ScrubberStyle get scrubberStyle => _scrubberStyle;
+  ProgressLineStyle get progressLineStyle =>
+      _scrubberStyle == ScrubberStyle.waveform
+          ? ProgressLineStyle.wave
+          : ProgressLineStyle.classic;
   AudioQualityPreset get audioQuality => _audioQuality;
   AudioFormatPreference get audioFormat => _audioFormat;
   String get lyricsDisplayMode => _lyricsDisplayMode;

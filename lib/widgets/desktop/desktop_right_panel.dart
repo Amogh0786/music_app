@@ -980,7 +980,9 @@ class _DesktopQueueTab extends StatefulWidget {
 }
 
 class _DesktopQueueTabState extends State<_DesktopQueueTab> {
-  final MusicService _musicService = MusicServic  @override
+  final MusicService _musicService = MusicService();
+
+  @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _musicService,
@@ -1350,6 +1352,5 @@ class _DesktopQueueTabState extends State<_DesktopQueueTab> {
         );
       },
     );
-  });
   }
 }

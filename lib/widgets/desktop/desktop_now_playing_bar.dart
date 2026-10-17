@@ -7,6 +7,7 @@ import '../../services/preferences_service.dart';
 import '../../services/web_player_bridge.dart';
 import '../../screens/player_screen.dart';
 import 'desktop_fullscreen_helper.dart';
+import '../waveform_scrubber.dart';
 
 /// Spotify-grade 90px Edge-to-Edge Bottom Now Playing Deck (#now-playing-bar).
 ///
@@ -522,6 +523,9 @@ class _DesktopTimelineScrubberState extends State<_DesktopTimelineScrubber> {
   Widget build(BuildContext context) {
     final prefs = PreferencesService();
     final accentColor = prefs.themeColor;
+    final isWave =
+        prefs.progressLineStyle == ProgressLineStyle.wave ||
+        prefs.scrubberStyle == ScrubberStyle.waveform;
 
     return StreamBuilder<Duration?>(
       stream: _musicService.durationStream,
@@ -567,59 +571,83 @@ class _DesktopTimelineScrubberState extends State<_DesktopTimelineScrubber> {
                 ),
                 const SizedBox(width: 8.0),
 
-                // Interactive Progress Slider
+                // Interactive Progress Slider / Waveform Scrubber
                 Expanded(
-                  child: MouseRegion(
-                    onExit: (_) {
-                      if (_dragPositionSeconds != null) {
-                        setState(() => _dragPositionSeconds = null);
-                      }
-                    },
-                    child: SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        trackHeight: 3.5,
-                        thumbShape: isScrubbable
-                            ? const RoundSliderThumbShape(
-                                enabledThumbRadius: 5.5,
-                              )
-                            : const RoundSliderThumbShape(
-                                enabledThumbRadius: 0.0,
-                              ),
-                        overlayShape: isScrubbable
-                            ? const RoundSliderOverlayShape(overlayRadius: 10.0)
-                            : const RoundSliderOverlayShape(overlayRadius: 0.0),
-                        activeTrackColor: accentColor,
-                        inactiveTrackColor: Colors.white.withValues(
-                          alpha: 0.15,
-                        ),
-                        thumbColor: Colors.white,
-                        overlayColor: accentColor.withValues(alpha: 0.25),
-                      ),
-                      child: Slider(
-                        value: isScrubbable ? currentVal : 0.0,
-                        min: 0.0,
-                        max: maxVal,
-                        onChangeStart: isScrubbable
-                            ? (val) {
-                                setState(() => _dragPositionSeconds = val);
-                              }
-                            : null,
-                        onChanged: isScrubbable
-                            ? (val) {
-                                setState(() => _dragPositionSeconds = val);
-                              }
-                            : null,
-                        onChangeEnd: isScrubbable
-                            ? (val) {
-                                final target = Duration(
-                                  milliseconds: (val * 1000).toInt(),
-                                );
-                                _musicService.seek(target);
+                  child: RepaintBoundary(
+                    child: (isWave && _musicService.currentSong != null)
+                        ? WaveformScrubber(
+                            position: position,
+                            duration: totalDuration,
+                            songId: _musicService.currentSong!.id.value,
+                            accentColor: accentColor,
+                            showTimestamps: false,
+                            height: 24.0,
+                            onSeek: (target) => _musicService.seek(target),
+                          )
+                        : MouseRegion(
+                            onExit: (_) {
+                              if (_dragPositionSeconds != null) {
                                 setState(() => _dragPositionSeconds = null);
                               }
-                            : null,
-                      ),
-                    ),
+                            },
+                            child: SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                trackHeight: 3.5,
+                                thumbShape: isScrubbable
+                                    ? const RoundSliderThumbShape(
+                                        enabledThumbRadius: 5.5,
+                                      )
+                                    : const RoundSliderThumbShape(
+                                        enabledThumbRadius: 0.0,
+                                      ),
+                                overlayShape: isScrubbable
+                                    ? const RoundSliderOverlayShape(
+                                        overlayRadius: 10.0,
+                                      )
+                                    : const RoundSliderOverlayShape(
+                                        overlayRadius: 0.0,
+                                      ),
+                                activeTrackColor: accentColor,
+                                inactiveTrackColor: Colors.white.withValues(
+                                  alpha: 0.15,
+                                ),
+                                thumbColor: Colors.white,
+                                overlayColor: accentColor.withValues(
+                                  alpha: 0.25,
+                                ),
+                              ),
+                              child: Slider(
+                                value: isScrubbable ? currentVal : 0.0,
+                                min: 0.0,
+                                max: maxVal,
+                                onChangeStart: isScrubbable
+                                    ? (val) {
+                                        setState(
+                                          () => _dragPositionSeconds = val,
+                                        );
+                                      }
+                                    : null,
+                                onChanged: isScrubbable
+                                    ? (val) {
+                                        setState(
+                                          () => _dragPositionSeconds = val,
+                                        );
+                                      }
+                                    : null,
+                                onChangeEnd: isScrubbable
+                                    ? (val) {
+                                        final target = Duration(
+                                          milliseconds: (val * 1000).toInt(),
+                                        );
+                                        _musicService.seek(target);
+                                        setState(
+                                          () => _dragPositionSeconds = null,
+                                        );
+                                      }
+                                    : null,
+                              ),
+                            ),
+                          ),
                   ),
                 ),
                 const SizedBox(width: 8.0),
