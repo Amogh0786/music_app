@@ -235,6 +235,11 @@ class SearchScreenState extends State<SearchScreen>
     if (query.isEmpty) {
       setState(() {
         _suggestions = [];
+        _searchResults = [];
+        _albumResults = [];
+        _currentQuery = '';
+        _isSearching = false;
+        _isSubmittingSearch = false;
       });
       return;
     }
@@ -910,7 +915,7 @@ class SearchScreenState extends State<SearchScreen>
                                 ),
                               ),
                             )
-                          : const SizedBox.shrink(),
+                          : _buildCategoriesGrid(),
                     ),
                   ],
                 )

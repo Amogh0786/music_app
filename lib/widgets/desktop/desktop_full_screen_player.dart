@@ -7,6 +7,7 @@ import '../../screens/album_screen.dart';
 import '../../screens/artist_profile_screen.dart';
 import '../../services/music_service.dart';
 import '../../services/preferences_service.dart';
+import '../../layouts/desktop_layout_state.dart';
 import '../animated_lyrics.dart';
 import '../vinyl_record_player.dart';
 
@@ -1165,13 +1166,8 @@ class _DesktopFullScreenPlayerState extends State<DesktopFullScreenPlayer> {
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
               ),
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        ArtistProfileScreen(artistName: widget.song.author),
-                  ),
-                );
+                widget.onClose();
+                DesktopLayoutState.openArtist(widget.song.author);
               },
             ),
             const SizedBox(width: 10),
@@ -1199,18 +1195,14 @@ class _DesktopFullScreenPlayerState extends State<DesktopFullScreenPlayer> {
                 final cachedTitle =
                     MusicService.getCachedAlbumTitle(widget.song.id.value) ??
                     MusicService.extractMovieOrAlbumTitle(widget.song.title);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => AlbumScreen(
-                      albumId: cachedId ?? '',
-                      albumTitle: cachedTitle ?? widget.song.title,
-                      albumArtwork: MusicService.getHdThumbnail(
-                        widget.song.id.value,
-                      ),
-                      albumArtist: widget.song.author,
-                    ),
+                widget.onClose();
+                DesktopLayoutState.openAlbum(
+                  albumId: cachedId ?? '',
+                  albumTitle: cachedTitle ?? widget.song.title,
+                  albumArtwork: MusicService.getHdThumbnail(
+                    widget.song.id.value,
                   ),
+                  albumArtist: widget.song.author,
                 );
               },
             ),

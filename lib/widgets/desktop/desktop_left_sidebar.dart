@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../layouts/desktop_layout_state.dart';
 import '../../services/music_service.dart';
 import '../../services/preferences_service.dart';
+import '../../services/dynamic_artist_service.dart';
 import '../playlist_action_menu.dart';
 import '../dilse_tooltip.dart';
 
@@ -23,6 +24,7 @@ class DesktopLeftSidebar extends StatefulWidget {
 
 class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
   final MusicService _musicService = MusicService();
+  final PreferencesService _prefs = PreferencesService();
   final ValueNotifier<Set<String>> _selectedFilters =
       ValueNotifier<Set<String>>({});
   final ValueNotifier<bool> _isSearchActive = ValueNotifier<bool>(false);
@@ -483,6 +485,7 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                               ),
                             ),
                           _buildFilterChip('Playlists', activeFilters),
+                          _buildFilterChip('Artists', activeFilters),
                           _buildFilterChip('Albums', activeFilters),
                           _buildFilterChip(
                             'Imported from Spotify',
@@ -617,11 +620,53 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                   child: AnimatedBuilder(
                     animation: Listenable.merge([
                       _musicService,
+                      _prefs,
                       _selectedFilters,
                       DesktopLayoutState.activeNavTab,
                       DesktopLayoutState.activePlaylistId,
+                      DesktopLayoutState.activeArtistName,
                     ]),
                     builder: (context, _) {
+                      final filters = _selectedFilters.value;
+                      final query = _searchController.text.trim().toLowerCase();
+
+                      if (filters.contains('Artists')) {
+                        final followed = _prefs.followedArtists.where((name) {
+                          if (query.isEmpty) return true;
+                          return name.toLowerCase().contains(query);
+                        }).toList();
+
+                        if (followed.isEmpty) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16.0,
+                                vertical: 24.0,
+                              ),
+                              child: Text(
+                                query.isEmpty
+                                    ? 'No followed artists yet'
+                                    : 'No artists match "$query"',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.4),
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+
+                        return ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                          itemCount: followed.length,
+                          itemBuilder: (context, index) {
+                            final artistName = followed[index];
+                            return _buildArtistRow(context, artistName);
+                          },
+                        );
+                      }
+
                       final playlists = _getFilteredPlaylists();
                       final showLiked = _shouldShowLikedSongs();
 
@@ -744,7 +789,9 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
     }
     if (filters.isEmpty) return true;
     if (filters.contains('Playlists')) return true;
-    if (filters.contains('Albums') || filters.contains('History')) {
+    if (filters.contains('Albums') ||
+        filters.contains('History') ||
+        filters.contains('Artists')) {
       return false;
     }
     return true;
@@ -989,6 +1036,134 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                   iconSize: 18.0,
                   iconColor: Colors.white70,
                 ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildArtistRow(BuildContext context, String artistName) {
+    final artistItem = DynamicArtistService().findArtist(artistName);
+    final displayName = artistItem?.name ?? artistName;
+    final isHovered = _hoveredRowId == 'artist_$artistName';
+    final isSelected =
+        DesktopLayoutState.activeNavTab.value == DesktopNavTab.artistProfile &&
+        DesktopLayoutState.activeArtistName.value == displayName;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hoveredRowId = 'artist_$artistName'),
+      onExit: (_) => setState(() => _hoveredRowId = null),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8.0),
+        onTap: () {
+          DesktopLayoutState.openArtist(displayName);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? Colors.white.withValues(alpha: 0.10)
+                : isHovered
+                ? Colors.white.withValues(alpha: 0.05)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          child: Row(
+            children: [
+              // 48x48 Circular Artist Avatar
+              Container(
+                width: 48.0,
+                height: 48.0,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF282836),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    width: 1.0,
+                  ),
+                ),
+                child: ClipOval(
+                  child: artistItem != null && artistItem.imageUrl.isNotEmpty
+                      ? Image.network(
+                          artistItem.imageUrl,
+                          fit: BoxFit.cover,
+                          cacheWidth: 120,
+                          cacheHeight: 120,
+                          errorBuilder: (_, _, _) => Center(
+                            child: Text(
+                              displayName.isNotEmpty
+                                  ? displayName[0].toUpperCase()
+                                  : 'A',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 17.0,
+                              ),
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: Text(
+                            displayName.isNotEmpty
+                                ? displayName[0].toUpperCase()
+                                : 'A',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 17.0,
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12.0),
+
+              // Title and Subtitle with Verified Badge
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            displayName,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? const Color(0xFF1DB954)
+                                  : Colors.white,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 4.0),
+                        const Icon(
+                          Icons.verified_rounded,
+                          size: 14.0,
+                          color: Color(0xFF1DB954),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2.0),
+                    Text(
+                      artistItem?.genre.isNotEmpty == true
+                          ? artistItem!.genre
+                          : 'Artist',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.60),
+                        fontSize: 12.0,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),

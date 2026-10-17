@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
@@ -699,6 +700,9 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                                                   ? FontWeight.bold
                                                   : FontWeight.w500,
                                               fontSize: 13,
+                                              fontFeatures: const [
+                                                FontFeature.tabularFigures(),
+                                              ],
                                             ),
                                           ),
                                   ),
@@ -1298,6 +1302,9 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                                                     ? FontWeight.bold
                                                     : FontWeight.w500,
                                                 fontSize: 13,
+                                                fontFeatures: const [
+                                                  FontFeature.tabularFigures(),
+                                                ],
                                               ),
                                             ),
                                     ),
@@ -1500,6 +1507,9 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                                                       ? FontWeight.bold
                                                       : FontWeight.w500,
                                                   fontSize: 13,
+                                                  fontFeatures: const [
+                                                    FontFeature.tabularFigures(),
+                                                  ],
                                                 ),
                                               ),
                                       ),

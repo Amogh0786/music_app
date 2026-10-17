@@ -103,15 +103,17 @@ class _AlbumScreenState extends State<AlbumScreen>
           final fallbackTracks = await _music.searchSongs(title, limit: 25);
           if (fallbackTracks.isNotEmpty) {
             final mapped = fallbackTracks
+                .asMap()
+                .entries
                 .map(
-                  (v) => {
-                    'id': v.id.value,
-                    'title': v.title,
-                    'author': v.author,
+                  (entry) => {
+                    'id': entry.value.id.value,
+                    'title': entry.value.title,
+                    'author': entry.value.author,
                     'album': title,
-                    'thumbnail': v.thumbnails.highResUrl,
-                    'duration': v.duration?.inSeconds ?? 0,
-                    'trackNumber': 0,
+                    'thumbnail': entry.value.thumbnails.highResUrl,
+                    'duration': entry.value.duration?.inSeconds ?? 0,
+                    'trackNumber': entry.key + 1,
                   },
                 )
                 .toList();
@@ -668,7 +670,10 @@ class _AlbumScreenState extends State<AlbumScreen>
     final title = s['title'] as String? ?? 'Unknown';
     final artist = s['author'] as String? ?? '';
     final dur = s['duration'] as int? ?? 0;
-    final trackNum = s['trackNumber'] as int? ?? (index + 1);
+    final rawTrackNum = s['trackNumber'] as int?;
+    final trackNum = (rawTrackNum != null && rawTrackNum > 0)
+        ? rawTrackNum
+        : (index + 1);
 
     return AnimatedBuilder(
       animation: _music,
@@ -699,6 +704,7 @@ class _AlbumScreenState extends State<AlbumScreen>
                         color: Colors.white.withValues(alpha: 0.38),
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                   ),

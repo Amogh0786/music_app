@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
@@ -470,6 +471,9 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
                                         fontWeight: isCurrent
                                             ? FontWeight.w800
                                             : FontWeight.w500,
+                                        fontFeatures: const [
+                                          FontFeature.tabularFigures(),
+                                        ],
                                       ),
                                     ),
                                   ),
@@ -650,18 +654,28 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AlbumScreen(
-              album: album,
-              albumId: album.id,
-              albumTitle: album.title,
-              albumArtwork: album.artwork,
-              albumArtist: album.artist,
+        if (MediaQuery.of(context).size.width >= 640) {
+          DesktopLayoutState.openAlbum(
+            album: album,
+            albumId: album.id,
+            albumTitle: album.title,
+            albumArtwork: album.artwork,
+            albumArtist: album.artist,
+          );
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AlbumScreen(
+                album: album,
+                albumId: album.id,
+                albumTitle: album.title,
+                albumArtwork: album.artwork,
+                albumArtist: album.artist,
+              ),
             ),
-          ),
-        );
+          );
+        }
       },
       child: SizedBox(
         width: 125,
