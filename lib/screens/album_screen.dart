@@ -190,26 +190,6 @@ class _AlbumScreenState extends State<AlbumScreen>
     _music.playPlaylist(shuffled, 0);
   }
 
-  void _addToQueue(int index) {
-    if (_album == null) return;
-    HapticFeedback.lightImpact();
-    final videos = _music.albumSongsToVideos(_album!);
-    if (index >= videos.length) return;
-    _music.addToQueue(videos[index]);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Added "${_album!.songs[index]['title']}" to queue',
-          style: const TextStyle(color: Colors.white),
-        ),
-        backgroundColor: const Color(0xFF1A1A2E),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
   String _fmtDuration(int sec) {
     if (sec <= 0) return '';
     final m = sec ~/ 60;
