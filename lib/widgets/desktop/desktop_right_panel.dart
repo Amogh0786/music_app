@@ -9,6 +9,7 @@ import '../../services/dynamic_artist_service.dart';
 import '../../services/album_color_deriver.dart';
 import '../../screens/player_screen.dart';
 import '../animated_lyrics.dart';
+import '../animated_equalizer.dart';
 
 /// Spotify-grade 280px Adaptive Desktop Right Context Panel (#Desktop_PanelContainer_Id).
 ///
@@ -500,10 +501,10 @@ class _DesktopLyricsPreviewBoxState extends State<_DesktopLyricsPreviewBox> {
       child: Container(
         padding: const EdgeInsets.all(14.0),
         decoration: BoxDecoration(
-          color: palette.darkVibrant.withValues(alpha: 0.35),
+          color: const Color(0xFF161622),
           borderRadius: BorderRadius.circular(10.0),
           border: Border.all(
-            color: palette.vibrant.withValues(alpha: 0.18),
+            color: Colors.white.withValues(alpha: 0.08),
             width: 1.0,
           ),
         ),
@@ -558,7 +559,7 @@ class _DesktopLyricsPreviewBoxState extends State<_DesktopLyricsPreviewBox> {
                 Text(
                   _parsedLines[_activeLyricIndex - 1].text,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: Colors.white.withValues(alpha: 0.40),
                     fontSize: 12.0,
                   ),
                   maxLines: 1,
@@ -571,6 +572,13 @@ class _DesktopLyricsPreviewBoxState extends State<_DesktopLyricsPreviewBox> {
                   color: Colors.white,
                   fontSize: 13.5,
                   fontWeight: FontWeight.w700,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black54,
+                      blurRadius: 4.0,
+                      offset: Offset(0, 1),
+                    ),
+                  ],
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -580,7 +588,7 @@ class _DesktopLyricsPreviewBoxState extends State<_DesktopLyricsPreviewBox> {
                 Text(
                   _parsedLines[_activeLyricIndex + 1].text,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: Colors.white.withValues(alpha: 0.40),
                     fontSize: 12.0,
                   ),
                   maxLines: 1,
@@ -937,15 +945,24 @@ class _DesktopLyricsTab extends StatelessWidget {
           );
         }
 
-        return AnimatedLyrics(
-          key: ValueKey('desktop_lyrics_${song.id.value}'),
-          rawLyrics: rawLyrics,
-          pronunciationLyrics: musicService.cachedPronunciationLyrics,
-          songLanguage: musicService.currentSongLanguage,
-          songTitle: song.title,
-          songArtist: song.author,
-          positionStream: musicService.positionStream,
-          onSeek: (target) => musicService.seek(target),
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F0F16),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.08),
+              width: 1.0,
+            ),
+          ),
+          child: AnimatedLyrics(
+            key: ValueKey('desktop_lyrics_${song.id.value}'),
+            rawLyrics: rawLyrics,
+            pronunciationLyrics: musicService.cachedPronunciationLyrics,
+            songLanguage: musicService.currentSongLanguage,
+            songTitle: song.title,
+            songArtist: song.author,
+            positionStream: musicService.positionStream,
+            onSeek: (target) => musicService.seek(target),
+          ),
         );
       },
     );
@@ -963,182 +980,376 @@ class _DesktopQueueTab extends StatefulWidget {
 }
 
 class _DesktopQueueTabState extends State<_DesktopQueueTab> {
-  final MusicService _musicService = MusicService();
-
-  @override
+  final MusicService _musicService = MusicServic  @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _musicService,
       builder: (context, _) {
         final playlist = _musicService.playlist;
         final currentIndex = _musicService.currentIndex;
+        final currentSong = _musicService.currentSong;
 
         if (playlist.isEmpty) {
-          return const Center(
-            child: Text(
-              'Queue is empty',
-              style: TextStyle(color: Colors.white54),
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.queue_music_rounded,
+                    color: Colors.white30,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Queue is empty',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Play a song or playlist to start queueing tracks',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.40),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           );
         }
 
+        final currentTrack =
+            (currentIndex >= 0 && currentIndex < playlist.length)
+            ? playlist[currentIndex]
+            : (currentSong ?? playlist.first);
+        final hdThumb = MusicService.getHdThumbnail(currentTrack.id.value);
+        final currentArtwork = hdThumb.isNotEmpty
+            ? hdThumb
+            : currentTrack.thumbnails.lowResUrl;
+
+        final upcomingOffset = currentIndex >= 0 ? currentIndex + 1 : 0;
+        final upcoming = upcomingOffset < playlist.length
+            ? playlist.sublist(upcomingOffset)
+            : <Video>[];
+
         return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Queue Subheader
+            // 1. Top Section: "Now Playing" Header & Card
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14.0,
-                vertical: 10.0,
-              ),
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Queue',
+                    'NOW PLAYING',
                     style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14.0,
+                      color: Colors.white54,
+                      fontSize: 11.0,
                       fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
                     ),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8.0,
-                      vertical: 2.0,
+                      horizontal: 6,
+                      vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10.0),
+                      color: PreferencesService().themeColor.withValues(
+                        alpha: 0.15,
+                      ),
+                      borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      '${playlist.length} Tracks',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 11.0,
-                        fontWeight: FontWeight.w600,
+                      'Live',
+                      style: TextStyle(
+                        color: PreferencesService().themeColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-            const Divider(color: Colors.white12, height: 1.0),
-
-            // Reorderable Virtualized Queue List
-            Expanded(
-              child: ReorderableListView.builder(
-                buildDefaultDragHandles: false,
-                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                itemCount: playlist.length,
-                // ignore: deprecated_member_use
-                onReorder: (oldIndex, newIndex) {
-                  HapticFeedback.selectionClick();
-                  _musicService.reorderQueue(oldIndex, newIndex);
-                  setState(() {});
-                },
-                itemBuilder: (context, index) {
-                  final track = playlist[index];
-                  final isCurrent = index == currentIndex;
-                  final hdThumbnail = MusicService.getHdThumbnail(
-                    track.id.value,
-                  );
-                  final artwork = hdThumbnail.isNotEmpty
-                      ? hdThumbnail
-                      : track.thumbnails.lowResUrl;
-
-                  return Material(
-                    key: ValueKey('desktop_queue_${track.id.value}_$index'),
-                    color: isCurrent
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () {
-                        _musicService.playPlaylist(playlist, index);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4.0,
-                          vertical: 6.0,
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10.0,
+                vertical: 4.0,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(8.0),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF161622),
+                  borderRadius: BorderRadius.circular(12.0),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    width: 1.0,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8.0),
+                      child: Image.network(
+                        currentArtwork,
+                        width: 48.0,
+                        height: 48.0,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Container(
+                          width: 48.0,
+                          height: 48.0,
+                          color: const Color(0xFF282836),
+                          child: const Icon(
+                            Icons.music_note_rounded,
+                            color: Colors.white24,
+                            size: 22,
+                          ),
                         ),
-                        child: Row(
-                          children: [
-                            ReorderableDragStartListener(
-                              index: index,
-                              child: Container(
-                                padding: const EdgeInsets.all(6.0),
-                                child: const Icon(
-                                  Icons.drag_handle_rounded,
-                                  color: Colors.white30,
-                                  size: 18.0,
-                                ),
-                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 10.0),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            currentTrack.title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13.0,
+                              fontWeight: FontWeight.w700,
                             ),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: Image.network(
-                                artwork,
-                                width: 38,
-                                height: 38,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => Container(
-                                  width: 38,
-                                  height: 38,
-                                  color: const Color(0xFF282836),
-                                  child: const Icon(
-                                    Icons.music_note_rounded,
-                                    color: Colors.white24,
-                                    size: 18,
-                                  ),
-                                ),
-                              ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 3.0),
+                          Text(
+                            currentTrack.author,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.60),
+                              fontSize: 11.5,
                             ),
-                            const SizedBox(width: 10.0),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8.0),
+                    AnimatedEqualizer(
+                      isPlaying: _musicService.isPlaying,
+                      color: PreferencesService().themeColor,
+                      size: 20.0,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 10.0),
+
+            // 2. Bottom Section: "Next In Queue" Header & List
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14.0,
+                vertical: 4.0,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'NEXT IN QUEUE',
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 11.0,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                  Text(
+                    '${upcoming.length} Tracks',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.45),
+                      fontSize: 11.0,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(color: Colors.white10, height: 1.0),
+
+            Expanded(
+              child: upcoming.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          'No upcoming tracks in queue',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.40),
+                            fontSize: 12.0,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    )
+                  : ReorderableListView.builder(
+                      buildDefaultDragHandles: false,
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 6,
+                        horizontal: 8,
+                      ),
+                      itemCount: upcoming.length,
+                      onReorder: (oldIndex, newIndex) {
+                        HapticFeedback.selectionClick();
+                        _musicService.reorderQueue(
+                          oldIndex + upcomingOffset,
+                          newIndex + upcomingOffset,
+                        );
+                        setState(() {});
+                      },
+                      itemBuilder: (context, index) {
+                        final track = upcoming[index];
+                        final absoluteIndex = upcomingOffset + index;
+                        final hdThumbnail = MusicService.getHdThumbnail(
+                          track.id.value,
+                        );
+                        final artwork = hdThumbnail.isNotEmpty
+                            ? hdThumbnail
+                            : track.thumbnails.lowResUrl;
+
+                        return Material(
+                          key: ValueKey('queue_next_${track.id.value}_$index'),
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () {
+                              _musicService.playPlaylist(
+                                playlist,
+                                absoluteIndex,
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6.0,
+                                vertical: 6.0,
+                              ),
+                              child: Row(
                                 children: [
-                                  Text(
-                                    track.title,
-                                    style: TextStyle(
-                                      color: isCurrent
-                                          ? PreferencesService().themeColor
-                                          : Colors.white,
-                                      fontSize: 12.5,
-                                      fontWeight: isCurrent
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 2.0),
-                                  Text(
-                                    track.author,
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.55,
+                                  // Index Badge
+                                  Container(
+                                    width: 22.0,
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      '${index + 1}',
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.45,
+                                        ),
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w600,
+                                        fontFeatures: const [
+                                          FontFeature.tabularFigures(),
+                                        ],
                                       ),
-                                      fontSize: 11.0,
                                     ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(width: 6.0),
+                                  // Squircle Artwork
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8.0),
+                                    child: Image.network(
+                                      artwork,
+                                      width: 40.0,
+                                      height: 40.0,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) => Container(
+                                        width: 40.0,
+                                        height: 40.0,
+                                        color: const Color(0xFF282836),
+                                        child: const Icon(
+                                          Icons.music_note_rounded,
+                                          color: Colors.white24,
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10.0),
+                                  // Track Title & Artist
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          track.title,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2.0),
+                                        Text(
+                                          track.author,
+                                          style: TextStyle(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.55,
+                                            ),
+                                            fontSize: 11.0,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Trailing Drag Handle
+                                  ReorderableDragStartListener(
+                                    index: index,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6.0,
+                                        vertical: 8.0,
+                                      ),
+                                      child: const Icon(
+                                        Icons.drag_handle_rounded,
+                                        color: Colors.white38,
+                                        size: 20.0,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
-                          ],
-                        ),
-                      ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ],
         );
       },
     );
+  });
   }
 }
