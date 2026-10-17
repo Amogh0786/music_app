@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
-import '../../screens/album_screen.dart';
 import '../../screens/artist_profile_screen.dart';
 import '../../services/music_service.dart';
 import '../../services/preferences_service.dart';

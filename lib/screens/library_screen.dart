@@ -2,7 +2,6 @@ import 'artist_profile_screen.dart';
 import 'album_screen.dart';
 import '../services/dynamic_artist_service.dart';
 import 'dart:io';
-import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1332,6 +1331,9 @@ class _LibraryScreenState extends State<LibraryScreen>
         if (activeFilter == PlaylistFilter.savedAlbums) {
           return _buildSavedAlbumsSection();
         }
+        if (activeFilter == PlaylistFilter.artists) {
+          return _buildFollowedArtistsSection();
+        }
 
         final List<Map<String, dynamic>> displayedPlaylists;
         switch (activeFilter) {
@@ -1345,6 +1347,7 @@ class _LibraryScreenState extends State<LibraryScreen>
             displayedPlaylists = spotifyPlaylists;
             break;
           case PlaylistFilter.savedAlbums:
+          case PlaylistFilter.artists:
             displayedPlaylists = [];
             break;
         }
