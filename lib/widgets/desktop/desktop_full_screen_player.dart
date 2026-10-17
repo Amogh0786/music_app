@@ -60,6 +60,7 @@ class _DesktopFullScreenPlayerState extends State<DesktopFullScreenPlayer> {
   DesktopPlayerTab _activeTab = DesktopPlayerTab.nowPlaying;
   double _lastVolume = 1.0;
   double _currentVolume = 1.0;
+  bool _isDraggingVolume = false;
   StreamSubscription<double>? _volumeSubscription;
 
   @override
@@ -70,7 +71,9 @@ class _DesktopFullScreenPlayerState extends State<DesktopFullScreenPlayer> {
       _lastVolume = _currentVolume;
     }
     _volumeSubscription = _musicService.audioPlayer.volumeStream.listen((vol) {
-      if (mounted && (vol - _currentVolume).abs() > 0.001) {
+      if (!_isDraggingVolume &&
+          mounted &&
+          (vol - _currentVolume).abs() > 0.001) {
         setState(() {
           _currentVolume = vol;
           if (vol > 0.001) {
@@ -1112,74 +1115,83 @@ class _DesktopFullScreenPlayerState extends State<DesktopFullScreenPlayer> {
   // Component: Desktop Volume Slider & Contextual Actions
   // ---------------------------------------------------------------------------
   Widget _buildDesktopBottomUtilities(BuildContext context) {
+    final volume = _currentVolume;
+    final isMuted = volume <= 0.001;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         // Volume Controller Deck
-        StreamBuilder<double>(
-          stream: _musicService.audioPlayer.volumeStream,
-          initialData: _currentVolume,
-          builder: (context, snapshot) {
-            final volume = snapshot.data ?? _currentVolume;
-            final isMuted = volume <= 0.001;
-
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  tooltip: isMuted ? 'Unmute' : 'Mute',
-                  icon: Icon(
-                    isMuted
-                        ? Icons.volume_off_rounded
-                        : (volume < 0.5
-                              ? Icons.volume_down_rounded
-                              : Icons.volume_up_rounded),
-                    color: isMuted
-                        ? Colors.white.withValues(alpha: 0.4)
-                        : Colors.white70,
-                    size: 20,
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: isMuted ? 'Unmute' : 'Mute',
+              icon: Icon(
+                isMuted
+                    ? Icons.volume_off_rounded
+                    : (volume < 0.5
+                          ? Icons.volume_down_rounded
+                          : Icons.volume_up_rounded),
+                color: isMuted
+                    ? Colors.white.withValues(alpha: 0.4)
+                    : Colors.white70,
+                size: 20,
+              ),
+              onPressed: _toggleMute,
+            ),
+            SizedBox(
+              width: 120,
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 3.5,
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 5.5,
                   ),
-                  onPressed: _toggleMute,
-                ),
-                SizedBox(
-                  width: 110,
-                  child: SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 3.5,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 5.0,
-                      ),
-                      overlayShape: const RoundSliderOverlayShape(
-                        overlayRadius: 10.0,
-                      ),
-                      activeTrackColor: Colors.white,
-                      inactiveTrackColor: Colors.white24,
-                      thumbColor: Colors.white,
-                    ),
-                    child: Slider(
-                      value: volume.clamp(0.0, 1.0),
-                      min: 0.0,
-                      max: 1.0,
-                      onChanged: (val) {
-                        if (val > 0.001) {
-                          _lastVolume = val;
-                        }
-                        _applyVolume(val);
-                      },
-                    ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 12.0,
                   ),
+                  activeTrackColor: Colors.white,
+                  inactiveTrackColor: Colors.white24,
+                  thumbColor: Colors.white,
                 ),
-                Text(
-                  '${(volume * 100).toInt()}%',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.50),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
+                child: Slider(
+                  key: const Key('desktop_fullscreen_volume_slider'),
+                  value: volume.clamp(0.0, 1.0),
+                  min: 0.0,
+                  max: 1.0,
+                  onChangeStart: (_) {
+                    _isDraggingVolume = true;
+                  },
+                  onChangeEnd: (val) {
+                    _isDraggingVolume = false;
+                    if (val > 0.001) {
+                      _lastVolume = val;
+                    }
+                    _applyVolume(val);
+                  },
+                  onChanged: (val) {
+                    if (val > 0.001) {
+                      _lastVolume = val;
+                    }
+                    _applyVolume(val);
+                  },
                 ),
-              ],
-            );
-          },
+              ),
+            ),
+            const SizedBox(width: 4),
+            SizedBox(
+              width: 38,
+              child: Text(
+                '${(volume * 100).toInt()}%',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.50),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
 
         // Quick Navigation Pills: "View Artist" & "Go to Album"

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:music_app/services/music_service.dart';
 import 'package:music_app/services/preferences_service.dart';
 import 'package:music_app/widgets/desktop/desktop_full_screen_player.dart';
 
@@ -16,6 +17,7 @@ void main() {
     final prefs = PreferencesService();
     prefs.resetForTesting();
     await prefs.init();
+    await MusicService().audioPlayer.setVolume(1.0);
 
     mockSong = Video(
       VideoId('BddP6PYo2gs'),
@@ -231,6 +233,54 @@ void main() {
         await tester.sendKeyEvent(LogicalKeyboardKey.keyM);
         await tester.pump();
         expect(find.text('95%'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'Controls volume mixer directly via interactive volume slider scrubber',
+      (tester) async {
+        tester.view.physicalSize = const Size(1280, 800);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DesktopFullScreenPlayer(
+                song: mockSong,
+                isPlaying: true,
+                isLoading: false,
+                isLiked: false,
+                dominantColor: const Color(0xFF1E3A8A),
+                vibrantColor: const Color(0xFF3B82F6),
+                darkVibrantColor: const Color(0xFF0F172A),
+                artworkStyle: ArtworkStyle.card,
+                onClose: () {},
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        // Initial state is 100%
+        expect(find.text('100%'), findsOneWidget);
+
+        // Find the volume slider by key
+        final volumeSliderFinder = find.byKey(
+          const Key('desktop_fullscreen_volume_slider'),
+        );
+        expect(volumeSliderFinder, findsOneWidget);
+
+        // Drag/scrub volume slider towards middle (approx 50%)
+        final sliderTopLeft = tester.getTopLeft(volumeSliderFinder);
+        final sliderBottomRight = tester.getBottomRight(volumeSliderFinder);
+        final sliderCenter = (sliderTopLeft + sliderBottomRight) / 2.0;
+
+        await tester.tapAt(sliderCenter);
+        await tester.pump();
+
+        // The volume percentage should have updated to around 50%
+        expect(find.text('100%'), findsNothing);
       },
     );
   });
