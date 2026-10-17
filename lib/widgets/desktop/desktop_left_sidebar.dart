@@ -189,7 +189,8 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
               // 4. "Liked Songs" Permanent 48x48 High-Fidelity Album Tile
               _CompactLikedSongsTile(
                 songCount: _musicService.likedSongs.length,
-                isSelected: activeTab == DesktopNavTab.customPlaylist &&
+                isSelected:
+                    activeTab == DesktopNavTab.customPlaylist &&
                     activePlaylistId == 'liked_songs',
                 onTap: () {
                   DesktopLayoutState.openPlaylist('liked_songs');
@@ -1333,23 +1334,25 @@ class _CompactPlaylistTileState extends State<_CompactPlaylistTile> {
 
   String _resolveArtworkUrl() {
     final pl = widget.playlist;
-    final direct = (pl['artworkUrl'] ??
-            pl['thumbnail'] ??
-            pl['imageUrl'] ??
-            pl['coverUrl'] ??
-            '')
-        .toString();
+    final direct =
+        (pl['artworkUrl'] ??
+                pl['thumbnail'] ??
+                pl['imageUrl'] ??
+                pl['coverUrl'] ??
+                '')
+            .toString();
     if (direct.isNotEmpty) return direct;
 
     final songs = (pl['songs'] as List?) ?? (pl['tracks'] as List?);
     if (songs != null && songs.isNotEmpty) {
       final first = songs.first;
       if (first is Map) {
-        final thumb = (first['thumbnail'] ??
-                first['artworkUrl'] ??
-                first['imageUrl'] ??
-                '')
-            .toString();
+        final thumb =
+            (first['thumbnail'] ??
+                    first['artworkUrl'] ??
+                    first['imageUrl'] ??
+                    '')
+                .toString();
         if (thumb.isNotEmpty) return thumb;
         final songId = first['id']?.toString() ?? '';
         if (songId.isNotEmpty) {
