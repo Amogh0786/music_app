@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
@@ -9,7 +8,6 @@ import '../screens/album_screen.dart';
 import '../services/preferences_service.dart';
 import '../layouts/desktop_layout_state.dart';
 import '../models/jio_album.dart';
-import 'desktop/desktop_context_menu.dart';
 
 /// Converts a song Map representation into a youtube_explode Video instance
 /// for seamless interop across existing song action sheets.
@@ -45,7 +43,6 @@ void showPlaylistSongOptionsBottomSheet(
   required String playlistId,
   VoidCallback? onPlayNow,
   VoidCallback? onRemoved,
-  Offset? globalPosition,
 }) {
   final video = songMapToVideo(songMap);
   final thumb = (songMap['thumbnail'] as String?) ?? '';
@@ -64,7 +61,6 @@ void showPlaylistSongOptionsBottomSheet(
             MusicService().removeSongFromPlaylist(playlistId, songId);
             onRemoved?.call();
           },
-    globalPosition: globalPosition,
   );
 }
 
@@ -76,24 +72,8 @@ void showSongOptionsBottomSheet(
   VoidCallback? onRemoveFromPlaylist,
   VoidCallback? onPlayNow,
   String? customThumbnail,
-  Offset? globalPosition,
 }) {
   HapticFeedback.lightImpact();
-  final isDesktop = kIsWeb || MediaQuery.of(context).size.width >= 640;
-  if (isDesktop) {
-    final screenSize = MediaQuery.of(context).size;
-    final pos =
-        globalPosition ??
-        Offset(screenSize.width / 2 - 120, screenSize.height / 2 - 160);
-    showUnifiedTrackMenu(
-      context: context,
-      globalPosition: pos,
-      song: song,
-      currentPlaylistId: currentPlaylistId,
-      onRemovedFromPlaylist: onRemoveFromPlaylist,
-    );
-    return;
-  }
   final musicService = MusicService();
 
   showModalBottomSheet(
