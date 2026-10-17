@@ -85,7 +85,7 @@ class _DesktopPanelHeader extends StatelessWidget {
       builder: (context, tab, _) {
         return Container(
           height: 52.0,
-          padding: const EdgeInsets.symmetric(horizontal: 14.0),
+          padding: const EdgeInsets.symmetric(horizontal: 12.0),
           decoration: const BoxDecoration(
             border: Border(
               bottom: BorderSide(color: Color(0xFF1E1E1E), width: 1.0),
@@ -94,15 +94,20 @@ class _DesktopPanelHeader extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                _getTitle(tab),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15.0,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.2,
+              Expanded(
+                child: Text(
+                  _getTitle(tab),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15.0,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
                 ),
               ),
+              const SizedBox(width: 6.0),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
