@@ -74,6 +74,8 @@ class DesktopLayoutState {
   static final ValueNotifier<DesktopContextTab> contextTab =
       ValueNotifier<DesktopContextTab>(DesktopContextTab.nowPlaying);
 
+  static double _lastExpandedLeftSidebarWidth = 280.0;
+
   /// Updates left sidebar width with tactical snap mechanics:
   /// - If dragged below 120px: snaps immediately to 72px (collapsed icon strip).
   /// - Otherwise: clamps between 72px and 398px.
@@ -82,8 +84,12 @@ class DesktopLayoutState {
       leftSidebarWidth.value = 72.0;
       isLeftSidebarCollapsed.value = true;
     } else {
-      leftSidebarWidth.value = newWidth.clamp(72.0, 398.0);
+      final clamped = newWidth.clamp(72.0, 398.0);
+      leftSidebarWidth.value = clamped;
       isLeftSidebarCollapsed.value = false;
+      if (clamped >= 240.0) {
+        _lastExpandedLeftSidebarWidth = clamped;
+      }
     }
   }
 
@@ -92,14 +98,34 @@ class DesktopLayoutState {
     rightPanelWidth.value = newWidth.clamp(240.0, 460.0);
   }
 
-  /// Toggles the left sidebar between expanded (280px) and collapsed (72px).
+  /// Toggles the left sidebar between expanded (280px or user custom width) and collapsed (72px).
   static void toggleLeftSidebar() {
     if (isLeftSidebarCollapsed.value || leftSidebarWidth.value <= 72.0) {
-      leftSidebarWidth.value = 280.0;
+      leftSidebarWidth.value = _lastExpandedLeftSidebarWidth.clamp(
+        240.0,
+        398.0,
+      );
       isLeftSidebarCollapsed.value = false;
     } else {
+      if (leftSidebarWidth.value >= 240.0) {
+        _lastExpandedLeftSidebarWidth = leftSidebarWidth.value;
+      }
       leftSidebarWidth.value = 72.0;
       isLeftSidebarCollapsed.value = true;
+    }
+  }
+
+  /// Explicitly expands the left sidebar to its expanded state.
+  static void expandLeftSidebar() {
+    if (isLeftSidebarCollapsed.value || leftSidebarWidth.value <= 72.0) {
+      toggleLeftSidebar();
+    }
+  }
+
+  /// Explicitly collapses the left sidebar to the 72px rail.
+  static void collapseLeftSidebar() {
+    if (!isLeftSidebarCollapsed.value && leftSidebarWidth.value > 72.0) {
+      toggleLeftSidebar();
     }
   }
 

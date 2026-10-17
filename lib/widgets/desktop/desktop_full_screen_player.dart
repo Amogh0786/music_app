@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
@@ -6,6 +7,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../../screens/artist_profile_screen.dart';
 import '../../services/music_service.dart';
 import '../../services/preferences_service.dart';
+import '../../services/web_player_bridge.dart';
 import '../../layouts/desktop_layout_state.dart';
 import '../animated_lyrics.dart';
 import '../vinyl_record_player.dart';

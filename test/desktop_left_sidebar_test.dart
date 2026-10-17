@@ -290,5 +290,81 @@ void main() {
         expect(find.byTooltip('Expand sidebar'), findsOneWidget);
       },
     );
+
+    testWidgets('Tapping Your Library header title collapses the sidebar', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      DesktopLayoutState.leftSidebarWidth.value = 280.0;
+      DesktopLayoutState.isLeftSidebarCollapsed.value = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<double>(
+              valueListenable: DesktopLayoutState.leftSidebarWidth,
+              builder: (context, width, _) {
+                return SizedBox(
+                  width: width,
+                  child: DesktopLeftSidebar(width: width),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Your Library'), findsOneWidget);
+      await tester.tap(find.text('Your Library'));
+      await tester.pump();
+
+      expect(DesktopLayoutState.isLeftSidebarCollapsed.value, true);
+      expect(DesktopLayoutState.leftSidebarWidth.value, 72.0);
+      expect(find.byTooltip('Expand sidebar'), findsOneWidget);
+    });
+
+    testWidgets('Preserves custom expanded width across collapse and expand', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      // User customizes width to 340px
+      DesktopLayoutState.updateLeftSidebarWidth(340.0);
+      expect(DesktopLayoutState.leftSidebarWidth.value, 340.0);
+      expect(DesktopLayoutState.isLeftSidebarCollapsed.value, false);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<double>(
+              valueListenable: DesktopLayoutState.leftSidebarWidth,
+              builder: (context, width, _) {
+                return SizedBox(
+                  width: width,
+                  child: DesktopLeftSidebar(width: width),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+
+      // Collapse via collapse button
+      await tester.tap(find.byTooltip('Collapse sidebar'));
+      await tester.pump();
+      expect(DesktopLayoutState.isLeftSidebarCollapsed.value, true);
+      expect(DesktopLayoutState.leftSidebarWidth.value, 72.0);
+
+      // Reopen via expand button -> restores 340px
+      await tester.tap(find.byTooltip('Expand sidebar'));
+      await tester.pump();
+      expect(DesktopLayoutState.isLeftSidebarCollapsed.value, false);
+      expect(DesktopLayoutState.leftSidebarWidth.value, 340.0);
+    });
   });
 }

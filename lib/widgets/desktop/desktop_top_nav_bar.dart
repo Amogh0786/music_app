@@ -112,62 +112,95 @@ class _DesktopTopNavBarState extends State<DesktopTopNavBar> {
 
                 return Row(
                   children: [
-                    // 1. LEADING: DILSE BRAND LOGO + HOME NAV
-                    InkWell(
-                      borderRadius: BorderRadius.circular(8.0),
-                      onTap: _navigateToHome,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6.0,
-                          vertical: 4.0,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(10.0),
-                              child: Image.asset(
-                                'assets/images/dilse_logo.png',
-                                width: 36.0,
-                                height: 36.0,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => Container(
-                                  width: 36.0,
-                                  height: 36.0,
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        accentColor,
-                                        accentColor.withValues(alpha: 0.7),
-                                      ],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                    borderRadius: BorderRadius.circular(10.0),
-                                  ),
-                                  child: const Icon(
-                                    Icons.music_note_rounded,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
+                    // 1. LEADING: SIDEBAR TOGGLE + DILSE BRAND LOGO + HOME NAV
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ValueListenableBuilder<double>(
+                          valueListenable: DesktopLayoutState.leftSidebarWidth,
+                          builder: (context, sidebarWidth, _) {
+                            final isCollapsed = sidebarWidth <= 72.0;
+                            return Tooltip(
+                              message: isCollapsed
+                                  ? 'Expand sidebar'
+                                  : 'Collapse sidebar',
+                              child: IconButton(
+                                visualDensity: VisualDensity.compact,
+                                icon: Icon(
+                                  isCollapsed
+                                      ? Icons.menu_rounded
+                                      : Icons.menu_open_rounded,
+                                  color: isCollapsed
+                                      ? accentColor
+                                      : Colors.white.withValues(alpha: 0.75),
+                                  size: 20.0,
                                 ),
+                                onPressed: () =>
+                                    DesktopLayoutState.toggleLeftSidebar(),
                               ),
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 4.0),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(8.0),
+                          onTap: _navigateToHome,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6.0,
+                              vertical: 4.0,
                             ),
-                            if (!isCompact) ...[
-                              const SizedBox(width: 12.0),
-                              const Text(
-                                'DilSe Music',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16.5,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.3,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10.0),
+                                  child: Image.asset(
+                                    'assets/images/dilse_logo.png',
+                                    width: 36.0,
+                                    height: 36.0,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) => Container(
+                                      width: 36.0,
+                                      height: 36.0,
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            accentColor,
+                                            accentColor.withValues(alpha: 0.7),
+                                          ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          10.0,
+                                        ),
+                                      ),
+                                      child: const Icon(
+                                        Icons.music_note_rounded,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ],
+                                if (!isCompact) ...[
+                                  const SizedBox(width: 12.0),
+                                  const Text(
+                                    'DilSe Music',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16.5,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.3,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
 
                     const Spacer(),

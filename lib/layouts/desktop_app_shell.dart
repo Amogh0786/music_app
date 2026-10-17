@@ -80,20 +80,9 @@ class DesktopAppShell extends StatelessWidget {
                             },
                           ),
 
-                          // Tactical Left Resize Divider (Only in Wide Tier 1 when sidebar is expanded)
+                          // Tactical Left Resize Divider (Only in Wide Tier 1)
                           if (!isCompactMode)
-                            ValueListenableBuilder<double>(
-                              valueListenable:
-                                  DesktopLayoutState.leftSidebarWidth,
-                              builder: (context, sidebarWidth, _) {
-                                if (sidebarWidth <= 72.0) {
-                                  return const SizedBox.shrink();
-                                }
-                                return const DesktopResizeDivider(
-                                  isRightSide: false,
-                                );
-                              },
-                            ),
+                            const DesktopResizeDivider(isRightSide: false),
 
                           // Center Main Content Viewport (Expanded flex 1)
                           const Expanded(

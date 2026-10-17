@@ -151,7 +151,8 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                 icon: Icons.menu_open_rounded,
                 isFlipped: true,
                 label: 'Expand sidebar',
-                color: Colors.white70,
+                color: Colors.white,
+                backgroundColor: const Color(0xFF22222E),
                 onTap: () => DesktopLayoutState.toggleLeftSidebar(),
               ),
 
@@ -330,6 +331,7 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
     required IconData icon,
     required String label,
     Color? color,
+    Color? backgroundColor,
     bool isActive = false,
     bool isFlipped = false,
     required VoidCallback onTap,
@@ -343,6 +345,8 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
         message: label,
         child: InkWell(
           borderRadius: BorderRadius.circular(10.0),
+          hoverColor: Colors.white.withValues(alpha: 0.08),
+          splashColor: accentColor.withValues(alpha: 0.16),
           onTap: onTap,
           child: Container(
             width: 44.0,
@@ -351,14 +355,19 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
             decoration: BoxDecoration(
               color: isActive
                   ? accentColor.withValues(alpha: 0.18)
-                  : Colors.transparent,
+                  : (backgroundColor ?? Colors.transparent),
               borderRadius: BorderRadius.circular(10.0),
               border: isActive
                   ? Border.all(
                       color: accentColor.withValues(alpha: 0.4),
                       width: 1.0,
                     )
-                  : null,
+                  : (backgroundColor != null
+                        ? Border.all(
+                            color: Colors.white.withValues(alpha: 0.12),
+                            width: 1.0,
+                          )
+                        : null),
             ),
             child: isFlipped
                 ? Transform.flip(
@@ -471,13 +480,20 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                                 DesktopLayoutState.toggleLeftSidebar(),
                           ),
                           const SizedBox(width: 6.0),
-                          const Text(
-                            'Your Library',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14.0,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.2,
+                          MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: GestureDetector(
+                              onTap: () =>
+                                  DesktopLayoutState.toggleLeftSidebar(),
+                              child: const Text(
+                                'Your Library',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14.0,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
                             ),
                           ),
                         ],
