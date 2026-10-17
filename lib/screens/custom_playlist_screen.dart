@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
@@ -794,35 +795,64 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                                     fontSize: 12.5,
                                   ),
                                 ),
-                                trailing: IconButton(
-                                  key: ValueKey('local_match_more_$songId'),
-                                  icon: const Icon(
-                                    Icons.more_vert_rounded,
-                                    color: Colors.white38,
-                                    size: 20,
+                                trailing: Builder(
+                                  builder: (btnCtx) => IconButton(
+                                    key: ValueKey('local_match_more_$songId'),
+                                    icon: const Icon(
+                                      Icons.more_vert_rounded,
+                                      color: Colors.white38,
+                                      size: 20,
+                                    ),
+                                    tooltip: 'Song options',
+                                    onPressed: () {
+                                      HapticFeedback.lightImpact();
+                                      final isDesktop =
+                                          kIsWeb ||
+                                          MediaQuery.of(context).size.width >=
+                                              640;
+                                      if (isDesktop) {
+                                        final box =
+                                            btnCtx.findRenderObject()
+                                                as RenderBox?;
+                                        final pos = box != null
+                                            ? box.localToGlobal(
+                                                box.size.bottomLeft(
+                                                  Offset.zero,
+                                                ),
+                                              )
+                                            : Offset.zero;
+                                        showUnifiedTrackMenu(
+                                          context: context,
+                                          globalPosition: pos,
+                                          song: songMapToVideo(song),
+                                          currentPlaylistId: isLikedSongs
+                                              ? null
+                                              : widget.playlistId,
+                                          onRemovedFromPlaylist: () =>
+                                              setState(() {}),
+                                        );
+                                      } else {
+                                        showPlaylistSongOptionsBottomSheet(
+                                          context,
+                                          songMap: song,
+                                          playlistId: widget.playlistId,
+                                          onPlayNow: () {
+                                            if (isLikedSongs) {
+                                              _musicService.playLikedSong(
+                                                _musicService
+                                                    .likedSongs[originalIndex],
+                                              );
+                                            } else {
+                                              _musicService.playCustomPlaylist(
+                                                widget.playlistId,
+                                                originalIndex,
+                                              );
+                                            }
+                                          },
+                                        );
+                                      }
+                                    },
                                   ),
-                                  tooltip: 'Song options',
-                                  onPressed: () {
-                                    HapticFeedback.lightImpact();
-                                    showPlaylistSongOptionsBottomSheet(
-                                      context,
-                                      songMap: song,
-                                      playlistId: widget.playlistId,
-                                      onPlayNow: () {
-                                        if (isLikedSongs) {
-                                          _musicService.playLikedSong(
-                                            _musicService
-                                                .likedSongs[originalIndex],
-                                          );
-                                        } else {
-                                          _musicService.playCustomPlaylist(
-                                            widget.playlistId,
-                                            originalIndex,
-                                          );
-                                        }
-                                      },
-                                    );
-                                  },
                                 ),
                                 onTap: () {
                                   HapticFeedback.lightImpact();
@@ -1426,32 +1456,59 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                                       fontSize: 12.5,
                                     ),
                                   ),
-                                  trailing: IconButton(
-                                    key: ValueKey('liked_song_more_$songId'),
-                                    icon: const Icon(
-                                      Icons.more_vert_rounded,
-                                      color: Colors.white38,
-                                      size: 20,
-                                    ),
-                                    tooltip: 'Song options',
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(
-                                      minWidth: 36,
-                                      minHeight: 40,
-                                    ),
-                                    onPressed: () {
-                                      HapticFeedback.lightImpact();
-                                      showPlaylistSongOptionsBottomSheet(
-                                        context,
-                                        songMap: song,
-                                        playlistId: widget.playlistId,
-                                        onPlayNow: () {
-                                          _musicService.playLikedSong(
-                                            _musicService.likedSongs[index],
+                                  trailing: Builder(
+                                    builder: (btnCtx) => IconButton(
+                                      key: ValueKey('liked_song_more_$songId'),
+                                      icon: const Icon(
+                                        Icons.more_vert_rounded,
+                                        color: Colors.white38,
+                                        size: 20,
+                                      ),
+                                      tooltip: 'Song options',
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 36,
+                                        minHeight: 40,
+                                      ),
+                                      onPressed: () {
+                                        HapticFeedback.lightImpact();
+                                        final isDesktop =
+                                            kIsWeb ||
+                                            MediaQuery.of(context).size.width >=
+                                                640;
+                                        if (isDesktop) {
+                                          final box =
+                                              btnCtx.findRenderObject()
+                                                  as RenderBox?;
+                                          final pos = box != null
+                                              ? box.localToGlobal(
+                                                  box.size.bottomLeft(
+                                                    Offset.zero,
+                                                  ),
+                                                )
+                                              : Offset.zero;
+                                          showUnifiedTrackMenu(
+                                            context: context,
+                                            globalPosition: pos,
+                                            song: songMapToVideo(song),
+                                            currentPlaylistId: null,
+                                            onRemovedFromPlaylist: () =>
+                                                setState(() {}),
                                           );
-                                        },
-                                      );
-                                    },
+                                        } else {
+                                          showPlaylistSongOptionsBottomSheet(
+                                            context,
+                                            songMap: song,
+                                            playlistId: widget.playlistId,
+                                            onPlayNow: () {
+                                              _musicService.playLikedSong(
+                                                _musicService.likedSongs[index],
+                                              );
+                                            },
+                                          );
+                                        }
+                                      },
+                                    ),
                                   ),
                                   onTap: () {
                                     HapticFeedback.lightImpact();
@@ -1655,36 +1712,66 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                                     trailing: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        IconButton(
-                                          key: ValueKey(
-                                            'playlist_song_more_$songId',
-                                          ),
-                                          icon: const Icon(
-                                            Icons.more_vert_rounded,
-                                            color: Colors.white38,
-                                            size: 20,
-                                          ),
-                                          tooltip: 'Song options',
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(
-                                            minWidth: 36,
-                                            minHeight: 40,
-                                          ),
-                                          onPressed: () {
-                                            HapticFeedback.lightImpact();
-                                            showPlaylistSongOptionsBottomSheet(
-                                              context,
-                                              songMap: song,
-                                              playlistId: widget.playlistId,
-                                              onPlayNow: () {
-                                                _musicService
-                                                    .playCustomPlaylist(
+                                        Builder(
+                                          builder: (btnCtx) => IconButton(
+                                            key: ValueKey(
+                                              'playlist_song_more_$songId',
+                                            ),
+                                            icon: const Icon(
+                                              Icons.more_vert_rounded,
+                                              color: Colors.white38,
+                                              size: 20,
+                                            ),
+                                            tooltip: 'Song options',
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(
+                                              minWidth: 36,
+                                              minHeight: 40,
+                                            ),
+                                            onPressed: () {
+                                              HapticFeedback.lightImpact();
+                                              final isDesktop =
+                                                  kIsWeb ||
+                                                  MediaQuery.of(
+                                                        context,
+                                                      ).size.width >=
+                                                      640;
+                                              if (isDesktop) {
+                                                final box =
+                                                    btnCtx.findRenderObject()
+                                                        as RenderBox?;
+                                                final pos = box != null
+                                                    ? box.localToGlobal(
+                                                        box.size.bottomLeft(
+                                                          Offset.zero,
+                                                        ),
+                                                      )
+                                                    : Offset.zero;
+                                                showUnifiedTrackMenu(
+                                                  context: context,
+                                                  globalPosition: pos,
+                                                  song: songMapToVideo(song),
+                                                  currentPlaylistId:
                                                       widget.playlistId,
-                                                      index,
-                                                    );
-                                              },
-                                            );
-                                          },
+                                                  onRemovedFromPlaylist: () =>
+                                                      setState(() {}),
+                                                );
+                                              } else {
+                                                showPlaylistSongOptionsBottomSheet(
+                                                  context,
+                                                  songMap: song,
+                                                  playlistId: widget.playlistId,
+                                                  onPlayNow: () {
+                                                    _musicService
+                                                        .playCustomPlaylist(
+                                                          widget.playlistId,
+                                                          index,
+                                                        );
+                                                  },
+                                                );
+                                              }
+                                            },
+                                          ),
                                         ),
                                         ReorderableDragStartListener(
                                           index: index,

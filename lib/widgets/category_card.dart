@@ -44,6 +44,13 @@ class _CategoryCardState extends State<CategoryCard> {
   Widget build(BuildContext context) {
     final scale = _isPressed ? 0.97 : (_isHovered ? 1.02 : 1.0);
 
+    final baseColor = widget.colors != null && widget.colors!.isNotEmpty
+        ? widget.colors!.first
+        : const Color(0xFFE13300);
+    final cardColor = _isHovered
+        ? Color.lerp(baseColor, Colors.white, 0.08)!
+        : baseColor;
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
@@ -62,14 +69,12 @@ class _CategoryCardState extends State<CategoryCard> {
           curve: Curves.easeOutCubic,
           child: Container(
             decoration: BoxDecoration(
-              color: _isHovered
-                  ? const Color(0xFF1E1E22)
-                  : const Color(0xFF141416),
+              color: cardColor,
               borderRadius: BorderRadius.circular(8.0),
               border: Border.all(
                 color: _isHovered
-                    ? Colors.white.withValues(alpha: 0.15)
-                    : Colors.white.withValues(alpha: 0.06),
+                    ? Colors.white.withValues(alpha: 0.20)
+                    : Colors.white.withValues(alpha: 0.08),
                 width: 1.0,
               ),
               boxShadow: [
@@ -86,8 +91,8 @@ class _CategoryCardState extends State<CategoryCard> {
                 children: [
                   // 1. Tilted Cover Artwork Thumbnail overflowing bottom-right corner (rotate 25 deg)
                   Positioned(
-                    right: -8,
-                    bottom: -8,
+                    right: -6,
+                    bottom: -6,
                     child: Transform.rotate(
                       angle: 25 * (math.pi / 180), // 25 degrees
                       child: Container(
@@ -98,7 +103,7 @@ class _CategoryCardState extends State<CategoryCard> {
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.40),
-                              blurRadius: 8,
+                              blurRadius: 10,
                               offset: const Offset(2, 4),
                             ),
                           ],
@@ -120,23 +125,23 @@ class _CategoryCardState extends State<CategoryCard> {
                     ),
                   ),
 
-                  // 2. Bold White Title pinned top-left with 12px padding
+                  // 2. Bold White Title pinned top-left with 14px padding
                   Padding(
-                    padding: const EdgeInsets.all(12.0),
+                    padding: const EdgeInsets.all(14.0),
                     child: Align(
                       alignment: Alignment.topLeft,
                       child: FractionallySizedBox(
-                        widthFactor: 0.72,
+                        widthFactor: 0.70,
                         child: Text(
                           widget.title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 15,
+                            fontSize: 16,
                             fontWeight: FontWeight.w700,
                             letterSpacing: -0.3,
-                            height: 1.2,
+                            height: 1.15,
                           ),
                         ),
                       ),

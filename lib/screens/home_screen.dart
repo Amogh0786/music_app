@@ -1761,15 +1761,35 @@ class _HomeScreenState extends State<HomeScreen>
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(
-                        icon: const Icon(
-                          Icons.more_vert_rounded,
-                          color: Colors.white38,
-                          size: 20,
+                      Builder(
+                        builder: (btnCtx) => IconButton(
+                          icon: const Icon(
+                            Icons.more_vert_rounded,
+                            color: Colors.white38,
+                            size: 20,
+                          ),
+                          onPressed: () {
+                            final isDesktop =
+                                kIsWeb ||
+                                MediaQuery.of(context).size.width >= 640;
+                            if (isDesktop) {
+                              final box =
+                                  btnCtx.findRenderObject() as RenderBox?;
+                              final pos = box != null
+                                  ? box.localToGlobal(
+                                      box.size.bottomLeft(Offset.zero),
+                                    )
+                                  : Offset.zero;
+                              showUnifiedTrackMenu(
+                                context: context,
+                                globalPosition: pos,
+                                song: song,
+                              );
+                            } else {
+                              showSongOptionsBottomSheet(context, song);
+                            }
+                          },
                         ),
-                        onPressed: () {
-                          showSongOptionsBottomSheet(context, song);
-                        },
                       ),
                       Container(
                         width: 34,

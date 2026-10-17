@@ -187,7 +187,7 @@ class DesktopContextMenu {
       items: entries,
       elevation: 16.0,
       shadowColor: Colors.black.withValues(alpha: 0.6),
-      color: const Color(0xFF16161E),
+      color: const Color(0xFF1A1A1E),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8.0),
         side: BorderSide(
@@ -397,19 +397,7 @@ class DesktopContextMenu {
     final isLiked = musicService.isLiked(song.id.value);
 
     return [
-      DesktopContextMenuItem(
-        title: 'Add to queue',
-        icon: Icons.queue_music_rounded,
-        onTap: () {
-          musicService.addToQueue(song);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Added "${song.title}" to queue'),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        },
-      ),
+      // 1. Play Next
       DesktopContextMenuItem(
         title: 'Play next',
         icon: Icons.playlist_play_rounded,
@@ -423,7 +411,22 @@ class DesktopContextMenu {
           );
         },
       ),
+      // 2. Add to Queue
+      DesktopContextMenuItem(
+        title: 'Add to queue',
+        icon: Icons.queue_music_rounded,
+        onTap: () {
+          musicService.addToQueue(song);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Added "${song.title}" to queue'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        },
+      ),
       const DesktopContextMenuItem.divider(),
+      // 3. Save to your Liked Songs / Remove from Liked Songs
       DesktopContextMenuItem(
         title: isLiked ? 'Remove from Liked Songs' : 'Save to your Liked Songs',
         icon: isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
@@ -442,6 +445,7 @@ class DesktopContextMenu {
           );
         },
       ),
+      // 4. Add to Playlist
       DesktopContextMenuItem(
         title: 'Add to playlist',
         icon: Icons.playlist_add_rounded,
@@ -469,13 +473,21 @@ class DesktopContextMenu {
           },
         ),
       const DesktopContextMenuItem.divider(),
+      // 5. Start Song Radio
       DesktopContextMenuItem(
-        title: 'Go to artist',
-        icon: Icons.person_rounded,
+        title: 'Start Song Radio',
+        icon: Icons.radio_rounded,
         onTap: () {
-          DesktopLayoutState.openArtist(song.author);
+          musicService.startSongRadio(song);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Starting radio for "${song.title}"'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
         },
       ),
+      // 6. Go to Album
       DesktopContextMenuItem(
         title: 'Go to album',
         icon: Icons.album_rounded,
@@ -512,6 +524,16 @@ class DesktopContextMenu {
           }
         },
       ),
+      // 7. View Artist Profile
+      DesktopContextMenuItem(
+        title: 'View artist profile',
+        icon: Icons.person_rounded,
+        onTap: () {
+          DesktopLayoutState.openArtist(song.author);
+        },
+      ),
+      const DesktopContextMenuItem.divider(),
+      // 8. Share Song
       DesktopContextMenuItem(
         title: 'Share song',
         icon: Icons.share_rounded,
@@ -725,4 +747,19 @@ Future<void> showDesktopContextMenu({
   context: context,
   globalPosition: globalPosition,
   items: items,
+);
+
+/// Unified track menu popup for both right-click and 3-dot button triggers on desktop.
+Future<void> showUnifiedTrackMenu({
+  required BuildContext context,
+  required Offset globalPosition,
+  required Video song,
+  String? currentPlaylistId,
+  VoidCallback? onRemovedFromPlaylist,
+}) => DesktopContextMenu.showSongMenu(
+  context: context,
+  globalPosition: globalPosition,
+  song: song,
+  currentPlaylistId: currentPlaylistId,
+  onRemovedFromPlaylist: onRemovedFromPlaylist,
 );

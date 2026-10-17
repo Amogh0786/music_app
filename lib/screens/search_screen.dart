@@ -103,7 +103,7 @@ class SearchScreenState extends State<SearchScreen>
       'title': 'Bollywood Hits',
       'subtitle': 'Top Trending & Classics',
       'query': 'Bollywood Top Hits 2026',
-      'colors': [const Color(0xFFFF416C), const Color(0xFFFF4B2B)],
+      'colors': [const Color(0xFFE13300)],
       'icon': Icons.whatshot_rounded,
       'thumbnailUrl':
           'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300&q=80',
@@ -112,7 +112,7 @@ class SearchScreenState extends State<SearchScreen>
       'title': 'Telugu Beats',
       'subtitle': 'Groove, Melodies & Mass',
       'query': 'Telugu Top Songs',
-      'colors': [const Color(0xFF8E2DE2), const Color(0xFF4A00E0)],
+      'colors': [const Color(0xFFB06239)],
       'icon': Icons.music_note_rounded,
       'thumbnailUrl':
           'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=300&q=80',
@@ -121,7 +121,7 @@ class SearchScreenState extends State<SearchScreen>
       'title': 'Pop & Global',
       'subtitle': 'Chartbusters & Hits',
       'query': 'Global Pop Hits',
-      'colors': [const Color(0xFF00c6ff), const Color(0xFF0072ff)],
+      'colors': [const Color(0xFF27856A)],
       'icon': Icons.public_rounded,
       'thumbnailUrl':
           'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&q=80',
@@ -130,7 +130,7 @@ class SearchScreenState extends State<SearchScreen>
       'title': 'Punjabi Hits',
       'subtitle': 'Bhangra, Dhol & Bass',
       'query': 'Punjabi Top Hits',
-      'colors': [const Color(0xFFf857a6), const Color(0xFFff5858)],
+      'colors': [const Color(0xFF8D67AB)],
       'icon': Icons.speaker_group_rounded,
       'thumbnailUrl':
           'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=300&q=80',
@@ -139,7 +139,7 @@ class SearchScreenState extends State<SearchScreen>
       'title': 'Lo-Fi & Chill',
       'subtitle': 'Focus, Relax & Study',
       'query': 'Lofi Chill Beats',
-      'colors': [const Color(0xFF11998e), const Color(0xFF38ef7d)],
+      'colors': [const Color(0xFF477D95)],
       'icon': Icons.bedtime_rounded,
       'thumbnailUrl':
           'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=300&q=80',
@@ -148,7 +148,7 @@ class SearchScreenState extends State<SearchScreen>
       'title': 'Workout Energy',
       'subtitle': 'High BPM & Motivation',
       'query': 'Workout Music Beats',
-      'colors': [const Color(0xFFFF8008), const Color(0xFFFFC837)],
+      'colors': [const Color(0xFFE91429)],
       'icon': Icons.bolt_rounded,
       'thumbnailUrl':
           'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=300&q=80',
@@ -157,7 +157,7 @@ class SearchScreenState extends State<SearchScreen>
       'title': 'Romance & Love',
       'subtitle': 'Soulful & Melodies',
       'query': 'Romantic Hindi Songs',
-      'colors': [const Color(0xFFee9ca7), const Color(0xFFff758c)],
+      'colors': [const Color(0xFF8C1932)],
       'icon': Icons.favorite_rounded,
       'thumbnailUrl':
           'https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=300&q=80',
@@ -166,7 +166,7 @@ class SearchScreenState extends State<SearchScreen>
       'title': 'Hip-Hop & Rap',
       'subtitle': 'Bars, Trap & 808s',
       'query': 'Hip Hop Hits',
-      'colors': [const Color(0xFF3A1C71), const Color(0xFFD76D77)],
+      'colors': [const Color(0xFFBA5D07)],
       'icon': Icons.mic_external_on_rounded,
       'thumbnailUrl':
           'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=300&q=80',
@@ -175,7 +175,7 @@ class SearchScreenState extends State<SearchScreen>
       'title': 'Party & Dance',
       'subtitle': 'Club Nights & EDM',
       'query': 'Party Dance Club Hits',
-      'colors': [const Color(0xFFFA2D48), const Color(0xFFF7971E)],
+      'colors': [const Color(0xFF7358FF)],
       'icon': Icons.celebration_rounded,
       'thumbnailUrl':
           'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=300&q=80',
@@ -184,10 +184,64 @@ class SearchScreenState extends State<SearchScreen>
       'title': 'Indie & Acoustic',
       'subtitle': 'Raw, Unplugged & Vibe',
       'query': 'Indian Indie Acoustic Songs',
-      'colors': [const Color(0xFF4776E6), const Color(0xFF8E54E9)],
+      'colors': [const Color(0xFF608108)],
       'icon': Icons.audiotrack_rounded,
       'thumbnailUrl':
           'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=300&q=80',
+    },
+    {
+      'title': 'Tamil Hits',
+      'subtitle': 'Kollywood & Folk Melodies',
+      'query': 'Tamil Top Hits',
+      'colors': [const Color(0xFFD16A1E)],
+      'icon': Icons.music_note_rounded,
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=300&q=80',
+    },
+    {
+      'title': 'Malayalam',
+      'subtitle': 'Sandalwood & Soulful',
+      'query': 'Malayalam Top Songs',
+      'colors': [const Color(0xFF186048)],
+      'icon': Icons.nature_people_rounded,
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&q=80',
+    },
+    {
+      'title': 'Devotional',
+      'subtitle': 'Spiritual & Bhakti',
+      'query': 'Devotional Songs',
+      'colors': [const Color(0xFFA87452)],
+      'icon': Icons.spa_rounded,
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1544717305-2782549b5136?w=300&q=80',
+    },
+    {
+      'title': 'Ghazals & Sufi',
+      'subtitle': 'Timeless Poetry',
+      'query': 'Ghazals Sufi Songs',
+      'colors': [const Color(0xFF50505A)],
+      'icon': Icons.menu_book_rounded,
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=300&q=80',
+    },
+    {
+      'title': 'Rock & Metal',
+      'subtitle': 'Riffs & Anthems',
+      'query': 'Rock Metal Hits',
+      'colors': [const Color(0xFFB0283B)],
+      'icon': Icons.electric_bolt_rounded,
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=300&q=80',
+    },
+    {
+      'title': 'Sleep & Relax',
+      'subtitle': 'Ambient & Calm',
+      'query': 'Sleep Ambient Relax',
+      'colors': [const Color(0xFF1E3264)],
+      'icon': Icons.nightlight_round,
+      'thumbnailUrl':
+          'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=300&q=80',
     },
   ];
 
@@ -865,16 +919,48 @@ class SearchScreenState extends State<SearchScreen>
                                                           size: 16,
                                                         ),
                                                       ),
-                                                    IconButton(
-                                                      icon: const Icon(
-                                                        Icons.more_horiz,
-                                                        color: Colors.white54,
+                                                    Builder(
+                                                      builder: (btnCtx) => IconButton(
+                                                        icon: const Icon(
+                                                          Icons.more_horiz,
+                                                          color: Colors.white54,
+                                                        ),
+                                                        onPressed: () {
+                                                          final isDesktop =
+                                                              kIsWeb ||
+                                                              MediaQuery.of(
+                                                                        context,
+                                                                      )
+                                                                      .size
+                                                                      .width >=
+                                                                  640;
+                                                          if (isDesktop) {
+                                                            final box =
+                                                                btnCtx.findRenderObject()
+                                                                    as RenderBox?;
+                                                            final pos =
+                                                                box != null
+                                                                ? box.localToGlobal(
+                                                                    box.size.bottomLeft(
+                                                                      Offset
+                                                                          .zero,
+                                                                    ),
+                                                                  )
+                                                                : Offset.zero;
+                                                            showUnifiedTrackMenu(
+                                                              context: context,
+                                                              globalPosition:
+                                                                  pos,
+                                                              song: video,
+                                                            );
+                                                          } else {
+                                                            showSongOptionsBottomSheet(
+                                                              context,
+                                                              video,
+                                                            );
+                                                          }
+                                                        },
                                                       ),
-                                                      onPressed: () =>
-                                                          showSongOptionsBottomSheet(
-                                                            context,
-                                                            video,
-                                                          ),
                                                     ),
                                                   ],
                                                 ),
@@ -1846,7 +1932,7 @@ class SearchScreenState extends State<SearchScreen>
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
-                  childAspectRatio: 0.68,
+                  childAspectRatio: crossAxisCount >= 5 ? 0.65 : 0.68,
                   crossAxisSpacing: 14,
                   mainAxisSpacing: 14,
                 ),
@@ -1978,46 +2064,50 @@ class SearchScreenState extends State<SearchScreen>
               ),
             ),
             // Info
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    album.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      height: 1.25,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  if (album.artist.isNotEmpty)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     Text(
-                      album.artist,
-                      maxLines: 1,
+                      album.title,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.48),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
                       ),
                     ),
-                  if (album.year.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        album.year,
+                    const SizedBox(height: 2),
+                    if (album.artist.isNotEmpty)
+                      Text(
+                        album.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.3),
+                          color: Colors.white.withValues(alpha: 0.60),
                           fontSize: 11,
                         ),
                       ),
-                    ),
-                ],
+                    if (album.year.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          album.year,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ],

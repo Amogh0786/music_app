@@ -573,15 +573,41 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
                                         size: 15,
                                       ),
                                     ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.more_vert_rounded,
-                                      color: Colors.white38,
-                                      size: 18,
-                                    ),
-                                    onPressed: () => showSongOptionsBottomSheet(
-                                      context,
-                                      video,
+                                  Builder(
+                                    builder: (btnCtx) => IconButton(
+                                      icon: const Icon(
+                                        Icons.more_vert_rounded,
+                                        color: Colors.white38,
+                                        size: 18,
+                                      ),
+                                      onPressed: () {
+                                        final isDesktop =
+                                            kIsWeb ||
+                                            MediaQuery.of(context).size.width >=
+                                                640;
+                                        if (isDesktop) {
+                                          final box =
+                                              btnCtx.findRenderObject()
+                                                  as RenderBox?;
+                                          final pos = box != null
+                                              ? box.localToGlobal(
+                                                  box.size.bottomLeft(
+                                                    Offset.zero,
+                                                  ),
+                                                )
+                                              : Offset.zero;
+                                          showUnifiedTrackMenu(
+                                            context: context,
+                                            globalPosition: pos,
+                                            song: video,
+                                          );
+                                        } else {
+                                          showSongOptionsBottomSheet(
+                                            context,
+                                            video,
+                                          );
+                                        }
+                                      },
                                     ),
                                   ),
                                 ],

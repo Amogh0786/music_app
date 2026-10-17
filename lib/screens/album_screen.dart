@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
@@ -752,14 +753,34 @@ class _AlbumScreenState extends State<AlbumScreen>
                     ),
                   ),
                 const SizedBox(width: 4),
-                IconButton(
-                  icon: const Icon(
-                    Icons.more_vert_rounded,
-                    color: Colors.white38,
-                    size: 18,
+                Builder(
+                  builder: (btnCtx) => IconButton(
+                    icon: const Icon(
+                      Icons.more_vert_rounded,
+                      color: Colors.white38,
+                      size: 18,
+                    ),
+                    onPressed: () {
+                      final isDesktop =
+                          kIsWeb || MediaQuery.of(context).size.width >= 640;
+                      if (isDesktop) {
+                        final box = btnCtx.findRenderObject() as RenderBox?;
+                        final pos = box != null
+                            ? box.localToGlobal(
+                                box.size.bottomLeft(Offset.zero),
+                              )
+                            : Offset.zero;
+                        showUnifiedTrackMenu(
+                          context: context,
+                          globalPosition: pos,
+                          song: songMapToVideo(s),
+                        );
+                      } else {
+                        showSongOptionsBottomSheet(context, songMapToVideo(s));
+                      }
+                    },
+                    tooltip: 'More options',
                   ),
-                  onPressed: () => _addToQueue(index),
-                  tooltip: 'Add to queue',
                 ),
               ],
             ),
