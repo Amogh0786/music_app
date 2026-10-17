@@ -11,7 +11,12 @@ enum DesktopNavTab {
   customPlaylist,
   artistProfile,
   album,
+  settings,
+  profile,
 }
+
+/// Type alias for DesktopNavTab matching prompt specification.
+typedef DesktopMainViewType = DesktopNavTab;
 
 /// Lightweight, primitive ValueNotifier state holder for the Spotify-grade Desktop Shell.
 ///
@@ -23,6 +28,9 @@ class DesktopLayoutState {
   /// Active central viewport navigation tab.
   static final ValueNotifier<DesktopNavTab> activeNavTab =
       ValueNotifier<DesktopNavTab>(DesktopNavTab.home);
+
+  /// Alias for activeNavTab matching DesktopMainViewType specification.
+  static ValueNotifier<DesktopNavTab> get currentView => activeNavTab;
 
   /// Active custom playlist ID rendered inside the central desktop viewport.
   static final ValueNotifier<String?> activePlaylistId = ValueNotifier<String?>(
