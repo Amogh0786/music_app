@@ -366,5 +366,42 @@ void main() {
       expect(DesktopLayoutState.isLeftSidebarCollapsed.value, false);
       expect(DesktopLayoutState.leftSidebarWidth.value, 340.0);
     });
+
+    testWidgets(
+      'Compact Mode renders 48x48 Liked Songs album tile & playlist covers',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        DesktopLayoutState.leftSidebarWidth.value = 72.0;
+        DesktopLayoutState.isLeftSidebarCollapsed.value = true;
+
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 72.0,
+                child: DesktopLeftSidebar(width: 72.0),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        // Liked songs 48x48 tile with white heart icon
+        expect(find.byIcon(Icons.favorite), findsOneWidget);
+        expect(find.byTooltip('Liked Songs • 0 songs'), findsOneWidget);
+
+        // Verify tapping Liked Songs opens liked_songs playlist in layout state
+        await tester.tap(find.byIcon(Icons.favorite));
+        await tester.pump();
+        expect(DesktopLayoutState.activePlaylistId.value, 'liked_songs');
+        expect(
+          DesktopLayoutState.activeNavTab.value,
+          DesktopNavTab.customPlaylist,
+        );
+      },
+    );
   });
 }
