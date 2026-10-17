@@ -296,8 +296,8 @@ class PreferencesService extends ChangeNotifier {
   ScrubberStyle get scrubberStyle => _scrubberStyle;
   ProgressLineStyle get progressLineStyle =>
       _scrubberStyle == ScrubberStyle.waveform
-          ? ProgressLineStyle.wave
-          : ProgressLineStyle.classic;
+      ? ProgressLineStyle.wave
+      : ProgressLineStyle.classic;
   AudioQualityPreset get audioQuality => _audioQuality;
   AudioFormatPreference get audioFormat => _audioFormat;
   String get lyricsDisplayMode => _lyricsDisplayMode;

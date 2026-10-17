@@ -6,7 +6,6 @@ import '../../layouts/desktop_layout_state.dart';
 import '../../services/music_service.dart';
 import '../../services/preferences_service.dart';
 import '../../services/dynamic_artist_service.dart';
-import '../../services/album_color_deriver.dart';
 import '../../screens/player_screen.dart';
 import '../animated_lyrics.dart';
 import '../animated_equalizer.dart';
@@ -493,8 +492,6 @@ class _DesktopLyricsPreviewBoxState extends State<_DesktopLyricsPreviewBox> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AlbumColorDeriver.getPalette(widget.song);
-
     return InkWell(
       borderRadius: BorderRadius.circular(10.0),
       onTap: () => DesktopLayoutState.setContextTab(DesktopContextTab.lyrics),
@@ -1217,6 +1214,7 @@ class _DesktopQueueTabState extends State<_DesktopQueueTab> {
                         horizontal: 8,
                       ),
                       itemCount: upcoming.length,
+                      // ignore: deprecated_member_use
                       onReorder: (oldIndex, newIndex) {
                         HapticFeedback.selectionClick();
                         _musicService.reorderQueue(

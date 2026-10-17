@@ -559,7 +559,57 @@ class SpotifyImportService extends ChangeNotifier {
     return '${cleanTitle}_$cleanArtist';
   }
 
-  /// High-performance concurrent resolver with in-memory caching and order preservation
+  Future<Video?> _resolveSingleTrack(ExportifyTrack track) async {
+    String cleanTrack = track.trackName
+        .replaceAll(
+          RegExp(
+            r'\s*[\(\[\{](?:feat\.?|with|remaster(?:ed)?|bonus|live|radio edit|deluxe|version|edit|mono|stereo|anniversary).*?[\)\]\}]',
+            caseSensitive: false,
+          ),
+          '',
+        )
+        .replaceAll(
+          RegExp(
+            r'\s*-\s*(?:remaster(?:ed)?|bonus|live|radio edit|deluxe|version|edit).*$',
+            caseSensitive: false,
+          ),
+          '',
+        )
+        .trim();
+    if (cleanTrack.isEmpty) cleanTrack = track.trackName.trim();
+
+    final primaryQuery = cleanTrack.isNotEmpty && track.artistName.isNotEmpty
+        ? '$cleanTrack ${track.artistName}'.trim()
+        : (cleanTrack.isNotEmpty
+              ? cleanTrack
+              : '${track.trackName} ${track.artistName}'.trim());
+
+    Video? song;
+    try {
+      var searchResults = await _musicService.searchSongs(
+        primaryQuery,
+        page: 1,
+      );
+      if (searchResults.isEmpty &&
+          cleanTrack.isNotEmpty &&
+          track.artistName.isNotEmpty) {
+        // Fallback to title-only search
+        searchResults = await _musicService.searchSongs(cleanTrack, page: 1);
+      }
+      if (searchResults.isNotEmpty) {
+        song = searchResults.firstWhere(
+          (v) => CanonicalSongDedup.isGenuineSong(v),
+          orElse: () => searchResults.first,
+        );
+      }
+    } catch (e) {
+      debugPrint('[SpotifyImport] Search error for "$primaryQuery": $e');
+    }
+    return song;
+  }
+
+  /// High-performance concurrent resolver with in-memory caching and order preservation.
+  /// On Web, restricts concurrency to sequential batches of 4 items to prevent browser socket exhaustion.
   Future<List<Video>> resolveTracksConcurrently({
     required List<ExportifyTrack> tracks,
     int concurrency = 8,
@@ -568,10 +618,58 @@ class SpotifyImportService extends ChangeNotifier {
   }) async {
     if (tracks.isEmpty) return [];
     final results = List<Video?>.filled(tracks.length, null);
-    int nextIndex = 0;
     int completedCount = 0;
     int lastFlushedCount = 0;
 
+    // Web concurrency guard: batch in sequential chunks of 4 to stay well under browser 6-socket limit
+    if (kIsWeb) {
+      for (var i = 0; i < tracks.length; i += 4) {
+        if (_isCancelled) break;
+        final chunkEnd = (i + 4 < tracks.length) ? i + 4 : tracks.length;
+        final chunkFutures = <Future<void>>[];
+
+        for (var j = i; j < chunkEnd; j++) {
+          final index = j;
+          final track = tracks[index];
+          chunkFutures.add(() async {
+            if (_isCancelled) return;
+            final key = _normalizeTrackKey(track.trackName, track.artistName);
+
+            Video? song;
+            if (_resolvedTrackCache.containsKey(key)) {
+              song = _resolvedTrackCache[key];
+              _cacheHitCount++;
+            } else {
+              song = await _resolveSingleTrack(track);
+              _resolvedTrackCache[key] = song;
+            }
+
+            results[index] = song;
+            completedCount++;
+            onProgress?.call(completedCount, track.trackName);
+          }());
+        }
+
+        await Future.wait(chunkFutures);
+
+        if (onSongsUpdated != null &&
+            (completedCount - lastFlushedCount >= 4 || _isCancelled)) {
+          lastFlushedCount = completedCount;
+          final current = results.whereType<Video>().toList();
+          onSongsUpdated(current);
+        }
+
+        await Future.delayed(const Duration(milliseconds: 30));
+      }
+
+      final finalResolved = results.whereType<Video>().toList();
+      if (onSongsUpdated != null) {
+        onSongsUpdated(finalResolved);
+      }
+      return finalResolved;
+    }
+
+    int nextIndex = 0;
     Future<void> worker() async {
       while (true) {
         if (_isCancelled) break;
@@ -587,54 +685,7 @@ class SpotifyImportService extends ChangeNotifier {
           song = _resolvedTrackCache[key];
           _cacheHitCount++;
         } else {
-          String cleanTrack = track.trackName
-              .replaceAll(
-                RegExp(
-                  r'\s*[\(\[\{](?:feat\.?|with|remaster(?:ed)?|bonus|live|radio edit|deluxe|version|edit|mono|stereo|anniversary).*?[\)\]\}]',
-                  caseSensitive: false,
-                ),
-                '',
-              )
-              .replaceAll(
-                RegExp(
-                  r'\s*-\s*(?:remaster(?:ed)?|bonus|live|radio edit|deluxe|version|edit).*$',
-                  caseSensitive: false,
-                ),
-                '',
-              )
-              .trim();
-          if (cleanTrack.isEmpty) cleanTrack = track.trackName.trim();
-
-          final primaryQuery =
-              cleanTrack.isNotEmpty && track.artistName.isNotEmpty
-              ? '$cleanTrack ${track.artistName}'.trim()
-              : (cleanTrack.isNotEmpty
-                    ? cleanTrack
-                    : '${track.trackName} ${track.artistName}'.trim());
-
-          try {
-            var searchResults = await _musicService.searchSongs(
-              primaryQuery,
-              page: 1,
-            );
-            if (searchResults.isEmpty &&
-                cleanTrack.isNotEmpty &&
-                track.artistName.isNotEmpty) {
-              // Fallback to title-only search
-              searchResults = await _musicService.searchSongs(
-                cleanTrack,
-                page: 1,
-              );
-            }
-            if (searchResults.isNotEmpty) {
-              song = searchResults.firstWhere(
-                (v) => CanonicalSongDedup.isGenuineSong(v),
-                orElse: () => searchResults.first,
-              );
-            }
-          } catch (e) {
-            debugPrint('[SpotifyImport] Search error for "$primaryQuery": $e');
-          }
+          song = await _resolveSingleTrack(track);
           _resolvedTrackCache[key] = song;
         }
 
