@@ -526,7 +526,7 @@ class DesktopContextMenu {
       ),
       // 7. View Artist Profile
       DesktopContextMenuItem(
-        title: 'View artist profile',
+        title: 'Go to artist',
         icon: Icons.person_rounded,
         onTap: () {
           DesktopLayoutState.openArtist(song.author);
