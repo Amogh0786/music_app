@@ -10,6 +10,7 @@ import '../services/preferences_service.dart';
 import '../services/canonical_song_dedup.dart';
 import '../widgets/shimmer_loading.dart';
 import '../widgets/song_options_bottom_sheet.dart';
+import '../widgets/desktop/desktop_context_menu.dart';
 import '../widgets/animated_equalizer.dart';
 import '../widgets/profile_side_drawer.dart';
 import 'album_screen.dart';
@@ -738,6 +739,12 @@ class _HomeScreenState extends State<HomeScreen>
             ? _musicService.likedSongs.first['thumbnail']
             : null,
         onTap: openLikedSongs,
+        onSecondaryTap: (pos) => DesktopContextMenu.showPlaylistMenu(
+          context: context,
+          globalPosition: pos,
+          playlistId: 'liked_songs',
+          playlistName: 'Liked Songs',
+        ),
       ),
       _HomeQuickAccessItem(
         title: dailyMix2?.title ?? 'Daily Mix 2',
@@ -818,41 +825,62 @@ class _HomeScreenState extends State<HomeScreen>
           final item = items[index];
           return Material(
             color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(AppThemeTokens.radiusSmall),
-              onTap: () {
-                HapticFeedback.lightImpact();
-                item.onTap();
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppThemeTokens.surfaceCard,
-                  borderRadius: BorderRadius.circular(
-                    AppThemeTokens.radiusSmall,
+            child: GestureDetector(
+              onSecondaryTapDown: item.onSecondaryTap != null
+                  ? (details) => item.onSecondaryTap!(details.globalPosition)
+                  : null,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppThemeTokens.radiusSmall),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  item.onTap();
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppThemeTokens.surfaceCard,
+                    borderRadius: BorderRadius.circular(
+                      AppThemeTokens.radiusSmall,
+                    ),
+                    border: Border.all(
+                      color: AppThemeTokens.surfaceBorder,
+                      width: 1,
+                    ),
                   ),
-                  border: Border.all(
-                    color: AppThemeTokens.surfaceBorder,
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    ClipRRect(
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(AppThemeTokens.radiusSmall),
-                        bottomLeft: Radius.circular(AppThemeTokens.radiusSmall),
-                      ),
-                      child: SizedBox(
-                        width: 52,
-                        height: 52,
-                        child:
-                            item.imageUrl != null && item.imageUrl!.isNotEmpty
-                            ? Image.network(
-                                item.imageUrl!,
-                                width: 52,
-                                height: 52,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => Container(
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(AppThemeTokens.radiusSmall),
+                          bottomLeft: Radius.circular(
+                            AppThemeTokens.radiusSmall,
+                          ),
+                        ),
+                        child: SizedBox(
+                          width: 52,
+                          height: 52,
+                          child:
+                              item.imageUrl != null && item.imageUrl!.isNotEmpty
+                              ? Image.network(
+                                  item.imageUrl!,
+                                  width: 52,
+                                  height: 52,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Container(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: item.iconGradient,
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      item.icon,
+                                      color: Colors.white,
+                                      size: 22,
+                                    ),
+                                  ),
+                                )
+                              : Container(
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(
                                       colors: item.iconGradient,
@@ -866,38 +894,24 @@ class _HomeScreenState extends State<HomeScreen>
                                     size: 22,
                                   ),
                                 ),
-                              )
-                            : Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: item.iconGradient,
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                ),
-                                child: Icon(
-                                  item.icon,
-                                  color: Colors.white,
-                                  size: 22,
-                                ),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        item.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppThemeTokens.textPrimary,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          item.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppThemeTokens.textPrimary,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1333,6 +1347,16 @@ class _HomeScreenState extends State<HomeScreen>
                     );
                   }
                 },
+                onSecondaryTapDown: (details) {
+                  DesktopContextMenu.showAlbumMenu(
+                    context: context,
+                    globalPosition: details.globalPosition,
+                    albumTitle: album.title,
+                    albumArtist: album.artist,
+                    albumId: album.id,
+                    albumArtwork: album.artwork,
+                  );
+                },
                 child: Container(
                   width: 152,
                   margin: const EdgeInsets.symmetric(
@@ -1682,89 +1706,101 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             child: Material(
               color: Colors.transparent,
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 2,
-                ),
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.network(
-                    hdThumbnail,
-                    width: 50,
-                    height: 50,
-                    fit: BoxFit.cover,
-                    cacheWidth: 120,
-                    cacheHeight: 120,
-                    errorBuilder: (_, _, _) => Image.network(
-                      song.thumbnails.lowResUrl,
+              child: GestureDetector(
+                onSecondaryTapDown: (details) {
+                  DesktopContextMenu.showSongMenu(
+                    context: context,
+                    globalPosition: details.globalPosition,
+                    song: song,
+                  );
+                },
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 2,
+                  ),
+                  leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.network(
+                      hdThumbnail,
                       width: 50,
                       height: 50,
                       fit: BoxFit.cover,
                       cacheWidth: 120,
                       cacheHeight: 120,
-                    ),
-                  ),
-                ),
-                title: Text(
-                  song.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                subtitle: Text(
-                  song.author,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.5),
-                    fontSize: 12,
-                  ),
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.more_vert_rounded,
-                        color: Colors.white38,
-                        size: 20,
-                      ),
-                      onPressed: () {
-                        showSongOptionsBottomSheet(context, song);
-                      },
-                    ),
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.10),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child:
-                            (_musicService.currentSong?.id.value ==
-                                    song.id.value &&
-                                _musicService.isPlaying)
-                            ? const AnimatedEqualizer(isPlaying: true, size: 16)
-                            : const Icon(
-                                Icons.play_arrow_rounded,
-                                color: Colors.white,
-                                size: 22,
-                              ),
+                      errorBuilder: (_, _, _) => Image.network(
+                        song.thumbnails.lowResUrl,
+                        width: 50,
+                        height: 50,
+                        fit: BoxFit.cover,
+                        cacheWidth: 120,
+                        cacheHeight: 120,
                       ),
                     ),
-                  ],
+                  ),
+                  title: Text(
+                    song.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  subtitle: Text(
+                    song.author,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 12,
+                    ),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(
+                          Icons.more_vert_rounded,
+                          color: Colors.white38,
+                          size: 20,
+                        ),
+                        onPressed: () {
+                          showSongOptionsBottomSheet(context, song);
+                        },
+                      ),
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.10),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child:
+                              (_musicService.currentSong?.id.value ==
+                                      song.id.value &&
+                                  _musicService.isPlaying)
+                              ? const AnimatedEqualizer(
+                                  isPlaying: true,
+                                  size: 16,
+                                )
+                              : const Icon(
+                                  Icons.play_arrow_rounded,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    _musicService.playPlaylist(displayList, index);
+                  },
                 ),
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  _musicService.playPlaylist(displayList, index);
-                },
               ),
             ),
           );
@@ -1780,6 +1816,7 @@ class _HomeQuickAccessItem {
   final List<Color> iconGradient;
   final String? imageUrl;
   final VoidCallback onTap;
+  final void Function(Offset globalPosition)? onSecondaryTap;
 
   const _HomeQuickAccessItem({
     required this.title,
@@ -1787,5 +1824,6 @@ class _HomeQuickAccessItem {
     required this.iconGradient,
     this.imageUrl,
     required this.onTap,
+    this.onSecondaryTap,
   });
 }

@@ -9,6 +9,8 @@ import '../widgets/mini_player.dart';
 import '../widgets/animated_equalizer.dart';
 import '../widgets/dilse_scrollbar.dart';
 import '../layouts/desktop_layout_state.dart';
+import '../widgets/song_options_bottom_sheet.dart';
+import '../widgets/desktop/desktop_context_menu.dart';
 import '../constants/app_theme_tokens.dart';
 
 class AlbumScreen extends StatefulWidget {
@@ -683,77 +685,86 @@ class _AlbumScreenState extends State<AlbumScreen>
             (_music.currentSong?.title == title &&
                 _music.currentSong?.author == artist);
 
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 2,
-          ),
-          leading: isPlaying
-              ? const SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: AnimatedEqualizer(isPlaying: true),
-                )
-              : SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: Center(
-                    child: Text(
-                      '$trackNum',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.38),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        fontFeatures: const [FontFeature.tabularFigures()],
+        return GestureDetector(
+          onSecondaryTapDown: (details) {
+            DesktopContextMenu.showSongMenu(
+              context: context,
+              globalPosition: details.globalPosition,
+              song: songMapToVideo(s),
+            );
+          },
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 2,
+            ),
+            leading: isPlaying
+                ? const SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: AnimatedEqualizer(isPlaying: true),
+                  )
+                : SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: Center(
+                      child: Text(
+                        '$trackNum',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.38),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
                       ),
                     ),
                   ),
-                ),
-          title: Text(
-            title,
-            style: TextStyle(
-              color: isPlaying ? const Color(0xFF7C3AED) : Colors.white,
-              fontSize: 14,
-              fontWeight: isPlaying ? FontWeight.w700 : FontWeight.w500,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          subtitle: artist.isNotEmpty
-              ? Text(
-                  artist,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.45),
-                    fontSize: 12,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                )
-              : null,
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (dur > 0)
-                Text(
-                  _fmtDuration(dur),
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.38),
-                    fontSize: 12,
-                  ),
-                ),
-              const SizedBox(width: 4),
-              IconButton(
-                icon: const Icon(
-                  Icons.more_vert_rounded,
-                  color: Colors.white38,
-                  size: 18,
-                ),
-                onPressed: () => _addToQueue(index),
-                tooltip: 'Add to queue',
+            title: Text(
+              title,
+              style: TextStyle(
+                color: isPlaying ? const Color(0xFF7C3AED) : Colors.white,
+                fontSize: 14,
+                fontWeight: isPlaying ? FontWeight.w700 : FontWeight.w500,
               ),
-            ],
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: artist.isNotEmpty
+                ? Text(
+                    artist,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.45),
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  )
+                : null,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (dur > 0)
+                  Text(
+                    _fmtDuration(dur),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.38),
+                      fontSize: 12,
+                    ),
+                  ),
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(
+                    Icons.more_vert_rounded,
+                    color: Colors.white38,
+                    size: 18,
+                  ),
+                  onPressed: () => _addToQueue(index),
+                  tooltip: 'Add to queue',
+                ),
+              ],
+            ),
+            onTap: () => _playAll(startIndex: index),
           ),
-          onTap: () => _playAll(startIndex: index),
         );
       },
     );

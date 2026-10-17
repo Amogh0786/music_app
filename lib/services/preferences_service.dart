@@ -1735,6 +1735,28 @@ class PreferencesService extends ChangeNotifier {
     }
   }
 
+  List<String> get pinnedPlaylistIds =>
+      _pinnedPlaylistIds.toList(growable: false);
+
+  bool isPlaylistPinned(String playlistId) =>
+      _pinnedPlaylistIds.contains(playlistId);
+
+  Future<void> togglePinPlaylist(String playlistId) async {
+    if (playlistId.isEmpty) return;
+    if (_pinnedPlaylistIds.contains(playlistId)) {
+      _pinnedPlaylistIds.remove(playlistId);
+    } else {
+      _pinnedPlaylistIds.add(playlistId);
+    }
+    if (_isInitialized) {
+      await _prefs.setStringList(
+        _pinnedPlaylistIdsKey,
+        _pinnedPlaylistIds.toList(),
+      );
+    }
+    notifyListeners();
+  }
+
   bool isAlbumSaved(String albumIdOrTitle) {
     final lower = albumIdOrTitle.toLowerCase().trim();
     return _savedAlbums.any((a) {
@@ -1798,6 +1820,7 @@ class PreferencesService extends ChangeNotifier {
     _profileImagePath = null;
     _spotifyImportedPlaylistIds.clear();
     _manualCreatedPlaylistIds.clear();
+    _pinnedPlaylistIds.clear();
     _savedAlbums.clear();
   }
 }

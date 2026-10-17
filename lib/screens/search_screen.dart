@@ -11,6 +11,7 @@ import '../services/canonical_song_dedup.dart';
 import '../models/jio_album.dart';
 import '../layouts/desktop_layout_state.dart';
 import '../widgets/song_options_bottom_sheet.dart';
+import '../widgets/desktop/desktop_context_menu.dart';
 import '../widgets/category_card.dart';
 import '../widgets/artist_card.dart';
 import '../widgets/animated_equalizer.dart';
@@ -771,102 +772,114 @@ class SearchScreenState extends State<SearchScreen>
                                                     .value ==
                                                 video.id.value;
 
-                                            return ListTile(
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                    vertical: 4,
-                                                  ),
-                                              leading: ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                                child: Image.network(
-                                                  hdThumbnail,
-                                                  width: 52,
-                                                  height: 52,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (_, _, _) =>
-                                                      Image.network(
-                                                        video
-                                                            .thumbnails
-                                                            .lowResUrl,
-                                                        width: 52,
-                                                        height: 52,
-                                                        fit: BoxFit.cover,
-                                                      ),
-                                                ),
-                                              ),
-                                              title: Text(
-                                                video.title,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: TextStyle(
-                                                  color: isCurrentSong
-                                                      ? Theme.of(
-                                                          context,
-                                                        ).primaryColor
-                                                      : Colors.white,
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 14,
-                                                ),
-                                              ),
-                                              subtitle: Text(
-                                                video.author,
-                                                maxLines: 1,
-                                                style: TextStyle(
-                                                  color: isCurrentSong
-                                                      ? Theme.of(context)
-                                                            .primaryColor
-                                                            .withValues(
-                                                              alpha: 0.8,
-                                                            )
-                                                      : Colors.grey[400],
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                              trailing: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  if (isCurrentSong)
-                                                    Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                            right: 8,
-                                                          ),
-                                                      child: AnimatedEqualizer(
-                                                        isPlaying: _musicService
-                                                            .isPlaying,
-                                                        barCount: 3,
-                                                        color: Theme.of(
-                                                          context,
-                                                        ).primaryColor,
-                                                        size: 16,
-                                                      ),
+                                            return GestureDetector(
+                                              onSecondaryTapDown: (details) {
+                                                DesktopContextMenu.showSongMenu(
+                                                  context: context,
+                                                  globalPosition:
+                                                      details.globalPosition,
+                                                  song: video,
+                                                );
+                                              },
+                                              child: ListTile(
+                                                contentPadding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 4,
                                                     ),
-                                                  IconButton(
-                                                    icon: const Icon(
-                                                      Icons.more_horiz,
-                                                      color: Colors.white54,
-                                                    ),
-                                                    onPressed: () =>
-                                                        showSongOptionsBottomSheet(
-                                                          context,
-                                                          video,
+                                                leading: ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  child: Image.network(
+                                                    hdThumbnail,
+                                                    width: 52,
+                                                    height: 52,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder: (_, _, _) =>
+                                                        Image.network(
+                                                          video
+                                                              .thumbnails
+                                                              .lowResUrl,
+                                                          width: 52,
+                                                          height: 52,
+                                                          fit: BoxFit.cover,
                                                         ),
                                                   ),
-                                                ],
+                                                ),
+                                                title: Text(
+                                                  video.title,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    color: isCurrentSong
+                                                        ? Theme.of(
+                                                            context,
+                                                          ).primaryColor
+                                                        : Colors.white,
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                                subtitle: Text(
+                                                  video.author,
+                                                  maxLines: 1,
+                                                  style: TextStyle(
+                                                    color: isCurrentSong
+                                                        ? Theme.of(context)
+                                                              .primaryColor
+                                                              .withValues(
+                                                                alpha: 0.8,
+                                                              )
+                                                        : Colors.grey[400],
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                                trailing: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    if (isCurrentSong)
+                                                      Padding(
+                                                        padding:
+                                                            const EdgeInsets.only(
+                                                              right: 8,
+                                                            ),
+                                                        child: AnimatedEqualizer(
+                                                          isPlaying:
+                                                              _musicService
+                                                                  .isPlaying,
+                                                          barCount: 3,
+                                                          color: Theme.of(
+                                                            context,
+                                                          ).primaryColor,
+                                                          size: 16,
+                                                        ),
+                                                      ),
+                                                    IconButton(
+                                                      icon: const Icon(
+                                                        Icons.more_horiz,
+                                                        color: Colors.white54,
+                                                      ),
+                                                      onPressed: () =>
+                                                          showSongOptionsBottomSheet(
+                                                            context,
+                                                            video,
+                                                          ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                onTap: () {
+                                                  if (_isArtistSearchActive) {
+                                                    _musicService.playPlaylist(
+                                                      _searchResults,
+                                                      songIndex,
+                                                    );
+                                                  } else {
+                                                    _musicService
+                                                        .startSongRadio(video);
+                                                  }
+                                                },
                                               ),
-                                              onTap: () {
-                                                if (_isArtistSearchActive) {
-                                                  _musicService.playPlaylist(
-                                                    _searchResults,
-                                                    songIndex,
-                                                  );
-                                                } else {
-                                                  _musicService.startSongRadio(
-                                                    video,
-                                                  );
-                                                }
-                                              },
                                             );
                                           },
                                         ),

@@ -8,6 +8,7 @@ import '../widgets/animated_equalizer.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/dilse_scrollbar.dart';
 import '../layouts/desktop_layout_state.dart';
+import '../widgets/desktop/desktop_context_menu.dart';
 import 'album_screen.dart';
 
 class CuratedPlaylistScreen extends StatefulWidget {
@@ -445,139 +446,151 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
                             video.id.value,
                           );
 
-                          return ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 2,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            leading: SizedBox(
-                              width: 76,
-                              child: Row(
-                                children: [
-                                  SizedBox(
-                                    width: 22,
-                                    child: Text(
-                                      '${index + 1}',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: isCurrent
-                                            ? primaryColor
-                                            : Colors.white38,
-                                        fontSize: 13,
-                                        fontWeight: isCurrent
-                                            ? FontWeight.w800
-                                            : FontWeight.w500,
-                                        fontFeatures: const [
-                                          FontFeature.tabularFigures(),
-                                        ],
+                          return GestureDetector(
+                            onSecondaryTapDown: (details) {
+                              DesktopContextMenu.showSongMenu(
+                                context: context,
+                                globalPosition: details.globalPosition,
+                                song: video,
+                              );
+                            },
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 2,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              leading: SizedBox(
+                                width: 76,
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 22,
+                                      child: Text(
+                                        '${index + 1}',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: isCurrent
+                                              ? primaryColor
+                                              : Colors.white38,
+                                          fontSize: 13,
+                                          fontWeight: isCurrent
+                                              ? FontWeight.w800
+                                              : FontWeight.w500,
+                                          fontFeatures: const [
+                                            FontFeature.tabularFigures(),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: SizedBox(
-                                      width: 46,
-                                      height: 46,
-                                      child: Image.network(
-                                        hdThumb,
+                                    const SizedBox(width: 8),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: SizedBox(
                                         width: 46,
                                         height: 46,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, _, _) =>
-                                            Image.network(
-                                              video.thumbnails.lowResUrl,
-                                              width: 46,
-                                              height: 46,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, _, _) =>
-                                                  Container(
-                                                    width: 46,
-                                                    height: 46,
-                                                    color: const Color(
-                                                      0xFF161622,
+                                        child: Image.network(
+                                          hdThumb,
+                                          width: 46,
+                                          height: 46,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, _, _) =>
+                                              Image.network(
+                                                video.thumbnails.lowResUrl,
+                                                width: 46,
+                                                height: 46,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, _, _) =>
+                                                    Container(
+                                                      width: 46,
+                                                      height: 46,
+                                                      color: const Color(
+                                                        0xFF161622,
+                                                      ),
+                                                      child: const Icon(
+                                                        Icons
+                                                            .music_note_rounded,
+                                                        size: 20,
+                                                        color: Colors.white38,
+                                                      ),
                                                     ),
-                                                    child: const Icon(
-                                                      Icons.music_note_rounded,
-                                                      size: 20,
-                                                      color: Colors.white38,
-                                                    ),
-                                                  ),
-                                            ),
+                                              ),
+                                        ),
                                       ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              title: Text(
+                                video.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: isCurrent
+                                      ? primaryColor
+                                      : Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Text(
+                                video.author,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: isCurrent
+                                      ? primaryColor.withValues(alpha: 0.8)
+                                      : Colors.white54,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (video.duration != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: Text(
+                                        _formatDuration(video.duration),
+                                        style: TextStyle(
+                                          color: isCurrent
+                                              ? primaryColor
+                                              : Colors.white38,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  if (isCurrent)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: AnimatedEqualizer(
+                                        isPlaying: _musicService.isPlaying,
+                                        barCount: 3,
+                                        color: primaryColor,
+                                        size: 15,
+                                      ),
+                                    ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.more_vert_rounded,
+                                      color: Colors.white38,
+                                      size: 18,
+                                    ),
+                                    onPressed: () => showSongOptionsBottomSheet(
+                                      context,
+                                      video,
                                     ),
                                   ),
                                 ],
                               ),
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                _musicService.playPlaylist(_tracks, index);
+                              },
                             ),
-                            title: Text(
-                              video.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: isCurrent ? primaryColor : Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            subtitle: Text(
-                              video.author,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: isCurrent
-                                    ? primaryColor.withValues(alpha: 0.8)
-                                    : Colors.white54,
-                                fontSize: 12,
-                              ),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (video.duration != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: Text(
-                                      _formatDuration(video.duration),
-                                      style: TextStyle(
-                                        color: isCurrent
-                                            ? primaryColor
-                                            : Colors.white38,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                if (isCurrent)
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: AnimatedEqualizer(
-                                      isPlaying: _musicService.isPlaying,
-                                      barCount: 3,
-                                      color: primaryColor,
-                                      size: 15,
-                                    ),
-                                  ),
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.more_vert_rounded,
-                                    color: Colors.white38,
-                                    size: 18,
-                                  ),
-                                  onPressed: () => showSongOptionsBottomSheet(
-                                    context,
-                                    video,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            onTap: () {
-                              HapticFeedback.lightImpact();
-                              _musicService.playPlaylist(_tracks, index);
-                            },
                           );
                         }, childCount: _tracks.length),
                       ),
@@ -675,6 +688,16 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
             ),
           );
         }
+      },
+      onSecondaryTapDown: (details) {
+        DesktopContextMenu.showAlbumMenu(
+          context: context,
+          globalPosition: details.globalPosition,
+          albumTitle: album.title,
+          albumArtist: album.artist,
+          albumId: album.id,
+          albumArtwork: album.artwork,
+        );
       },
       child: SizedBox(
         width: 125,
