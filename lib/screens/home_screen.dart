@@ -17,6 +17,10 @@ import 'curated_playlist_screen.dart';
 import 'custom_playlist_screen.dart';
 import '../models/jio_album.dart';
 import '../constants/app_theme_tokens.dart';
+import '../services/auth_service.dart';
+import '../services/studio_search_service.dart';
+import '../services/youtube_library_service.dart';
+import '../widgets/auth/google_profile_header_button.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -43,7 +47,14 @@ class _HomeScreenState extends State<HomeScreen>
   List<JioAlbum> _trendingAlbums = [];
   CircadianContext? _circadianContext;
   List<DailyMixConfig> _dailyMixConfigs = [];
+  // 1-Door Sequential Shelf Loading Flags
+  bool _isLoadingDailyMix1 = true;
+  bool _isLoadingDailyMix2 = true;
+  bool _isLoadingCircadian = true;
   bool _isLoadingCharts = true;
+  bool _isLoadingTrending = true;
+  bool _isLoadingAlbums = true;
+  bool _isLoadingPersonalized = true;
 
   int _selectedMoodIndex = 0;
   List<Video> _moodSongs = [];
@@ -98,20 +109,39 @@ class _HomeScreenState extends State<HomeScreen>
     super.initState();
     _prefs.addListener(_onPrefsChanged);
     _musicService.addListener(_onPrefsChanged);
+    DesktopLayoutState.prioritizedPlaylistDoor.addListener(_onPrefsChanged);
+    DesktopLayoutState.activeNavTab.addListener(_onPrefsChanged);
+    DesktopLayoutState.globalSearchQuery.addListener(_onPrefsChanged);
+
     // Instant zero-wait display if background preload completed during splash
     if (_musicService.hasPreloadedHome &&
         _musicService.preloadedTopChartsIndia.isNotEmpty) {
       _topChartsIndia = List.from(_musicService.preloadedTopChartsIndia);
       _trendingNow = List.from(_musicService.preloadedTrending);
       _isLoadingCharts = false;
+      _isLoadingTrending = false;
     }
-    _loadHomeFeeds();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadHomeFeeds();
+    });
+  }
+
+  void _setHomeFeedComplete(bool complete) {
+    if (DesktopLayoutState.isHomeFeedComplete.value == complete) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        DesktopLayoutState.isHomeFeedComplete.value = complete;
+      }
+    });
   }
 
   @override
   void dispose() {
     _musicService.removeListener(_onPrefsChanged);
     _prefs.removeListener(_onPrefsChanged);
+    DesktopLayoutState.prioritizedPlaylistDoor.removeListener(_onPrefsChanged);
+    DesktopLayoutState.activeNavTab.removeListener(_onPrefsChanged);
+    DesktopLayoutState.globalSearchQuery.removeListener(_onPrefsChanged);
     super.dispose();
   }
 
@@ -199,138 +229,312 @@ class _HomeScreenState extends State<HomeScreen>
       hadCache = true;
       if (mounted) {
         setState(() {
-          if (cachedCircadian.isNotEmpty) _circadianMix = cachedCircadian;
-          if (cachedMix1.isNotEmpty) _dailyMix1 = cachedMix1;
-          if (cachedMix2.isNotEmpty) _dailyMix2 = cachedMix2;
-          if (cachedCharts.isNotEmpty) _topChartsIndia = cachedCharts;
-          if (cachedTrending.isNotEmpty) _trendingNow = cachedTrending;
+          if (cachedCircadian.isNotEmpty) {
+            _circadianMix = cachedCircadian;
+            _isLoadingCircadian = false;
+          }
+          if (cachedMix1.isNotEmpty) {
+            _dailyMix1 = cachedMix1;
+            _isLoadingDailyMix1 = false;
+          }
+          if (cachedMix2.isNotEmpty) {
+            _dailyMix2 = cachedMix2;
+            _isLoadingDailyMix2 = false;
+          }
+          if (cachedCharts.isNotEmpty) {
+            _topChartsIndia = cachedCharts;
+            _isLoadingCharts = false;
+          }
+          if (cachedTrending.isNotEmpty) {
+            _trendingNow = cachedTrending;
+            _isLoadingTrending = false;
+          }
           if (cachedNewReleases.isNotEmpty) _newReleases = cachedNewReleases;
           if (cachedPersonalized.isNotEmpty) {
             _personalizedMixes = cachedPersonalized;
+            _isLoadingPersonalized = false;
           }
-          if (cachedAlbums.isNotEmpty) _trendingAlbums = cachedAlbums;
-          _isLoadingCharts = false;
+          if (cachedAlbums.isNotEmpty) {
+            _trendingAlbums = cachedAlbums;
+            _isLoadingAlbums = false;
+          }
         });
       }
+      _setHomeFeedComplete(true);
+    } else {
+      _setHomeFeedComplete(false);
     }
 
     // 2. Background Refresh / Initial Load
-    // On Web, if cache was already successfully hydrated, skip flooding all 6 browser sockets
-    // so sockets remain 100% available for instant playback and neural queue generation.
+    // Hydrate UI with cached feeds first, then revalidate with fresh Studio Search streams
     if (kIsWeb && hadCache) {
       return;
+    }
+
+    Future<void> pauseIfSearchActive() async {
+      while (mounted) {
+        final isSearchTab =
+            DesktopLayoutState.activeNavTab.value == DesktopNavTab.search;
+        final hasSearchQuery = DesktopLayoutState.globalSearchQuery.value
+            .trim()
+            .isNotEmpty;
+        if (!isSearchTab && !hasSearchQuery) {
+          break;
+        }
+        await Future.delayed(const Duration(milliseconds: 250));
+      }
     }
 
     try {
       final primaryLang = _prefs.preferredLanguages.isNotEmpty
           ? _prefs.preferredLanguages.first
           : 'Telugu';
-      final futureCircadian = _musicService.searchSongs(
-        _circadianContext!.query,
-      );
-      final futureMix1 = _loadRichDailyMix(_dailyMixConfigs[0]);
-      final futureMix2 = _loadRichDailyMix(_dailyMixConfigs[1]);
-      final futureCharts =
-          _musicService.hasPreloadedHome &&
-              _musicService.preloadedTopChartsIndia.isNotEmpty
-          ? Future.value(_musicService.preloadedTopChartsIndia)
-          : _musicService.searchSongs('$primaryLang Top Hits');
-      final futureTrending =
-          _musicService.hasPreloadedHome &&
-              _musicService.preloadedTrending.isNotEmpty
-          ? Future.value(_musicService.preloadedTrending)
-          : _musicService.searchSongs('$primaryLang Trending');
-      final futureNewReleases = _musicService.searchSongs(
-        '$primaryLang Latest Songs',
-      );
-      final futurePersonalized = _dailyMixConfigs.length > 2
-          ? _loadRichDailyMix(_dailyMixConfigs[2])
-          : _musicService.searchSongs('$primaryLang Mix');
-      final futureAlbums = _musicService.searchAlbums(
-        '$primaryLang Soundtracks',
-        limit: 12,
-      );
 
-      final results = await Future.wait<dynamic>([
-        futureCircadian,
-        futureMix1,
-        futureMix2,
-        futureCharts,
-        futureTrending,
-        futureNewReleases,
-        futurePersonalized,
-        futureAlbums,
-      ]);
+      // 1-Door Sequential Priority Pipeline:
+      // Priority 1: Check door hijacking (Did user tap Daily Mix 2 or another playlist?)
+      final prioritized = DesktopLayoutState.prioritizedPlaylistDoor.value;
+      final loadMix2First = prioritized == 'daily_mix_2';
 
-      final circadian = CanonicalSongDedup.deduplicateList(
-        results[0] as List<Video>,
-      );
-      final mix1 = CanonicalSongDedup.deduplicateList(
-        results[1] as List<Video>,
-      );
-      final mix2 = CanonicalSongDedup.deduplicateList(
-        results[2] as List<Video>,
-      );
-      final charts = CanonicalSongDedup.deduplicateList(
-        results[3] as List<Video>,
-      );
-      final trending = CanonicalSongDedup.deduplicateList(
-        results[4] as List<Video>,
-      );
-      final newReleases = CanonicalSongDedup.deduplicateList(
-        results[5] as List<Video>,
-      );
-      final personalized = CanonicalSongDedup.deduplicateList(
-        results[6] as List<Video>,
-      );
-      var albums = (results[7] as List<dynamic>).whereType<JioAlbum>().toList();
-      if (albums.length < 3) {
-        final fallbackAlbums = await _musicService.searchAlbums(
-          primaryLang,
-          limit: 12,
-        );
-        if (fallbackAlbums.isNotEmpty) {
-          albums = fallbackAlbums;
+      if (loadMix2First && _dailyMixConfigs.length > 1) {
+        await pauseIfSearchActive();
+        if (!mounted) return;
+        try {
+          final mix2 = CanonicalSongDedup.deduplicateList(
+            await _loadRichDailyMix(_dailyMixConfigs[1]),
+          );
+          if (mix2.isNotEmpty && mounted) {
+            setState(() {
+              _dailyMix2 = mix2;
+              _isLoadingDailyMix2 = false;
+            });
+            _prefs.cacheHomeFeed('daily_mix_2', _serializeVideos(mix2));
+          }
+        } catch (_) {
+          if (mounted) setState(() => _isLoadingDailyMix2 = false);
         }
       }
 
-      _prefs.cacheHomeFeed('circadian', _serializeVideos(circadian));
-      _prefs.cacheHomeFeed('daily_mix_1', _serializeVideos(mix1));
-      _prefs.cacheHomeFeed('daily_mix_2', _serializeVideos(mix2));
-      _prefs.cacheHomeFeed('charts', _serializeVideos(charts));
-      _prefs.cacheHomeFeed('trending', _serializeVideos(trending));
-      _prefs.cacheHomeFeed('new_releases', _serializeVideos(newReleases));
-      _prefs.cacheHomeFeed('personalized', _serializeVideos(personalized));
-      if (albums.isNotEmpty) {
-        _prefs.cacheHomeFeed(
-          'albums',
-          json.encode(albums.map((a) => a.toJson()).toList()),
-        );
+      // Priority 1: Daily Mix 1
+      await pauseIfSearchActive();
+      if (!mounted) return;
+      if (_dailyMixConfigs.isNotEmpty) {
+        try {
+          final mix1 = CanonicalSongDedup.deduplicateList(
+            await _loadRichDailyMix(_dailyMixConfigs[0]),
+          );
+          if (mix1.isNotEmpty && mounted) {
+            setState(() {
+              _dailyMix1 = mix1;
+              _isLoadingDailyMix1 = false;
+            });
+            _prefs.cacheHomeFeed('daily_mix_1', _serializeVideos(mix1));
+          }
+        } catch (_) {
+          if (mounted) setState(() => _isLoadingDailyMix1 = false);
+        }
       }
 
-      if (mounted) {
-        setState(() {
-          _circadianMix = circadian;
-          _dailyMix1 = mix1;
-          _dailyMix2 = mix2;
-          _topChartsIndia = charts;
-          _trendingNow = trending;
-          _newReleases = newReleases;
-          _personalizedMixes = personalized;
-          if (albums.isNotEmpty) _trendingAlbums = albums;
-          _isLoadingCharts = false;
-        });
-        // Asynchronously enrich home cards with genuine JioSaavn album artwork
-        _musicService.enrichArtworkForSongs(charts);
-        _musicService.enrichArtworkForSongs(trending);
-        _musicService.enrichArtworkForSongs(circadian);
+      // Priority 2: Daily Mix 2 (if not loaded first)
+      await pauseIfSearchActive();
+      if (!mounted) return;
+      if (!loadMix2First && _dailyMixConfigs.length > 1) {
+        try {
+          final mix2 = CanonicalSongDedup.deduplicateList(
+            await _loadRichDailyMix(_dailyMixConfigs[1]),
+          );
+          if (mix2.isNotEmpty && mounted) {
+            setState(() {
+              _dailyMix2 = mix2;
+              _isLoadingDailyMix2 = false;
+            });
+            _prefs.cacheHomeFeed('daily_mix_2', _serializeVideos(mix2));
+          }
+        } catch (_) {
+          if (mounted) setState(() => _isLoadingDailyMix2 = false);
+        }
       }
+
+      // Priority 3: Circadian / Made For You (Contextual time-of-day)
+      await pauseIfSearchActive();
+      if (!mounted) return;
+      if (_circadianContext != null) {
+        try {
+          List<Video> circadian = CanonicalSongDedup.deduplicateList(
+            await StudioSearchService().searchSongs(
+              _circadianContext!.query,
+              limit: 30,
+            ),
+          );
+          if (circadian.isEmpty) {
+            circadian = CanonicalSongDedup.deduplicateList(
+              await _musicService.searchSongs(_circadianContext!.query),
+            );
+          }
+          if (circadian.isNotEmpty && mounted) {
+            setState(() {
+              _circadianMix = circadian;
+              _isLoadingCircadian = false;
+            });
+            _prefs.cacheHomeFeed('circadian', _serializeVideos(circadian));
+            _musicService.enrichArtworkForSongs(circadian);
+          }
+        } catch (_) {
+          if (mounted) setState(() => _isLoadingCircadian = false);
+        }
+      }
+
+      // Priority 4: Top Charts India
+      await pauseIfSearchActive();
+      if (!mounted) return;
+      try {
+        List<Video> charts = CanonicalSongDedup.deduplicateList(
+          await StudioSearchService().searchSongs(
+            'Top Charts India $primaryLang',
+            limit: 30,
+          ),
+        );
+        if (charts.isEmpty) {
+          charts = CanonicalSongDedup.deduplicateList(
+            _musicService.hasPreloadedHome &&
+                    _musicService.preloadedTopChartsIndia.isNotEmpty
+                ? _musicService.preloadedTopChartsIndia
+                : await _musicService.searchSongs('$primaryLang Top Hits'),
+          );
+        }
+        if (charts.isNotEmpty && mounted) {
+          setState(() {
+            _topChartsIndia = charts;
+            _isLoadingCharts = false;
+          });
+          _prefs.cacheHomeFeed('charts', _serializeVideos(charts));
+          _musicService.enrichArtworkForSongs(charts);
+        }
+      } catch (_) {
+        if (mounted) setState(() => _isLoadingCharts = false);
+      }
+
+      // Priority 5: Trending Now
+      await pauseIfSearchActive();
+      if (!mounted) return;
+      try {
+        final trending = CanonicalSongDedup.deduplicateList(
+          _musicService.hasPreloadedHome &&
+                  _musicService.preloadedTrending.isNotEmpty
+              ? _musicService.preloadedTrending
+              : await _musicService.searchSongs('$primaryLang Trending'),
+        );
+        if (trending.isNotEmpty && mounted) {
+          setState(() {
+            _trendingNow = trending;
+            _isLoadingTrending = false;
+          });
+          _prefs.cacheHomeFeed('trending', _serializeVideos(trending));
+          _musicService.enrichArtworkForSongs(trending);
+        }
+      } catch (_) {
+        if (mounted) setState(() => _isLoadingTrending = false);
+      }
+
+      // Priority 6: Soundtracks & Albums
+      await pauseIfSearchActive();
+      if (!mounted) return;
+      if (_trendingAlbums.isEmpty) {
+        try {
+          var albums = await _musicService.searchAlbums(
+            '$primaryLang Soundtracks',
+            limit: 12,
+          );
+          if (albums.length < 3) {
+            final fallbackAlbums = await _musicService.searchAlbums(
+              primaryLang,
+              limit: 12,
+            );
+            if (fallbackAlbums.isNotEmpty) {
+              albums = fallbackAlbums;
+            }
+          }
+          if (mounted) {
+            setState(() {
+              _trendingAlbums = albums;
+              _isLoadingAlbums = false;
+            });
+            if (albums.isNotEmpty) {
+              _prefs.cacheHomeFeed(
+                'albums',
+                json.encode(albums.map((a) => a.toJson()).toList()),
+              );
+            }
+          }
+        } catch (_) {
+          if (mounted) setState(() => _isLoadingAlbums = false);
+        }
+      }
+
+      // Priority 7: Personalized Mixes (Made For You)
+      await pauseIfSearchActive();
+      if (!mounted) return;
+      if (_personalizedMixes.isEmpty) {
+        try {
+          List<Video> personalized = CanonicalSongDedup.deduplicateList(
+            await StudioSearchService().searchSongs(
+              '$primaryLang Made For You Mix',
+              limit: 30,
+            ),
+          );
+          if (personalized.isEmpty) {
+            personalized = CanonicalSongDedup.deduplicateList(
+              _dailyMixConfigs.length > 2
+                  ? await _loadRichDailyMix(_dailyMixConfigs[2])
+                  : await _musicService.searchSongs('$primaryLang Mix'),
+            );
+          }
+          if (mounted) {
+            setState(() {
+              _personalizedMixes = personalized;
+              _isLoadingPersonalized = false;
+            });
+            _prefs.cacheHomeFeed(
+              'personalized',
+              _serializeVideos(personalized),
+            );
+          }
+        } catch (_) {
+          if (mounted) setState(() => _isLoadingPersonalized = false);
+        }
+      }
+
+      // Priority 8: New Releases
+      await pauseIfSearchActive();
+      if (!mounted) return;
+      if (_newReleases.isEmpty) {
+        try {
+          final newReleases = CanonicalSongDedup.deduplicateList(
+            await _musicService.searchSongs('$primaryLang Latest Songs'),
+          );
+          if (mounted) {
+            setState(() {
+              _newReleases = newReleases;
+            });
+            _prefs.cacheHomeFeed('new_releases', _serializeVideos(newReleases));
+          }
+        } catch (_) {}
+      }
+
+      // Entire Home Feed Sequence Complete! Signal Left Sidebar and layout.
+      _setHomeFeedComplete(true);
     } catch (e) {
       if (mounted && !hadCache) {
         setState(() {
+          _isLoadingDailyMix1 = false;
+          _isLoadingDailyMix2 = false;
+          _isLoadingCircadian = false;
           _isLoadingCharts = false;
+          _isLoadingTrending = false;
+          _isLoadingAlbums = false;
+          _isLoadingPersonalized = false;
         });
       }
+      _setHomeFeedComplete(true);
     }
   }
 
@@ -485,41 +689,48 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     ),
                     if (!kIsWeb || MediaQuery.of(context).size.width < 1024)
-                      GestureDetector(
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          ProfileSideDrawer.show(context);
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(2.5),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.18),
-                              width: 1.5,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.35),
-                                blurRadius: 10,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const GoogleProfileHeaderButton(compact: true),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              ProfileSideDrawer.show(context);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(2.5),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.18),
+                                  width: 1.5,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.35),
+                                    blurRadius: 10,
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          child: CircleAvatar(
-                            backgroundColor: const Color(0xFF1E1E28),
-                            radius: 20,
-                            backgroundImage: getProfileImageProvider(
-                              _prefs.profileImagePath,
+                              child: CircleAvatar(
+                                backgroundColor: const Color(0xFF1E1E28),
+                                radius: 20,
+                                backgroundImage: getProfileImageProvider(
+                                  _prefs.profileImagePath,
+                                ),
+                                child: !hasProfileImage(_prefs.profileImagePath)
+                                    ? const Icon(
+                                        Icons.person_rounded,
+                                        color: Colors.white,
+                                        size: 22,
+                                      )
+                                    : null,
+                              ),
                             ),
-                            child: !hasProfileImage(_prefs.profileImagePath)
-                                ? const Icon(
-                                    Icons.person_rounded,
-                                    color: Colors.white,
-                                    size: 22,
-                                  )
-                                : null,
                           ),
-                        ),
+                        ],
                       ),
                   ],
                 ),
@@ -528,6 +739,9 @@ class _HomeScreenState extends State<HomeScreen>
 
             // Smart Playback Quick Resume Banner
             _buildQuickResumeBanner(),
+
+            // Personalized YouTube Mixes (Supermix, Liked Music, Discover Mix)
+            _buildPersonalizedYouTubeMixes(),
 
             // 2x3 Minimalist Quick Access Grid for 1-Tap Playback
             _buildQuickAccessGrid(),
@@ -600,69 +814,86 @@ class _HomeScreenState extends State<HomeScreen>
 
             const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
-            // Loading state with Shimmer Skeletons
-            if (_isLoadingCharts)
-              const SliverToBoxAdapter(
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 160),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ShimmerBillboard(),
-                    SizedBox(height: 20),
-                    ShimmerCardRow(),
-                    SizedBox(height: 20),
-                    ShimmerSongRow(),
-                  ],
-                ),
-              )
-            else
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 160),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Dedicated Vibe Radio Hub vs Default Full Home Feed
-                      if (_selectedMoodIndex != 0)
-                        _buildVibeRadioView(_selectedMoodIndex)
-                      else ...[
-                        // Circadian Time-of-Day Contextual Shelf
-                        if (_circadianMix.isNotEmpty &&
-                            _circadianContext != null) ...[
-                          _buildSectionHeader(
-                            _circadianContext!.title.toUpperCase(),
-                            _circadianContext!.subtitle,
-                          ),
-                          _buildHorizontalChartCards(_circadianMix),
-                          const SizedBox(height: 24),
-                        ],
+                    // Dedicated Vibe Radio Hub vs Default Full Home Feed
+                    if (_selectedMoodIndex != 0)
+                      _buildVibeRadioView(_selectedMoodIndex)
+                    else ...[
+                      // Circadian Time-of-Day Contextual Shelf
+                      if (_circadianMix.isNotEmpty &&
+                          _circadianContext != null) ...[
+                        _buildSectionHeader(
+                          _circadianContext!.title.toUpperCase(),
+                          _circadianContext!.subtitle,
+                        ),
+                        _buildHorizontalChartCards(_circadianMix),
+                        const SizedBox(height: 24),
+                      ] else if (_isLoadingCircadian &&
+                          _circadianContext != null) ...[
+                        _buildSectionHeader(
+                          _circadianContext!.title.toUpperCase(),
+                          _circadianContext!.subtitle,
+                        ),
+                        const ShimmerCardRow(),
+                        const SizedBox(height: 24),
+                      ],
 
-                        // TOP CHARTS: INDIA
+                      // TOP CHARTS: INDIA
+                      if (_topChartsIndia.isNotEmpty) ...[
                         _buildSectionHeader(
                           'TOP CHARTS: INDIA',
                           'Updated Daily',
                         ),
                         _buildHorizontalChartCards(_topChartsIndia),
                         const SizedBox(height: 24),
+                      ] else if (_isLoadingCharts) ...[
+                        _buildSectionHeader(
+                          'TOP CHARTS: INDIA',
+                          'Updated Daily',
+                        ),
+                        const ShimmerCardRow(),
+                        const SizedBox(height: 24),
+                      ],
 
-                        // BLOCKBUSTER SOUNDTRACKS & ALBUMS
-                        if (_trendingAlbums.isNotEmpty) ...[
-                          _buildAlbumsSection(),
-                          const SizedBox(height: 24),
-                        ],
+                      // BLOCKBUSTER SOUNDTRACKS & ALBUMS
+                      if (_trendingAlbums.isNotEmpty) ...[
+                        _buildAlbumsSection(),
+                        const SizedBox(height: 24),
+                      ] else if (_isLoadingAlbums) ...[
+                        _buildSectionHeader(
+                          'BLOCKBUSTER SOUNDTRACKS & ALBUMS',
+                          'Original Soundtracks & Compilations',
+                        ),
+                        const ShimmerCardRow(),
+                        const SizedBox(height: 24),
+                      ],
 
-                        // MADE FOR YOU
-                        if (_personalizedMixes.isNotEmpty) ...[
-                          _buildSectionHeader(
-                            'MADE FOR YOU',
-                            'Curated for your taste',
-                          ),
-                          _buildHorizontalChartCards(_personalizedMixes),
-                          const SizedBox(height: 24),
-                        ],
+                      // MADE FOR YOU
+                      if (_personalizedMixes.isNotEmpty) ...[
+                        _buildSectionHeader(
+                          'MADE FOR YOU',
+                          'Curated for your taste',
+                        ),
+                        _buildHorizontalChartCards(_personalizedMixes),
+                        const SizedBox(height: 24),
+                      ] else if (_isLoadingPersonalized) ...[
+                        _buildSectionHeader(
+                          'MADE FOR YOU',
+                          'Curated for your taste',
+                        ),
+                        const ShimmerCardRow(),
+                        const SizedBox(height: 24),
                       ],
                     ],
-                  ),
+                  ],
                 ),
               ),
+            ),
           ],
         ),
       ),
@@ -678,6 +909,7 @@ class _HomeScreenState extends State<HomeScreen>
         title: dailyMix1?.title ?? 'Daily Mix 1',
         icon: Icons.shuffle_rounded,
         iconGradient: const [Color(0xFFE040FB), Color(0xFF1DB954)],
+        isLoading: _isLoadingDailyMix1 && _dailyMix1.isEmpty,
         imageUrl: _dailyMix1.isNotEmpty
             ? (MusicService.resolveArtworkUrl(_dailyMix1.first).isNotEmpty
                   ? MusicService.resolveArtworkUrl(_dailyMix1.first)
@@ -685,6 +917,7 @@ class _HomeScreenState extends State<HomeScreen>
             : null,
         onTap: () {
           HapticFeedback.lightImpact();
+          DesktopLayoutState.prioritizeDoor('daily_mix_1');
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -721,6 +954,7 @@ class _HomeScreenState extends State<HomeScreen>
         title: dailyMix2?.title ?? 'Daily Mix 2',
         icon: Icons.graphic_eq_rounded,
         iconGradient: const [Color(0xFF00C6FF), Color(0xFF0072FF)],
+        isLoading: _isLoadingDailyMix2 && _dailyMix2.isEmpty,
         imageUrl: _dailyMix2.isNotEmpty
             ? (MusicService.resolveArtworkUrl(_dailyMix2.first).isNotEmpty
                   ? MusicService.resolveArtworkUrl(_dailyMix2.first)
@@ -728,6 +962,7 @@ class _HomeScreenState extends State<HomeScreen>
             : null,
         onTap: () {
           HapticFeedback.lightImpact();
+          DesktopLayoutState.prioritizeDoor('daily_mix_2');
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -762,6 +997,14 @@ class _HomeScreenState extends State<HomeScreen>
                 initialSongs: _topChartsIndia,
                 gradientColors: const [Color(0xFFFF512F), Color(0xFFDD2476)],
                 icon: Icons.trending_up_rounded,
+                fetchSongs: () {
+                  final lang = _prefs.preferredLanguages.isNotEmpty
+                      ? _prefs.preferredLanguages.first
+                      : 'Telugu';
+                  return StudioSearchService().searchSongs(
+                    'Top Charts India $lang',
+                  );
+                },
               ),
             ),
           );
@@ -796,6 +1039,7 @@ class _HomeScreenState extends State<HomeScreen>
         title: 'Trending',
         icon: Icons.whatshot_rounded,
         iconGradient: const [Color(0xFFF857A6), Color(0xFFFF5858)],
+        isLoading: _isLoadingTrending && _trendingNow.isEmpty,
         imageUrl: _trendingNow.isNotEmpty
             ? (MusicService.resolveArtworkUrl(_trendingNow.first).isNotEmpty
                   ? MusicService.resolveArtworkUrl(_trendingNow.first)
@@ -859,8 +1103,13 @@ class _HomeScreenState extends State<HomeScreen>
                       child: SizedBox(
                         width: 52,
                         height: 52,
-                        child:
-                            item.imageUrl != null && item.imageUrl!.isNotEmpty
+                        child: item.isLoading
+                            ? const ShimmerBox(
+                                width: 52,
+                                height: 52,
+                                borderRadius: 0,
+                              )
+                            : item.imageUrl != null && item.imageUrl!.isNotEmpty
                             ? Image.network(
                                 item.imageUrl!,
                                 width: 52,
@@ -917,6 +1166,511 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           );
         }, childCount: items.length),
+      ),
+    );
+  }
+
+  Widget _buildPersonalizedYouTubeMixes() {
+    return SliverToBoxAdapter(
+      child: AnimatedBuilder(
+        animation: Listenable.merge([AuthService(), YouTubeLibraryService()]),
+        builder: (context, _) {
+          final auth = AuthService();
+          final ytLib = YouTubeLibraryService();
+
+          if (!auth.isAuthenticated) {
+            if (_prefs.isYouTubeConnectDismissed == true) {
+              return const SizedBox.shrink();
+            }
+            // Elegant Glassmorphic YouTube Connection Card
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Stack(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF1E1E2C).withValues(alpha: 0.95),
+                          const Color(0xFF14141E).withValues(alpha: 0.95),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.10),
+                        width: 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          blurRadius: 14,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: LayoutBuilder(
+                      builder: (context, cardConstraints) {
+                        final isNarrow = cardConstraints.maxWidth < 600;
+
+                        if (isNarrow) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 38,
+                                    height: 38,
+                                    decoration: BoxDecoration(
+                                      color: const Color(
+                                        0xFFFF0000,
+                                      ).withValues(alpha: 0.14),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: const Color(
+                                          0xFFFF0000,
+                                        ).withValues(alpha: 0.3),
+                                      ),
+                                    ),
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.smart_display_rounded,
+                                        color: Color(0xFFFF0000),
+                                        size: 22,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Connect YouTube Taste',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 13.5,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: -0.2,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Import your Liked Music & Supermix in pure 320k (Strictly Read-Only).',
+                                          style: TextStyle(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.6,
+                                            ),
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              const Center(child: GoogleProfileHeaderButton()),
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: const Color(
+                                  0xFFFF0000,
+                                ).withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFFFF0000,
+                                  ).withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.smart_display_rounded,
+                                  color: Color(0xFFFF0000),
+                                  size: 26,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Connect YouTube Taste',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Import your Liked Music & Supermix in pure 320k (Strictly Read-Only).',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.6,
+                                      ),
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const GoogleProfileHeaderButton(),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: IconButton(
+                      tooltip: 'Dismiss',
+                      iconSize: 18,
+                      visualDensity: VisualDensity.compact,
+                      splashRadius: 18,
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        _prefs.setYouTubeConnectDismissed(true);
+                      },
+                      icon: Icon(
+                        Icons.close,
+                        color: Colors.white.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          // Authenticated: Render YouTube Mixes Horizontal Cards
+          final ytMixCards = [
+            _YouTubeMixCardData(
+              title: 'Liked Music',
+              subtitle: ytLib.likedMusicResolvedToJio.isNotEmpty
+                  ? '${ytLib.likedMusicResolvedToJio.length} studio songs'
+                  : (ytLib.likedMusic.isNotEmpty
+                        ? '${ytLib.likedMusic.length} songs'
+                        : 'Your Likes'),
+              gradientColors: const [Color(0xFFFF0055), Color(0xFF7928CA)],
+              icon: Icons.thumb_up_alt_rounded,
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CuratedPlaylistScreen(
+                      title: 'Liked Music',
+                      subtitle: 'From Your YouTube Likes (Studio 320k)',
+                      gradientColors: const [
+                        Color(0xFFFF0055),
+                        Color(0xFF7928CA),
+                      ],
+                      icon: Icons.thumb_up_alt_rounded,
+                      fetchSongs: () => ytLib.fetchLikedMusicResolvedToJio(),
+                    ),
+                  ),
+                );
+              },
+            ),
+            _YouTubeMixCardData(
+              title: 'My Supermix',
+              subtitle: 'Endless personalized mix',
+              gradientColors: const [Color(0xFFFF0000), Color(0xFFFF7A00)],
+              icon: Icons.auto_awesome_rounded,
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CuratedPlaylistScreen(
+                      title: 'My Supermix',
+                      subtitle: 'Personalized Endless Flow',
+                      gradientColors: const [
+                        Color(0xFFFF0000),
+                        Color(0xFFFF7A00),
+                      ],
+                      icon: Icons.auto_awesome_rounded,
+                      fetchSongs: () => ytLib.fetchSupermix(),
+                    ),
+                  ),
+                );
+              },
+            ),
+            _YouTubeMixCardData(
+              title: 'Discover Mix',
+              subtitle: 'Fresh tracks tuned to taste',
+              gradientColors: const [Color(0xFF00C6FF), Color(0xFF0072FF)],
+              icon: Icons.explore_rounded,
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CuratedPlaylistScreen(
+                      title: 'Discover Mix',
+                      subtitle: 'Fresh Personalized Drops',
+                      gradientColors: const [
+                        Color(0xFF00C6FF),
+                        Color(0xFF0072FF),
+                      ],
+                      icon: Icons.explore_rounded,
+                      fetchSongs: () => ytLib.fetchDiscoverMix(),
+                    ),
+                  ),
+                );
+              },
+            ),
+            _YouTubeMixCardData(
+              title: 'New Release Mix',
+              subtitle: 'Latest drops from artists',
+              gradientColors: const [Color(0xFF11998E), Color(0xFF38EF7D)],
+              icon: Icons.fiber_new_rounded,
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CuratedPlaylistScreen(
+                      title: 'New Release Mix',
+                      subtitle: 'Latest Singles & Drops',
+                      gradientColors: const [
+                        Color(0xFF11998E),
+                        Color(0xFF38EF7D),
+                      ],
+                      icon: Icons.fiber_new_rounded,
+                      fetchSongs: () => ytLib.fetchNewReleaseMix(),
+                    ),
+                  ),
+                );
+              },
+            ),
+            _YouTubeMixCardData(
+              title: 'Forgotten Tracks',
+              subtitle: 'Rediscover your past favorites',
+              gradientColors: const [Color(0xFF8A2387), Color(0xFFE94057)],
+              icon: Icons.history_toggle_off_rounded,
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CuratedPlaylistScreen(
+                      title: 'Forgotten Tracks',
+                      subtitle: 'Rediscover Past Favorites',
+                      gradientColors: const [
+                        Color(0xFF8A2387),
+                        Color(0xFFE94057),
+                      ],
+                      icon: Icons.history_toggle_off_rounded,
+                      fetchSongs: () => ytLib.fetchForgottenTracks(),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ];
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.smart_display_rounded,
+                      color: Color(0xFFFF0000),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'FROM YOUR YOUTUBE',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(100),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.12),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.lock_outline_rounded,
+                            color: Colors.white54,
+                            size: 11,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Read-Only',
+                            style: TextStyle(
+                              color: Colors.white60,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                height: 124,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  itemCount: ytMixCards.length,
+                  itemBuilder: (context, index) {
+                    final item = ytMixCards[index];
+                    return _buildYouTubeMixCard(item);
+                  },
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildYouTubeMixCard(_YouTubeMixCardData item) {
+    return Container(
+      width: 175,
+      margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [
+            item.gradientColors.first.withValues(alpha: 0.28),
+            item.gradientColors.last.withValues(alpha: 0.14),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(
+          color: item.gradientColors.first.withValues(alpha: 0.35),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: item.onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: item.gradientColors,
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: item.gradientColors.first.withValues(
+                              alpha: 0.4,
+                            ),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                      child: Icon(item.icon, color: Colors.white, size: 16),
+                    ),
+                    const Icon(
+                      Icons.play_arrow_rounded,
+                      color: Colors.white60,
+                      size: 22,
+                    ),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.subtitle,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.65),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1839,6 +2593,7 @@ class _HomeQuickAccessItem {
   final IconData icon;
   final List<Color> iconGradient;
   final String? imageUrl;
+  final bool isLoading;
   final VoidCallback onTap;
 
   const _HomeQuickAccessItem({
@@ -1846,6 +2601,23 @@ class _HomeQuickAccessItem {
     required this.icon,
     required this.iconGradient,
     this.imageUrl,
+    this.isLoading = false,
+    required this.onTap,
+  });
+}
+
+class _YouTubeMixCardData {
+  final String title;
+  final String subtitle;
+  final List<Color> gradientColors;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _YouTubeMixCardData({
+    required this.title,
+    required this.subtitle,
+    required this.gradientColors,
+    required this.icon,
     required this.onTap,
   });
 }

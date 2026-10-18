@@ -58,6 +58,22 @@ class DesktopLayoutState {
     }
   }
 
+  /// Whether the Home Screen feed has completed its primary sequential loading.
+  /// Defaults to true so that isolated tests don't wait, but managed dynamically
+  /// by HomeScreen on mount.
+  static final ValueNotifier<bool> isHomeFeedComplete = ValueNotifier<bool>(
+    true,
+  );
+
+  /// Signal to request immediate prioritization / door routing for a specific playlist.
+  static final ValueNotifier<String?> prioritizedPlaylistDoor =
+      ValueNotifier<String?>(null);
+
+  /// Requests immediate door routing / prioritization for a playlist or mix.
+  static void prioritizeDoor(String doorId) {
+    prioritizedPlaylistDoor.value = doorId;
+  }
+
   /// Width of the resizable left library sidebar (clamped between 72.0 and 398.0).
   static final ValueNotifier<double> leftSidebarWidth = ValueNotifier<double>(
     280.0,

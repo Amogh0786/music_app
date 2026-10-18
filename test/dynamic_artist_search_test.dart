@@ -362,6 +362,152 @@ void main() {
       expect(bloodySweetCount, equals(1));
     });
 
+    Video makeVideo(String id, String title, String author) => Video(
+      VideoId(id.padRight(11, '0')),
+      title,
+      author,
+      ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
+      DateTime.now(),
+      '',
+      null,
+      '',
+      const Duration(minutes: 3, seconds: 45),
+      ThumbnailSet(id.padRight(11, '0')),
+      null,
+      Engagement(0, null, null),
+      false,
+    );
+
+    test(
+      'rankSearchResults enforces Relevance Floor, collapses compilation duplicates, and honors Entity Anchor',
+      () {
+        final testPool = [
+          makeVideo(
+            'tzp_title',
+            'Taare Zameen Par',
+            'Shankar Mahadevan, Raman Mahadevan',
+          ),
+          makeVideo(
+            'maa_ost',
+            'Maa (From "Taare Zameen Par")',
+            'Shankar Mahadevan',
+          ),
+          makeVideo(
+            'maa_mom',
+            'Maa (Mother\'s Day Special)',
+            'Prasoon Joshi, Shankar Mahadevan',
+          ),
+          makeVideo('maa_comp', 'Maa', 'Various Artists'),
+          makeVideo(
+            'kholo',
+            'Kholo Kholo (From "Taare Zameen Par")',
+            'Raman Mahadevan',
+          ),
+          makeVideo('mela_dekho', 'Dekho Dekho', 'Aamir Khan, Alka Yagnik'),
+        ];
+
+        final anchor = makeVideo(
+          'ytm_anchor',
+          'Taare Zameen Par',
+          'Shankar Mahadevan',
+        );
+
+        // 1. Multi-word search for "Taare Zameen Par"
+        final ranked = MusicService().rankSearchResults(
+          testPool,
+          'Taare Zameen Par',
+          anchorVideo: anchor,
+        );
+
+        // Verified title track must be pinned at index 0
+        expect(ranked.first.id.value, equals('tzp_title'.padRight(11, '0')));
+
+        // Irrelevant track from different film ("Dekho Dekho" from Mela) must be dropped by Relevance Floor
+        expect(ranked.any((s) => s.title.contains('Dekho Dekho')), isFalse);
+
+        // 3 duplicate versions of "Maa" across compilations must collapse to exactly 1
+        final maaCount = ranked
+            .where((s) => s.title.toLowerCase().startsWith('maa'))
+            .length;
+        expect(maaCount, equals(1));
+
+        // 2. Typo query: "Tare Zami Par" with anchor should still pin "Taare Zameen Par" at index 0
+        final typoRanked = MusicService().rankSearchResults(
+          testPool,
+          'Tare Zami Par',
+          anchorVideo: anchor,
+        );
+        expect(
+          typoRanked.first.id.value,
+          equals('tzp_title'.padRight(11, '0')),
+        );
+        expect(typoRanked.any((s) => s.title.contains('Dekho Dekho')), isFalse);
+      },
+    );
+
+    test(
+      'rankSearchResults prioritizes exact match and preserves alternative songs below it',
+      () {
+        final songA = makeVideo('exact_mat01', 'Finding Her', 'Kushagra');
+        final songB = makeVideo(
+          'alt_match01',
+          'Finding Her at My Door',
+          'Antone Sanders',
+        );
+        final songC = makeVideo('cover_ver01', 'Finding Her', 'Anuv Jain');
+
+        final anchor = makeVideo('ytm_anchor1', 'Finding Her', 'Kushagra');
+
+        final ranked = MusicService().rankSearchResults(
+          [songC, songB, songA],
+          'Finding Her',
+          anchorVideo: anchor,
+        );
+
+        // Exact match by Kushagra must be at the very top (index 0)
+        expect(ranked.first.id.value, equals('exact_mat01'.padRight(11, '0')));
+
+        // Alternative song by Antone Sanders must NOT be discarded
+        expect(
+          ranked.any((s) => s.id.value == 'alt_match01'.padRight(11, '0')),
+          isTrue,
+        );
+
+        // Cover by Anuv Jain must also be preserved, but ranked below the original exact match
+        expect(
+          ranked.any((s) => s.id.value == 'cover_ver01'.padRight(11, '0')),
+          isTrue,
+        );
+        expect(ranked.length, equals(3));
+      },
+    );
+
+    test(
+      'rankSearchResults prioritizes original artist via Google/YTM Entity Anchor',
+      () {
+        final original = makeVideo('adele_orig1', 'Skyfall', 'Adele');
+        final cover = makeVideo('madi_cover1', 'Skyfall', 'Madilyn Bailey');
+        final orchestra = makeVideo(
+          'orch_cover1',
+          'Skyfall',
+          'The Royal Philharmonic Orchestra',
+        );
+
+        final anchor = makeVideo('ytm_adele01', 'Skyfall', 'Adele');
+
+        final ranked = MusicService().rankSearchResults(
+          [cover, orchestra, original],
+          'Skyfall',
+          anchorVideo: anchor,
+        );
+
+        // Original artist matching anchor must be #1
+        expect(ranked.first.id.value, equals('adele_orig1'.padRight(11, '0')));
+        // Other versions preserved below
+        expect(ranked.length, equals(3));
+      },
+    );
+
     test(
       'fetchEntitySuggestions returns artist suggestion for known curated artist',
       () async {

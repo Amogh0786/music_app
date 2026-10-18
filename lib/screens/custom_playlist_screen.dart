@@ -10,6 +10,7 @@ import '../widgets/mini_player.dart';
 import '../widgets/playlist_action_menu.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/dilse_scrollbar.dart';
+import '../widgets/shimmer_loading.dart';
 import '../layouts/desktop_layout_state.dart';
 
 class CustomPlaylistScreen extends StatefulWidget {
@@ -973,25 +974,10 @@ class _CustomPlaylistScreenState extends State<CustomPlaylistScreen> {
                     ),
 
                     if (_isSearchingGlobal && _globalRecommendations.isEmpty)
-                      SliverToBoxAdapter(
+                      const SliverToBoxAdapter(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 36),
-                          child: Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                CircularProgressIndicator(color: themeColor),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'Searching catalog for "$_searchQuery"...',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.6),
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          padding: EdgeInsets.symmetric(vertical: 20),
+                          child: ShimmerSongRow(),
                         ),
                       )
                     else if (!_isSearchingGlobal &&

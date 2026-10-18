@@ -78,6 +78,30 @@ void main() {
     );
 
     testWidgets(
+      'Typing single character maintains TextField focus without unmounting or dropping focus',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(const MaterialApp(home: SearchScreen()));
+        await tester.pumpAndSettle();
+
+        // Tap on TextField to focus it
+        await tester.tap(find.byType(TextField));
+        await tester.pumpAndSettle();
+
+        final focusNode = tester
+            .widget<TextField>(find.byType(TextField))
+            .focusNode;
+        expect(focusNode?.hasFocus, isTrue);
+
+        // Enter single character (previously triggered unmount/remount losing focus)
+        await tester.enterText(find.byType(TextField), 'a');
+        await tester.pump();
+
+        expect(focusNode?.hasFocus, isTrue);
+        expect(find.byKey(const ValueKey('search_text_field')), findsOneWidget);
+      },
+    );
+
+    testWidgets(
       'SearchScreen PopScope intercepts back navigation when search is active',
       (WidgetTester tester) async {
         final GlobalKey<SearchScreenState> searchKey =

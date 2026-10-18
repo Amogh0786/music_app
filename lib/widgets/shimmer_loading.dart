@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 /// High-performance, zero-dependency shimmer effect that sweeps smoothly across child widgets.
@@ -21,7 +23,14 @@ class _ShimmerLoadingState extends State<ShimmerLoading>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
-    )..repeat();
+    );
+    final isTesting =
+        !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+    if (!isTesting) {
+      _controller.repeat();
+    } else {
+      _controller.value = 0.5;
+    }
   }
 
   @override
@@ -198,6 +207,47 @@ class ShimmerSongRow extends StatelessWidget {
           );
         }),
       ),
+    );
+  }
+}
+
+/// Skeleton for Left Sidebar Library Items (compact or expanded mode)
+class ShimmerSidebarRow extends StatelessWidget {
+  final bool isCompact;
+
+  const ShimmerSidebarRow({super.key, this.isCompact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return ShimmerLoading(
+      child: isCompact
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 4.0),
+              child: ShimmerBox(width: 44, height: 44, borderRadius: 8),
+            )
+          : Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8.0,
+                vertical: 6.0,
+              ),
+              child: Row(
+                children: [
+                  const ShimmerBox(width: 48, height: 48, borderRadius: 8),
+                  const SizedBox(width: 12.0),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        ShimmerBox(width: 120, height: 13, borderRadius: 4),
+                        SizedBox(height: 6.0),
+                        ShimmerBox(width: 75, height: 10, borderRadius: 4),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }

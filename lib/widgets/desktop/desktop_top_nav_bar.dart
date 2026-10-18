@@ -5,6 +5,7 @@ import '../../services/preferences_service.dart';
 import '../../screens/dilse_capsule_screen.dart';
 import '../../screens/settings_screen.dart';
 import '../../screens/profile_screen.dart';
+import '../auth/google_profile_header_button.dart';
 
 /// Spotify-grade 64px Desktop Top Global Navigation Bar (#global-nav-bar).
 ///
@@ -113,8 +114,8 @@ class _DesktopTopNavBarState extends State<DesktopTopNavBar> {
                 final isCompact = constraints.maxWidth < 900.0;
                 final isSuperCompact = constraints.maxWidth < 750.0;
                 final searchWidth = isSuperCompact
-                    ? 220.0
-                    : (isCompact ? 300.0 : 460.0);
+                    ? 200.0
+                    : (isCompact ? 260.0 : 340.0);
 
                 return Row(
                   children: [
@@ -468,6 +469,11 @@ class _DesktopTopNavBarState extends State<DesktopTopNavBar> {
                                 DesktopLayoutState.toggleRightPanel(),
                           ),
                         ),
+
+                        const SizedBox(width: 8.0),
+
+                        // Google Sign-In & YouTube Account Profile Button
+                        const GoogleProfileHeaderButton(compact: true),
 
                         const SizedBox(width: 8.0),
 

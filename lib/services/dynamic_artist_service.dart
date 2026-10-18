@@ -5,6 +5,7 @@ import 'preferences_service.dart';
 import 'music_service.dart';
 import 'playlist_artist_filter.dart';
 import 'canonical_song_dedup.dart';
+import 'youtube_library_service.dart';
 
 /// Data model representing an artist in the Search section.
 class ArtistItem {
@@ -609,6 +610,13 @@ class DynamicArtistService {
       final author = song['author'] ?? '';
       final title = song['title'] ?? '';
       final extracted = _extractArtists(author, title);
+      userArtistNames.addAll(extracted);
+    }
+
+    // (f) Authenticated Google/YouTube Liked Music tracks
+    final ytLiked = YouTubeLibraryService().likedMusic;
+    for (final song in ytLiked.take(25)) {
+      final extracted = _extractArtists(song.author, song.title);
       userArtistNames.addAll(extracted);
     }
 

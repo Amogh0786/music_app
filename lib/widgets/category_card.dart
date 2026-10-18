@@ -108,109 +108,151 @@ class _CategoryCardState extends State<CategoryCard> {
                   ),
 
                   // Card Content
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Top Header: Badge + Hover Play Micro-Button
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            // Frosted Category Pill
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.28),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.18),
-                                  width: 0.8,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
+                  LayoutBuilder(
+                    builder: (context, cardConstraints) {
+                      final isVeryCompact = cardConstraints.maxHeight < 68;
+                      final isCompact = cardConstraints.maxHeight < 85;
+                      final isNarrow = cardConstraints.maxWidth < 130;
+                      final padH = isNarrow ? 8.0 : 14.0;
+                      final padV = isVeryCompact
+                          ? 4.0
+                          : (isCompact ? 6.0 : 12.0);
+
+                      return ClipRect(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: padH,
+                            vertical: padV,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              // Top Header: Badge + Hover Play Micro-Button
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Icon(
-                                    widget.icon,
-                                    size: 11,
-                                    color: Colors.white.withValues(alpha: 0.95),
+                                  // Frosted Category Pill
+                                  Flexible(
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: isNarrow ? 6 : 8,
+                                        vertical: isCompact ? 2 : 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.28,
+                                        ),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.18,
+                                          ),
+                                          width: 0.8,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            widget.icon,
+                                            size: isCompact ? 9 : 11,
+                                            color: Colors.white.withValues(
+                                              alpha: 0.95,
+                                            ),
+                                          ),
+                                          if (widget.badgeText != null &&
+                                              widget.badgeText!.isNotEmpty) ...[
+                                            const SizedBox(width: 4),
+                                            Flexible(
+                                              child: Text(
+                                                widget.badgeText!,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: isCompact
+                                                      ? 8.5
+                                                      : 9.5,
+                                                  fontWeight: FontWeight.w800,
+                                                  letterSpacing: 0.6,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                  if (widget.badgeText != null &&
-                                      widget.badgeText!.isNotEmpty) ...[
+                                  if (!isNarrow) ...[
                                     const SizedBox(width: 4),
-                                    Text(
-                                      widget.badgeText!,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 0.6,
+                                    // Micro Hover Play Trigger
+                                    AnimatedOpacity(
+                                      duration: const Duration(
+                                        milliseconds: 180,
+                                      ),
+                                      opacity: _isHovered ? 1.0 : 0.0,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.3,
+                                          ),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.play_arrow_rounded,
+                                          color: Colors.white,
+                                          size: 14,
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ],
                               ),
-                            ),
 
-                            // Micro Hover Play Trigger
-                            AnimatedOpacity(
-                              duration: const Duration(milliseconds: 180),
-                              opacity: _isHovered ? 1.0 : 0.0,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.3),
-                                  shape: BoxShape.circle,
+                              // Bottom Titles
+                              Flexible(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      widget.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: isCompact ? 13 : 15,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: -0.3,
+                                      ),
+                                    ),
+                                    if (!isCompact ||
+                                        cardConstraints.maxHeight > 65) ...[
+                                      const SizedBox(height: 1),
+                                      Text(
+                                        widget.subtitle,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.82,
+                                          ),
+                                          fontSize: isCompact ? 9.5 : 11,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
-                                child: const Icon(
-                                  Icons.play_arrow_rounded,
-                                  color: Colors.white,
-                                  size: 14,
-                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-
-                        // Bottom Titles
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              widget.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.3,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              widget.subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.82),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
                 ],
               ),

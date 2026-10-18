@@ -161,6 +161,69 @@ void main() {
         expect(prefs.lastPlayedPositionMs, equals(45000));
       },
     );
+
+    test(
+      'restoreLastPlaybackSession restores album and queue metadata for all items',
+      () async {
+        final prefs = PreferencesService();
+        final songA = {
+          'id': 'video_id_001',
+          'title': 'Track One',
+          'author': 'Artist One',
+          'thumbnail': 'https://example.com/art1.jpg',
+          'durationMs': 150000,
+          'streamUrl': 'https://example.com/s1.mp4',
+          'album': 'Album Alpha',
+          'albumId': 'album_001',
+        };
+        final songB = {
+          'id': 'video_id_002',
+          'title': 'Track Two',
+          'author': 'Artist Two',
+          'thumbnail': 'https://example.com/art2.jpg',
+          'durationMs': 180000,
+          'streamUrl': 'https://example.com/s2.mp4',
+          'album': 'Album Alpha',
+          'albumId': 'album_001',
+        };
+
+        await prefs.saveLastPlaybackSession(
+          song: songA,
+          positionMs: 12000,
+          durationMs: 150000,
+          playlist: [songA, songB],
+          playlistIndex: 0,
+        );
+
+        final musicService = MusicService();
+        musicService.restoreLastPlaybackSession();
+
+        expect(musicService.currentSong, isNotNull);
+        expect(musicService.currentSong!.title, equals('Track One'));
+        expect(musicService.playlist.length, equals(2));
+        expect(
+          MusicService.getCachedAlbumTitle('video_id_001'),
+          equals('Album Alpha'),
+        );
+        expect(
+          MusicService.getCachedAlbumTitle('video_id_002'),
+          equals('Album Alpha'),
+        );
+        expect(
+          MusicService.getHdThumbnail('video_id_002'),
+          equals('https://example.com/art2.jpg'),
+        );
+      },
+    );
+
+    test('adaptJioSaavnBitrate adapts dataSaver to _48 for minimal data usage', () {
+      const url = 'https://aac.saavncdn.com/123/sample_320.mp4';
+      final adapted = MusicService.adaptJioSaavnBitrate(
+        url,
+        AudioQualityPreset.dataSaver,
+      );
+      expect(adapted, contains('_48.mp4'));
+    });
   });
 
   group('HomeScreen Quick Resume Banner UI Tests', () {

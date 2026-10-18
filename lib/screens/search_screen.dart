@@ -8,6 +8,7 @@ import '../services/music_service.dart';
 import '../services/preferences_service.dart';
 import '../services/dynamic_artist_service.dart';
 import '../services/canonical_song_dedup.dart';
+import '../services/studio_search_service.dart';
 import '../models/jio_album.dart';
 import '../layouts/desktop_layout_state.dart';
 import '../widgets/song_options_bottom_sheet.dart';
@@ -382,7 +383,11 @@ class SearchScreenState extends State<SearchScreen>
       final futures = await Future.wait([
         isArtistSearch
             ? _musicService.fetchArtistDiscography(effectiveQuery, page: 1)
-            : _musicService.searchSongs(effectiveQuery, page: 1, limit: 50),
+            : StudioSearchService().searchSongs(
+                effectiveQuery,
+                page: 1,
+                limit: 50,
+              ),
         if (!isArtistSearch)
           _musicService.searchAlbums(effectiveQuery, limit: 12)
         else
@@ -436,7 +441,7 @@ class SearchScreenState extends State<SearchScreen>
               _currentQuery,
               page: targetPage,
             )
-          : await _musicService.searchSongs(
+          : await StudioSearchService().searchSongs(
               _currentQuery,
               page: targetPage,
               limit: 50,
@@ -538,17 +543,17 @@ class SearchScreenState extends State<SearchScreen>
         ),
         body: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: isSearchActive
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Modern Frosted Search Field
-                    _buildSearchInputField(isSearchActive),
-                    const SizedBox(height: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Modern Frosted Search Field - permanently mounted so it never unmounts or drops keyboard focus
+              _buildSearchInputField(isSearchActive),
+              const SizedBox(height: 16),
 
-                    // Content Area: Either Searching, Live Suggestions, Search Results, or Browse Categories
-                    Expanded(
-                      child: _isSearching
+              // Content Area: Either Searching, Live Suggestions, Search Results, or Browse Categories
+              Expanded(
+                child: isSearchActive
+                    ? (_isSearching
                           ? Center(
                               child: CircularProgressIndicator(
                                 color: Theme.of(context).primaryColor,
@@ -953,11 +958,11 @@ class SearchScreenState extends State<SearchScreen>
                                 ),
                               ),
                             )
-                          : const SizedBox.shrink(),
-                    ),
-                  ],
-                )
-              : _buildBrowseNestedScrollView(context, structuredHistory),
+                          : const SizedBox.shrink())
+                    : _buildBrowseNestedScrollView(context, structuredHistory),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -974,6 +979,7 @@ class SearchScreenState extends State<SearchScreen>
         boxShadow: AppThemeTokens.cardShadow,
       ),
       child: TextField(
+        key: const ValueKey('search_text_field'),
         controller: _searchController,
         focusNode: _searchFocusNode,
         onSubmitted: (val) {
@@ -1187,8 +1193,6 @@ class SearchScreenState extends State<SearchScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSearchInputField(false),
-                const SizedBox(height: 16),
                 if (structuredHistory.isNotEmpty) ...[
                   _buildRecentSearchesSection(structuredHistory),
                   const SizedBox(height: 12),
@@ -1359,8 +1363,10 @@ class SearchScreenState extends State<SearchScreen>
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final crossAxisCount = width > 900 ? 4 : (width > 600 ? 3 : 2);
-        final aspectRatio = width > 600 ? 1.60 : 1.40;
+        final crossAxisCount = width > 900
+            ? 4
+            : (width > 600 ? 3 : (width > 340 ? 2 : 1));
+        final aspectRatio = width > 600 ? 1.60 : (width > 340 ? 1.45 : 2.60);
 
         return ListView(
           key: const PageStorageKey('categories_grid_view'),
@@ -1450,6 +1456,9 @@ class SearchScreenState extends State<SearchScreen>
                           query: cat['query'] as String,
                           gradientColors: cat['colors'] as List<Color>,
                           icon: cat['icon'] as IconData,
+                          fetchSongs: () => StudioSearchService().searchSongs(
+                            cat['query'] as String,
+                          ),
                         ),
                       ),
                     );

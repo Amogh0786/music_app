@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/recent_search_item.dart';
 import 'canonical_song_dedup.dart';
 import 'playlist_artist_filter.dart';
@@ -143,7 +144,7 @@ extension AudioFormatPreferenceExt on AudioFormatPreference {
       case AudioFormatPreference.aac:
         return 'Industry standard Advanced Audio Coding. Hardware-accelerated decoding across all devices.';
       case AudioFormatPreference.mp3:
-        return 'Standard direct audio container for maximum legacy cross-platform compatibility.';
+        return 'Standard direct audio container (MP4 / AAC / MP3) for maximum cross-platform compatibility.';
     }
   }
 }
@@ -302,6 +303,15 @@ class PreferencesService extends ChangeNotifier {
   String get userName => _userName.isEmpty ? 'Friend' : _userName;
   bool get hasCustomName => _userName.isNotEmpty;
   bool get hasPromptedName => _hasPromptedName;
+  bool? _isYouTubeConnectDismissed;
+  bool get isYouTubeConnectDismissed => _isYouTubeConnectDismissed ?? false;
+
+  Future<void> setYouTubeConnectDismissed(bool value) async {
+    _isYouTubeConnectDismissed = value;
+    await _prefs.setBool('yt_connect_card_dismissed', value);
+    notifyListeners();
+  }
+
   String? get profileImagePath => _profileImagePath;
   List<String> get searchHistory => _searchHistory;
   List<RecentSearchItem> get structuredSearchHistory =>
@@ -408,6 +418,8 @@ class PreferencesService extends ChangeNotifier {
     _mostPlayedArtist = _prefs.getString('mostPlayedArtist') ?? '';
     _userName = _prefs.getString('userName') ?? '';
     _hasPromptedName = _prefs.getBool('hasPromptedName') ?? false;
+    _isYouTubeConnectDismissed =
+        _prefs.getBool('yt_connect_card_dismissed') ?? false;
     _profileImagePath = _prefs.getString('profileImagePath');
     final styleStr = _prefs.getString('artworkStyle') ?? 'card';
     _artworkStyle = styleStr == 'vinyl'
@@ -953,7 +965,7 @@ class PreferencesService extends ChangeNotifier {
       return CircadianContext(
         title: 'Evening Chill',
         subtitle: 'Trending relaxing tracks and chill evening vibes',
-        query: '$primaryLang Top Hits',
+        query: '$primaryLang Chill Melodies',
         tag: 'EVENING',
         emoji: '🌆',
       );
@@ -1164,6 +1176,68 @@ class PreferencesService extends ChangeNotifier {
       await _prefs.setString('mostPlayedArtist', _mostPlayedArtist);
     }
 
+    notifyListeners();
+  }
+
+  /// Seeds user taste matrix directly from authenticated Google/YouTube Music library.
+  ///
+  /// Weights liked songs heavily (+5 plays) and playlist tracks (+3 plays).
+  /// Dynamically updates top artist, preferred languages, and persists to disk.
+  Future<void> seedTasteFromYouTube({
+    required List<Video> likedSongs,
+    List<Video> playlistSongs = const [],
+  }) async {
+    if (likedSongs.isEmpty && playlistSongs.isEmpty) return;
+
+    final Map<String, int> langScores = {};
+
+    void ingestVideo(Video video, int weight) {
+      final author = video.author;
+      final title = video.title;
+      final artists = _resolveCanonicalArtists(author, title);
+      for (final a in artists) {
+        if (a.length >= 2) {
+          _artistPlayCounts[a] = (_artistPlayCounts[a] ?? 0) + weight;
+        }
+      }
+
+      final detected = CanonicalSongDedup.detectLanguage('$title $author');
+      if (detected != null) {
+        langScores[detected] = (langScores[detected] ?? 0) + weight;
+      }
+    }
+
+    for (final v in likedSongs) {
+      ingestVideo(v, 5);
+    }
+
+    for (final v in playlistSongs) {
+      ingestVideo(v, 3);
+    }
+
+    // Persist artist play counts
+    try {
+      await _prefs.setString(
+        'artistPlayCountsJson',
+        json.encode(_artistPlayCounts),
+      );
+    } catch (_) {}
+
+    // Update language preferences if strong signal
+    if (langScores.isNotEmpty) {
+      final sortedLangs = langScores.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      for (final entry in sortedLangs) {
+        if (!_preferredLanguages.contains(entry.key) && entry.value >= 3) {
+          _preferredLanguages.add(entry.key);
+        }
+      }
+      try {
+        await _prefs.setStringList('preferredLanguages', _preferredLanguages);
+      } catch (_) {}
+    }
+
+    _recalculateTopArtist();
     notifyListeners();
   }
 
@@ -1606,33 +1680,24 @@ class PreferencesService extends ChangeNotifier {
     Color? darkVibrantColor,
   }) async {
     if (!_isInitialized) return;
-    await _prefs.setString('last_played_song_json', json.encode(song));
-    await _prefs.setInt('last_played_position_ms', positionMs);
-    await _prefs.setInt('last_played_duration_ms', durationMs);
-    if (playlist != null && playlist.isNotEmpty) {
-      await _prefs.setString(
-        'last_played_playlist_json',
-        json.encode(playlist),
-      );
-    }
-    if (playlistIndex != null) {
-      await _prefs.setInt('last_played_playlist_index', playlistIndex);
-    }
-    if (dominantColor != null) {
-      await _prefs.setInt(
-        'last_played_dominant_color',
-        dominantColor.toARGB32(),
-      );
-    }
-    if (vibrantColor != null) {
-      await _prefs.setInt('last_played_vibrant_color', vibrantColor.toARGB32());
-    }
-    if (darkVibrantColor != null) {
-      await _prefs.setInt(
-        'last_played_dark_vibrant_color',
-        darkVibrantColor.toARGB32(),
-      );
-    }
+    await Future.wait([
+      _prefs.setString('last_played_song_json', json.encode(song)),
+      _prefs.setInt('last_played_position_ms', positionMs),
+      _prefs.setInt('last_played_duration_ms', durationMs),
+      if (playlist != null)
+        _prefs.setString('last_played_playlist_json', json.encode(playlist)),
+      if (playlistIndex != null)
+        _prefs.setInt('last_played_playlist_index', playlistIndex),
+      if (dominantColor != null)
+        _prefs.setInt('last_played_dominant_color', dominantColor.toARGB32()),
+      if (vibrantColor != null)
+        _prefs.setInt('last_played_vibrant_color', vibrantColor.toARGB32()),
+      if (darkVibrantColor != null)
+        _prefs.setInt(
+          'last_played_dark_vibrant_color',
+          darkVibrantColor.toARGB32(),
+        ),
+    ]);
     notifyListeners();
   }
 
@@ -1786,6 +1851,30 @@ class PreferencesService extends ChangeNotifier {
     } else {
       await saveAlbum(album);
     }
+  }
+
+  /// Checks whether an account ID has completed initial setup on this device.
+  bool isFirstTimeAccountSignIn(String accountId) {
+    if (!_isInitialized) return true;
+    final signedAccounts =
+        _prefs.getStringList('known_signed_in_accounts') ?? [];
+    return !signedAccounts.contains(accountId);
+  }
+
+  /// Marks an account as signed in and initialized on this device.
+  Future<void> markAccountSignedIn(String accountId) async {
+    if (!_isInitialized) return;
+    final signedAccounts =
+        _prefs.getStringList('known_signed_in_accounts') ?? [];
+    if (!signedAccounts.contains(accountId)) {
+      signedAccounts.add(accountId);
+      await _prefs.setStringList('known_signed_in_accounts', signedAccounts);
+    }
+  }
+
+  /// Returns true if the local guest/device session has meaningful user listening data.
+  bool hasGuestData() {
+    return _listeningHistory.isNotEmpty || _mostPlayedSongs.isNotEmpty;
   }
 
   @visibleForTesting

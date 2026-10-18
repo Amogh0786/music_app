@@ -941,6 +941,21 @@ class CanonicalSongDedup {
       if (cleanTitle(k) == cleanTA && cleanTA.length >= 4) return true;
     }
 
+    // Token-set Jaccard overlap and string similarity requires artist compatibility
+    final cleanAA = cleanArtist(artistA);
+    final cleanAB = cleanArtist(artistB);
+    final bool artistsCompatible =
+        cleanAA.isEmpty ||
+        cleanAB.isEmpty ||
+        cleanAA == cleanAB ||
+        cleanAA.contains(cleanAB) ||
+        cleanAB.contains(cleanAA) ||
+        tokenize(cleanAA).intersection(tokenize(cleanAB)).isNotEmpty;
+
+    if (!artistsCompatible) {
+      return false;
+    }
+
     // Token-set Jaccard overlap
     final tokensA = tokenize(cleanTA);
     final tokensB = tokenize(cleanTB);
@@ -960,22 +975,6 @@ class CanonicalSongDedup {
     // Levenshtein string similarity on clean title
     final titleSim = stringSimilarity(cleanTA, cleanTB);
     if (titleSim >= threshold) return true;
-
-    // Check artist consistency if title similarity is moderately high (>= 0.60)
-    if (titleSim >= 0.60) {
-      final cleanAA = cleanArtist(artistA);
-      final cleanAB = cleanArtist(artistB);
-      if (cleanAA.isNotEmpty && cleanAB.isNotEmpty) {
-        if (cleanAA == cleanAB ||
-            cleanAA.contains(cleanAB) ||
-            cleanAB.contains(cleanAA)) {
-          return true;
-        }
-        final tokensAA = tokenize(cleanAA);
-        final tokensAB = tokenize(cleanAB);
-        if (tokensAA.intersection(tokensAB).isNotEmpty) return true;
-      }
-    }
 
     return false;
   }

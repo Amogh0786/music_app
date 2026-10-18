@@ -3060,7 +3060,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           : [];
 
       // Supplement with recommendations for artists if initial results are under 25
-      if (page == 1 && jioResults.length < 25) {
+      if (page == 1 &&
+          jioResults.length < 25 &&
+          DynamicArtistService().isKnownArtist(query)) {
         try {
           final recResp = await http
               .get(ApiConfig.jioRecommendationsUri(query, limit: jioLimit))
@@ -3089,6 +3091,61 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       final ytmResults = rawYtm
           .where((v) => CanonicalSongDedup.isGenuineSong(v))
           .toList();
+
+      final Video? ytmAnchor = ytmResults.isNotEmpty ? ytmResults.first : null;
+
+      // Google/YTM Entity Anchor Bridge: If JioSaavn returned 0 tracks OR is missing the verified original artist,
+      // use the verified Google/YTM top track's canonical title & artist to retrieve the 320k JioSaavn studio release!
+      if (page == 1 && ytmAnchor != null) {
+        final cleanAnchorT = CanonicalSongDedup.cleanTitle(ytmAnchor.title);
+        final cleanAnchorA = CanonicalSongDedup.cleanArtist(ytmAnchor.author);
+        final bool hasAnchorInJio = jioResults.any((s) {
+          final sTitle = CanonicalSongDedup.cleanTitle(s.title);
+          final sArtist = CanonicalSongDedup.cleanArtist(s.author);
+          final bool titleMatches =
+              sTitle == cleanAnchorT ||
+              sTitle.contains(cleanAnchorT) ||
+              cleanAnchorT.contains(sTitle);
+          final bool artistMatches =
+              cleanAnchorA.isEmpty ||
+              sArtist.contains(cleanAnchorA) ||
+              cleanAnchorA.contains(sArtist) ||
+              CanonicalSongDedup.stringSimilarity(sArtist, cleanAnchorA) >=
+                  0.70;
+          return titleMatches && artistMatches;
+        });
+
+        if (!hasAnchorInJio && cleanAnchorT.isNotEmpty) {
+          final anchorQuery = cleanAnchorA.isNotEmpty
+              ? '$cleanAnchorT $cleanAnchorA'
+              : cleanAnchorT;
+          try {
+            final anchorJioResp = await http
+                .get(
+                  ApiConfig.jioSearchUri(anchorQuery, limit: jioLimit, page: 1),
+                )
+                .timeout(const Duration(seconds: 5))
+                .catchError((_) => http.Response('[]', 500));
+            if (anchorJioResp.statusCode == 200) {
+              final anchorList = _parseJioResults(
+                anchorJioResp.body,
+                query: query,
+              );
+              if (anchorList.isNotEmpty) {
+                final genuineAnchor = anchorList
+                    .where((v) => CanonicalSongDedup.isGenuineSong(v))
+                    .toList();
+                if (genuineAnchor.isNotEmpty) {
+                  jioResults = CanonicalSongDedup.deduplicateList([
+                    ...genuineAnchor,
+                    ...jioResults,
+                  ]);
+                }
+              }
+            }
+          } catch (_) {}
+        }
+      }
 
       // Fallback: If JioSaavn from edge worker returned fewer than 8 genuine tracks, query the custom backend if configured
       if (jioResults.length < 8 &&
@@ -3177,7 +3234,11 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       );
 
       final combined = <Video>[...jioResults, ...dedupedYtm, ...dedupedYt];
-      final ranked = _rankSearchResults(combined, query);
+      final ranked = _rankSearchResults(
+        combined,
+        query,
+        anchorVideo: ytmAnchor,
+      );
       debugPrint(
         '[Studio Search] Returned ${ranked.length} songs (${jioResults.length} Jio + ${dedupedYtm.length} YTM + ${dedupedYt.length} YT)',
       );
@@ -3193,12 +3254,18 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Exposes search ranking for test suites
   @visibleForTesting
-  List<Video> rankSearchResults(List<Video> songs, String rawQuery) =>
-      _rankSearchResults(songs, rawQuery);
+  List<Video> rankSearchResults(
+    List<Video> songs,
+    String rawQuery, {
+    Video? anchorVideo,
+  }) => _rankSearchResults(songs, rawQuery, anchorVideo: anchorVideo);
 
   /// Spotify-grade Search Relevance & Quality Re-ranking
-  /// Spotify-grade Search Relevance & Quality Re-ranking
-  List<Video> _rankSearchResults(List<Video> songs, String rawQuery) {
+  List<Video> _rankSearchResults(
+    List<Video> songs,
+    String rawQuery, {
+    Video? anchorVideo,
+  }) {
     if (songs.isEmpty || rawQuery.trim().isEmpty) return songs;
 
     // Filter genuine songs first and deduplicate pool via CanonicalSongDedup
@@ -3215,11 +3282,35 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         .where((t) => t.isNotEmpty)
         .toList();
 
+    final cleanAnchorT = anchorVideo != null
+        ? CanonicalSongDedup.cleanTitle(anchorVideo.title)
+        : '';
+    final cleanAnchorA = anchorVideo != null
+        ? CanonicalSongDedup.cleanArtist(anchorVideo.author)
+        : '';
+
+    // Pre-sort candidates so exact title matches and unbracketed studio releases are processed first
+    final pool = List<Video>.from(dedupedSongs);
+    pool.sort((a, b) {
+      final aLower = a.title.toLowerCase().trim();
+      final bLower = b.title.toLowerCase().trim();
+      final aExact = aLower == q ? 1 : 0;
+      final bExact = bLower == q ? 1 : 0;
+      if (aExact != bExact) return bExact.compareTo(aExact);
+
+      final aHasBrackets = a.title.contains('(') || a.title.contains('[');
+      final bHasBrackets = b.title.contains('(') || b.title.contains('[');
+      if (aHasBrackets != bHasBrackets) {
+        return aHasBrackets ? 1 : -1;
+      }
+      return a.title.length.compareTo(b.title.length);
+    });
+
     final scored = <MapEntry<Video, double>>[];
     final seenKeys = <String>{};
 
-    for (int i = 0; i < dedupedSongs.length; i++) {
-      final song = dedupedSongs[i];
+    for (int i = 0; i < pool.length; i++) {
+      final song = pool[i];
       final title = song.title.toLowerCase();
       final cleanT = CanonicalSongDedup.cleanTitle(song.title);
       final cleanTCompact = cleanT.replaceAll(RegExp(r'\s+'), '');
@@ -3232,7 +3323,90 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         continue;
       }
 
+      // Check if this song is an audio/canonical duplicate of any song we already scored,
+      // collapsing compilation tracks (e.g. 5 identical versions of "Maa" across different albums).
+      final isCompilationDuplicate = scored.any((entry) {
+        final existingCleanT = CanonicalSongDedup.cleanTitle(entry.key.title);
+        if (existingCleanT != cleanT || cleanT.isEmpty) return false;
+
+        // Canonical comparison: if artists or duration overlap, or if marked as duplicate
+        if (CanonicalSongDedup.areDuplicateSongs(
+          titleA: entry.key.title,
+          artistA: entry.key.author,
+          titleB: song.title,
+          artistB: song.author,
+        )) {
+          return true;
+        }
+
+        // Generic compilation label detection ("various artists", "soundtrack")
+        final cleanA1 = CanonicalSongDedup.cleanArtist(entry.key.author);
+        final cleanA2 = cleanA;
+        final isGeneric1 =
+            cleanA1.isEmpty ||
+            cleanA1.contains('various') ||
+            cleanA1.contains('soundtrack');
+        final isGeneric2 =
+            cleanA2.isEmpty ||
+            cleanA2.contains('various') ||
+            cleanA2.contains('soundtrack');
+        if (isGeneric1 || isGeneric2) return true;
+
+        return false;
+      });
+      if (isCompilationDuplicate) {
+        continue;
+      }
+
+      // Relevance Floor: discard completely unrelated noise (zero word overlap with query, artist, or anchor)
+      if (queryTokens.length >= 2) {
+        final bool queryMatchesTitle = queryTokens.any(
+          (t) => t.length >= 3 && (cleanT.contains(t) || title.contains(t)),
+        );
+        final bool queryMatchesArtist = queryTokens.any(
+          (t) => t.length >= 3 && (cleanA.contains(t) || author.contains(t)),
+        );
+        final bool anchorMatches =
+            anchorVideo != null &&
+            cleanAnchorT.isNotEmpty &&
+            (cleanT.contains(cleanAnchorT) ||
+                cleanAnchorT.contains(cleanT) ||
+                CanonicalSongDedup.areDuplicateSongs(
+                  titleA: anchorVideo.title,
+                  artistA: anchorVideo.author,
+                  titleB: song.title,
+                  artistB: song.author,
+                ));
+
+        if (!queryMatchesTitle && !queryMatchesArtist && !anchorMatches) {
+          continue;
+        }
+      }
+
       double score = 0.0;
+
+      // Anchor Boost: If we have a verified Google/YTM anchor (identifying original song and artist),
+      // give highest priority to the track matching the canonical entity.
+      if (anchorVideo != null && cleanAnchorT.isNotEmpty) {
+        final bool isAnchorTitleMatch =
+            cleanT == cleanAnchorT ||
+            cleanT.contains(cleanAnchorT) ||
+            cleanAnchorT.contains(cleanT);
+        if (isAnchorTitleMatch) {
+          score += 2500.0;
+          final bool isAnchorArtistMatch =
+              cleanA.isNotEmpty &&
+              cleanAnchorA.isNotEmpty &&
+              (cleanA.contains(cleanAnchorA) ||
+                  cleanAnchorA.contains(cleanA) ||
+                  CanonicalSongDedup.stringSimilarity(cleanA, cleanAnchorA) >=
+                      0.75);
+          if (isAnchorArtistMatch) {
+            score +=
+                2000.0; // Guaranteed top rank for verified original studio release!
+          }
+        }
+      }
 
       // 0. Compound Title + Artist Match:
       // When the user specifies both the song title AND the artist (e.g. "perfect ed sheeran", "perfect edsheeran", "shape of you ed sheeran")
@@ -3262,16 +3436,19 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
               ));
 
       if (hasTitleMatch && hasArtistMatch) {
-        score += 2500.0;
+        score += 3500.0;
       }
 
       // 1. Exact or Fuzzy Title Match (e.g. "Perfect" == "perfect", "namo re" ~ "namo rey")
-      if (cleanT == cleanQ || title == q) {
-        score += 1200.0;
+      if (title.trim() == q) {
+        score +=
+            3500.0; // Pure, unadorned exact title match gets highest priority
+      } else if (cleanT == cleanQ) {
+        score += 2500.0;
       } else if (cleanT.startsWith(cleanQ) || cleanQ.startsWith(cleanT)) {
-        score += 800.0;
+        score += 1200.0;
       } else if (cleanT.contains(cleanQ)) {
-        score += 500.0;
+        score += 600.0;
       }
 
       // 1b. Multi-token Title Match (handles typos & minor variations like "namo re" vs "namo rey")
@@ -3286,28 +3463,28 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
                 queryTokens.any((qt) => qt.startsWith(t) || t.startsWith(qt)),
           );
       if (hasStrongTitleTokenMatch && cleanT != cleanQ) {
-        score += 900.0;
+        score += 1000.0;
       }
 
       // 2. Token overlap score (both Title and Artist tokens)
       for (final token in queryTokens) {
         if (token.length >= 2) {
           if (cleanT.contains(token) || title.contains(token)) {
-            score += 100.0;
+            score += 150.0;
           }
           if (cleanA.contains(token) || author.contains(token)) {
-            score += 80.0;
+            score += 100.0;
           }
         }
       }
 
       // 3. Artist Match (user searched artist name e.g. "Ed Sheeran", "SPB")
       if (cleanA == cleanQ || author == q) {
-        score += 800.0;
+        score += 1000.0;
       } else if (cleanA.contains(cleanQ) ||
           author.contains(q) ||
           (cleanA.isNotEmpty && cleanQ.contains(cleanA))) {
-        score += 400.0;
+        score += 500.0;
       }
 
       // 4. Standalone Song vs Movie Tag / Remix / Version penalty:
@@ -3335,13 +3512,28 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           title.contains('dj mix') ||
           title.contains('dsp mix') ||
           title.contains('acoustic') ||
-          title.contains('cover');
+          title.contains('cover') ||
+          title.contains('slowed') ||
+          title.contains('live') ||
+          title.contains('session') ||
+          title.contains('instrumental') ||
+          title.contains('karaoke');
       if (isAlternativeVersion) {
         final hasVersionQuery = queryTokens.any(
-          (t) => t == 'remix' || t == 'acoustic' || t == 'cover' || t == 'mix',
+          (t) =>
+              t == 'remix' ||
+              t == 'acoustic' ||
+              t == 'cover' ||
+              t == 'mix' ||
+              t == 'slowed' ||
+              t == 'live' ||
+              t == 'session' ||
+              t == 'instrumental' ||
+              t == 'karaoke',
         );
         if (!hasVersionQuery) {
-          score -= 200.0;
+          score -=
+              800.0; // Strong penalty ensures original studio tracks always rank on top!
         }
       }
 
@@ -3374,7 +3566,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       // 8. Preservation of source priority
-      final sourceBonus = (dedupedSongs.length - i) * 1.0;
+      final sourceBonus = (pool.length - i) * 1.0;
       score += sourceBonus;
 
       scored.add(MapEntry(song, score));
@@ -3783,6 +3975,11 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     _seedPlaylistArtists = _extractArtistsFromSongs(_playlist);
     _playlistArtistRecommendationOffset = 0;
     if (_currentIndex >= 0 && _currentIndex < _playlist.length) {
+      _currentSong = _playlist[_currentIndex];
+      // Persist immediately on playlist selection to guarantee that even if
+      // the app is removed from memory during audio network buffering, the new playlist
+      // and track are safely committed to disk.
+      persistPlaybackSession(force: true);
       await playSong(_playlist[_currentIndex], updateQueue: false);
     }
   }
@@ -4290,8 +4487,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           );
         }
       }
-    } else if (formatPref == AudioFormatPreference.aac) {
-      // 1. AAC streams strictly prioritized
+    } else if (formatPref == AudioFormatPreference.aac ||
+        formatPref == AudioFormatPreference.mp3) {
+      // 1. AAC / Direct MPEG streams strictly prioritized
       if (quality == AudioQualityPreset.dataSaver) {
         for (final s in aacStreams) {
           addCandidate(s, 'mp4_audio_dash', codec: 'aac');
@@ -4306,14 +4504,8 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         }
       } else if (quality == AudioQualityPreset.studioMaster ||
           quality == AudioQualityPreset.high) {
-        for (final m in muxed22List) {
-          addCandidate(
-            m,
-            'mp4_progressive_720p_aac',
-            defaultBitrate: 192,
-            codec: 'aac',
-          );
-        }
+        // Prioritize lightweight pure AAC audio streams (itag 140) over heavy 720p progressive video (itag 22)
+        // to prevent ExoPlayer background buffer exhaustion and memory pressure
         for (final s in aacStreams) {
           addCandidate(s, 'mp4_audio_dash', codec: 'aac');
         }
@@ -4322,6 +4514,14 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             m,
             'mp4_progressive_360p_aac',
             defaultBitrate: 128,
+            codec: 'aac',
+          );
+        }
+        for (final m in muxed22List) {
+          addCandidate(
+            m,
+            'mp4_progressive_720p_aac',
+            defaultBitrate: 192,
             codec: 'aac',
           );
         }
@@ -4772,17 +4972,35 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             return false;
           }
 
-          // 1. Try Cloudflare Worker edge first (ultra-fast 100ms)
+          // 1. Try Cloudflare Worker edge first (ultra-fast 100ms) with clean title + clean artist
           bool matched = await tryResolveFromUri(
             ApiConfig.jioSearchUri(q, limit: 5),
           );
+
+          // 1b. Fallback to clean title alone (prevents JioSaavn misses due to artist spelling/typos or channel noise)
+          if (!matched &&
+              cleanA.isNotEmpty &&
+              cleanT.isNotEmpty &&
+              _currentSong?.id.value == song.id.value &&
+              sessionToken == _activePlaySessionToken) {
+            matched = await tryResolveFromUri(
+              ApiConfig.jioSearchUri(cleanT, limit: 5),
+            );
+          }
 
           // 2. If edge didn't match, fallback to custom backend if configured
           if (!matched &&
               _currentSong?.id.value == song.id.value &&
               sessionToken == _activePlaySessionToken &&
               PreferencesService().customServerUrl.isNotEmpty) {
-            await tryResolveFromUri(ApiConfig.jioBackendSearchUri(q, limit: 5));
+            matched = await tryResolveFromUri(
+              ApiConfig.jioBackendSearchUri(q, limit: 5),
+            );
+            if (!matched && cleanA.isNotEmpty && cleanT.isNotEmpty) {
+              await tryResolveFromUri(
+                ApiConfig.jioBackendSearchUri(cleanT, limit: 5),
+              );
+            }
           }
         }
       } catch (_) {}
@@ -5125,7 +5343,11 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
             // 1. First attempt: Direct native AudioSource.uri (fastest, progressive hardware decoding)
             try {
               await targetPlayer.setAudioSource(
-                AudioSource.uri(Uri.parse(candidate.url), tag: mediaItem),
+                AudioSource.uri(
+                  Uri.parse(candidate.url),
+                  headers: _ytHeaders,
+                  tag: mediaItem,
+                ),
                 preload: true,
               );
               playbackSourceSet = true;
@@ -5151,6 +5373,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
                   // ignore: experimental_member_use
                   LockCachingAudioSource(
                     Uri.parse(candidate.url),
+                    headers: _ytHeaders,
                     cacheFile: cacheFile,
                     tag: mediaItem,
                   ),
@@ -6516,6 +6739,8 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       'durationMs': video.duration?.inMilliseconds ?? 0,
       'thumbnail': MusicService.getHdThumbnail(video.id.value),
       'streamUrl': _webStreamUrls[video.id.value] ?? '',
+      'album': _songAlbumMap[video.id.value] ?? '',
+      'albumId': _songAlbumIdMap[video.id.value] ?? '',
     };
   }
 
@@ -6523,11 +6748,19 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     final id = (map['id'] as String?) ?? '';
     final durationMs = (map['durationMs'] as int?) ?? 0;
     final cleanId = id.isNotEmpty ? id : '00000000000';
-    final safeId = cleanId.length >= 11
-        ? cleanId.substring(0, 11)
-        : cleanId.padRight(11, '0');
+    VideoId safeId;
+    try {
+      safeId = VideoId(cleanId);
+    } catch (_) {
+      try {
+        final padded = cleanId.padRight(11, '0').substring(0, 11);
+        safeId = VideoId(padded);
+      } catch (_) {
+        safeId = VideoId('00000000000');
+      }
+    }
     return Video(
-      VideoId(safeId),
+      safeId,
       (map['title'] as String?) ?? 'Unknown Title',
       (map['author'] as String?) ?? 'Unknown Artist',
       ChannelId('UC0WP5P-fwGlLyO4yOE76T8g'),
@@ -6536,7 +6769,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       null,
       '',
       durationMs > 0 ? Duration(milliseconds: durationMs) : null,
-      ThumbnailSet(safeId),
+      ThumbnailSet(safeId.value),
       null,
       Engagement(0, null, null),
       false,
@@ -6620,18 +6853,64 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
           0,
           _playlist.length - 1,
         );
+        for (int i = 0; i < playlistMaps.length; i++) {
+          final pMap = playlistMaps[i];
+          final pSong = _playlist[i];
+          final rawId = (pMap['id'] as String?) ?? '';
+          final pThumb = (pMap['thumbnail'] as String?) ?? '';
+          final pStream = (pMap['streamUrl'] as String?) ?? '';
+          final pAlbum = (pMap['album'] as String?) ?? '';
+          final pAlbumId = (pMap['albumId'] as String?) ?? '';
+          if (pThumb.isNotEmpty) {
+            _artworkMap[pSong.id.value] = pThumb;
+            if (rawId.isNotEmpty) _artworkMap[rawId] = pThumb;
+          }
+          if (pStream.isNotEmpty) {
+            _webStreamUrls[pSong.id.value] = pStream;
+            if (rawId.isNotEmpty) _webStreamUrls[rawId] = pStream;
+          }
+          if (pAlbum.isNotEmpty || pAlbumId.isNotEmpty) {
+            registerSongAlbum(
+              pSong.id.value,
+              albumTitle: pAlbum,
+              albumId: pAlbumId,
+            );
+            if (rawId.isNotEmpty && rawId != pSong.id.value) {
+              registerSongAlbum(rawId, albumTitle: pAlbum, albumId: pAlbumId);
+            }
+          }
+        }
       } else {
         _playlist = [restoredSong];
         _currentIndex = 0;
       }
 
+      final rawSongId = (songMap['id'] as String?) ?? '';
       final streamUrl = (songMap['streamUrl'] as String?) ?? '';
       if (streamUrl.isNotEmpty) {
         _webStreamUrls[restoredSong.id.value] = streamUrl;
+        if (rawSongId.isNotEmpty) _webStreamUrls[rawSongId] = streamUrl;
       }
       final thumbnail = (songMap['thumbnail'] as String?) ?? '';
       if (thumbnail.isNotEmpty) {
         _artworkMap[restoredSong.id.value] = thumbnail;
+        if (rawSongId.isNotEmpty) _artworkMap[rawSongId] = thumbnail;
+      }
+      final songAlbum = (songMap['album'] as String?) ?? '';
+      final songAlbumId = (songMap['albumId'] as String?) ?? '';
+      if (songAlbum.isNotEmpty || songAlbumId.isNotEmpty) {
+        registerSongAlbum(
+          restoredSong.id.value,
+          albumTitle: songAlbum,
+          albumId: songAlbumId,
+        );
+        if (rawSongId.isNotEmpty && rawSongId != restoredSong.id.value) {
+          registerSongAlbum(
+            rawSongId,
+            albumTitle: songAlbum,
+            albumId: songAlbumId,
+          );
+        }
       }
 
       final domColorInt = prefs.lastPlayedDominantColor;
@@ -6667,6 +6946,10 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     restoreLastPlaybackSession();
     if (_currentSong != null) {
       final posMs = prefs.lastPlayedPositionMs;
+      final matchIdx = _playlist.indexWhere((s) => s.id == _currentSong!.id);
+      if (matchIdx != -1) {
+        _currentIndex = matchIdx;
+      }
       await playSong(_currentSong!, updateQueue: false);
       if (posMs > 0) {
         await seek(Duration(milliseconds: posMs));

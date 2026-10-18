@@ -4,10 +4,14 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/jio_album.dart';
 import '../services/music_service.dart';
 import '../services/canonical_song_dedup.dart';
+import '../services/studio_search_service.dart';
+import '../services/youtube_library_service.dart';
 import '../widgets/mini_player.dart';
 import '../widgets/animated_equalizer.dart';
 import '../widgets/song_options_bottom_sheet.dart';
 import '../widgets/dilse_scrollbar.dart';
+import '../widgets/shimmer_loading.dart';
+import '../layouts/desktop_layout_state.dart';
 import 'album_screen.dart';
 
 class CuratedPlaylistScreen extends StatefulWidget {
@@ -15,6 +19,7 @@ class CuratedPlaylistScreen extends StatefulWidget {
   final String subtitle;
   final String? query;
   final List<Video>? initialSongs;
+  final Future<List<Video>> Function()? fetchSongs;
   final List<Color>? gradientColors;
   final IconData? icon;
   final String? imageUrl;
@@ -25,6 +30,7 @@ class CuratedPlaylistScreen extends StatefulWidget {
     required this.subtitle,
     this.query,
     this.initialSongs,
+    this.fetchSongs,
     this.gradientColors,
     this.icon,
     this.imageUrl,
@@ -63,11 +69,37 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
 
   Future<void> _loadTracks() async {
     final query = widget.query ?? widget.title;
+    DesktopLayoutState.prioritizeDoor(query);
+
+    if (widget.fetchSongs != null) {
+      try {
+        final songs = await widget.fetchSongs!();
+        if (mounted) {
+          setState(() {
+            _tracks = CanonicalSongDedup.deduplicateList(songs);
+            _isLoading = false;
+            if (_tracks.isEmpty) {
+              _errorMessage = 'No tracks found in this playlist.';
+            }
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'Failed to load tracks: $e';
+          });
+        }
+      }
+      return;
+    }
 
     if (widget.initialSongs != null && widget.initialSongs!.isNotEmpty) {
       if (mounted) {
         setState(() {
-          _tracks = List<Video>.from(widget.initialSongs!);
+          _tracks = CanonicalSongDedup.deduplicateList(
+            List<Video>.from(widget.initialSongs!),
+          );
           _isLoading = false;
         });
       }
@@ -82,14 +114,105 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
       return;
     }
 
+    final qLower = query.toLowerCase().trim();
+    if (qLower == 'supermix' || qLower == 'my supermix') {
+      try {
+        final songs = await YouTubeLibraryService().fetchSupermix();
+        if (mounted) {
+          setState(() {
+            _tracks = CanonicalSongDedup.deduplicateList(songs);
+            _isLoading = false;
+            if (_tracks.isEmpty) {
+              _errorMessage = 'No tracks found for this playlist.';
+            }
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'Failed to load tracks: $e';
+          });
+        }
+      }
+      return;
+    } else if (qLower == 'discover mix' || qLower == 'discover') {
+      try {
+        final songs = await YouTubeLibraryService().fetchDiscoverMix();
+        if (mounted) {
+          setState(() {
+            _tracks = CanonicalSongDedup.deduplicateList(songs);
+            _isLoading = false;
+            if (_tracks.isEmpty) {
+              _errorMessage = 'No tracks found for this playlist.';
+            }
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'Failed to load tracks: $e';
+          });
+        }
+      }
+      return;
+    } else if (qLower == 'new release mix') {
+      try {
+        final songs = await YouTubeLibraryService().fetchNewReleaseMix();
+        if (mounted) {
+          setState(() {
+            _tracks = CanonicalSongDedup.deduplicateList(songs);
+            _isLoading = false;
+            if (_tracks.isEmpty) {
+              _errorMessage = 'No tracks found for this playlist.';
+            }
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'Failed to load tracks: $e';
+          });
+        }
+      }
+      return;
+    } else if (qLower == 'forgotten tracks' ||
+        qLower == 'forgotten favorites') {
+      try {
+        final songs = await YouTubeLibraryService().fetchForgottenTracks();
+        if (mounted) {
+          setState(() {
+            _tracks = CanonicalSongDedup.deduplicateList(songs);
+            _isLoading = false;
+            if (_tracks.isEmpty) {
+              _errorMessage = 'No tracks found for this playlist.';
+            }
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'Failed to load tracks: $e';
+          });
+        }
+      }
+      return;
+    }
+
     try {
-      final resultsFuture = _musicService.searchSongs(query);
+      final resultsFuture = StudioSearchService().searchSongs(query);
       final albumsFuture = _musicService.searchAlbums(query, limit: 10);
-      final results = await resultsFuture;
+      List<Video> results = await resultsFuture;
+      if (results.isEmpty) {
+        results = await _musicService.searchSongs(query);
+      }
       final albums = await albumsFuture;
       if (mounted) {
         setState(() {
-          _tracks = results;
+          _tracks = CanonicalSongDedup.deduplicateList(results);
           _relatedAlbums = albums;
           _isLoading = false;
           if (_tracks.isEmpty && _relatedAlbums.isEmpty) {
@@ -364,12 +487,10 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
 
                   // Tracklist or Loading state
                   if (_isLoading)
-                    const SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          color: Color(0xFF1DB954),
-                        ),
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16.0),
+                        child: ShimmerSongRow(),
                       ),
                     )
                   else if (_errorMessage != null)
