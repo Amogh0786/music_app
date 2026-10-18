@@ -216,14 +216,17 @@ void main() {
       },
     );
 
-    test('adaptJioSaavnBitrate adapts dataSaver to _48 for minimal data usage', () {
-      const url = 'https://aac.saavncdn.com/123/sample_320.mp4';
-      final adapted = MusicService.adaptJioSaavnBitrate(
-        url,
-        AudioQualityPreset.dataSaver,
-      );
-      expect(adapted, contains('_48.mp4'));
-    });
+    test(
+      'adaptJioSaavnBitrate adapts dataSaver to _48 for minimal data usage',
+      () {
+        const url = 'https://aac.saavncdn.com/123/sample_320.mp4';
+        final adapted = MusicService.adaptJioSaavnBitrate(
+          url,
+          AudioQualityPreset.dataSaver,
+        );
+        expect(adapted, contains('_48.mp4'));
+      },
+    );
   });
 
   group('HomeScreen Quick Resume Banner UI Tests', () {
