@@ -26,6 +26,7 @@ class AuthService extends ChangeNotifier {
 
   GoogleSignIn _googleSignIn = GoogleSignIn(
     clientId: defaultClientId,
+    serverClientId: defaultClientId,
     scopes: <String>[
       'email',
       'https://www.googleapis.com/auth/youtube.readonly',
@@ -164,6 +165,7 @@ class AuthService extends ChangeNotifier {
       _isMissingClientId = false;
       _googleSignIn = GoogleSignIn(
         clientId: _clientId,
+        serverClientId: _clientId,
         scopes: <String>[
           'email',
           'https://www.googleapis.com/auth/youtube.readonly',
