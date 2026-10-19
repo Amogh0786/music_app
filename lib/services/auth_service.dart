@@ -25,6 +25,7 @@ class AuthService extends ChangeNotifier {
 
   GoogleSignIn _googleSignIn = GoogleSignIn(
     clientId: kIsWeb ? defaultClientId : null,
+    serverClientId: defaultClientId,
     scopes: const <String>['email'],
   );
 
@@ -160,6 +161,7 @@ class AuthService extends ChangeNotifier {
       _isMissingClientId = false;
       _googleSignIn = GoogleSignIn(
         clientId: kIsWeb ? _clientId : null,
+        serverClientId: _clientId,
         scopes: const <String>['email'],
       );
     }
