@@ -253,16 +253,12 @@ class DilSeMusicWidgetProvider : AppWidgetProvider() {
             if (!artworkPath.isNullOrEmpty()) {
                 val file = File(artworkPath)
                 if (file.exists()) {
-                    try {
-                        albumBitmap = BitmapFactory.decodeFile(artworkPath)
-                    } catch (_: Exception) {}
+                    albumBitmap = decodeSampledBitmapFromFile(artworkPath, 128, 128)
                 } else if (artworkPath.startsWith("http://") || artworkPath.startsWith("https://")) {
                     val safeHash = artworkPath.hashCode().toString().replace("-", "n")
                     val cachedArt = File(context.cacheDir, "widget_art_$safeHash.png")
                     if (cachedArt.exists()) {
-                        try {
-                            albumBitmap = BitmapFactory.decodeFile(cachedArt.absolutePath)
-                        } catch (_: Exception) {}
+                        albumBitmap = decodeSampledBitmapFromFile(cachedArt.absolutePath, 128, 128)
                     } else {
                         // Asynchronously download and cache to disk, then trigger widget update
                         Thread {
@@ -276,8 +272,9 @@ class DilSeMusicWidgetProvider : AppWidgetProvider() {
                                 val stream = conn.inputStream
                                 val downloadedBmp = BitmapFactory.decodeStream(stream)
                                 if (downloadedBmp != null) {
+                                    val scaledBmp = Bitmap.createScaledBitmap(downloadedBmp, 128, 128, true)
                                     cachedArt.outputStream().use { out ->
-                                        downloadedBmp.compress(Bitmap.CompressFormat.PNG, 90, out)
+                                        scaledBmp.compress(Bitmap.CompressFormat.PNG, 90, out)
                                     }
                                     Handler(Looper.getMainLooper()).post {
                                         updateAllWidgets(context)
@@ -290,7 +287,7 @@ class DilSeMusicWidgetProvider : AppWidgetProvider() {
             }
 
             if (albumBitmap != null) {
-                val roundedArt = createRoundedBitmap(albumBitmap, 30f)
+                val roundedArt = createRoundedBitmap(albumBitmap, 18f)
                 views.setImageViewBitmap(R.id.widget_album_art, roundedArt)
             } else {
                 views.setImageViewResource(R.id.widget_album_art, R.drawable.ic_stat_music)
@@ -417,7 +414,11 @@ class DilSeMusicWidgetProvider : AppWidgetProvider() {
             // 9. Bottom Shelf: 5 Prominent Top Playlists / Quick-Launch Badges
             setupTopPlaylists(context, views, playlistsJson, dominantColor, flag)
 
-            appWidgetManager.updateAppWidget(appWidgetId, views)
+            try {
+                appWidgetManager.updateAppWidget(appWidgetId, views)
+            } catch (e: Exception) {
+                android.util.Log.e("DilSeWidget", "Failed to update widget $appWidgetId", e)
+            }
         }
 
         private fun setupTopPlaylists(
@@ -504,22 +505,22 @@ class DilSeMusicWidgetProvider : AppWidgetProvider() {
         }
 
         private fun createPlaylistBadge(colors: IntArray, iconType: Int): Bitmap {
-            val size = 76
+            val size = 48
             val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 shader = LinearGradient(0f, 0f, size.toFloat(), size.toFloat(), colors, null, Shader.TileMode.CLAMP)
             }
             val rect = RectF(0f, 0f, size.toFloat(), size.toFloat())
-            canvas.drawRoundRect(rect, 20f, 20f, paint)
+            canvas.drawRoundRect(rect, 13f, 13f, paint)
 
             // Subtle inner glow border
             val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.STROKE
-                strokeWidth = 1.5f
+                strokeWidth = 1.0f
                 color = Color.argb(60, 255, 255, 255)
             }
-            canvas.drawRoundRect(RectF(1f, 1f, size - 1f, size - 1f), 19f, 19f, strokePaint)
+            canvas.drawRoundRect(RectF(0.5f, 0.5f, size - 0.5f, size - 0.5f), 12.5f, 12.5f, strokePaint)
 
             // Draw crisp white icon centered inside the badge
             val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -529,16 +530,16 @@ class DilSeMusicWidgetProvider : AppWidgetProvider() {
             val center = size / 2f
             when (iconType) {
                 0 -> { // Daily Mix: Music soundwave bars
-                    val r = 2f
-                    canvas.drawRoundRect(RectF(center - 12f, center - 6f, center - 8f, center + 6f), r, r, iconPaint)
-                    canvas.drawRoundRect(RectF(center - 5f, center - 12f, center - 1f, center + 12f), r, r, iconPaint)
-                    canvas.drawRoundRect(RectF(center + 2f, center - 16f, center + 6f, center + 16f), r, r, iconPaint)
-                    canvas.drawRoundRect(RectF(center + 9f, center - 8f, center + 13f, center + 8f), r, r, iconPaint)
+                    val r = 1.2f
+                    canvas.drawRoundRect(RectF(center - 8f, center - 4f, center - 5.5f, center + 4f), r, r, iconPaint)
+                    canvas.drawRoundRect(RectF(center - 3.5f, center - 8f, center - 1f, center + 8f), r, r, iconPaint)
+                    canvas.drawRoundRect(RectF(center + 1.5f, center - 11f, center + 4f, center + 11f), r, r, iconPaint)
+                    canvas.drawRoundRect(RectF(center + 6.5f, center - 5f, center + 9f, center + 5f), r, r, iconPaint)
                 }
                 1 -> { // Favorites: Heart
                     val path = Path()
-                    val w = 11f
-                    val h = 11f
+                    val w = 7.5f
+                    val h = 7.5f
                     path.moveTo(center, center + h * 0.7f)
                     path.cubicTo(center - w * 1.2f, center - h * 0.2f, center - w * 0.7f, center - h * 1.1f, center, center - h * 0.3f)
                     path.cubicTo(center + w * 0.7f, center - h * 1.1f, center + w * 1.2f, center - h * 0.2f, center, center + h * 0.7f)
@@ -547,8 +548,8 @@ class DilSeMusicWidgetProvider : AppWidgetProvider() {
                 }
                 2 -> { // Most Played: Star
                     val path = Path()
-                    val rOuter = 12f
-                    val rInner = 5.5f
+                    val rOuter = 8f
+                    val rInner = 3.6f
                     for (step in 0 until 10) {
                         val angle = (step * Math.PI / 5 - Math.PI / 2).toFloat()
                         val r = if (step % 2 == 0) rOuter else rInner
@@ -563,20 +564,20 @@ class DilSeMusicWidgetProvider : AppWidgetProvider() {
                     val strokeP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         color = Color.WHITE
                         style = Paint.Style.STROKE
-                        strokeWidth = 2.5f
+                        strokeWidth = 1.8f
                     }
-                    canvas.drawCircle(center, center, 11f, strokeP)
-                    canvas.drawLine(center, center, center, center - 6.5f, strokeP)
-                    canvas.drawLine(center, center, center + 5f, center, strokeP)
+                    canvas.drawCircle(center, center, 7.5f, strokeP)
+                    canvas.drawLine(center, center, center, center - 4.5f, strokeP)
+                    canvas.drawLine(center, center, center + 3.5f, center, strokeP)
                 }
                 else -> { // Disc / Music Note
                     val path = Path()
-                    path.addCircle(center - 5f, center + 6f, 4f, Path.Direction.CW)
-                    path.moveTo(center - 1f, center + 6f)
-                    path.lineTo(center - 1f, center - 8f)
-                    path.lineTo(center + 8f, center - 11f)
-                    path.lineTo(center + 8f, center + 3f)
-                    path.addCircle(center + 4f, center + 3f, 4f, Path.Direction.CW)
+                    path.addCircle(center - 3.5f, center + 4f, 2.6f, Path.Direction.CW)
+                    path.moveTo(center - 0.9f, center + 4f)
+                    path.lineTo(center - 0.9f, center - 5.5f)
+                    path.lineTo(center + 5.5f, center - 7.5f)
+                    path.lineTo(center + 5.5f, center + 2f)
+                    path.addCircle(center + 2.8f, center + 2f, 2.6f, Path.Direction.CW)
                     canvas.drawPath(path, iconPaint)
                 }
             }
@@ -584,21 +585,45 @@ class DilSeMusicWidgetProvider : AppWidgetProvider() {
             return bitmap
         }
 
-        private fun createRoundedBitmap(source: Bitmap, cornerRadiusDp: Float): Bitmap {
-            val size = 220
-            val scaled = Bitmap.createScaledBitmap(source, size, size, true)
-            val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(output)
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                shader = BitmapShader(scaled, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+        private fun decodeSampledBitmapFromFile(path: String, reqWidth: Int, reqHeight: Int): Bitmap? {
+            return try {
+                val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(path, options)
+                var inSampleSize = 1
+                if (options.outHeight > reqHeight || options.outWidth > reqWidth) {
+                    val halfHeight = options.outHeight / 2
+                    val halfWidth = options.outWidth / 2
+                    while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
+                        inSampleSize *= 2
+                    }
+                }
+                options.inJustDecodeBounds = false
+                options.inSampleSize = inSampleSize
+                BitmapFactory.decodeFile(path, options)
+            } catch (_: Exception) {
+                null
             }
-            val rect = RectF(0f, 0f, size.toFloat(), size.toFloat())
-            canvas.drawRoundRect(rect, cornerRadiusDp, cornerRadiusDp, paint)
-            return output
+        }
+
+        private fun createRoundedBitmap(source: Bitmap, cornerRadiusDp: Float): Bitmap {
+            return try {
+                val size = 128
+                val scaled = Bitmap.createScaledBitmap(source, size, size, true)
+                val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(output)
+                val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    shader = BitmapShader(scaled, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+                }
+                val rect = RectF(0f, 0f, size.toFloat(), size.toFloat())
+                canvas.drawRoundRect(rect, cornerRadiusDp, cornerRadiusDp, paint)
+                output
+            } catch (_: Exception) {
+                source
+            }
         }
 
         private fun createGlowingPlayButton(context: Context, isPlaying: Boolean, dominantColor: Int): Bitmap {
-            val size = 120
+            val size = 72
             val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
             val center = size / 2f
@@ -621,7 +646,7 @@ class DilSeMusicWidgetProvider : AppWidgetProvider() {
             // 2. Solid Inner Circle Deck with Subtle Radial Gradient
             val deckPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 shader = RadialGradient(
-                    center, center - 6f, center * 0.70f,
+                    center, center - 4f, center * 0.70f,
                     intArrayOf(
                         Color.WHITE,
                         Color.parseColor("#FFF4EE"),
@@ -642,18 +667,18 @@ class DilSeMusicWidgetProvider : AppWidgetProvider() {
 
             if (isPlaying) {
                 // Pause bars
-                val barWidth = 8f
-                val barHeight = 26f
-                val spacing = 7f
-                canvas.drawRoundRect(RectF(center - spacing - barWidth, center - barHeight / 2, center - spacing, center + barHeight / 2), 3f, 3f, glyphPaint)
-                canvas.drawRoundRect(RectF(center + spacing, center - barHeight / 2, center + spacing + barWidth, center + barHeight / 2), 3f, 3f, glyphPaint)
+                val barWidth = 4.8f
+                val barHeight = 16f
+                val spacing = 4.2f
+                canvas.drawRoundRect(RectF(center - spacing - barWidth, center - barHeight / 2, center - spacing, center + barHeight / 2), 2f, 2f, glyphPaint)
+                canvas.drawRoundRect(RectF(center + spacing, center - barHeight / 2, center + spacing + barWidth, center + barHeight / 2), 2f, 2f, glyphPaint)
             } else {
                 // Play triangle
                 val path = Path().apply {
-                    val half = 15f
-                    moveTo(center - 10f, center - half)
-                    lineTo(center + 14f, center)
-                    lineTo(center - 10f, center + half)
+                    val half = 9f
+                    moveTo(center - 6f, center - half)
+                    lineTo(center + 8.5f, center)
+                    lineTo(center - 6f, center + half)
                     close()
                 }
                 canvas.drawPath(path, glyphPaint)
@@ -663,89 +688,93 @@ class DilSeMusicWidgetProvider : AppWidgetProvider() {
         }
 
         private fun createDynamicGlassBackground(context: Context, dominantColor: Int): Bitmap? {
-            val width = 720
-            val height = 360
-            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
-            val rect = RectF(0f, 0f, width.toFloat(), height.toFloat())
-            val cornerRadius = 52f
+            return try {
+                val width = 180
+                val height = 90
+                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bitmap)
+                val rect = RectF(0f, 0f, width.toFloat(), height.toFloat())
+                val cornerRadius = 14f
 
-            // Ensure dominantColor has enough vibrancy and saturation for ambient beauty
-            val hsv = FloatArray(3)
-            Color.colorToHSV(dominantColor, hsv)
-            val vibrantHsv = floatArrayOf(
-                hsv[0],
-                maxOf(0.65f, hsv[1]),
-                hsv[2].coerceIn(0.40f, 0.85f)
-            )
-            val vibrantColor = Color.HSVToColor(vibrantHsv)
-
-            // 1. Base Dark Charcoal Obsidian Glass
-            val basePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.parseColor("#FF101016")
-            }
-            canvas.drawRoundRect(rect, cornerRadius, cornerRadius, basePaint)
-
-            // 2. Rich Multi-Stop Linear Gradient from top-left to bottom-right
-            val gradientPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                shader = LinearGradient(
-                    0f, 0f, width.toFloat(), height.toFloat(),
-                    intArrayOf(
-                        Color.argb(130, Color.red(vibrantColor), Color.green(vibrantColor), Color.blue(vibrantColor)),
-                        Color.argb(65, Color.red(vibrantColor), Color.green(vibrantColor), Color.blue(vibrantColor)),
-                        Color.argb(205, 16, 16, 24)
-                    ),
-                    floatArrayOf(0.0f, 0.45f, 1.0f),
-                    Shader.TileMode.CLAMP
+                // Ensure dominantColor has enough vibrancy and saturation for ambient beauty
+                val hsv = FloatArray(3)
+                Color.colorToHSV(dominantColor, hsv)
+                val vibrantHsv = floatArrayOf(
+                    hsv[0],
+                    maxOf(0.65f, hsv[1]),
+                    hsv[2].coerceIn(0.40f, 0.85f)
                 )
-            }
-            canvas.drawRoundRect(rect, cornerRadius, cornerRadius, gradientPaint)
+                val vibrantColor = Color.HSVToColor(vibrantHsv)
 
-            // 3. Ambient Radial Glow behind the Album Art (Left side bloom)
-            val albumGlow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                shader = RadialGradient(
-                    width * 0.22f, height * 0.35f, width * 0.50f,
-                    intArrayOf(
-                        Color.argb(165, Color.red(vibrantColor), Color.green(vibrantColor), Color.blue(vibrantColor)),
-                        Color.argb(70, Color.red(vibrantColor), Color.green(vibrantColor), Color.blue(vibrantColor)),
-                        Color.TRANSPARENT
-                    ),
-                    floatArrayOf(0f, 0.55f, 1f),
-                    Shader.TileMode.CLAMP
-                )
-            }
-            canvas.drawRoundRect(rect, cornerRadius, cornerRadius, albumGlow)
+                // 1. Base Dark Charcoal Obsidian Glass
+                val basePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.parseColor("#FF101016")
+                }
+                canvas.drawRoundRect(rect, cornerRadius, cornerRadius, basePaint)
 
-            // 4. Subtle Bottom Vignette for crisp playlist icon and text readability
-            val bottomVignette = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                shader = LinearGradient(
-                    0f, height * 0.50f, 0f, height.toFloat(),
-                    Color.TRANSPARENT,
-                    Color.argb(180, 10, 10, 16),
-                    Shader.TileMode.CLAMP
-                )
-            }
-            canvas.drawRoundRect(rect, cornerRadius, cornerRadius, bottomVignette)
+                // 2. Rich Multi-Stop Linear Gradient from top-left to bottom-right
+                val gradientPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    shader = LinearGradient(
+                        0f, 0f, width.toFloat(), height.toFloat(),
+                        intArrayOf(
+                            Color.argb(130, Color.red(vibrantColor), Color.green(vibrantColor), Color.blue(vibrantColor)),
+                            Color.argb(65, Color.red(vibrantColor), Color.green(vibrantColor), Color.blue(vibrantColor)),
+                            Color.argb(205, 16, 16, 24)
+                        ),
+                        floatArrayOf(0.0f, 0.45f, 1.0f),
+                        Shader.TileMode.CLAMP
+                    )
+                }
+                canvas.drawRoundRect(rect, cornerRadius, cornerRadius, gradientPaint)
 
-            // 5. Sleek Translucent Glass Highlight Border Outline
-            val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.STROKE
-                strokeWidth = 2.5f
-                shader = LinearGradient(
-                    0f, 0f, width.toFloat(), height.toFloat(),
-                    intArrayOf(
-                        Color.argb(110, 255, 255, 255),
-                        Color.argb(45, Color.red(vibrantColor), Color.green(vibrantColor), Color.blue(vibrantColor)),
-                        Color.argb(30, 255, 255, 255)
-                    ),
-                    null,
-                    Shader.TileMode.CLAMP
-                )
-            }
-            val strokeRect = RectF(1.25f, 1.25f, width - 1.25f, height - 1.25f)
-            canvas.drawRoundRect(strokeRect, cornerRadius, cornerRadius, strokePaint)
+                // 3. Ambient Radial Glow behind the Album Art (Left side bloom)
+                val albumGlow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    shader = RadialGradient(
+                        width * 0.22f, height * 0.35f, width * 0.50f,
+                        intArrayOf(
+                            Color.argb(165, Color.red(vibrantColor), Color.green(vibrantColor), Color.blue(vibrantColor)),
+                            Color.argb(70, Color.red(vibrantColor), Color.green(vibrantColor), Color.blue(vibrantColor)),
+                            Color.TRANSPARENT
+                        ),
+                        floatArrayOf(0f, 0.55f, 1f),
+                        Shader.TileMode.CLAMP
+                    )
+                }
+                canvas.drawRoundRect(rect, cornerRadius, cornerRadius, albumGlow)
 
-            return bitmap
+                // 4. Subtle Bottom Vignette for crisp playlist icon and text readability
+                val bottomVignette = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    shader = LinearGradient(
+                        0f, height * 0.50f, 0f, height.toFloat(),
+                        Color.TRANSPARENT,
+                        Color.argb(180, 10, 10, 16),
+                        Shader.TileMode.CLAMP
+                    )
+                }
+                canvas.drawRoundRect(rect, cornerRadius, cornerRadius, bottomVignette)
+
+                // 5. Sleek Translucent Glass Highlight Border Outline
+                val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.STROKE
+                    strokeWidth = 1.0f
+                    shader = LinearGradient(
+                        0f, 0f, width.toFloat(), height.toFloat(),
+                        intArrayOf(
+                            Color.argb(110, 255, 255, 255),
+                            Color.argb(45, Color.red(vibrantColor), Color.green(vibrantColor), Color.blue(vibrantColor)),
+                            Color.argb(30, 255, 255, 255)
+                        ),
+                        null,
+                        Shader.TileMode.CLAMP
+                    )
+                }
+                val strokeRect = RectF(0.6f, 0.6f, width - 0.6f, height - 0.6f)
+                canvas.drawRoundRect(strokeRect, cornerRadius, cornerRadius, strokePaint)
+
+                bitmap
+            } catch (_: Exception) {
+                null
+            }
         }
 
         private fun extractDominantColorFromBitmap(bmp: Bitmap): Int {
