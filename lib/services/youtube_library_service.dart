@@ -135,6 +135,14 @@ class YouTubeLibraryService extends ChangeNotifier {
       return _cachedPlaylists;
     }
 
+    // Invariant: youtube.readonly scope is retired from AuthService.
+    // If not running in demo mode, do not call private user playlists endpoints.
+    if (!AuthService().isDemoMode) {
+      _cachedPlaylists = [];
+      notifyListeners();
+      return [];
+    }
+
     if (!forceRefresh && _cachedPlaylists.isNotEmpty) {
       return _cachedPlaylists;
     }
@@ -305,6 +313,13 @@ class YouTubeLibraryService extends ChangeNotifier {
       return [];
     }
 
+    // Invariant: youtube.readonly scope is retired from AuthService.
+    if (!AuthService().isDemoMode) {
+      _cachedLikedMusic = [];
+      notifyListeners();
+      return [];
+    }
+
     if (!forceRefresh && _cachedLikedMusic.isNotEmpty) {
       return _cachedLikedMusic;
     }
@@ -385,7 +400,7 @@ class YouTubeLibraryService extends ChangeNotifier {
   /// Synchronizes authentic YouTube Music taste (Liked Music + user playlists)
   /// into the local taste matrix, dynamic artists, and personalized mixes.
   Future<void> syncGoogleTaste({bool forceRefresh = false}) async {
-    if (!AuthService().isAuthenticated) return;
+    if (!AuthService().isAuthenticated || !AuthService().isDemoMode) return;
 
     try {
       debugPrint(

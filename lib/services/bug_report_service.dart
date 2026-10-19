@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_email_sender/flutter_email_sender.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -247,10 +248,16 @@ class BugReportService with WidgetsBindingObserver {
       'currentIndex': musicService.currentIndex,
     };
 
+    String appVersionStr = '3.9.8+31';
+    try {
+      final info = await PackageInfo.fromPlatform();
+      appVersionStr = '${info.version}+${info.buildNumber}';
+    } catch (_) {}
+
     final deviceTelemetry = {
       'os': osName,
       'osVersion': osVersion,
-      'appVersion': '3.6.0+19',
+      'appVersion': appVersionStr,
       'currentRoute': currentRoute,
       'capturedAt': DateTime.now().toIso8601String(),
     };
@@ -301,6 +308,7 @@ class BugReportService with WidgetsBindingObserver {
   String _assembleFlightTelemetry({
     required String userDescription,
     required MusicService musicService,
+    String appVersion = '3.9.9+32',
   }) {
     final song = musicService.currentSong;
     final osName = kIsWeb ? 'Web' : Platform.operatingSystem;
@@ -315,7 +323,7 @@ class BugReportService with WidgetsBindingObserver {
     buffer.writeln('');
     buffer.writeln('DEVICE INFORMATION:');
     buffer.writeln('Platform: $osName $osVersion');
-    buffer.writeln('App Version: 3.6.0+19');
+    buffer.writeln('App Version: $appVersion');
     buffer.writeln('Timestamp: ${DateTime.now().toUtc().toIso8601String()}');
     buffer.writeln('');
     buffer.writeln('AUDIO PIPELINE:');
@@ -390,10 +398,17 @@ class BugReportService with WidgetsBindingObserver {
       return false;
     }
 
+    String appVer = '3.9.8+31';
+    try {
+      final info = await PackageInfo.fromPlatform();
+      appVer = '${info.version}+${info.buildNumber}';
+    } catch (_) {}
+
     final musicService = MusicService();
     final body = _assembleFlightTelemetry(
       userDescription: userDescription,
       musicService: musicService,
+      appVersion: appVer,
     );
 
     final firstLine = userDescription.trim().split('\n').first;

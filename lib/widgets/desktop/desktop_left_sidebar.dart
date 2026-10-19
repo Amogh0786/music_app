@@ -7,8 +7,6 @@ import '../../services/dynamic_artist_service.dart';
 import '../playlist_action_menu.dart';
 import '../dilse_tooltip.dart';
 import '../shimmer_loading.dart';
-import '../../services/youtube_library_service.dart';
-import '../../screens/curated_playlist_screen.dart';
 import 'desktop_context_menu.dart';
 import 'desktop_import_modal.dart';
 
@@ -212,7 +210,6 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                 child: AnimatedBuilder(
                   animation: Listenable.merge([
                     _musicService,
-                    YouTubeLibraryService(),
                     DesktopLayoutState.isHomeFeedComplete,
                     prefs,
                   ]),
@@ -233,7 +230,6 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                       itemBuilder: (context, index) {
                         final pl = playlists[index];
                         final id = pl['id']?.toString() ?? '';
-                        final isYouTube = pl['isYouTube'] == true;
                         final isPinned = pinnedIds.contains(id);
                         final isSelected =
                             activeTab == DesktopNavTab.customPlaylist &&
@@ -244,31 +240,12 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                           isSelected: isSelected,
                           isPinned: isPinned,
                           onTap: () {
-                            if (isYouTube) {
-                              final ytId = pl['ytPlaylistId']?.toString() ?? '';
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CuratedPlaylistScreen(
-                                    title: pl['name']?.toString() ?? 'Playlist',
-                                    subtitle: 'YouTube Playlist',
-                                    imageUrl: pl['thumbnailUrl']?.toString(),
-                                    gradientColors: const [
-                                      Color(0xFFFF0000),
-                                      Color(0xFF181822),
-                                    ],
-                                    icon: Icons.smart_display_rounded,
-                                    fetchSongs: () => YouTubeLibraryService()
-                                        .fetchPlaylistSongs(ytId),
-                                  ),
-                                ),
-                              );
-                            } else if (id.isNotEmpty) {
+                            if (id.isNotEmpty) {
                               DesktopLayoutState.openPlaylist(id);
                             }
                           },
                           onSecondaryTapDown: (details) {
-                            if (id.isNotEmpty && !isYouTube) {
+                            if (id.isNotEmpty) {
                               final name = pl['name']?.toString() ?? 'Playlist';
                               final isSpotify = pl['isSpotify'] == true;
                               DesktopContextMenu.showPlaylistMenu(
@@ -583,7 +560,6 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                               ),
                             ),
                           _buildFilterChip('Playlists', activeFilters),
-                          _buildFilterChip('YouTube', activeFilters),
                           _buildFilterChip('Albums', activeFilters),
                           _buildFilterChip(
                             'Imported from Spotify',
@@ -718,7 +694,6 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                   child: AnimatedBuilder(
                     animation: Listenable.merge([
                       _musicService,
-                      YouTubeLibraryService(),
                       _prefs,
                       _selectedFilters,
                       DesktopLayoutState.activeNavTab,
@@ -1123,20 +1098,7 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
 
   List<Map<String, dynamic>> _getFilteredPlaylists() {
     final customPlaylists = _musicService.customPlaylists;
-    final ytLib = YouTubeLibraryService();
-    final ytPlaylists = ytLib.playlists.map((yp) {
-      return <String, dynamic>{
-        'id': 'yt_${yp.id}',
-        'ytPlaylistId': yp.id,
-        'name': yp.title,
-        'thumbnailUrl': yp.thumbnailUrl,
-        'trackCount': yp.itemCount,
-        'isYouTube': true,
-        'type': 'playlist',
-      };
-    }).toList();
-
-    final allPlaylists = [...customPlaylists, ...ytPlaylists];
+    final allPlaylists = customPlaylists;
     final filters = _selectedFilters.value;
     final query = _searchController.text.trim().toLowerCase();
 
@@ -1145,7 +1107,6 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
       final isSpotify =
           pl['isSpotify'] == true ||
           (pl['source']?.toString().contains('spotify') ?? false);
-      final isYouTube = pl['isYouTube'] == true;
       final isAlbum = pl['type'] == 'album';
 
       if (query.isNotEmpty && !name.contains(query)) {
@@ -1156,9 +1117,6 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
 
       bool matches = false;
       if (filters.contains('Playlists') && !isAlbum) {
-        matches = true;
-      }
-      if (filters.contains('YouTube') && isYouTube) {
         matches = true;
       }
       if (filters.contains('Imported from Spotify') && isSpotify) {
@@ -1302,7 +1260,6 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
     final id = pl['id']?.toString() ?? '';
     final name = pl['name']?.toString() ?? 'Untitled Playlist';
     final isSpotify = pl['isSpotify'] == true;
-    final isYouTube = pl['isYouTube'] == true;
     final thumb = pl['thumbnailUrl']?.toString() ?? '';
     final trackCount =
         pl['trackCount'] as int? ??
@@ -1334,26 +1291,7 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
         child: InkWell(
           borderRadius: BorderRadius.circular(8.0),
           onTap: () {
-            if (isYouTube) {
-              final ytId = pl['ytPlaylistId']?.toString() ?? '';
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CuratedPlaylistScreen(
-                    title: name,
-                    subtitle: 'YouTube Playlist',
-                    imageUrl: thumb.isNotEmpty ? thumb : null,
-                    gradientColors: const [
-                      Color(0xFFFF0000),
-                      Color(0xFF181822),
-                    ],
-                    icon: Icons.smart_display_rounded,
-                    fetchSongs: () =>
-                        YouTubeLibraryService().fetchPlaylistSongs(ytId),
-                  ),
-                ),
-              );
-            } else if (id.isNotEmpty) {
+            if (id.isNotEmpty) {
               DesktopLayoutState.openPlaylist(id);
             }
           },
@@ -1376,23 +1314,17 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                   decoration: BoxDecoration(
                     color: const Color(0xFF282836),
                     borderRadius: BorderRadius.circular(6.0),
-                    image: isYouTube && thumb.isNotEmpty
+                    image: thumb.isNotEmpty
                         ? DecorationImage(
                             image: NetworkImage(thumb),
                             fit: BoxFit.cover,
                           )
                         : null,
                   ),
-                  child: isYouTube && thumb.isNotEmpty
+                  child: thumb.isNotEmpty
                       ? null
                       : Center(
-                          child: isYouTube
-                              ? const Icon(
-                                  Icons.smart_display_rounded,
-                                  color: Color(0xFFFF0000),
-                                  size: 24.0,
-                                )
-                              : isSpotify
+                          child: isSpotify
                               ? const Icon(
                                   Icons.stream_rounded,
                                   color: Color(0xFF1DB954),
@@ -1439,49 +1371,21 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                             const SizedBox(width: 4.0),
                           ],
                           Expanded(
-                            child: isYouTube
-                                ? Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.smart_display_rounded,
-                                        color: Color(0xFFFF0000),
-                                        size: 13.0,
-                                      ),
-                                      const SizedBox(width: 4.0),
-                                      Expanded(
-                                        child: Text(
-                                          'YouTube • $trackCount ${trackCount == 1 ? "song" : "songs"}',
-                                          style: TextStyle(
-                                            color: isSelected
-                                                ? const Color(
-                                                    0xFF1DB954,
-                                                  ).withValues(alpha: 0.8)
-                                                : Colors.white.withValues(
-                                                    alpha: 0.6,
-                                                  ),
-                                            fontSize: 12.0,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                : Text(
-                                    isSpotify
-                                        ? 'Playlist • Spotify Import'
-                                        : 'Playlist • $trackCount ${trackCount == 1 ? "song" : "songs"}',
-                                    style: TextStyle(
-                                      color: isSelected
-                                          ? const Color(
-                                              0xFF1DB954,
-                                            ).withValues(alpha: 0.8)
-                                          : Colors.white.withValues(alpha: 0.6),
-                                      fontSize: 12.0,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                            child: Text(
+                              isSpotify
+                                  ? 'Playlist • Spotify Import'
+                                  : 'Playlist • $trackCount ${trackCount == 1 ? "song" : "songs"}',
+                              style: TextStyle(
+                                color: isSelected
+                                    ? const Color(
+                                        0xFF1DB954,
+                                      ).withValues(alpha: 0.8)
+                                    : Colors.white.withValues(alpha: 0.6),
+                                fontSize: 12.0,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ],
                       ),
@@ -1490,7 +1394,7 @@ class _DesktopLeftSidebarState extends State<DesktopLeftSidebar> {
                 ),
 
                 // Hover Actions: 3-Dot More Menu
-                if (isHovered && id.isNotEmpty && !isYouTube)
+                if (isHovered && id.isNotEmpty)
                   PlaylistActionMenu(
                     playlistId: id,
                     playlistName: name,

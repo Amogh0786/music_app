@@ -3,11 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Authentication Service managing Google Sign-In with read-only access.
+/// Authentication Service managing Google Sign-In with standard email profile access.
 ///
-/// Invariant: Strictly READ-ONLY.
-/// Requests ONLY `email` and `https://www.googleapis.com/auth/youtube.readonly`.
-/// Never requests write permissions; never modifies or mutates the user's YouTube account.
+/// Invariant: Strictly READ-ONLY. Requests ONLY `email`.
+/// Never requests sensitive scopes or write permissions; works globally for any Google account.
 class AuthService extends ChangeNotifier {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
@@ -25,12 +24,8 @@ class AuthService extends ChangeNotifier {
   static const String _prefAccessToken = 'dilse_auth_access_token';
 
   GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId: defaultClientId,
-    serverClientId: defaultClientId,
-    scopes: <String>[
-      'email',
-      'https://www.googleapis.com/auth/youtube.readonly',
-    ],
+    clientId: kIsWeb ? defaultClientId : null,
+    scopes: const <String>['email'],
   );
 
   GoogleSignInAccount? _currentUser;
@@ -164,12 +159,8 @@ class AuthService extends ChangeNotifier {
       _clientId = clientId.trim();
       _isMissingClientId = false;
       _googleSignIn = GoogleSignIn(
-        clientId: _clientId,
-        serverClientId: _clientId,
-        scopes: <String>[
-          'email',
-          'https://www.googleapis.com/auth/youtube.readonly',
-        ],
+        clientId: kIsWeb ? _clientId : null,
+        scopes: const <String>['email'],
       );
     }
   }

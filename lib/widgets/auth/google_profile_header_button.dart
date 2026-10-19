@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/auth_service.dart';
-import '../../services/youtube_library_service.dart';
+import '../../services/music_service.dart';
 import '../../services/preferences_service.dart';
 import '../../services/data_snapshot_service.dart';
 import 'google_logo.dart';
@@ -69,15 +69,11 @@ class _GoogleProfileHeaderButtonState extends State<GoogleProfileHeaderButton> {
       await prefs.markAccountSignedIn(userId);
     }
 
-    // Fetch user's YouTube playlists and synchronize authentic taste matrix
-    await YouTubeLibraryService().fetchUserPlaylists(forceRefresh: true);
-    await YouTubeLibraryService().syncGoogleTaste(forceRefresh: true);
-
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Welcome, ${auth.userDisplayName ?? "Music Lover"}! YouTube library connected.',
+            'Welcome, ${auth.userDisplayName ?? "Music Lover"}! Signed in with Google.',
           ),
           backgroundColor: const Color(0xFF1E88E5),
           behavior: SnackBarBehavior.floating,
@@ -166,7 +162,7 @@ class _GoogleProfileHeaderButtonState extends State<GoogleProfileHeaderButton> {
       onExit: (_) => setState(() => _isHovered = false),
       cursor: SystemMouseCursors.click,
       child: Tooltip(
-        message: '$name (YouTube Connected)',
+        message: '$name (Google Connected)',
         child: GestureDetector(
           onTap: _showAccountDialog,
           child: AnimatedContainer(
@@ -368,14 +364,13 @@ class _GoogleProfileHeaderButtonState extends State<GoogleProfileHeaderButton> {
   }
 }
 
-/// Modal dialog providing account details, YouTube read-only status, and sign-out option.
+/// Modal dialog providing account details, Google account status, and sign-out option.
 class _GoogleAccountDialog extends StatelessWidget {
   const _GoogleAccountDialog();
 
   @override
   Widget build(BuildContext context) {
     final auth = AuthService();
-    final ytLib = YouTubeLibraryService();
     final photoUrl = auth.userPhotoUrl;
     final name = auth.userDisplayName ?? 'DilSe User';
     final email = auth.userEmail ?? '';
@@ -456,7 +451,7 @@ class _GoogleAccountDialog extends StatelessWidget {
             ],
             const SizedBox(height: 18),
 
-            // Connection Badge (Strictly Read-Only Guarantee)
+            // Connection Badge (Google Profile Active)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
@@ -477,7 +472,7 @@ class _GoogleAccountDialog extends StatelessWidget {
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
-                      'YouTube Connected • Read-Only',
+                      'Google Account • Connected',
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: 12,
@@ -486,66 +481,50 @@ class _GoogleAccountDialog extends StatelessWidget {
                     ),
                   ),
                   const Icon(
-                    Icons.lock_outline_rounded,
-                    color: Colors.white38,
-                    size: 14,
+                    Icons.verified_user_rounded,
+                    color: Color(0xFF4285F4),
+                    size: 16,
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 10),
 
-            // Playlists Count Tile
-            AnimatedBuilder(
-              animation: ytLib,
-              builder: (context, _) {
-                final count = ytLib.playlists.length;
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF222230),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.08),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // Library Stats Tile
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF222230),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Row(
                     children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.playlist_play_rounded,
-                            color: const Color(
-                              0xFFFF0000,
-                            ).withValues(alpha: 0.9),
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'YouTube Playlists',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+                      Icon(
+                        Icons.library_music_rounded,
+                        color: Color(0xFF1E88E5),
+                        size: 20,
                       ),
+                      SizedBox(width: 8),
                       Text(
-                        '$count synced',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        'Music Library',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
                       ),
                     ],
                   ),
-                );
-              },
+                  Text(
+                    '${MusicService().customPlaylists.length} playlists • ${MusicService().likedSongs.length} likes',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 20),
 
@@ -554,14 +533,28 @@ class _GoogleAccountDialog extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () {
+                    onPressed: () async {
                       HapticFeedback.lightImpact();
-                      ytLib.fetchUserPlaylists(forceRefresh: true);
-                      ytLib.syncGoogleTaste(forceRefresh: true);
                       Navigator.of(context).pop();
+                      final result = await DataSnapshotService()
+                          .createSafetySnapshot(
+                            triggerReason: 'Account Dialog Manual Backup',
+                          );
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              result.success
+                                  ? 'Library backup created: ${result.playlistCount} playlists, ${result.likedSongsCount} likes.'
+                                  : 'Backup failed: ${result.errorMessage}',
+                            ),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
                     },
-                    icon: const Icon(Icons.refresh_rounded, size: 16),
-                    label: const Text('Refresh'),
+                    icon: const Icon(Icons.backup_rounded, size: 16),
+                    label: const Text('Backup'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white70,
                       side: BorderSide(
@@ -581,7 +574,6 @@ class _GoogleAccountDialog extends StatelessWidget {
                       HapticFeedback.lightImpact();
                       Navigator.of(context).pop();
                       await auth.signOut();
-                      ytLib.clear();
                     },
                     icon: const Icon(Icons.logout_rounded, size: 16),
                     label: const Text('Sign Out'),
@@ -819,7 +811,7 @@ class _DataPreservationDialog extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Start Fresh with YouTube Only',
+                            'Start Fresh (Clean Slate)',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 13.5,
@@ -984,7 +976,7 @@ class _GoogleSignInModalState extends State<_GoogleSignInModal> {
 
                     // Subtitle
                     Text(
-                      'Connect your YouTube account to unlock your personal library, Supermix, and high-fidelity 320kbps playback.',
+                      'Sign in with your Google account for cross-platform profile sync and high-fidelity 320kbps playback.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.68),
@@ -1014,7 +1006,8 @@ class _GoogleSignInModalState extends State<_GoogleSignInModal> {
                             icon: Icons.high_quality_rounded,
                             iconColor: const Color(0xFF34A853),
                             title: 'Lossless 320k Audio',
-                            subtitle: 'YouTube taste matched to studio sound',
+                            subtitle:
+                                'Studio Master AAC matched to pristine sound',
                           ),
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 6),
@@ -1025,7 +1018,7 @@ class _GoogleSignInModalState extends State<_GoogleSignInModal> {
                             iconColor: const Color(0xFFFBBC05),
                             title: 'Personalized Mixes',
                             subtitle:
-                                'Supermix, Discover, New Releases & Forgotten Tracks',
+                                'Curated daily mixes, top charts, and artist radio',
                           ),
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 6),
@@ -1036,7 +1029,7 @@ class _GoogleSignInModalState extends State<_GoogleSignInModal> {
                             iconColor: const Color(0xFF4285F4),
                             title: 'Strictly Read-Only',
                             subtitle:
-                                'Private & secure; no writes to your YouTube channel',
+                                'Private & secure standard Google account profile',
                           ),
                         ],
                       ),
