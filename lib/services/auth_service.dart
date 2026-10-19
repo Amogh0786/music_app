@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'cloud_sync_service.dart';
+
 /// Authentication Service managing Google Sign-In with standard email profile access.
 ///
 /// Invariant: Strictly READ-ONLY. Requests ONLY `email`.
@@ -58,6 +60,9 @@ class AuthService extends ChangeNotifier {
   bool get isAuthenticated =>
       !_isExplicitGuestMode &&
       (_currentUser != null || _hasCachedGoogleUser || _isDemoMode);
+
+  /// Convenient alias for isAuthenticated.
+  bool get isSignedIn => isAuthenticated;
 
   /// Whether Guest Mode is currently active.
   bool get isGuestMode => !isAuthenticated;
@@ -230,6 +235,15 @@ class AuthService extends ChangeNotifier {
           debugPrint(
             '[AuthService] User signed in: ${account.email} (${account.displayName})',
           );
+          // Auto-sync library non-destructively in the background
+          CloudSyncService().sync().catchError((e) {
+            debugPrint('[AuthService] Auto-sync error: $e');
+            return const CloudSyncResult(
+              success: false,
+              status: CloudSyncStatus.error,
+              message: 'Auto-sync failed',
+            );
+          });
         } else if (!_isDemoMode && !_hasCachedGoogleUser) {
           _accessToken = null;
           debugPrint('[AuthService] User signed out');
@@ -282,6 +296,15 @@ class AuthService extends ChangeNotifier {
         photo: account.photoUrl,
         token: _accessToken,
       );
+      // Auto-sync library non-destructively in the background
+      CloudSyncService().sync().catchError((e) {
+        debugPrint('[AuthService] Auto-sync error: $e');
+        return const CloudSyncResult(
+          success: false,
+          status: CloudSyncStatus.error,
+          message: 'Auto-sync failed',
+        );
+      });
       notifyListeners();
       return true;
     } catch (e) {

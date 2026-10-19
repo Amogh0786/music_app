@@ -6595,8 +6595,8 @@ var require_crypto_js = __commonJS({
 var import_crypto_js = __toESM(require_crypto_js(), 1);
 var CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-  "Access-Control-Allow-Headers": "Range, Content-Type, Accept",
+  "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Range, Content-Type, Accept, Authorization, X-User-Id",
   "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges"
 };
 var JIO_CIPHER_KEY = "38346591";
@@ -6618,10 +6618,91 @@ var worker_source_default = {
         JSON.stringify({
           status: "online",
           service: "dilse-cloudflare-edge",
-          engine: "jiosaavn-native-catalog-320k"
+          engine: "jiosaavn-native-catalog-320k",
+          userStoreAvailable: !!env.DILSE_USER_STORE
         }),
         { headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
       );
+    }
+    if (url.pathname === "/user/sync") {
+      if (request.method === "GET") {
+        const userId = url.searchParams.get("userId");
+        if (!userId || userId.trim().length < 3) {
+          return new Response(
+            JSON.stringify({ status: "error", message: "Missing or invalid userId" }),
+            { status: 400, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+          );
+        }
+        if (!env.DILSE_USER_STORE) {
+          return new Response(
+            JSON.stringify({
+              status: "not_configured",
+              message: "KV namespace DILSE_USER_STORE is not bound on Cloudflare Worker",
+              data: null
+            }),
+            { headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+          );
+        }
+        const safeKey = `user_lib_${userId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+        try {
+          const raw = await env.DILSE_USER_STORE.get(safeKey);
+          if (!raw) {
+            return new Response(
+              JSON.stringify({ status: "ok", data: null }),
+              { headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+            );
+          }
+          const parsed = JSON.parse(raw);
+          return new Response(
+            JSON.stringify({ status: "ok", data: parsed }),
+            { headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+          );
+        } catch (err) {
+          return new Response(
+            JSON.stringify({ status: "error", message: err.message || "KV read error" }),
+            { status: 500, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+          );
+        }
+      }
+      if (request.method === "POST") {
+        try {
+          const body = await request.json();
+          const userId = body.userId;
+          if (!userId || userId.trim().length < 3) {
+            return new Response(
+              JSON.stringify({ status: "error", message: "Missing or invalid userId in body" }),
+              { status: 400, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+            );
+          }
+          if (!env.DILSE_USER_STORE) {
+            return new Response(
+              JSON.stringify({
+                status: "not_configured",
+                message: "KV namespace DILSE_USER_STORE is not bound on Cloudflare Worker"
+              }),
+              { headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+            );
+          }
+          const safeKey = `user_lib_${userId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+          const payload = {
+            userId,
+            email: body.email || "",
+            playlists: Array.isArray(body.playlists) ? body.playlists : [],
+            likedSongs: Array.isArray(body.likedSongs) ? body.likedSongs : [],
+            updatedAt: Date.now()
+          };
+          await env.DILSE_USER_STORE.put(safeKey, JSON.stringify(payload));
+          return new Response(
+            JSON.stringify({ status: "ok", success: true, updatedAt: payload.updatedAt }),
+            { headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+          );
+        } catch (err) {
+          return new Response(
+            JSON.stringify({ status: "error", message: err.message || "KV write error" }),
+            { status: 500, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+          );
+        }
+      }
     }
     if (url.pathname === "/jio/search") {
       const query = url.searchParams.get("q") || "";
@@ -6793,13 +6874,14 @@ var worker_source_default = {
     if (url.pathname === "/ytm/radio" || url.pathname === "/radio") {
       const videoId = url.searchParams.get("v") || "";
       const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get("limit") || "30")));
+      const visitorData = url.searchParams.get("visitorData") || "";
       if (!videoId) {
         return new Response(JSON.stringify([]), {
           headers: { "Content-Type": "application/json", ...CORS_HEADERS }
         });
       }
       try {
-        const results = await fetchYtmRadio(videoId, limit);
+        const results = await fetchYtmRadio(videoId, limit, visitorData);
         return new Response(JSON.stringify(results), {
           headers: {
             "Content-Type": "application/json",
@@ -7520,13 +7602,21 @@ function parseDurationSec(str) {
   }
   return 0;
 }
-async function fetchYtmRadio(videoId, limit = 40) {
+async function fetchYtmRadio(videoId, limit = 40, visitorData = "") {
   try {
+    const headers = { ...YTM_HEADERS };
+    if (visitorData) {
+      headers["X-Goog-Visitor-Id"] = visitorData;
+    }
+    const context = JSON.parse(JSON.stringify(YTM_CONTEXT));
+    if (visitorData) {
+      context.client.visitorData = visitorData;
+    }
     const resp = await fetch("https://music.youtube.com/youtubei/v1/next", {
       method: "POST",
-      headers: YTM_HEADERS,
+      headers,
       body: JSON.stringify({
-        context: YTM_CONTEXT,
+        context,
         videoId,
         playlistId: `RDAMVM${videoId}`
       })
