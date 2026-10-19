@@ -83,8 +83,8 @@ class YouTubeMusicClient {
       final payload = {
         'context': _buildContext(),
         'query': query.trim(),
-        // Song filter parameter to restrict to official studio releases
-        'params': 'Eg-KAQwIABAAGAEgASgAMABqChAMEAMQBBAJEAo%3D',
+        // Song filter parameter to restrict to official studio releases (Song category)
+        'params': 'EgWKAQIIAWoKEAkQChADEAQQBQ%3D%3D',
       };
 
       final response = await http
@@ -113,7 +113,11 @@ class YouTubeMusicClient {
           [];
 
       for (final section in contents) {
-        final items = section['musicShelfRenderer']?['contents'] ?? [];
+        final items =
+            (section['musicShelfRenderer']?['contents'] ??
+                    section['itemSectionRenderer']?['contents'])
+                as List<dynamic>? ??
+            [];
         for (final item in items) {
           final renderer = item['musicResponsiveListItemRenderer'];
           if (renderer == null) continue;
@@ -312,6 +316,11 @@ class YouTubeMusicClient {
         final titleNav = titleRuns[0]['navigationEndpoint'];
         videoId = titleNav?['watchEndpoint']?['videoId'] as String?;
       }
+
+      videoId ??= renderer['playlistItemData']?['videoId'] as String?;
+      videoId ??=
+          renderer['navigationEndpoint']?['watchEndpoint']?['videoId']
+              as String?;
 
       if (videoId == null || videoId.isEmpty) return null;
 

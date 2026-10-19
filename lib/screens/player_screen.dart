@@ -204,408 +204,429 @@ class _PlayerScreenState extends State<PlayerScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            final playlist = _musicService.playlist;
-            final currentIndex = _musicService.currentIndex;
+            return ListenableBuilder(
+              listenable: _musicService,
+              builder: (context, _) {
+                final playlist = _musicService.playlist;
+                final currentIndex = _musicService.currentIndex;
 
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.78,
-              decoration: BoxDecoration(
-                color: const Color(0xFF14141E).withValues(alpha: 0.96),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(28),
-                ),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: Column(
-                children: [
-                  const SizedBox(height: 12),
-                  Container(
-                    width: 38,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white30,
-                      borderRadius: BorderRadius.circular(2),
+                return Container(
+                  height: MediaQuery.of(context).size.height * 0.78,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF14141E).withValues(alpha: 0.96),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(28),
+                    ),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.08),
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 14,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 12),
+                      Container(
+                        width: 38,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.white30,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Up Next',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: -0.3,
-                              ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Up Next',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: -0.3,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Swipe right to delete • Swipe left to send to bottom • Drag ☰ to reorder',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Swipe right to delete • Swipe left to send to bottom • Drag ☰ to reorder',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.5),
-                                fontSize: 12,
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white12,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${playlist.length} Tracks',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ],
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white12,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            '${playlist.length} Tracks',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(color: Colors.white12, height: 1),
-                  Expanded(
-                    child: playlist.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'Queue is empty',
-                              style: TextStyle(color: Colors.white54),
-                            ),
-                          )
-                        : ReorderableListView.builder(
-                            buildDefaultDragHandles: false,
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 8,
-                              horizontal: 14,
-                            ),
-                            itemCount: playlist.length,
-                            // ignore: deprecated_member_use
-                            onReorder: (oldIndex, newIndex) {
-                              HapticFeedback.selectionClick();
-                              _musicService.reorderQueue(oldIndex, newIndex);
-                              setSheetState(() {});
-                            },
-                            itemBuilder: (context, index) {
-                              final song = playlist[index];
-                              final isCurrent = index == currentIndex;
-                              final hdThumbnail = MusicService.getHdThumbnail(
-                                song.id.value,
-                              );
+                      ),
+                      const Divider(color: Colors.white12, height: 1),
+                      Expanded(
+                        child: playlist.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  'Queue is empty',
+                                  style: TextStyle(color: Colors.white54),
+                                ),
+                              )
+                            : ReorderableListView.builder(
+                                buildDefaultDragHandles: false,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                  horizontal: 14,
+                                ),
+                                itemCount: playlist.length,
+                                // ignore: deprecated_member_use
+                                onReorder: (oldIndex, newIndex) {
+                                  HapticFeedback.selectionClick();
+                                  _musicService.reorderQueue(
+                                    oldIndex,
+                                    newIndex,
+                                  );
+                                  setSheetState(() {});
+                                },
+                                itemBuilder: (context, index) {
+                                  final song = playlist[index];
+                                  final isCurrent = index == currentIndex;
+                                  final hdThumbnail =
+                                      MusicService.getHdThumbnail(
+                                        song.id.value,
+                                      );
 
-                              return Dismissible(
-                                key: ValueKey(
-                                  'queue_dismissible_${song.id.value}_$index',
-                                ),
-                                direction: isCurrent
-                                    ? DismissDirection.none
-                                    : DismissDirection.horizontal,
-                                background: Container(
-                                  margin: const EdgeInsets.symmetric(
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.redAccent.withValues(
-                                      alpha: 0.85,
+                                  return Dismissible(
+                                    key: ValueKey(
+                                      'queue_dismissible_${song.id.value}_$index',
                                     ),
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                  ),
-                                  alignment: Alignment.centerLeft,
-                                  child: const Row(
-                                    children: [
-                                      Icon(
-                                        Icons.delete_sweep_rounded,
-                                        color: Colors.white,
-                                        size: 22,
+                                    direction: isCurrent
+                                        ? DismissDirection.none
+                                        : DismissDirection.horizontal,
+                                    background: Container(
+                                      margin: const EdgeInsets.symmetric(
+                                        vertical: 4,
                                       ),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'Remove from queue',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 13,
+                                      decoration: BoxDecoration(
+                                        color: Colors.redAccent.withValues(
+                                          alpha: 0.85,
                                         ),
+                                        borderRadius: BorderRadius.circular(14),
                                       ),
-                                    ],
-                                  ),
-                                ),
-                                secondaryBackground: Container(
-                                  margin: const EdgeInsets.symmetric(
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.indigoAccent.withValues(
-                                      alpha: 0.85,
-                                    ),
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                  ),
-                                  alignment: Alignment.centerRight,
-                                  child: const Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        'Send to bottom',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 13,
-                                        ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 20,
                                       ),
-                                      SizedBox(width: 8),
-                                      Icon(
-                                        Icons.vertical_align_bottom_rounded,
-                                        color: Colors.white,
-                                        size: 22,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                confirmDismiss: (direction) async {
-                                  if (direction ==
-                                      DismissDirection.startToEnd) {
-                                    HapticFeedback.mediumImpact();
-                                    return true;
-                                  } else if (direction ==
-                                      DismissDirection.endToStart) {
-                                    HapticFeedback.lightImpact();
-                                    _musicService.reorderQueue(
-                                      index,
-                                      playlist.length,
-                                    );
-                                    setSheetState(() {});
-                                    return false;
-                                  }
-                                  return false;
-                                },
-                                onDismissed: (direction) {
-                                  if (direction ==
-                                      DismissDirection.startToEnd) {
-                                    _musicService.removeFromQueue(index);
-                                    setSheetState(() {});
-                                  }
-                                },
-                                child: Container(
-                                  margin: const EdgeInsets.symmetric(
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isCurrent
-                                        ? Theme.of(
-                                            context,
-                                          ).primaryColor.withValues(alpha: 0.16)
-                                        : const Color(0xFF1B1B26),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color: isCurrent
-                                          ? Theme.of(context).primaryColor
-                                                .withValues(alpha: 0.45)
-                                          : Colors.white.withValues(
-                                              alpha: 0.07,
+                                      alignment: Alignment.centerLeft,
+                                      child: const Row(
+                                        children: [
+                                          Icon(
+                                            Icons.delete_sweep_rounded,
+                                            color: Colors.white,
+                                            size: 22,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            'Remove from queue',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13,
                                             ),
-                                      width: 1,
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(14),
-                                      onTap: () {
-                                        Navigator.pop(context);
-                                        _musicService.playPlaylist(
-                                          playlist,
+                                    secondaryBackground: Container(
+                                      margin: const EdgeInsets.symmetric(
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.indigoAccent.withValues(
+                                          alpha: 0.85,
+                                        ),
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 20,
+                                      ),
+                                      alignment: Alignment.centerRight,
+                                      child: const Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            'Send to bottom',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                          SizedBox(width: 8),
+                                          Icon(
+                                            Icons.vertical_align_bottom_rounded,
+                                            color: Colors.white,
+                                            size: 22,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    confirmDismiss: (direction) async {
+                                      if (direction ==
+                                          DismissDirection.startToEnd) {
+                                        HapticFeedback.mediumImpact();
+                                        return true;
+                                      } else if (direction ==
+                                          DismissDirection.endToStart) {
+                                        HapticFeedback.lightImpact();
+                                        _musicService.reorderQueue(
                                           index,
+                                          playlist.length,
                                         );
-                                      },
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 4,
-                                          vertical: 6,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            // Far left 3-line handle for priority reordering
-                                            ReorderableDragStartListener(
-                                              index: index,
-                                              child: Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 10,
-                                                      vertical: 12,
-                                                    ),
-                                                child: const Icon(
-                                                  Icons.menu_rounded,
-                                                  color: Colors.white60,
-                                                  size: 20,
+                                        setSheetState(() {});
+                                        return false;
+                                      }
+                                      return false;
+                                    },
+                                    onDismissed: (direction) {
+                                      if (direction ==
+                                          DismissDirection.startToEnd) {
+                                        _musicService.removeFromQueue(index);
+                                        setSheetState(() {});
+                                      }
+                                    },
+                                    child: Container(
+                                      margin: const EdgeInsets.symmetric(
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isCurrent
+                                            ? Theme.of(context).primaryColor
+                                                  .withValues(alpha: 0.16)
+                                            : const Color(0xFF1B1B26),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: isCurrent
+                                              ? Theme.of(context).primaryColor
+                                                    .withValues(alpha: 0.45)
+                                              : Colors.white.withValues(
+                                                  alpha: 0.07,
                                                 ),
-                                              ),
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                          onTap: () {
+                                            Navigator.pop(context);
+                                            _musicService.playPlaylist(
+                                              playlist,
+                                              index,
+                                            );
+                                          },
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 4,
+                                              vertical: 6,
                                             ),
-                                            ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              child: Image.network(
-                                                hdThumbnail,
-                                                width: 44,
-                                                height: 44,
-                                                cacheWidth: 100,
-                                                cacheHeight: 100,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (_, _, _) =>
-                                                    CanonicalSongDedup.isLikelyYouTubeId(
-                                                      song.id.value,
-                                                    )
-                                                    ? Image.network(
-                                                        song
-                                                            .thumbnails
-                                                            .lowResUrl,
-                                                        width: 44,
-                                                        height: 44,
-                                                        cacheWidth: 100,
-                                                        cacheHeight: 100,
-                                                        fit: BoxFit.cover,
-                                                      )
-                                                    : Container(
-                                                        width: 44,
-                                                        height: 44,
-                                                        color: const Color(
-                                                          0xFF1E1E2C,
+                                            child: Row(
+                                              children: [
+                                                // Far left 3-line handle for priority reordering
+                                                ReorderableDragStartListener(
+                                                  index: index,
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 10,
+                                                          vertical: 12,
                                                         ),
-                                                        child: const Icon(
-                                                          Icons
-                                                              .music_note_rounded,
-                                                          color: Colors.white24,
-                                                          size: 20,
+                                                    child: const Icon(
+                                                      Icons.menu_rounded,
+                                                      color: Colors.white60,
+                                                      size: 20,
+                                                    ),
+                                                  ),
+                                                ),
+                                                ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  child: Image.network(
+                                                    hdThumbnail,
+                                                    width: 44,
+                                                    height: 44,
+                                                    cacheWidth: 100,
+                                                    cacheHeight: 100,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder: (_, _, _) =>
+                                                        CanonicalSongDedup.isLikelyYouTubeId(
+                                                          song.id.value,
+                                                        )
+                                                        ? Image.network(
+                                                            song
+                                                                .thumbnails
+                                                                .lowResUrl,
+                                                            width: 44,
+                                                            height: 44,
+                                                            cacheWidth: 100,
+                                                            cacheHeight: 100,
+                                                            fit: BoxFit.cover,
+                                                          )
+                                                        : Container(
+                                                            width: 44,
+                                                            height: 44,
+                                                            color: const Color(
+                                                              0xFF1E1E2C,
+                                                            ),
+                                                            child: const Icon(
+                                                              Icons
+                                                                  .music_note_rounded,
+                                                              color: Colors
+                                                                  .white24,
+                                                              size: 20,
+                                                            ),
+                                                          ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Text(
+                                                        song.title,
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: TextStyle(
+                                                          color: isCurrent
+                                                              ? Theme.of(
+                                                                  context,
+                                                                ).primaryColor
+                                                              : Colors.white,
+                                                          fontWeight: isCurrent
+                                                              ? FontWeight.bold
+                                                              : FontWeight.w600,
+                                                          fontSize: 13.5,
                                                         ),
                                                       ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Text(
-                                                    song.title,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: TextStyle(
-                                                      color: isCurrent
-                                                          ? Theme.of(
-                                                              context,
-                                                            ).primaryColor
-                                                          : Colors.white,
-                                                      fontWeight: isCurrent
-                                                          ? FontWeight.bold
-                                                          : FontWeight.w600,
-                                                      fontSize: 13.5,
+                                                      const SizedBox(height: 2),
+                                                      Text(
+                                                        song.author,
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: TextStyle(
+                                                          color: isCurrent
+                                                              ? Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .primaryColor
+                                                                    .withValues(
+                                                                      alpha:
+                                                                          0.8,
+                                                                    )
+                                                              : Colors.white54,
+                                                          fontSize: 12,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                if (isCurrent)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          right: 6,
+                                                        ),
+                                                    child: Icon(
+                                                      Icons.equalizer_rounded,
+                                                      color: Theme.of(
+                                                        context,
+                                                      ).primaryColor,
+                                                      size: 22,
                                                     ),
                                                   ),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    song.author,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: TextStyle(
-                                                      color: isCurrent
-                                                          ? Theme.of(context)
-                                                                .primaryColor
-                                                                .withValues(
-                                                                  alpha: 0.8,
-                                                                )
-                                                          : Colors.white54,
-                                                      fontSize: 12,
-                                                    ),
+                                                IconButton(
+                                                  icon: const Icon(
+                                                    Icons.more_vert_rounded,
+                                                    color: Colors.white38,
+                                                    size: 18,
                                                   ),
-                                                ],
-                                              ),
-                                            ),
-                                            if (isCurrent)
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                  right: 6,
+                                                  padding: EdgeInsets.zero,
+                                                  constraints:
+                                                      const BoxConstraints(
+                                                        minWidth: 32,
+                                                        minHeight: 32,
+                                                      ),
+                                                  onPressed: () {
+                                                    showSongOptionsBottomSheet(
+                                                      context,
+                                                      song,
+                                                    );
+                                                  },
                                                 ),
-                                                child: Icon(
-                                                  Icons.equalizer_rounded,
-                                                  color: Theme.of(
-                                                    context,
-                                                  ).primaryColor,
-                                                  size: 22,
+                                                IconButton(
+                                                  icon: const Icon(
+                                                    Icons.close_rounded,
+                                                    color: Colors.white38,
+                                                    size: 18,
+                                                  ),
+                                                  padding: EdgeInsets.zero,
+                                                  constraints:
+                                                      const BoxConstraints(
+                                                        minWidth: 32,
+                                                        minHeight: 32,
+                                                      ),
+                                                  onPressed: () {
+                                                    HapticFeedback.lightImpact();
+                                                    _musicService
+                                                        .removeFromQueue(index);
+                                                    setSheetState(() {});
+                                                  },
                                                 ),
-                                              ),
-                                            IconButton(
-                                              icon: const Icon(
-                                                Icons.more_vert_rounded,
-                                                color: Colors.white38,
-                                                size: 18,
-                                              ),
-                                              padding: EdgeInsets.zero,
-                                              constraints: const BoxConstraints(
-                                                minWidth: 32,
-                                                minHeight: 32,
-                                              ),
-                                              onPressed: () {
-                                                showSongOptionsBottomSheet(
-                                                  context,
-                                                  song,
-                                                );
-                                              },
+                                                const SizedBox(width: 4),
+                                              ],
                                             ),
-                                            IconButton(
-                                              icon: const Icon(
-                                                Icons.close_rounded,
-                                                color: Colors.white38,
-                                                size: 18,
-                                              ),
-                                              padding: EdgeInsets.zero,
-                                              constraints: const BoxConstraints(
-                                                minWidth: 32,
-                                                minHeight: 32,
-                                              ),
-                                              onPressed: () {
-                                                HapticFeedback.lightImpact();
-                                                _musicService.removeFromQueue(
-                                                  index,
-                                                );
-                                                setSheetState(() {});
-                                              },
-                                            ),
-                                            const SizedBox(width: 4),
-                                          ],
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             );
           },
         );
