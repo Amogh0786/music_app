@@ -1,9 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music_app/services/auth_service.dart';
 import 'package:music_app/services/youtube_library_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
 
   group('AuthService & YouTubeLibraryService Verification', () {
     test(
@@ -147,6 +152,35 @@ void main() {
         await auth.signOut();
         expect(auth.isAuthenticated, isFalse);
         expect(auth.isDemoMode, isFalse);
+        expect(auth.userDisplayName, isNull);
+      },
+    );
+
+    test(
+      'AuthService restores persisted session from SharedPreferences on cold start',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'dilse_auth_session_type': 'google',
+          'dilse_auth_user_id': 'user_persisted_999',
+          'dilse_auth_user_name': 'Charan Teja Persisted',
+          'dilse_auth_user_email': 'charan.persisted@dilse.app',
+          'dilse_auth_user_photo': 'https://example.com/photo.jpg',
+          'dilse_auth_access_token': 'persisted_oauth_token_xyz',
+        });
+
+        final auth = AuthService();
+        await auth.initialize();
+
+        expect(auth.isAuthenticated, isTrue);
+        expect(auth.isGuestMode, isFalse);
+        expect(auth.userDisplayName, equals('Charan Teja Persisted'));
+        expect(auth.userEmail, equals('charan.persisted@dilse.app'));
+        expect(auth.userPhotoUrl, equals('https://example.com/photo.jpg'));
+        expect(auth.accessToken, equals('persisted_oauth_token_xyz'));
+
+        // Sign out cleans SharedPreferences
+        await auth.signOut();
+        expect(auth.isAuthenticated, isFalse);
         expect(auth.userDisplayName, isNull);
       },
     );

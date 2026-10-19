@@ -75,7 +75,10 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
 
     if (widget.fetchSongs != null) {
       try {
-        final songs = await widget.fetchSongs!();
+        final songs = await widget.fetchSongs!().timeout(
+          const Duration(seconds: 12),
+          onTimeout: () => <Video>[],
+        );
         if (mounted) {
           setState(() {
             _tracks = CanonicalSongDedup.deduplicateList(songs);
@@ -119,7 +122,10 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
     final qLower = query.toLowerCase().trim();
     if (qLower == 'supermix' || qLower == 'my supermix') {
       try {
-        final songs = await YouTubeLibraryService().fetchSupermix();
+        final songs = await YouTubeLibraryService().fetchSupermix().timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => <Video>[],
+        );
         if (mounted) {
           setState(() {
             _tracks = CanonicalSongDedup.deduplicateList(songs);
@@ -140,7 +146,10 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
       return;
     } else if (qLower == 'discover mix' || qLower == 'discover') {
       try {
-        final songs = await YouTubeLibraryService().fetchDiscoverMix();
+        final songs = await YouTubeLibraryService().fetchDiscoverMix().timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => <Video>[],
+        );
         if (mounted) {
           setState(() {
             _tracks = CanonicalSongDedup.deduplicateList(songs);
@@ -161,7 +170,9 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
       return;
     } else if (qLower == 'new release mix') {
       try {
-        final songs = await YouTubeLibraryService().fetchNewReleaseMix();
+        final songs = await YouTubeLibraryService()
+            .fetchNewReleaseMix()
+            .timeout(const Duration(seconds: 10), onTimeout: () => <Video>[]);
         if (mounted) {
           setState(() {
             _tracks = CanonicalSongDedup.deduplicateList(songs);
@@ -183,7 +194,9 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
     } else if (qLower == 'forgotten tracks' ||
         qLower == 'forgotten favorites') {
       try {
-        final songs = await YouTubeLibraryService().fetchForgottenTracks();
+        final songs = await YouTubeLibraryService()
+            .fetchForgottenTracks()
+            .timeout(const Duration(seconds: 10), onTimeout: () => <Video>[]);
         if (mounted) {
           setState(() {
             _tracks = CanonicalSongDedup.deduplicateList(songs);
@@ -205,11 +218,27 @@ class _CuratedPlaylistScreenState extends State<CuratedPlaylistScreen> {
     }
 
     try {
-      final resultsFuture = StudioSearchService().searchSongs(query);
-      final albumsFuture = _musicService.searchAlbums(query, limit: 10);
+      final resultsFuture = StudioSearchService()
+          .searchSongs(query)
+          .timeout(const Duration(seconds: 10), onTimeout: () => <Video>[]);
+      final albumsFuture = _musicService
+          .searchAlbums(query, limit: 10)
+          .timeout(const Duration(seconds: 8), onTimeout: () => <JioAlbum>[]);
       List<Video> results = await resultsFuture;
       if (results.isEmpty) {
-        results = await _musicService.searchSongs(query);
+        results = await _musicService
+            .searchSongs(query)
+            .timeout(const Duration(seconds: 8), onTimeout: () => <Video>[]);
+      }
+      if (results.isEmpty) {
+        final fallbackQuery = query.toLowerCase().contains('late night')
+            ? 'Slow Melodies'
+            : (query.toLowerCase().contains('morning')
+                  ? 'Morning Melodies'
+                  : '$query Songs');
+        results = await _musicService
+            .searchSongs(fallbackQuery)
+            .timeout(const Duration(seconds: 8), onTimeout: () => <Video>[]);
       }
       final albums = await albumsFuture;
       if (mounted) {

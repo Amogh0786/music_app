@@ -7,6 +7,7 @@ import 'services/audio_handler.dart';
 import 'screens/intro_splash_screen.dart';
 import 'services/preferences_service.dart';
 import 'services/bug_report_service.dart';
+import 'services/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +21,7 @@ void main() async {
     }
   }
   await PreferencesService().init();
+  await AuthService().initialize();
   await BugReportService.instance.init();
   runApp(const MusicApp());
 }

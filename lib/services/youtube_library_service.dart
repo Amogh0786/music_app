@@ -195,6 +195,12 @@ class YouTubeLibraryService extends ChangeNotifier {
       return _playlistSongsCache[playlistId]!;
     }
 
+    if (AuthService().isDemoMode || playlistId.startsWith('yt_demo_')) {
+      final songs = _getDemoStudioLikedTracks();
+      _playlistSongsCache[playlistId] = songs;
+      return songs;
+    }
+
     final token = await AuthService().getFreshAccessToken();
     if (token == null || token.isEmpty) return [];
 

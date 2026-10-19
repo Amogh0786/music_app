@@ -222,12 +222,12 @@ class _HomeScreenState extends State<HomeScreen>
       } catch (_) {}
     }
 
-    bool hadCache = false;
-    if (cachedCircadian.isNotEmpty ||
+    final hadAnyCache =
+        cachedCircadian.isNotEmpty ||
         cachedMix1.isNotEmpty ||
         cachedCharts.isNotEmpty ||
-        cachedAlbums.isNotEmpty) {
-      hadCache = true;
+        cachedAlbums.isNotEmpty;
+    if (hadAnyCache) {
       if (mounted) {
         setState(() {
           if (cachedCircadian.isNotEmpty) {
@@ -268,7 +268,22 @@ class _HomeScreenState extends State<HomeScreen>
 
     // 2. Background Refresh / Initial Load
     // Hydrate UI with cached feeds first, then revalidate with fresh Studio Search streams
-    if (kIsWeb && hadCache) {
+    final allEssentialCached =
+        cachedCircadian.isNotEmpty &&
+        cachedMix1.isNotEmpty &&
+        cachedCharts.isNotEmpty;
+    if (kIsWeb && allEssentialCached) {
+      if (mounted) {
+        setState(() {
+          _isLoadingDailyMix1 = false;
+          _isLoadingDailyMix2 = false;
+          _isLoadingCircadian = false;
+          _isLoadingCharts = false;
+          _isLoadingTrending = false;
+          _isLoadingAlbums = false;
+          _isLoadingPersonalized = false;
+        });
+      }
       return;
     }
 
@@ -301,14 +316,18 @@ class _HomeScreenState extends State<HomeScreen>
         if (!mounted) return;
         try {
           final mix2 = CanonicalSongDedup.deduplicateList(
-            await _loadRichDailyMix(_dailyMixConfigs[1]),
+            await _loadRichDailyMix(
+              _dailyMixConfigs[1],
+            ).timeout(const Duration(seconds: 10), onTimeout: () => <Video>[]),
           );
-          if (mix2.isNotEmpty && mounted) {
+          if (mounted) {
             setState(() {
-              _dailyMix2 = mix2;
+              if (mix2.isNotEmpty) _dailyMix2 = mix2;
               _isLoadingDailyMix2 = false;
             });
-            _prefs.cacheHomeFeed('daily_mix_2', _serializeVideos(mix2));
+            if (mix2.isNotEmpty) {
+              _prefs.cacheHomeFeed('daily_mix_2', _serializeVideos(mix2));
+            }
           }
         } catch (_) {
           if (mounted) setState(() => _isLoadingDailyMix2 = false);
@@ -321,18 +340,24 @@ class _HomeScreenState extends State<HomeScreen>
       if (_dailyMixConfigs.isNotEmpty) {
         try {
           final mix1 = CanonicalSongDedup.deduplicateList(
-            await _loadRichDailyMix(_dailyMixConfigs[0]),
+            await _loadRichDailyMix(
+              _dailyMixConfigs[0],
+            ).timeout(const Duration(seconds: 10), onTimeout: () => <Video>[]),
           );
-          if (mix1.isNotEmpty && mounted) {
+          if (mounted) {
             setState(() {
-              _dailyMix1 = mix1;
+              if (mix1.isNotEmpty) _dailyMix1 = mix1;
               _isLoadingDailyMix1 = false;
             });
-            _prefs.cacheHomeFeed('daily_mix_1', _serializeVideos(mix1));
+            if (mix1.isNotEmpty) {
+              _prefs.cacheHomeFeed('daily_mix_1', _serializeVideos(mix1));
+            }
           }
         } catch (_) {
           if (mounted) setState(() => _isLoadingDailyMix1 = false);
         }
+      } else {
+        if (mounted) setState(() => _isLoadingDailyMix1 = false);
       }
 
       // Priority 2: Daily Mix 2 (if not loaded first)
@@ -341,47 +366,74 @@ class _HomeScreenState extends State<HomeScreen>
       if (!loadMix2First && _dailyMixConfigs.length > 1) {
         try {
           final mix2 = CanonicalSongDedup.deduplicateList(
-            await _loadRichDailyMix(_dailyMixConfigs[1]),
+            await _loadRichDailyMix(
+              _dailyMixConfigs[1],
+            ).timeout(const Duration(seconds: 10), onTimeout: () => <Video>[]),
           );
-          if (mix2.isNotEmpty && mounted) {
+          if (mounted) {
             setState(() {
-              _dailyMix2 = mix2;
+              if (mix2.isNotEmpty) _dailyMix2 = mix2;
               _isLoadingDailyMix2 = false;
             });
-            _prefs.cacheHomeFeed('daily_mix_2', _serializeVideos(mix2));
+            if (mix2.isNotEmpty) {
+              _prefs.cacheHomeFeed('daily_mix_2', _serializeVideos(mix2));
+            }
           }
         } catch (_) {
           if (mounted) setState(() => _isLoadingDailyMix2 = false);
         }
+      } else if (!loadMix2First) {
+        if (mounted) setState(() => _isLoadingDailyMix2 = false);
       }
 
-      // Priority 3: Circadian / Made For You (Contextual time-of-day)
+      // Priority 3: Circadian / Made For You (Contextual time-of-day: Late Night Vibes, Morning, etc.)
       await pauseIfSearchActive();
       if (!mounted) return;
       if (_circadianContext != null) {
         try {
           List<Video> circadian = CanonicalSongDedup.deduplicateList(
-            await StudioSearchService().searchSongs(
-              _circadianContext!.query,
-              limit: 30,
-            ),
+            await StudioSearchService()
+                .searchSongs(_circadianContext!.query, limit: 30)
+                .timeout(
+                  const Duration(seconds: 10),
+                  onTimeout: () => <Video>[],
+                ),
           );
           if (circadian.isEmpty) {
             circadian = CanonicalSongDedup.deduplicateList(
-              await _musicService.searchSongs(_circadianContext!.query),
+              await _musicService
+                  .searchSongs(_circadianContext!.query)
+                  .timeout(
+                    const Duration(seconds: 8),
+                    onTimeout: () => <Video>[],
+                  ),
             );
           }
-          if (circadian.isNotEmpty && mounted) {
+          if (circadian.isEmpty) {
+            circadian = CanonicalSongDedup.deduplicateList(
+              await _musicService
+                  .searchSongs('$primaryLang Melodies')
+                  .timeout(
+                    const Duration(seconds: 8),
+                    onTimeout: () => <Video>[],
+                  ),
+            );
+          }
+          if (mounted) {
             setState(() {
-              _circadianMix = circadian;
+              if (circadian.isNotEmpty) _circadianMix = circadian;
               _isLoadingCircadian = false;
             });
-            _prefs.cacheHomeFeed('circadian', _serializeVideos(circadian));
-            _musicService.enrichArtworkForSongs(circadian);
+            if (circadian.isNotEmpty) {
+              _prefs.cacheHomeFeed('circadian', _serializeVideos(circadian));
+              _musicService.enrichArtworkForSongs(circadian);
+            }
           }
         } catch (_) {
           if (mounted) setState(() => _isLoadingCircadian = false);
         }
+      } else {
+        if (mounted) setState(() => _isLoadingCircadian = false);
       }
 
       // Priority 4: Top Charts India
@@ -389,26 +441,32 @@ class _HomeScreenState extends State<HomeScreen>
       if (!mounted) return;
       try {
         List<Video> charts = CanonicalSongDedup.deduplicateList(
-          await StudioSearchService().searchSongs(
-            'Top Charts India $primaryLang',
-            limit: 30,
-          ),
+          await StudioSearchService()
+              .searchSongs('Top Charts India $primaryLang', limit: 30)
+              .timeout(const Duration(seconds: 10), onTimeout: () => <Video>[]),
         );
         if (charts.isEmpty) {
           charts = CanonicalSongDedup.deduplicateList(
             _musicService.hasPreloadedHome &&
                     _musicService.preloadedTopChartsIndia.isNotEmpty
                 ? _musicService.preloadedTopChartsIndia
-                : await _musicService.searchSongs('$primaryLang Top Hits'),
+                : await _musicService
+                      .searchSongs('$primaryLang Top Hits')
+                      .timeout(
+                        const Duration(seconds: 8),
+                        onTimeout: () => <Video>[],
+                      ),
           );
         }
-        if (charts.isNotEmpty && mounted) {
+        if (mounted) {
           setState(() {
-            _topChartsIndia = charts;
+            if (charts.isNotEmpty) _topChartsIndia = charts;
             _isLoadingCharts = false;
           });
-          _prefs.cacheHomeFeed('charts', _serializeVideos(charts));
-          _musicService.enrichArtworkForSongs(charts);
+          if (charts.isNotEmpty) {
+            _prefs.cacheHomeFeed('charts', _serializeVideos(charts));
+            _musicService.enrichArtworkForSongs(charts);
+          }
         }
       } catch (_) {
         if (mounted) setState(() => _isLoadingCharts = false);
@@ -422,15 +480,22 @@ class _HomeScreenState extends State<HomeScreen>
           _musicService.hasPreloadedHome &&
                   _musicService.preloadedTrending.isNotEmpty
               ? _musicService.preloadedTrending
-              : await _musicService.searchSongs('$primaryLang Trending'),
+              : await _musicService
+                    .searchSongs('$primaryLang Trending')
+                    .timeout(
+                      const Duration(seconds: 8),
+                      onTimeout: () => <Video>[],
+                    ),
         );
-        if (trending.isNotEmpty && mounted) {
+        if (mounted) {
           setState(() {
-            _trendingNow = trending;
+            if (trending.isNotEmpty) _trendingNow = trending;
             _isLoadingTrending = false;
           });
-          _prefs.cacheHomeFeed('trending', _serializeVideos(trending));
-          _musicService.enrichArtworkForSongs(trending);
+          if (trending.isNotEmpty) {
+            _prefs.cacheHomeFeed('trending', _serializeVideos(trending));
+            _musicService.enrichArtworkForSongs(trending);
+          }
         }
       } catch (_) {
         if (mounted) setState(() => _isLoadingTrending = false);
@@ -441,22 +506,26 @@ class _HomeScreenState extends State<HomeScreen>
       if (!mounted) return;
       if (_trendingAlbums.isEmpty) {
         try {
-          var albums = await _musicService.searchAlbums(
-            '$primaryLang Soundtracks',
-            limit: 12,
-          );
+          var albums = await _musicService
+              .searchAlbums('$primaryLang Soundtracks', limit: 12)
+              .timeout(
+                const Duration(seconds: 8),
+                onTimeout: () => <JioAlbum>[],
+              );
           if (albums.length < 3) {
-            final fallbackAlbums = await _musicService.searchAlbums(
-              primaryLang,
-              limit: 12,
-            );
+            final fallbackAlbums = await _musicService
+                .searchAlbums(primaryLang, limit: 12)
+                .timeout(
+                  const Duration(seconds: 8),
+                  onTimeout: () => <JioAlbum>[],
+                );
             if (fallbackAlbums.isNotEmpty) {
               albums = fallbackAlbums;
             }
           }
           if (mounted) {
             setState(() {
-              _trendingAlbums = albums;
+              if (albums.isNotEmpty) _trendingAlbums = albums;
               _isLoadingAlbums = false;
             });
             if (albums.isNotEmpty) {
@@ -469,6 +538,8 @@ class _HomeScreenState extends State<HomeScreen>
         } catch (_) {
           if (mounted) setState(() => _isLoadingAlbums = false);
         }
+      } else {
+        if (mounted) setState(() => _isLoadingAlbums = false);
       }
 
       // Priority 7: Personalized Mixes (Made For You)
@@ -477,31 +548,45 @@ class _HomeScreenState extends State<HomeScreen>
       if (_personalizedMixes.isEmpty) {
         try {
           List<Video> personalized = CanonicalSongDedup.deduplicateList(
-            await StudioSearchService().searchSongs(
-              '$primaryLang Made For You Mix',
-              limit: 30,
-            ),
+            await StudioSearchService()
+                .searchSongs('$primaryLang Made For You Mix', limit: 30)
+                .timeout(
+                  const Duration(seconds: 10),
+                  onTimeout: () => <Video>[],
+                ),
           );
           if (personalized.isEmpty) {
             personalized = CanonicalSongDedup.deduplicateList(
               _dailyMixConfigs.length > 2
-                  ? await _loadRichDailyMix(_dailyMixConfigs[2])
-                  : await _musicService.searchSongs('$primaryLang Mix'),
+                  ? await _loadRichDailyMix(_dailyMixConfigs[2]).timeout(
+                      const Duration(seconds: 8),
+                      onTimeout: () => <Video>[],
+                    )
+                  : await _musicService
+                        .searchSongs('$primaryLang Mix')
+                        .timeout(
+                          const Duration(seconds: 8),
+                          onTimeout: () => <Video>[],
+                        ),
             );
           }
           if (mounted) {
             setState(() {
-              _personalizedMixes = personalized;
+              if (personalized.isNotEmpty) _personalizedMixes = personalized;
               _isLoadingPersonalized = false;
             });
-            _prefs.cacheHomeFeed(
-              'personalized',
-              _serializeVideos(personalized),
-            );
+            if (personalized.isNotEmpty) {
+              _prefs.cacheHomeFeed(
+                'personalized',
+                _serializeVideos(personalized),
+              );
+            }
           }
         } catch (_) {
           if (mounted) setState(() => _isLoadingPersonalized = false);
         }
+      } else {
+        if (mounted) setState(() => _isLoadingPersonalized = false);
       }
 
       // Priority 8: New Releases
@@ -510,13 +595,23 @@ class _HomeScreenState extends State<HomeScreen>
       if (_newReleases.isEmpty) {
         try {
           final newReleases = CanonicalSongDedup.deduplicateList(
-            await _musicService.searchSongs('$primaryLang Latest Songs'),
+            await _musicService
+                .searchSongs('$primaryLang Latest Songs')
+                .timeout(
+                  const Duration(seconds: 8),
+                  onTimeout: () => <Video>[],
+                ),
           );
           if (mounted) {
             setState(() {
-              _newReleases = newReleases;
+              if (newReleases.isNotEmpty) _newReleases = newReleases;
             });
-            _prefs.cacheHomeFeed('new_releases', _serializeVideos(newReleases));
+            if (newReleases.isNotEmpty) {
+              _prefs.cacheHomeFeed(
+                'new_releases',
+                _serializeVideos(newReleases),
+              );
+            }
           }
         } catch (_) {}
       }
@@ -524,7 +619,9 @@ class _HomeScreenState extends State<HomeScreen>
       // Entire Home Feed Sequence Complete! Signal Left Sidebar and layout.
       _setHomeFeedComplete(true);
     } catch (e) {
-      if (mounted && !hadCache) {
+      debugPrint('[HomeScreen] Home feed loading error: $e');
+    } finally {
+      if (mounted) {
         setState(() {
           _isLoadingDailyMix1 = false;
           _isLoadingDailyMix2 = false;
@@ -913,6 +1010,7 @@ class _HomeScreenState extends State<HomeScreen>
       required List<Video> initialSongs,
       required List<Color> gradientColors,
       required IconData icon,
+      String? query,
     }) {
       HapticFeedback.lightImpact();
       if (isDesktop) {
@@ -920,6 +1018,7 @@ class _HomeScreenState extends State<HomeScreen>
           playlistId,
           title: title,
           subtitle: subtitle,
+          query: query,
           initialSongs: initialSongs,
           gradientColors: gradientColors,
           icon: icon,
@@ -931,6 +1030,7 @@ class _HomeScreenState extends State<HomeScreen>
             builder: (_) => CuratedPlaylistScreen(
               title: title,
               subtitle: subtitle,
+              query: query,
               initialSongs: initialSongs,
               gradientColors: gradientColors,
               icon: icon,
@@ -970,6 +1070,9 @@ class _HomeScreenState extends State<HomeScreen>
           playlistId: 'daily_mix_1',
           title: dailyMix1?.title ?? 'Daily Mix 1',
           subtitle: dailyMix1?.subtitle ?? 'Curated for you',
+          query:
+              dailyMix1?.query ??
+              '${_prefs.preferredLanguages.firstOrNull ?? 'Telugu'} Mix',
           initialSongs: _dailyMix1,
           gradientColors: const [Color(0xFFE040FB), Color(0xFF1DB954)],
           icon: Icons.shuffle_rounded,
@@ -1004,6 +1107,9 @@ class _HomeScreenState extends State<HomeScreen>
           playlistId: 'daily_mix_2',
           title: dailyMix2?.title ?? 'Daily Mix 2',
           subtitle: dailyMix2?.subtitle ?? 'Curated for you',
+          query:
+              dailyMix2?.query ??
+              '${_prefs.preferredLanguages.firstOrNull ?? 'Telugu'} Hits',
           initialSongs: _dailyMix2,
           gradientColors: const [Color(0xFF00C6FF), Color(0xFF0072FF)],
           icon: Icons.graphic_eq_rounded,
@@ -1022,6 +1128,8 @@ class _HomeScreenState extends State<HomeScreen>
           playlistId: 'top_charts_india',
           title: 'Top Charts India',
           subtitle: 'Updated Daily',
+          query:
+              'Top Charts India ${_prefs.preferredLanguages.firstOrNull ?? 'Telugu'}',
           initialSongs: _topChartsIndia,
           gradientColors: const [Color(0xFFFF512F), Color(0xFFDD2476)],
           icon: Icons.trending_up_rounded,
@@ -1040,6 +1148,8 @@ class _HomeScreenState extends State<HomeScreen>
           playlistId: 'new_releases',
           title: 'New Releases',
           subtitle: 'Fresh Music',
+          query:
+              '${_prefs.preferredLanguages.firstOrNull ?? 'Telugu'} Latest Songs',
           initialSongs: _newReleases,
           gradientColors: const [Color(0xFF11998E), Color(0xFF38EF7D)],
           icon: Icons.fiber_new_rounded,
@@ -1059,6 +1169,8 @@ class _HomeScreenState extends State<HomeScreen>
           playlistId: 'trending_now',
           title: 'Trending Now',
           subtitle: 'Global Pick',
+          query:
+              '${_prefs.preferredLanguages.firstOrNull ?? 'Telugu'} Trending',
           initialSongs: _trendingNow,
           gradientColors: const [Color(0xFFF857A6), Color(0xFFFF5858)],
           icon: Icons.whatshot_rounded,
