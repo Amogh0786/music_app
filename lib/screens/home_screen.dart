@@ -38,7 +38,6 @@ class _HomeScreenState extends State<HomeScreen>
     with AutomaticKeepAliveClientMixin {
   final MusicService _musicService = MusicService();
   final PreferencesService _prefs = PreferencesService();
-  Timer? _cloudBackupPromptTimer;
 
   @override
   bool get wantKeepAlive => true;
@@ -130,40 +129,56 @@ class _HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _loadHomeFeeds();
-        _checkFirstTimeCloudBackupPrompt();
         _checkAppUpdateQuietly();
       }
     });
   }
 
-  void _checkFirstTimeCloudBackupPrompt() {
-    _cloudBackupPromptTimer?.cancel();
-    _cloudBackupPromptTimer = Timer(const Duration(milliseconds: 5000), () async {
-      if (!mounted) return;
-      final auth = AuthService();
-      final prefs = PreferencesService();
-      if (!auth.isAuthenticated || prefs.hasPromptedGoogleCloudBackup) return;
+  /// Stage 2: After loading all home feed doors in given priority, take up playlists & library info
+  Future<void> _loadPlaylistsAndLibraryStage() async {
+    if (!mounted) return;
+    try {
+      if (_musicService.customPlaylists.isEmpty) {
+        await _musicService.loadCustomPlaylists();
+      }
+      // Progressive yield: allow Flutter engine to take up and render playlists smoothly
+      await Future.delayed(const Duration(milliseconds: 300));
+    } catch (e) {
+      debugPrint('[HomeScreen] Stage 2 playlist loading error: $e');
+    }
+  }
 
+  /// Stage 3: After loading playlists and library, check for differences in cloud and update if needed
+  Future<void> _checkCloudDifferencesAndUpdate() async {
+    if (!mounted) return;
+    final auth = AuthService();
+    final prefs = PreferencesService();
+    if (!auth.isAuthenticated) return;
+
+    try {
       final analysis = await CloudSyncService().inspectSyncState();
       if (!mounted) return;
 
-      // If local storage has no new items to back up (L ⊆ C, e.g. opened in browser after backing up on mobile)
       if (!analysis.hasNewLocalItems) {
-        // If cloud has songs/playlists that this device lacks, pull them silently so browser is hydrated immediately
+        // If cloud has updates/songs that this device lacks, pull them silently so browser is updated
         if (analysis.hasNewCloudItems) {
-          CloudSyncService().sync();
+          await CloudSyncService().sync();
         }
         await prefs.setHasPromptedGoogleCloudBackup(true);
         return;
       }
 
-      // Only prompt if there is actual unsaved local data that doesn't exist in the cloud (L \ C != ∅)
-      showDialog(
-        context: context,
-        barrierDismissible: true,
-        builder: (ctx) => GoogleCloudBackupPromptDialog(analysis: analysis),
-      );
-    });
+      // If local storage has unsaved items that don't exist in the cloud (L \ C != ∅)
+      if (!prefs.hasPromptedGoogleCloudBackup) {
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (ctx) => GoogleCloudBackupPromptDialog(analysis: analysis),
+        );
+      }
+    } catch (e) {
+      debugPrint('[HomeScreen] Stage 3 cloud checkup error: $e');
+    }
   }
 
   Future<void> _checkAppUpdateQuietly() async {
@@ -183,7 +198,6 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
-    _cloudBackupPromptTimer?.cancel();
     _musicService.removeListener(_onPrefsChanged);
     _prefs.removeListener(_onPrefsChanged);
     DesktopLayoutState.prioritizedPlaylistDoor.removeListener(_onPrefsChanged);
@@ -293,9 +307,6 @@ class _HomeScreenState extends State<HomeScreen>
           }
         });
       }
-      _setHomeFeedComplete(true);
-    } else {
-      _setHomeFeedComplete(false);
     }
 
     // 2. Background Refresh / Initial Load
@@ -316,8 +327,13 @@ class _HomeScreenState extends State<HomeScreen>
           _isLoadingPersonalized = false;
         });
       }
+      _setHomeFeedComplete(true);
+      await _loadPlaylistsAndLibraryStage();
+      await _checkCloudDifferencesAndUpdate();
       return;
     }
+
+    _setHomeFeedComplete(false);
 
     Future<void> pauseIfSearchActive() async {
       while (mounted) {
@@ -666,6 +682,12 @@ class _HomeScreenState extends State<HomeScreen>
       }
       _setHomeFeedComplete(true);
     }
+
+    // Stage 2: After loading all the home feed in given priority, start taking up playlists and other info
+    await _loadPlaylistsAndLibraryStage();
+
+    // Stage 3: After loading playlists and library, check for differences in cloud and update if needed
+    await _checkCloudDifferencesAndUpdate();
   }
 
   String _serializeVideos(List<Video> videos) {
