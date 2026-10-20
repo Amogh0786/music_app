@@ -215,6 +215,9 @@ class PreferencesService extends ChangeNotifier {
   double _bassBoost = 0.0;
   double _virtualizer = 0.0;
   Color _themeColor = const Color(0xFFFA2D48); // Default DilSe Crimson
+  final ValueNotifier<Color> themeColorNotifier = ValueNotifier<Color>(
+    const Color(0xFFFA2D48),
+  );
   double _cacheSizeMB = 500.0;
   String _customServerUrl = '';
   String _cloudflareWorkerUrl = '';
@@ -399,6 +402,7 @@ class PreferencesService extends ChangeNotifier {
 
     int colorValue = _prefs.getInt('themeColor') ?? 0xFFFA2D48;
     _themeColor = Color(colorValue);
+    themeColorNotifier.value = _themeColor;
     _cacheSizeMB = _prefs.getDouble('cacheSizeMB') ?? 500.0;
     _customServerUrl = _prefs.getString('customServerUrl') ?? '';
     _cloudflareWorkerUrl = _prefs.getString('cloudflareWorkerUrl') ?? '';
@@ -1403,6 +1407,7 @@ class PreferencesService extends ChangeNotifier {
   Future<void> setThemeColor(Color color) async {
     if (!_isInitialized) return;
     _themeColor = color;
+    themeColorNotifier.value = color;
     await _prefs.setInt('themeColor', color.toARGB32());
     notifyListeners();
   }
