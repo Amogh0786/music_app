@@ -562,9 +562,7 @@ class _GoogleAccountDialog extends StatelessWidget {
                           behavior: SnackBarBehavior.floating,
                         ),
                       );
-                      final result = await CloudSyncService().sync(
-                        forcePushLocal: true,
-                      );
+                      final result = await CloudSyncService().sync();
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).hideCurrentSnackBar();
                         ScaffoldMessenger.of(context).showSnackBar(

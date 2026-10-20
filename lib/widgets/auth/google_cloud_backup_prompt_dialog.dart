@@ -9,14 +9,31 @@ import '../../services/audio/favorites_repository.dart';
 /// Modal dialog presented to users upon first launch after Google sign-in
 /// offering a 1-tap option to back up their local playlists and liked songs to the cloud.
 class GoogleCloudBackupPromptDialog extends StatelessWidget {
-  const GoogleCloudBackupPromptDialog({super.key});
+  final CloudSyncAnalysis? analysis;
+
+  const GoogleCloudBackupPromptDialog({super.key, this.analysis});
 
   @override
   Widget build(BuildContext context) {
     final auth = AuthService();
     final displayName = auth.userDisplayName ?? 'Music Lover';
-    final playlistCount = MusicService().customPlaylists.length;
-    final likesCount = FavoritesRepository().likedSongs.length;
+    final playlistCount = analysis != null
+        ? analysis!.newLocalPlaylistsCount
+        : MusicService().customPlaylists.length;
+    final likesCount = analysis != null
+        ? analysis!.newLocalLikesCount
+        : FavoritesRepository().likedSongs.length;
+
+    String readyText;
+    if (playlistCount > 0 && likesCount > 0) {
+      readyText = '$playlistCount Playlists • $likesCount Likes ready';
+    } else if (likesCount > 0) {
+      readyText = '$likesCount Likes ready to back up';
+    } else if (playlistCount > 0) {
+      readyText = '$playlistCount Playlists ready to back up';
+    } else {
+      readyText = 'Ready to sync with cloud';
+    }
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -113,7 +130,7 @@ class GoogleCloudBackupPromptDialog extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    '$playlistCount Playlists • $likesCount Likes ready',
+                    readyText,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 13,
@@ -185,9 +202,7 @@ class GoogleCloudBackupPromptDialog extends StatelessWidget {
                         );
                       }
 
-                      final result = await CloudSyncService().sync(
-                        forcePushLocal: true,
-                      );
+                      final result = await CloudSyncService().sync();
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).hideCurrentSnackBar();
                         ScaffoldMessenger.of(context).showSnackBar(

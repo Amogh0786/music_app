@@ -21,6 +21,7 @@ import '../models/jio_album.dart';
 import '../constants/app_theme_tokens.dart';
 import '../services/studio_search_service.dart';
 import '../services/auth_service.dart';
+import '../services/cloud_sync_service.dart';
 import '../services/update_service.dart';
 import '../widgets/auth/google_profile_header_button.dart';
 import '../widgets/auth/google_cloud_backup_prompt_dialog.dart';
@@ -137,18 +138,31 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _checkFirstTimeCloudBackupPrompt() {
     _cloudBackupPromptTimer?.cancel();
-    _cloudBackupPromptTimer = Timer(const Duration(milliseconds: 1500), () {
+    _cloudBackupPromptTimer = Timer(const Duration(milliseconds: 1500), () async {
       if (!mounted) return;
       final auth = AuthService();
       final prefs = PreferencesService();
-      if (auth.isAuthenticated && !prefs.hasPromptedGoogleCloudBackup) {
-        if (!mounted) return;
-        showDialog(
-          context: context,
-          barrierDismissible: true,
-          builder: (ctx) => const GoogleCloudBackupPromptDialog(),
-        );
+      if (!auth.isAuthenticated || prefs.hasPromptedGoogleCloudBackup) return;
+
+      final analysis = await CloudSyncService().inspectSyncState();
+      if (!mounted) return;
+
+      // If local storage has no new items to back up (L ⊆ C, e.g. opened in browser after backing up on mobile)
+      if (!analysis.hasNewLocalItems) {
+        // If cloud has songs/playlists that this device lacks, pull them silently so browser is hydrated immediately
+        if (analysis.hasNewCloudItems) {
+          CloudSyncService().sync();
+        }
+        await prefs.setHasPromptedGoogleCloudBackup(true);
+        return;
       }
+
+      // Only prompt if there is actual unsaved local data that doesn't exist in the cloud (L \ C != ∅)
+      showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (ctx) => GoogleCloudBackupPromptDialog(analysis: analysis),
+      );
     });
   }
 
