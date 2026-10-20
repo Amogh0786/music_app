@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -19,7 +20,11 @@ import 'custom_playlist_screen.dart';
 import '../models/jio_album.dart';
 import '../constants/app_theme_tokens.dart';
 import '../services/studio_search_service.dart';
+import '../services/auth_service.dart';
+import '../services/update_service.dart';
 import '../widgets/auth/google_profile_header_button.dart';
+import '../widgets/auth/google_cloud_backup_prompt_dialog.dart';
+import '../widgets/top_bar_cloud_actions.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -32,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen>
     with AutomaticKeepAliveClientMixin {
   final MusicService _musicService = MusicService();
   final PreferencesService _prefs = PreferencesService();
+  Timer? _cloudBackupPromptTimer;
 
   @override
   bool get wantKeepAlive => true;
@@ -121,8 +127,35 @@ class _HomeScreenState extends State<HomeScreen>
       _isLoadingTrending = false;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _loadHomeFeeds();
+      if (mounted) {
+        _loadHomeFeeds();
+        _checkFirstTimeCloudBackupPrompt();
+        _checkAppUpdateQuietly();
+      }
     });
+  }
+
+  void _checkFirstTimeCloudBackupPrompt() {
+    _cloudBackupPromptTimer?.cancel();
+    _cloudBackupPromptTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (!mounted) return;
+      final auth = AuthService();
+      final prefs = PreferencesService();
+      if (auth.isAuthenticated && !prefs.hasPromptedGoogleCloudBackup) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (ctx) => const GoogleCloudBackupPromptDialog(),
+        );
+      }
+    });
+  }
+
+  Future<void> _checkAppUpdateQuietly() async {
+    try {
+      await UpdateService().checkForUpdate();
+    } catch (_) {}
   }
 
   void _setHomeFeedComplete(bool complete) {
@@ -136,6 +169,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    _cloudBackupPromptTimer?.cancel();
     _musicService.removeListener(_onPrefsChanged);
     _prefs.removeListener(_onPrefsChanged);
     DesktopLayoutState.prioritizedPlaylistDoor.removeListener(_onPrefsChanged);
@@ -788,6 +822,8 @@ class _HomeScreenState extends State<HomeScreen>
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          const AppUpdateTopBarButton(),
+                          const CloudBackupTopBarButton(),
                           const GoogleProfileHeaderButton(compact: true),
                           const SizedBox(width: 8),
                           GestureDetector(

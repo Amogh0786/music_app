@@ -227,6 +227,7 @@ class PreferencesService extends ChangeNotifier {
   String _lyricsDisplayMode = 'original'; // 'original', 'pronunciation', 'dual'
   String _userName = '';
   bool _hasPromptedName = false;
+  bool _hasPromptedGoogleCloudBackup = false;
   String? _profileImagePath;
 
   // Search History
@@ -315,6 +316,7 @@ class PreferencesService extends ChangeNotifier {
   String get userName => _userName.isEmpty ? 'Friend' : _userName;
   bool get hasCustomName => _userName.isNotEmpty;
   bool get hasPromptedName => _hasPromptedName;
+  bool get hasPromptedGoogleCloudBackup => _hasPromptedGoogleCloudBackup;
   bool? _isYouTubeConnectDismissed;
   bool get isYouTubeConnectDismissed => _isYouTubeConnectDismissed ?? false;
 
@@ -460,6 +462,8 @@ class PreferencesService extends ChangeNotifier {
     _mostPlayedArtist = _prefs.getString('mostPlayedArtist') ?? '';
     _userName = _prefs.getString('userName') ?? '';
     _hasPromptedName = _prefs.getBool('hasPromptedName') ?? false;
+    _hasPromptedGoogleCloudBackup =
+        _prefs.getBool('hasPromptedGoogleCloudBackup') ?? false;
     _isYouTubeConnectDismissed =
         _prefs.getBool('yt_connect_card_dismissed') ?? false;
     _profileImagePath = _prefs.getString('profileImagePath');
@@ -1711,6 +1715,14 @@ class PreferencesService extends ChangeNotifier {
     _hasPromptedName = true;
     await _prefs.setString('userName', _userName);
     await _prefs.setBool('hasPromptedName', true);
+    notifyListeners();
+  }
+
+  Future<void> setHasPromptedGoogleCloudBackup(bool value) async {
+    _hasPromptedGoogleCloudBackup = value;
+    if (_isInitialized) {
+      await _prefs.setBool('hasPromptedGoogleCloudBackup', value);
+    }
     notifyListeners();
   }
 

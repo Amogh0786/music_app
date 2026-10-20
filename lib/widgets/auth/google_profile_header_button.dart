@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/auth_service.dart';
+import '../../services/cloud_sync_service.dart';
 import '../../services/music_service.dart';
 import '../../services/preferences_service.dart';
 import '../../services/data_snapshot_service.dart';
@@ -541,19 +542,42 @@ class _GoogleAccountDialog extends StatelessWidget {
                     onPressed: () async {
                       HapticFeedback.lightImpact();
                       Navigator.of(context).pop();
-                      final result = await DataSnapshotService()
-                          .createSafetySnapshot(
-                            triggerReason: 'Account Dialog Manual Backup',
-                          );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Row(
+                            children: [
+                              SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              SizedBox(width: 12),
+                              Text('Backing up library to cloud...'),
+                            ],
+                          ),
+                          duration: Duration(seconds: 2),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                      final result = await CloudSyncService().sync(
+                        forcePushLocal: true,
+                      );
                       if (context.mounted) {
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
                               result.success
-                                  ? 'Library backup created: ${result.playlistCount} playlists, ${result.likedSongsCount} likes.'
-                                  : 'Backup failed: ${result.errorMessage}',
+                                  ? 'Cloud backup complete: ${result.mergedPlaylistsCount} playlists, ${result.mergedLikesCount} likes.'
+                                  : 'Backup note: ${result.message}',
                             ),
                             behavior: SnackBarBehavior.floating,
+                            backgroundColor: result.success
+                                ? const Color(0xFF1E293B)
+                                : const Color(0xFF332025),
                           ),
                         );
                       }
