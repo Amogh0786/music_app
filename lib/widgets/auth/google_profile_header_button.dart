@@ -42,6 +42,11 @@ class _GoogleProfileHeaderButtonState extends State<GoogleProfileHeaderButton> {
     final auth = AuthService();
     final prefs = PreferencesService();
     final userId = auth.userId ?? 'user';
+    final name = auth.userDisplayName;
+
+    if (name != null && name.trim().isNotEmpty) {
+      await prefs.setUserName(name.trim());
+    }
 
     // Check if this is the first time signing into this account on this device
     final isNewAccount = prefs.isFirstTimeAccountSignIn(userId);
