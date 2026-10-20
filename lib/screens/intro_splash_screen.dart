@@ -22,7 +22,9 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   Timer? _fallbackTimer;
+  Timer? _hardFallbackTimer;
   bool _navigated = false;
+  bool _showMainFallback = false;
   int _lastCharCount = 0;
 
   static const String _fullTitle = 'DilSe';
@@ -63,6 +65,18 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
     _fallbackTimer = Timer(Duration(milliseconds: kIsWeb ? 1100 : 2900), () {
       if (mounted) _navigateToMain();
     });
+
+    // Ultimate hard failsafe: if still mounted after 2.5s on web (or 3.5s on mobile), switch internal state to render MainScreen directly
+    _hardFallbackTimer = Timer(
+      Duration(milliseconds: kIsWeb ? 2500 : 3500),
+      () {
+        if (mounted && !_showMainFallback) {
+          setState(() {
+            _showMainFallback = true;
+          });
+        }
+      },
+    );
 
     _controller.forward();
   }
@@ -116,12 +130,16 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
   @override
   void dispose() {
     _fallbackTimer?.cancel();
+    _hardFallbackTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_showMainFallback) {
+      return const MainScreen();
+    }
     return Scaffold(
       backgroundColor: AppThemeTokens.oledBackground,
       body: Stack(
@@ -306,6 +324,13 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
                   onPressed: () {
                     _navigated = false;
                     _navigateToMain();
+                    Future.delayed(const Duration(milliseconds: 350), () {
+                      if (mounted && !_showMainFallback) {
+                        setState(() {
+                          _showMainFallback = true;
+                        });
+                      }
+                    });
                   },
                   child: Text(
                     'Skip',

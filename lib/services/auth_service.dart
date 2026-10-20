@@ -348,8 +348,8 @@ class AuthService extends ChangeNotifier {
         notifyListeners();
       });
 
-      // 3. Attempt silent sign-in in the background without blocking app startup
-      if (savedType == 'google' || savedType == null) {
+      // 3. Attempt silent sign-in in the background without blocking app startup (non-web only; on web, cached session is already hydrated and silent sign-in triggers Google One Tap FedCM modal which throttles vsync/tickers)
+      if (!kIsWeb && (savedType == 'google' || savedType == null)) {
         unawaited(
           _googleSignIn
               .signInSilently()
