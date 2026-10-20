@@ -138,7 +138,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _checkFirstTimeCloudBackupPrompt() {
     _cloudBackupPromptTimer?.cancel();
-    _cloudBackupPromptTimer = Timer(const Duration(milliseconds: 1500), () async {
+    _cloudBackupPromptTimer = Timer(const Duration(milliseconds: 5000), () async {
       if (!mounted) return;
       final auth = AuthService();
       final prefs = PreferencesService();
@@ -219,41 +219,27 @@ class _HomeScreenState extends State<HomeScreen>
     _circadianContext = _prefs.getCircadianContext();
     _dailyMixConfigs = _prefs.getDailyMixConfigs();
 
-    // 1. Silent Instant Cache Hydration (< 6 hours) with strict deduplication & noise filtering
-    final cachedCircadian = CanonicalSongDedup.deduplicateList(
-      _deserializeCachedVideos(
-        _prefs.getCachedHomeFeed('circadian'),
-      ).where((v) => CanonicalSongDedup.isGenuineSong(v)).toList(),
+    // 1. Silent Instant Cache Hydration (< 6 hours)
+    final cachedCircadian = _deserializeCachedVideos(
+      _prefs.getCachedHomeFeed('circadian'),
     );
-    final cachedMix1 = CanonicalSongDedup.deduplicateList(
-      _deserializeCachedVideos(
-        _prefs.getCachedHomeFeed('daily_mix_1'),
-      ).where((v) => CanonicalSongDedup.isGenuineSong(v)).toList(),
+    final cachedMix1 = _deserializeCachedVideos(
+      _prefs.getCachedHomeFeed('daily_mix_1'),
     );
-    final cachedMix2 = CanonicalSongDedup.deduplicateList(
-      _deserializeCachedVideos(
-        _prefs.getCachedHomeFeed('daily_mix_2'),
-      ).where((v) => CanonicalSongDedup.isGenuineSong(v)).toList(),
+    final cachedMix2 = _deserializeCachedVideos(
+      _prefs.getCachedHomeFeed('daily_mix_2'),
     );
-    final cachedCharts = CanonicalSongDedup.deduplicateList(
-      _deserializeCachedVideos(
-        _prefs.getCachedHomeFeed('charts'),
-      ).where((v) => CanonicalSongDedup.isGenuineSong(v)).toList(),
+    final cachedCharts = _deserializeCachedVideos(
+      _prefs.getCachedHomeFeed('charts'),
     );
-    final cachedTrending = CanonicalSongDedup.deduplicateList(
-      _deserializeCachedVideos(
-        _prefs.getCachedHomeFeed('trending'),
-      ).where((v) => CanonicalSongDedup.isGenuineSong(v)).toList(),
+    final cachedTrending = _deserializeCachedVideos(
+      _prefs.getCachedHomeFeed('trending'),
     );
-    final cachedNewReleases = CanonicalSongDedup.deduplicateList(
-      _deserializeCachedVideos(
-        _prefs.getCachedHomeFeed('new_releases'),
-      ).where((v) => CanonicalSongDedup.isGenuineSong(v)).toList(),
+    final cachedNewReleases = _deserializeCachedVideos(
+      _prefs.getCachedHomeFeed('new_releases'),
     );
-    final cachedPersonalized = CanonicalSongDedup.deduplicateList(
-      _deserializeCachedVideos(
-        _prefs.getCachedHomeFeed('personalized'),
-      ).where((v) => CanonicalSongDedup.isGenuineSong(v)).toList(),
+    final cachedPersonalized = _deserializeCachedVideos(
+      _prefs.getCachedHomeFeed('personalized'),
     );
     final cachedAlbumsJson = _prefs.getCachedHomeFeed('albums');
     List<JioAlbum> cachedAlbums = [];

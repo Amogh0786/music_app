@@ -273,8 +273,9 @@ class AuthService extends ChangeNotifier {
 
         notifyListeners();
 
-        // Auto-sync in background when restoring session from storage
-        Future.microtask(
+        // Defer background auto-sync until after UI finishes mounting and intro animation completes
+        Future.delayed(
+          const Duration(seconds: kIsWeb ? 5 : 2),
           () => CloudSyncService().sync().catchError((e) {
             debugPrint('[AuthService] Auto-sync on startup error: $e');
             return const CloudSyncResult(

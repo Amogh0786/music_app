@@ -198,9 +198,33 @@ class CloudSyncService {
         }
       }
 
+      // Fast Set-based lookup for Likes
+      final localLikesIds = localLikes
+          .map((s) => s.id.trim())
+          .where((id) => id.isNotEmpty)
+          .toSet();
+      final localLikesTitles = localLikes
+          .map((s) => s.title.trim().toLowerCase())
+          .where((t) => t.isNotEmpty)
+          .toSet();
+      final remoteLikesIds = remoteLikes
+          .map((s) => s.id.trim())
+          .where((id) => id.isNotEmpty)
+          .toSet();
+      final remoteLikesTitles = remoteLikes
+          .map((s) => s.title.trim().toLowerCase())
+          .where((t) => t.isNotEmpty)
+          .toSet();
+
       // Calculate Likes Difference L \ C
       int newLocalLikes = 0;
       for (final localSong in localLikes) {
+        final id = localSong.id.trim();
+        final title = localSong.title.trim().toLowerCase();
+        if ((id.isNotEmpty && remoteLikesIds.contains(id)) ||
+            (title.isNotEmpty && remoteLikesTitles.contains(title))) {
+          continue;
+        }
         final existsInCloud = remoteLikes.any(
           (remoteSong) => _areSameSongs(localSong, remoteSong),
         );
@@ -212,6 +236,12 @@ class CloudSyncService {
       // Calculate Likes Difference C \ L
       int newCloudLikes = 0;
       for (final remoteSong in remoteLikes) {
+        final id = remoteSong.id.trim();
+        final title = remoteSong.title.trim().toLowerCase();
+        if ((id.isNotEmpty && localLikesIds.contains(id)) ||
+            (title.isNotEmpty && localLikesTitles.contains(title))) {
+          continue;
+        }
         final existsInLocal = localLikes.any(
           (localSong) => _areSameSongs(localSong, remoteSong),
         );
@@ -220,26 +250,71 @@ class CloudSyncService {
         }
       }
 
+      // Build index of remote playlists by ID and lowercased name
+      final remotePlaylistsById = <String, Map<String, dynamic>>{};
+      final remotePlaylistsByName = <String, Map<String, dynamic>>{};
+      for (final p in remotePlaylistsList) {
+        if (p is Map) {
+          final pMap = Map<String, dynamic>.from(p);
+          final id = (pMap['id'] ?? '').toString().trim();
+          if (id.isNotEmpty) remotePlaylistsById[id] = pMap;
+          final name = (pMap['name'] ?? '').toString().trim().toLowerCase();
+          if (name.isNotEmpty) remotePlaylistsByName[name] = pMap;
+        }
+      }
+
+      // Build index of local playlists by ID and lowercased name
+      final localPlaylistsById = <String, Map<String, dynamic>>{};
+      final localPlaylistsByName = <String, Map<String, dynamic>>{};
+      for (final p in localPlaylists) {
+        final id = (p['id'] ?? '').toString().trim();
+        if (id.isNotEmpty) localPlaylistsById[id] = p;
+        final name = (p['name'] ?? '').toString().trim().toLowerCase();
+        if (name.isNotEmpty) localPlaylistsByName[name] = p;
+      }
+
       // Calculate Playlists Difference L \ C
       int newLocalPlaylists = 0;
       for (final localP in localPlaylists) {
-        final matchingCloudP = remotePlaylistsList.cast<dynamic>().firstWhere(
-          (p) => p is Map && _areSamePlaylists(localP, p),
-          orElse: () => null,
-        );
+        final id = (localP['id'] ?? '').toString().trim();
+        final name = (localP['name'] ?? '').toString().trim().toLowerCase();
+        final matchingCloudP =
+            (id.isNotEmpty ? remotePlaylistsById[id] : null) ??
+            (name.isNotEmpty ? remotePlaylistsByName[name] : null);
 
         if (matchingCloudP == null) {
           newLocalPlaylists++;
         } else {
           final localSongs = localP['songs'] as List? ?? [];
           final cloudSongs = matchingCloudP['songs'] as List? ?? [];
-          final hasUnsyncedSongs = localSongs.any(
-            (ls) =>
-                ls is Map &&
-                !cloudSongs.any((cs) => cs is Map && _areSameSongMaps(ls, cs)),
-          );
-          if (hasUnsyncedSongs) {
-            newLocalPlaylists++;
+          if (localSongs.isNotEmpty) {
+            final cloudSongIds = <String>{};
+            final cloudSongTitles = <String>{};
+            for (final cs in cloudSongs) {
+              if (cs is Map) {
+                final csId = (cs['id'] ?? cs['videoId'] ?? '')
+                    .toString()
+                    .trim();
+                if (csId.isNotEmpty) cloudSongIds.add(csId);
+                final csT = (cs['title'] ?? '').toString().trim().toLowerCase();
+                if (csT.isNotEmpty) cloudSongTitles.add(csT);
+              }
+            }
+            final hasUnsyncedSongs = localSongs.any((ls) {
+              if (ls is! Map) return false;
+              final lsId = (ls['id'] ?? ls['videoId'] ?? '').toString().trim();
+              final lsT = (ls['title'] ?? '').toString().trim().toLowerCase();
+              if ((lsId.isNotEmpty && cloudSongIds.contains(lsId)) ||
+                  (lsT.isNotEmpty && cloudSongTitles.contains(lsT))) {
+                return false;
+              }
+              return !cloudSongs.any(
+                (cs) => cs is Map && _areSameSongMaps(ls, cs),
+              );
+            });
+            if (hasUnsyncedSongs) {
+              newLocalPlaylists++;
+            }
           }
         }
       }
@@ -247,23 +322,45 @@ class CloudSyncService {
       int newCloudPlaylists = 0;
       for (final cloudP in remotePlaylistsList) {
         if (cloudP is! Map) continue;
-        final matchingLocalP = localPlaylists.firstWhere(
-          (p) => _areSamePlaylists(p, cloudP),
-          orElse: () => <String, dynamic>{},
-        );
+        final id = (cloudP['id'] ?? '').toString().trim();
+        final name = (cloudP['name'] ?? '').toString().trim().toLowerCase();
+        final matchingLocalP =
+            (id.isNotEmpty ? localPlaylistsById[id] : null) ??
+            (name.isNotEmpty ? localPlaylistsByName[name] : null);
 
-        if (matchingLocalP.isEmpty) {
+        if (matchingLocalP == null) {
           newCloudPlaylists++;
         } else {
           final cloudSongs = cloudP['songs'] as List? ?? [];
           final localSongs = matchingLocalP['songs'] as List? ?? [];
-          final hasMissingLocalSongs = cloudSongs.any(
-            (cs) =>
-                cs is Map &&
-                !localSongs.any((ls) => ls is Map && _areSameSongMaps(cs, ls)),
-          );
-          if (hasMissingLocalSongs) {
-            newCloudPlaylists++;
+          if (cloudSongs.isNotEmpty) {
+            final localSongIds = <String>{};
+            final localSongTitles = <String>{};
+            for (final ls in localSongs) {
+              if (ls is Map) {
+                final lsId = (ls['id'] ?? ls['videoId'] ?? '')
+                    .toString()
+                    .trim();
+                if (lsId.isNotEmpty) localSongIds.add(lsId);
+                final lsT = (ls['title'] ?? '').toString().trim().toLowerCase();
+                if (lsT.isNotEmpty) localSongTitles.add(lsT);
+              }
+            }
+            final hasMissingLocalSongs = cloudSongs.any((cs) {
+              if (cs is! Map) return false;
+              final csId = (cs['id'] ?? cs['videoId'] ?? '').toString().trim();
+              final csT = (cs['title'] ?? '').toString().trim().toLowerCase();
+              if ((csId.isNotEmpty && localSongIds.contains(csId)) ||
+                  (csT.isNotEmpty && localSongTitles.contains(csT))) {
+                return false;
+              }
+              return !localSongs.any(
+                (ls) => ls is Map && _areSameSongMaps(cs, ls),
+              );
+            });
+            if (hasMissingLocalSongs) {
+              newCloudPlaylists++;
+            }
           }
         }
       }
@@ -427,16 +524,29 @@ class CloudSyncService {
 
         // A. Merge Liked Songs (Union with zero duplicates)
         final List<SongItem> mergedLikes = [];
+        final Set<String> seenLikeIds = {};
+        final Set<String> seenLikeTitles = {};
+
         for (final song in localLikes) {
-          if (!mergedLikes.any((s) => _areSameSongs(s, song))) {
-            mergedLikes.add(song);
-          }
+          final id = song.id.trim();
+          final title = song.title.trim().toLowerCase();
+          if (id.isNotEmpty) seenLikeIds.add(id);
+          if (title.isNotEmpty) seenLikeTitles.add(title);
+          mergedLikes.add(song);
         }
+
         for (final raw in remoteLikesList) {
           if (raw is Map) {
             try {
               final song = SongItem.fromJson(Map<String, dynamic>.from(raw));
+              final id = song.id.trim();
+              final title = song.title.trim().toLowerCase();
+              if (id.isNotEmpty && seenLikeIds.contains(id)) continue;
+              if (title.isNotEmpty && seenLikeTitles.contains(title)) continue;
+
               if (!mergedLikes.any((s) => _areSameSongs(s, song))) {
+                if (id.isNotEmpty) seenLikeIds.add(id);
+                if (title.isNotEmpty) seenLikeTitles.add(title);
                 mergedLikes.add(song);
               }
             } catch (_) {}
@@ -445,40 +555,82 @@ class CloudSyncService {
 
         // B. Merge Custom Playlists (Union by ID / name & song dedup)
         final List<Map<String, dynamic>> mergedPlaylists = [];
+        final Map<String, int> playlistIdxById = {};
+        final Map<String, int> playlistIdxByName = {};
+
         for (final p in localPlaylists) {
           final copy = Map<String, dynamic>.from(p);
           copy['songs'] = _dedupSongList(copy['songs'] as List? ?? []);
+          final idx = mergedPlaylists.length;
           mergedPlaylists.add(copy);
+
+          final id = (copy['id'] ?? '').toString().trim();
+          if (id.isNotEmpty) playlistIdxById[id] = idx;
+          final name = (copy['name'] ?? '').toString().trim().toLowerCase();
+          if (name.isNotEmpty) playlistIdxByName[name] = idx;
         }
 
         for (final raw in remotePlaylistsList) {
           if (raw is! Map) continue;
           final remoteP = Map<String, dynamic>.from(raw);
-          final existingIdx = mergedPlaylists.indexWhere(
-            (p) => _areSamePlaylists(p, remoteP),
-          );
+          final rId = (remoteP['id'] ?? '').toString().trim();
+          final rName = (remoteP['name'] ?? '').toString().trim().toLowerCase();
 
-          if (existingIdx == -1) {
+          int? existingIdx;
+          if (rId.isNotEmpty && playlistIdxById.containsKey(rId)) {
+            existingIdx = playlistIdxById[rId];
+          } else if (rName.isNotEmpty && playlistIdxByName.containsKey(rName)) {
+            existingIdx = playlistIdxByName[rName];
+          }
+
+          if (existingIdx == null ||
+              existingIdx < 0 ||
+              existingIdx >= mergedPlaylists.length) {
             final copy = Map<String, dynamic>.from(remoteP);
             copy['songs'] = _dedupSongList(copy['songs'] as List? ?? []);
+            final idx = mergedPlaylists.length;
             mergedPlaylists.add(copy);
+            if (rId.isNotEmpty) playlistIdxById[rId] = idx;
+            if (rName.isNotEmpty) playlistIdxByName[rName] = idx;
           } else {
             final existingP = mergedPlaylists[existingIdx];
             final existingSongs = List<dynamic>.from(
               existingP['songs'] as List? ?? [],
             );
+            final Set<String> existingIds = {};
+            final Set<String> existingTitles = {};
+            for (final s in existingSongs) {
+              if (s is Map) {
+                final id = (s['id'] ?? s['videoId'] ?? '').toString().trim();
+                if (id.isNotEmpty) existingIds.add(id);
+                final t = (s['title'] ?? '').toString().trim().toLowerCase();
+                if (t.isNotEmpty) existingTitles.add(t);
+              }
+            }
             final remoteSongs = List<dynamic>.from(
               remoteP['songs'] as List? ?? [],
             );
             for (final rs in remoteSongs) {
-              if (rs is Map &&
-                  !existingSongs.any(
-                    (s) => s is Map && _areSameSongMaps(s, rs),
-                  )) {
+              if (rs is! Map) continue;
+              final rsId = (rs['id'] ?? rs['videoId'] ?? '').toString().trim();
+              final rsTitle = (rs['title'] ?? '')
+                  .toString()
+                  .trim()
+                  .toLowerCase();
+              if (rsId.isNotEmpty && existingIds.contains(rsId)) continue;
+              if (rsTitle.isNotEmpty && existingTitles.contains(rsTitle)) {
+                continue;
+              }
+
+              if (!existingSongs.any(
+                (s) => s is Map && _areSameSongMaps(s, rs),
+              )) {
+                if (rsId.isNotEmpty) existingIds.add(rsId);
+                if (rsTitle.isNotEmpty) existingTitles.add(rsTitle);
                 existingSongs.add(rs);
               }
             }
-            existingP['songs'] = _dedupSongList(existingSongs);
+            existingP['songs'] = existingSongs;
           }
         }
 
@@ -599,6 +751,11 @@ class CloudSyncService {
     final idA = a.id.trim();
     final idB = b.id.trim();
     if (idA.isNotEmpty && idA == idB) return true;
+
+    final titleA = a.title.trim().toLowerCase();
+    final titleB = b.title.trim().toLowerCase();
+    if (titleA.isNotEmpty && titleA == titleB) return true;
+
     return CanonicalSongDedup.areDuplicateSongs(
       titleA: a.title,
       artistA: a.author,
@@ -612,42 +769,42 @@ class CloudSyncService {
     final idB = (b['id'] ?? b['videoId'] ?? '').toString().trim();
     if (idA.isNotEmpty && idA == idB) return true;
 
-    final titleA = (a['title'] ?? '').toString().trim();
+    final titleA = (a['title'] ?? '').toString().trim().toLowerCase();
+    final titleB = (b['title'] ?? '').toString().trim().toLowerCase();
+    if (titleA.isEmpty || titleB.isEmpty) return false;
+    if (titleA == titleB) return true;
+
     final artistA = (a['author'] ?? a['artist'] ?? '').toString().trim();
-    final titleB = (b['title'] ?? '').toString().trim();
     final artistB = (b['author'] ?? b['artist'] ?? '').toString().trim();
 
-    if (titleA.isEmpty || titleB.isEmpty) return false;
-
     return CanonicalSongDedup.areDuplicateSongs(
-      titleA: titleA,
+      titleA: (a['title'] ?? '').toString().trim(),
       artistA: artistA,
-      titleB: titleB,
+      titleB: (b['title'] ?? '').toString().trim(),
       artistB: artistB,
     );
   }
 
-  static bool _areSamePlaylists(Map a, Map b) {
-    final idA = (a['id'] ?? '').toString().trim();
-    final idB = (b['id'] ?? '').toString().trim();
-    if (idA.isNotEmpty && idA == idB) return true;
-
-    final nameA = (a['name'] ?? '').toString().trim().toLowerCase();
-    final nameB = (b['name'] ?? '').toString().trim().toLowerCase();
-    if (nameA.isNotEmpty && nameA == nameB) return true;
-
-    return false;
-  }
-
   static List<Map<String, dynamic>> _dedupSongList(List rawList) {
     final List<Map<String, dynamic>> deduped = [];
+    final Set<String> seenIds = {};
+    final Set<String> seenTitles = {};
+
     for (final item in rawList) {
       if (item is! Map) continue;
       final songMap = Map<String, dynamic>.from(item);
+      final id = (songMap['id'] ?? songMap['videoId'] ?? '').toString().trim();
+      final title = (songMap['title'] ?? '').toString().trim().toLowerCase();
+
+      if (id.isNotEmpty && seenIds.contains(id)) continue;
+      if (title.isNotEmpty && seenTitles.contains(title)) continue;
+
       final isDup = deduped.any(
         (existing) => _areSameSongMaps(existing, songMap),
       );
       if (!isDup) {
+        if (id.isNotEmpty) seenIds.add(id);
+        if (title.isNotEmpty) seenTitles.add(title);
         deduped.add(songMap);
       }
     }
