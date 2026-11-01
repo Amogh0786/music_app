@@ -10,6 +10,7 @@ import 'music_service.dart';
 import 'preferences_service.dart';
 import 'studio_search_service.dart';
 import 'youtube_music_client.dart';
+import 'dynamic_artist_service.dart';
 
 /// Represents a track exported from Spotify via Exportify or similar CSV tools
 class ExportifyTrack {
@@ -595,23 +596,257 @@ class SpotifyImportService extends ChangeNotifier {
     return '${cleanTitle}_$cleanArtist';
   }
 
-  static String cleanTrackTitle(String trackName) {
-    String clean = trackName
-        .replaceAll(
-          RegExp(
-            r'\s*[\(\[\{](?:feat\.?|with|remaster(?:ed)?|bonus|live|radio edit|deluxe|version|edit|mono|stereo|anniversary).*?[\)\]\}]',
+  /// Detects whether an Exportify track represents a remix or club mix
+  static bool isRemixTrack(ExportifyTrack track) {
+    final title = track.trackName.toLowerCase();
+    final album = track.albumName.toLowerCase();
+    return title.contains('remix') ||
+        title.contains('club mix') ||
+        title.contains('dj mix') ||
+        album.contains('remix') ||
+        album.contains('remixes');
+  }
+
+  /// Detects whether an Exportify track represents an instrumental release
+  static bool isInstrumentalTrack(ExportifyTrack track) {
+    final title = track.trackName.toLowerCase();
+    final album = track.albumName.toLowerCase();
+    return title.contains('instrumental') ||
+        album.contains('instrumental') ||
+        track.instrumentalness > 0.65;
+  }
+
+  /// Checks whether the artist specified in the Spotify CSV is a verified recording artist.
+  /// Enforces that remix and instrumental songs imported into DilSe originate from
+  /// genuine artists rather than amateur/bootleg fan uploads.
+  static bool isVerifiedArtist(String artistName, {ExportifyTrack? track}) {
+    final clean = artistName.trim();
+    if (clean.isEmpty || clean.toLowerCase() == 'unknown artist') return false;
+
+    // 1. Check against DynamicArtistService (curated, Indic, and verified global registry)
+    if (DynamicArtistService().isVerifiedArtist(clean)) return true;
+
+    // 2. Check user's verified personal taste artists
+    final prefs = PreferencesService();
+    if (prefs.isArtistFollowed(clean)) return true;
+    if (prefs.mostPlayedArtist.isNotEmpty &&
+        prefs.mostPlayedArtist.toLowerCase() == clean.toLowerCase()) {
+      return true;
+    }
+    final topArtists = prefs.getTopArtists(limit: 10);
+    if (topArtists.any((t) => t.toLowerCase() == clean.toLowerCase())) {
+      return true;
+    }
+
+    // 3. Check individual co-artists
+    final parts = clean.split(
+      RegExp(
+        r'[,/;&]|(?:\s+feat\.?\s+)|\s+ft\.?\s+|(?:\s+with\s+)',
+        caseSensitive: false,
+      ),
+    );
+    for (final p in parts) {
+      final pTrim = p.trim();
+      if (pTrim.isNotEmpty && DynamicArtistService().isVerifiedArtist(pTrim)) {
+        return true;
+      }
+    }
+
+    // 4. Spotify metadata authentic publication validation:
+    // If the track contains a Spotify ID or popularity from Spotify's database,
+    // and the artist name is not obvious amateur/bootleg channel noise, verify it.
+    if (track != null &&
+        (track.spotifyId.isNotEmpty || track.popularity > 10)) {
+      final lower = clean.toLowerCase();
+      final isAmateur =
+          lower.contains('remix hub') ||
+          lower.contains('amateur') ||
+          lower.contains('cover band') ||
+          lower.contains('tribute band') ||
+          lower.startsWith('dj ') ||
+          lower.contains(' dj ') ||
+          lower.endsWith(' dj') ||
+          lower.contains('varmala') ||
+          lower.contains('wedding') ||
+          lower.contains('ceremony');
+      if (!isAmateur && clean.length >= 2) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  static final RegExp _nonMusicTitleNoiseWithoutRemixOrInstrumental = RegExp(
+    r'\b(speech|speech\s*@|press\s+meet|success\s+meet|launch\s+event|song\s+launch|audio\s+launch|'
+    r'pre\s+release|trailer|teaser|glimpse|promo|first\s+look|motion\s+poster|title\s+reveal|'
+    r'interview|talk\s+show|podcast|episode|review|reaction|reacting|behind\s+the\s+scenes|making\s+of|bts|'
+    r'dances?\s+to|dance\s+performance|dance\s+cover|dance\s+video|stage\s+performance|performance\s+video|'
+    r'status\s+video|whatsapp\s+status|cricket|ipl|match\s+highlights|trophy|shreyas\s+iyer|'
+    r'full\s+movie|movie\s+scene|comedy\s+scene|action\s+scene|fight\s+scene|climax\s+scene|scenes|comedy\s+scenes|'
+    r'ringtone|bgm\s+only|shorts|#shorts|shorts\s+video|reels?|tiktok|troll|parody|spoof|'
+    r'jukebox|all\s+songs|audio\s+jukebox|video\s+jukebox|full\s+album|mega\s+jukebox|'
+    r'slowed\s*(?:\+|\band\b)?\s*reverb|speed\s*up|sped\s*up|nightcore|8d\s+audio|bass\s+boosted|'
+    r'acoustic\s+cover|guitar\s+cover|piano\s+cover|flute\s+cover|violin\s+cover|vocal\s+cover|cover\s+song|cover\s+version|cover\s+classics|female\s+cover|male\s+cover|'
+    r'recreated|recreation|fan\s*made|unplugged\s*cover|lo-?fi\s*version|lo-?fi\s*mix|'
+    r'oye\s+lalii|'
+    r'tabata|power\s+music|workout\s+(?:mix|music|version|track)?|fitness\s+beats|gym\s+(?:music|mix|workout)|'
+    r'carnatic\s+mix|lo-?fi\s+mix|'
+    r'varmala|vidhi|ceremony|wedding\s+music|shaadi|mehendi|sangeet|sarangi\s+tabla|mangal\s+sutra|kanyadaan|shehnai|band\s+baaja|dulhan|'
+    r'making\s+video|bloopers|deleted\s+scenes?|'
+    r'exclusive\s+interview|success\s+celebrations?|song\s+teaser)\b',
+    caseSensitive: false,
+  );
+
+  static final RegExp _nonMusicAuthorNoise = RegExp(
+    r'\b(media|news|tv|filmnagar|events|buzz|sports|daily|cinema\s+news|vlogs?|cricket|gaming|memes?|creations?|edits?|dj\s+\w+|remix\s+hub|wedding|ceremony|oye\s+lalii|cover\s+classics|the\s+covers|the\s+hit\s+crew|party\s+hits\s+band|tabata|power\s+music|fitness\s+beats|workout|luxebeats|zzang|sweet\s+strings)\b',
+    caseSensitive: false,
+  );
+
+  /// Validates whether a candidate is a genuine music track.
+  /// When [allowRemix] is true, permits official studio remixes by verified artists.
+  /// When [allowInstrumental] is true, permits official instrumental releases.
+  static bool isGenuineCandidate(
+    Video video, {
+    bool allowRemix = false,
+    bool allowInstrumental = false,
+  }) {
+    final title = video.title;
+    final author = video.author;
+
+    // 1. Blacklist non-music noise (interviews, speeches, trailers, memes, etc.)
+    if (_nonMusicTitleNoiseWithoutRemixOrInstrumental.hasMatch(title)) {
+      return false;
+    }
+
+    // 1b. Reject generic genre/search spam titles
+    final trimmedTitle = title.trim();
+    if (RegExp(
+      r'^(?:hindi|telugu|tamil|punjabi|malayalam|kannada|bengali|english|bollywood|tollywood|kollywood)\s+(?:melodic|melodies|chill|hits?|songs?|beats?|vibe|vibes|mix|music|sound|audio|track|tracks|bgm)$',
+      caseSensitive: false,
+    ).hasMatch(trimmedTitle)) {
+      return false;
+    }
+
+    // 1c. If remix is NOT allowed for this track, reject DJ/remix titles
+    if (!allowRemix) {
+      if (RegExp(
+        r'\b(dj\s+\w+|dj\s+mix|dj\s+remix|mashup|mash\s+up|club\s+mix|remix)\b',
+        caseSensitive: false,
+      ).hasMatch(title)) {
+        return false;
+      }
+    }
+
+    // 1d. If instrumental is NOT allowed for this track, reject instrumental/karaoke titles
+    if (!allowInstrumental) {
+      if (RegExp(
+        r'\b(instrumental|karaoke)\b',
+        caseSensitive: false,
+      ).hasMatch(title)) {
+        return false;
+      }
+    }
+
+    // 2. Blacklist DJ, wedding ritual, or ceremony channels
+    final authorLower = author.toLowerCase().trim();
+    if (authorLower.contains('varmala') ||
+        authorLower.contains('vidhi') ||
+        authorLower.contains('ceremony') ||
+        authorLower.contains('wedding') ||
+        authorLower.contains('remix hub') ||
+        authorLower.startsWith('dj ') ||
+        authorLower.contains(' dj ') ||
+        authorLower.endsWith(' dj')) {
+      return false;
+    }
+
+    // 3. Blacklist non-music channels (media, news, tv, cricket, etc.)
+    if (_nonMusicAuthorNoise.hasMatch(author)) {
+      final titleLower = title.toLowerCase();
+      final hasSongIndicator =
+          titleLower.contains('official music video') ||
+          titleLower.contains('official song');
+      if (!hasSongIndicator) {
+        return false;
+      }
+    }
+
+    // 4. Duration boundaries (authentic music tracks are 45s to 600s)
+    final duration = video.duration;
+    if (duration != null) {
+      final sec = duration.inSeconds;
+      if (sec > 0 && (sec < 45 || sec > 600)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /// Cleans track titles from Spotify exports by removing noise and extraneous tags
+  /// while preserving remix and instrumental tags when [preserveRemixOrInstrumental] is true.
+  static String cleanTrackTitle(
+    String trackName, {
+    bool preserveRemixOrInstrumental = false,
+  }) {
+    if (trackName.trim().isEmpty) return '';
+
+    String clean = trackName;
+    if (preserveRemixOrInstrumental) {
+      // Remove bracketed noise ONLY IF it does not contain 'remix', 'mix', or 'instrumental'
+      clean = clean.replaceAllMapped(RegExp(r'\s*[\(\[\{](.*?)[\)\]\}]'), (
+        match,
+      ) {
+        final inner = match.group(1)?.toLowerCase() ?? '';
+        if (inner.contains('remix') ||
+            inner.contains('mix') ||
+            inner.contains('instrumental')) {
+          return match.group(0)!; // Keep the remix or instrumental tag!
+        }
+        if (RegExp(
+          r'^(?:feat\.?|with|remaster(?:ed)?|bonus|live|radio edit|deluxe|version|edit|mono|stereo|anniversary)',
+          caseSensitive: false,
+        ).hasMatch(inner.trim())) {
+          return ''; // Strip standard noise
+        }
+        return match.group(0)!;
+      });
+
+      // Remove hyphenated suffix ONLY IF it does not contain 'remix', 'mix', or 'instrumental'
+      final hyphenIndex = clean.lastIndexOf(' - ');
+      if (hyphenIndex != -1) {
+        final suffix = clean.substring(hyphenIndex + 3).trim().toLowerCase();
+        if (!suffix.contains('remix') &&
+            !suffix.contains('mix') &&
+            !suffix.contains('instrumental')) {
+          if (RegExp(
+            r'^(?:remaster(?:ed)?|bonus|live|radio edit|deluxe|version|edit)',
             caseSensitive: false,
-          ),
-          '',
-        )
-        .replaceAll(
-          RegExp(
-            r'\s*-\s*(?:remaster(?:ed)?|bonus|live|radio edit|deluxe|version|edit).*$',
-            caseSensitive: false,
-          ),
-          '',
-        )
-        .trim();
+          ).hasMatch(suffix)) {
+            clean = clean.substring(0, hyphenIndex).trim();
+          }
+        }
+      }
+    } else {
+      clean = clean
+          .replaceAll(
+            RegExp(
+              r'\s*[\(\[\{](?:feat\.?|with|remaster(?:ed)?|bonus|live|radio edit|deluxe|version|edit|mono|stereo|anniversary).*?[\)\]\}]',
+              caseSensitive: false,
+            ),
+            '',
+          )
+          .replaceAll(
+            RegExp(
+              r'\s*-\s*(?:remaster(?:ed)?|bonus|live|radio edit|deluxe|version|edit).*$',
+              caseSensitive: false,
+            ),
+            '',
+          );
+    }
+
+    clean = clean.trim();
     return clean.isNotEmpty ? clean : trackName.trim();
   }
 
@@ -641,7 +876,23 @@ class SpotifyImportService extends ChangeNotifier {
       }
     }
 
-    final cleanTitle = cleanTrackTitle(title);
+    final isRemix = isRemixTrack(track);
+    final isInstrumental = isInstrumentalTrack(track);
+    final isVerified = isVerifiedArtist(artist, track: track);
+
+    // If it's a remix or instrumental song, verify that its artist in the CSV
+    // is a genuine verified artist. If not, do not import unverified amateur/bootleg cuts.
+    if ((isRemix || isInstrumental) && !isVerified) {
+      return null;
+    }
+
+    final allowRemix = isRemix && isVerified;
+    final allowInstrumental = isInstrumental && isVerified;
+
+    final cleanTitle = cleanTrackTitle(
+      title,
+      preserveRemixOrInstrumental: allowRemix || allowInstrumental,
+    );
     final primaryArtist = extractPrimaryArtist(artist);
 
     final targetedQuery = primaryArtist.isNotEmpty
@@ -661,6 +912,8 @@ class SpotifyImportService extends ChangeNotifier {
         final jioCandidates = _parseJioResults(
           jioResp.body,
           query: targetedQuery,
+          allowRemix: allowRemix,
+          allowInstrumental: allowInstrumental,
         );
         final match = findBestMatch(jioCandidates, track);
         if (match != null) {
@@ -696,6 +949,8 @@ class SpotifyImportService extends ChangeNotifier {
           final jioCandidates = _parseJioResults(
             fbResp.body,
             query: cleanTitle,
+            allowRemix: allowRemix,
+            allowInstrumental: allowInstrumental,
           );
           final match = findBestMatch(jioCandidates, track);
           if (match != null) return match;
@@ -719,7 +974,12 @@ class SpotifyImportService extends ChangeNotifier {
   }
 
   /// Parses JioSaavn JSON search response and registers artwork, stream URLs, and album metadata.
-  List<Video> _parseJioResults(String body, {String? query}) {
+  List<Video> _parseJioResults(
+    String body, {
+    String? query,
+    bool allowRemix = false,
+    bool allowInstrumental = false,
+  }) {
     final List<Video> list = [];
     try {
       final List<dynamic> jsonList = json.decode(body);
@@ -795,7 +1055,11 @@ class SpotifyImportService extends ChangeNotifier {
           false,
         );
 
-        if (CanonicalSongDedup.isGenuineSong(video)) {
+        if (isGenuineCandidate(
+          video,
+          allowRemix: allowRemix,
+          allowInstrumental: allowInstrumental,
+        )) {
           list.add(video);
         }
       }
@@ -864,6 +1128,19 @@ class SpotifyImportService extends ChangeNotifier {
       score += 0.5;
     }
 
+    // Remix / Instrumental precision bonuses
+    final isRemix = isRemixTrack(track);
+    final isInstrumental = isInstrumentalTrack(track);
+
+    if (isRemix &&
+        (titleLower.contains('remix') || titleLower.contains('mix'))) {
+      score += 3.0; // High priority for genuine remix candidate
+    }
+
+    if (isInstrumental && titleLower.contains('instrumental')) {
+      score += 3.0; // High priority for genuine instrumental candidate
+    }
+
     return score;
   }
 
@@ -876,7 +1153,20 @@ class SpotifyImportService extends ChangeNotifier {
   /// 4. Strict Artist verification (candidate author must match target artist).
   /// 5. Strict Duration verification (when duration is known, must be within 35 seconds).
   static bool isValidMatchCandidate(Video candidate, ExportifyTrack track) {
-    if (!CanonicalSongDedup.isGenuineSong(candidate)) return false;
+    final isRemix = isRemixTrack(track);
+    final isInstrumental = isInstrumentalTrack(track);
+    final isVerified = isVerifiedArtist(track.artistName, track: track);
+
+    final allowRemix = isRemix && isVerified;
+    final allowInstrumental = isInstrumental && isVerified;
+
+    if (!isGenuineCandidate(
+      candidate,
+      allowRemix: allowRemix,
+      allowInstrumental: allowInstrumental,
+    )) {
+      return false;
+    }
 
     final targetTitle = track.trackName.trim();
     final targetArtist = track.artistName.trim();
@@ -919,14 +1209,39 @@ class SpotifyImportService extends ChangeNotifier {
       return false;
     }
 
-    // 3. Strict Duration Check (when duration is available, tolerance <= 35 seconds)
+    final targetHasRemix = RegExp(
+      r'\b(remix|mix|edit)\b',
+      caseSensitive: false,
+    ).hasMatch(targetTitleLower);
+    if (!targetHasRemix &&
+        RegExp(
+          r'\b(remix|mashup|club\s+mix)\b',
+          caseSensitive: false,
+        ).hasMatch(candidateTitleLower)) {
+      return false;
+    }
+
+    // If target was a remix from a verified artist, ensure candidate is actually a remix
+    if (allowRemix &&
+        !candidateTitleLower.contains('remix') &&
+        !candidateTitleLower.contains('mix')) {
+      return false;
+    }
+
+    // If target was an instrumental from a verified artist, ensure candidate is instrumental
+    if (allowInstrumental && !candidateTitleLower.contains('instrumental')) {
+      return false;
+    }
+
+    // 3. Strict Duration Check (when duration is available, tolerance <= 35 seconds; for remixes, <= 50 seconds due to club cuts)
     if (track.durationMs > 0 &&
         candidate.duration != null &&
         candidate.duration!.inSeconds > 0) {
       final targetSec = track.durationMs ~/ 1000;
       final candSec = candidate.duration!.inSeconds;
       final diff = (candSec - targetSec).abs();
-      if (diff > 35) {
+      final maxTolerance = allowRemix ? 50 : 35;
+      if (diff > maxTolerance) {
         return false;
       }
     }
@@ -978,6 +1293,9 @@ class SpotifyImportService extends ChangeNotifier {
         'lyrical',
         'dialogue',
         'part',
+        'remix',
+        'mix',
+        'instrumental',
       };
       final cleanAlbumTokens = CanonicalSongDedup.tokenize(
         CanonicalSongDedup.cleanTitle(track.albumName),
@@ -1027,7 +1345,7 @@ class SpotifyImportService extends ChangeNotifier {
         final individualArtists = targetArtist
             .split(
               RegExp(
-                r'[,/;&]|(?:\s+feat\.?\s+)|\s+ft\.?\s+',
+                r'[,/;&]|(?:\s+feat\.?\s+)|\s+ft\.?\s+|(?:\s+with\s+)',
                 caseSensitive: false,
               ),
             )
