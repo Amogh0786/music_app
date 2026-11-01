@@ -403,6 +403,9 @@ class _HomeScreenState extends State<HomeScreen>
     final cachedNostalgic = _deserializeCachedVideos(
       _prefs.getCachedHomeFeed('nostalgic'),
     );
+    final primaryLang = _prefs.preferredLanguages.isNotEmpty
+        ? _prefs.preferredLanguages.first
+        : 'Telugu';
     final cachedAlbumsJson = _prefs.getCachedHomeFeed('albums');
     List<JioAlbum> cachedAlbums = [];
     if (cachedAlbumsJson != null && cachedAlbumsJson.isNotEmpty) {
@@ -411,7 +414,15 @@ class _HomeScreenState extends State<HomeScreen>
         cachedAlbums = decoded
             .whereType<Map<String, dynamic>>()
             .map(JioAlbum.fromJson)
-            .where((a) => a.id.isNotEmpty && a.title.isNotEmpty)
+            .where(
+              (a) =>
+                  a.id.isNotEmpty &&
+                  a.title.isNotEmpty &&
+                  TrendingCatalogService.isAlbumMatchingLanguage(
+                    a,
+                    primaryLang,
+                  ),
+            )
             .toList();
       } catch (_) {}
     }
@@ -1224,7 +1235,11 @@ class _HomeScreenState extends State<HomeScreen>
     setState(() => _selectedAlbumLangIndex = index);
 
     final cached = TrendingCatalogService().getCachedAlbums(lang);
-    if (cached != null && cached.isNotEmpty) {
+    if (cached != null &&
+        cached.isNotEmpty &&
+        cached.every(
+          (a) => TrendingCatalogService.isAlbumMatchingLanguage(a, lang),
+        )) {
       setState(() => _trendingAlbums = cached);
       return;
     }
@@ -1235,8 +1250,14 @@ class _HomeScreenState extends State<HomeScreen>
           .fetchTopAlbums(language: lang, limit: 12)
           .timeout(const Duration(seconds: 8), onTimeout: () => <JioAlbum>[]);
       if (mounted) {
+        if (_selectedAlbumLangIndex != index) return;
+        final filtered = albums
+            .where(
+              (a) => TrendingCatalogService.isAlbumMatchingLanguage(a, lang),
+            )
+            .toList();
         setState(() {
-          if (albums.isNotEmpty) _trendingAlbums = albums;
+          if (filtered.isNotEmpty) _trendingAlbums = filtered;
           _isLoadingAlbums = false;
         });
       }
@@ -2403,19 +2424,32 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
         const SizedBox(height: 6),
-        SizedBox(
-          height: 220,
-          child: ListView.builder(
-            controller: controller,
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            itemCount: _trendingAlbums.length,
-            itemBuilder: (context, index) {
-              final album = _trendingAlbums[index];
-              return _buildAlbumCard(album);
-            },
-          ),
+        Builder(
+          builder: (context) {
+            final activeLang = _albumLanguages[_selectedAlbumLangIndex];
+            final displayAlbums = _trendingAlbums
+                .where(
+                  (a) => TrendingCatalogService.isAlbumMatchingLanguage(
+                    a,
+                    activeLang,
+                  ),
+                )
+                .toList();
+            return SizedBox(
+              height: 220,
+              child: ListView.builder(
+                controller: controller,
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                itemCount: displayAlbums.length,
+                itemBuilder: (context, index) {
+                  final album = displayAlbums[index];
+                  return _buildAlbumCard(album);
+                },
+              ),
+            );
+          },
         ),
       ],
     );
