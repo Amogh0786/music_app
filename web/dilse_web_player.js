@@ -489,7 +489,9 @@
         if (dur > 1 && pos >= (dur - 2.5)) {
           console.log(`[DilSe Web Player] JioSaavn audio track ended (${id})`);
           broadcastState('ended');
-          if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+          // Note: DO NOT set navigator.mediaSession.playbackState to 'paused' here!
+          // Auto-advance is immediately transitioning to the next playlist song. Setting 'paused'
+          // causes the OS lock screen to glitch to paused icon and triggers mobile browser suspension.
           window.dispatchEvent(new CustomEvent('dilse_ended'));
         } else {
           console.log(`[DilSe Web Player] Ignored premature/reset ended event on ${id} (pos: ${pos}, dur: ${dur})`);
@@ -877,8 +879,11 @@
 
   function attemptAutoResumeAfterInterruption() {
     if (isInterrupted && !isUserPaused && document.visibilityState === 'visible') {
-      console.log('[DilSe Web Player] Attempting auto-resume after interruption...');
-      window.dilseResume();
+      const active = getActiveDeck();
+      if (active && active.src && (active.src.startsWith('http') || active.src.startsWith('blob:')) && active.readyState >= 2) {
+        console.log('[DilSe Web Player] Attempting auto-resume after interruption...');
+        window.dilseResume();
+      }
     }
   }
 
@@ -899,13 +904,18 @@
         broadcastTime(pos, dur);
         updateMediaSessionPosition(pos, dur);
         startTicker();
-      } else if (activeEngine === ENGINE_AUDIO && audioEl) {
-        const pos = audioEl.currentTime || 0;
-        const dur = audioEl.duration || 0;
-        lastReportedPos = pos;
-        if (dur > 0) lastReportedDur = dur;
-        broadcastTime(pos, dur);
-        updateMediaSessionPosition(pos, dur);
+      } else if (activeEngine === ENGINE_AUDIO) {
+        const active = getActiveDeck();
+        if (active && active.src && active.readyState >= 2) {
+          const pos = active.currentTime || 0;
+          const dur = active.duration || 0;
+          if (dur > 0) {
+            lastReportedPos = pos;
+            lastReportedDur = dur;
+            broadcastTime(pos, dur);
+            updateMediaSessionPosition(pos, dur);
+          }
+        }
       }
     } else if (document.visibilityState === 'hidden') {
       if (
@@ -1004,6 +1014,9 @@
 
     // Update MediaSession with initial metadata
     window.dilseSetMetadata(currentTitle, currentArtist, currentArtwork, currentAlbum);
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = 'playing';
+    }
 
     isUserPaused = false;
     isInterrupted = false;
@@ -1224,6 +1237,9 @@
     wasPlayingBeforeInterruption = true;
 
     window.dilseSetMetadata(currentTitle, currentArtist, currentArtwork, currentAlbum);
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = 'playing';
+    }
 
     function startRamp() {
       // Toggle active deck
@@ -1507,6 +1523,10 @@
             ]
           : [],
       });
+
+      if (!isUserPaused) {
+        navigator.mediaSession.playbackState = 'playing';
+      }
 
       navigator.mediaSession.setActionHandler('play', () => {
         window.dilseResume();
