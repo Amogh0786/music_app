@@ -460,7 +460,12 @@
           isInterrupted = true;
         }
         broadcastState('paused');
-        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+        // CRITICAL FOR IOS SAFARI / PWA LOCK SCREEN:
+        // Only set mediaSession to paused if the user deliberately initiated pause or genuine interruption occurred.
+        // When advancing tracks, resetting src, or buffering, NEVER glitch the OS lock screen to paused!
+        if ('mediaSession' in navigator && (isUserPaused || isInterrupted)) {
+          navigator.mediaSession.playbackState = 'paused';
+        }
       }
     });
 
@@ -478,6 +483,13 @@
         if (dur > 0) lastReportedDur = dur;
         broadcastTime(pos, dur);
         updateMediaSessionPosition(pos, dur);
+        // Continuous lockscreen state guard: If audio is actively advancing and not user paused,
+        // guarantee that Apple lockscreen / notification center reflects 'playing' (showing the Pause icon)
+        if (!isUserPaused && !el.paused && 'mediaSession' in navigator) {
+          if (navigator.mediaSession.playbackState !== 'playing') {
+            navigator.mediaSession.playbackState = 'playing';
+          }
+        }
       }
     });
 
@@ -1061,6 +1073,9 @@
 
       audioEl.play().then(() => {
         unlockAudioContext();
+        if ('mediaSession' in navigator && !isUserPaused) {
+          navigator.mediaSession.playbackState = 'playing';
+        }
       }).catch((err) => {
         handlePlayRejection(err, audioEl);
       });
@@ -1190,6 +1205,9 @@
 
             audioEl.play().then(() => {
               unlockAudioContext();
+              if ('mediaSession' in navigator && !isUserPaused) {
+                navigator.mediaSession.playbackState = 'playing';
+              }
             }).catch((err) => {
               handlePlayRejection(err, audioEl);
             });
@@ -1256,6 +1274,9 @@
 
       incoming.play().then(() => {
         broadcastState('playing');
+        if ('mediaSession' in navigator && !isUserPaused) {
+          navigator.mediaSession.playbackState = 'playing';
+        }
         crossfadeInterval = setInterval(() => {
           const elapsed = performance.now() - startTime;
           const ratio = Math.min(1.0, elapsed / durationMs);
@@ -1529,12 +1550,28 @@
       }
 
       navigator.mediaSession.setActionHandler('play', () => {
-        window.dilseResume();
-        window.dispatchEvent(new CustomEvent('dilse_remote_play'));
+        const active = (activeEngine === ENGINE_AUDIO) ? getActiveDeck() : null;
+        if (active && !active.paused && (active.currentTime > 0)) {
+          // Desync auto-recovery: If active deck is already playing, user tapped lockscreen button expecting to pause
+          console.log('[DilSe Web Player] MediaSession play action received while audio is playing (desync recovery: toggling to pause)');
+          window.dilsePause();
+          window.dispatchEvent(new CustomEvent('dilse_remote_pause'));
+        } else {
+          window.dilseResume();
+          window.dispatchEvent(new CustomEvent('dilse_remote_play'));
+        }
       });
       navigator.mediaSession.setActionHandler('pause', () => {
-        window.dilsePause();
-        window.dispatchEvent(new CustomEvent('dilse_remote_pause'));
+        const active = (activeEngine === ENGINE_AUDIO) ? getActiveDeck() : null;
+        if (active && active.paused) {
+          // Desync auto-recovery: If active deck is already paused, user tapped lockscreen button expecting to resume
+          console.log('[DilSe Web Player] MediaSession pause action received while audio is paused (desync recovery: toggling to play)');
+          window.dilseResume();
+          window.dispatchEvent(new CustomEvent('dilse_remote_play'));
+        } else {
+          window.dilsePause();
+          window.dispatchEvent(new CustomEvent('dilse_remote_pause'));
+        }
       });
       navigator.mediaSession.setActionHandler('stop', () => {
         window.dilsePause();
