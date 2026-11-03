@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'services/audio_handler.dart';
 import 'screens/intro_splash_screen.dart';
-import 'screens/main_screen.dart';
 import 'screens/recovery_shell_screen.dart';
 import 'services/preferences_service.dart';
 import 'services/bug_report_service.dart';
@@ -154,9 +153,7 @@ class _MusicAppState extends State<MusicApp> {
                   child: wrapped,
                 );
               },
-              home: IntroSplashScreen.hasCompletedSplash
-                  ? const MainScreen()
-                  : const IntroSplashScreen(),
+              home: const IntroSplashScreen(),
             );
           },
         );

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io' show InternetAddress, SocketException, Platform;
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'web_connectivity_helper.dart';
 import 'music_service.dart';
 import 'cloud_sync_service.dart';
@@ -196,29 +195,11 @@ class ConnectivityService extends ChangeNotifier {
           return;
         }
 
-        final stopwatch = Stopwatch()..start();
-        try {
-          final uri = Uri.base.resolve(
-            'favicon.png?t=${DateTime.now().millisecondsSinceEpoch}',
-          );
-          final response = await http
-              .get(uri)
-              .timeout(const Duration(milliseconds: 2500));
-          stopwatch.stop();
-
-          if (response.statusCode == 200) {
-            final elapsed = stopwatch.elapsedMilliseconds;
-            if (elapsed > 1800) {
-              _updateState(offline: false, low: true, q: NetworkQuality.poor);
-            } else {
-              _updateState(offline: false, low: false, q: NetworkQuality.good);
-            }
-          } else {
-            _updateState(offline: false, low: true, q: NetworkQuality.poor);
-          }
-        } catch (_) {
-          // If ping timed out or failed while navigator was online, mark as poor/unstable connection
+        final isSlow = isWebConnectionSlow();
+        if (isSlow) {
           _updateState(offline: false, low: true, q: NetworkQuality.poor);
+        } else {
+          _updateState(offline: false, low: false, q: NetworkQuality.good);
         }
         return;
       }

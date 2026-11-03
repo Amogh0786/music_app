@@ -166,6 +166,7 @@ class _MainScreenState extends State<MainScreen> {
 
   void _checkFirstTimeNamePrompt() {
     final prefs = PreferencesService();
+    if (ConnectivityService().isOffline) return;
     if (!prefs.hasPromptedName) {
       WelcomeOnboardingDialog.show(
         context,

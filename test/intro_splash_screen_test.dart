@@ -109,23 +109,23 @@ void main() {
     ConnectivityService().setOfflineForTesting(false);
   });
 
-  testWidgets('IntroSplashScreen routes to Library (Tab 2) when offline', (
-    WidgetTester tester,
-  ) async {
-    IntroSplashScreen.hasCompletedSplash = false;
-    ConnectivityService().setOfflineForTesting(true);
+  testWidgets(
+    'IntroSplashScreen routes to Home (Tab 0) when online with good network',
+    (WidgetTester tester) async {
+      IntroSplashScreen.hasCompletedSplash = false;
+      ConnectivityService().setOfflineForTesting(false);
+      ConnectivityService().setQualityForTesting(NetworkQuality.good);
 
-    await tester.pumpWidget(const MaterialApp(home: IntroSplashScreen()));
+      await tester.pumpWidget(const MaterialApp(home: IntroSplashScreen()));
 
-    await tester.pump(const Duration(milliseconds: 1000));
-    await tester.tap(find.text('Skip'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 1000));
+      await tester.tap(find.text('Skip'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
 
-    final mainScreen = tester.widget<MainScreen>(find.byType(MainScreen));
-    expect(mainScreen.initialIndex, 2);
-
-    ConnectivityService().setOfflineForTesting(false);
-  });
+      final mainScreen = tester.widget<MainScreen>(find.byType(MainScreen));
+      expect(mainScreen.initialIndex, 0);
+    },
+  );
 }
