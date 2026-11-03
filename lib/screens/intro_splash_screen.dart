@@ -41,6 +41,13 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
   void initState() {
     super.initState();
 
+    if (IntroSplashScreen.hasCompletedSplash) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _navigateToMain();
+      });
+      return;
+    }
+
     // 1. Kick off concurrent background preloading of Home data immediately
     MusicService().preloadHomeData();
 
