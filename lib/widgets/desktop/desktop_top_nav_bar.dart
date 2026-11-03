@@ -8,6 +8,7 @@ import '../../screens/dilse_capsule_screen.dart';
 import 'desktop_search_dropdown.dart';
 import '../profile_avatar_helper.dart';
 import '../top_bar_cloud_actions.dart';
+import '../top_bar_offline_badge.dart';
 
 /// Spotify-grade 64px Desktop Top Global Navigation Bar (#global-nav-bar).
 ///
@@ -590,6 +591,8 @@ class _DesktopTopNavBarState extends State<DesktopTopNavBar> {
                         ),
 
                         const SizedBox(width: 8.0),
+
+                        const TopBarOfflineBadge(),
 
                         // Single Unified User Profile Avatar (Custom Photo & Google Account Linked)
                         AnimatedBuilder(

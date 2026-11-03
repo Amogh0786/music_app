@@ -29,6 +29,7 @@ import '../services/youtube_music_client.dart';
 import '../widgets/auth/google_profile_header_button.dart';
 import '../widgets/auth/google_cloud_backup_prompt_dialog.dart';
 import '../widgets/top_bar_cloud_actions.dart';
+import '../widgets/top_bar_offline_badge.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -1155,6 +1156,7 @@ class _HomeScreenState extends State<HomeScreen>
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          const TopBarOfflineBadge(),
                           const AppUpdateTopBarButton(),
                           const CloudBackupTopBarButton(),
                           const GoogleProfileHeaderButton(compact: true),
