@@ -145,6 +145,14 @@
   <script src="dilse_web_player.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
+      var refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (!refreshing) {
+          refreshing = true;
+          console.log('[DilSe ServiceWorker] New service worker activated, reloading for instant update');
+          window.location.reload();
+        }
+      });
       window.addEventListener('load', function () {
         navigator.serviceWorker.register('sw.js').then(function (reg) {
           reg.update();
