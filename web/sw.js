@@ -1,5 +1,5 @@
 /* DilSe PWA Service Worker (Zero-Data Offline App Shell & Audio Engine) */
-const SHELL_CACHE = 'dilse-shell-v5';
+const SHELL_CACHE = 'dilse-shell-v7';
 const AUDIO_CACHE = 'dilse-offline-audio-v1';
 
 const PRECACHE_ASSETS = [
@@ -20,7 +20,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(SHELL_CACHE).then(async (cache) => {
-      console.log('[DilSe SW] Pre-caching app shell assets (v5)');
+      console.log('[DilSe SW] Pre-caching app shell assets (v7)');
 
       // Fetch root HTML document and store clean, non-redirected copies for all root navigation paths.
       // Critical for Safari iOS WebKit: Vercel clean URLs redirect /index.html -> / (HTTP 308).

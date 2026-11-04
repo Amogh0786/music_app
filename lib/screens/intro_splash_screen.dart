@@ -32,6 +32,7 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
   int _lastCharCount = 0;
   int _emergencyTapCount = 0;
   DateTime? _lastEmergencyTap;
+  Future<int>? _startupAnalysisFuture;
 
   static const String _fullTitle = 'DilSe';
   static const String _fullTagline = 'Suno Dil Se.';
@@ -40,11 +41,21 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
   void initState() {
     super.initState();
 
+    if (IntroSplashScreen.hasCompletedSplash) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _navigateToMain();
+      });
+      return;
+    }
+
     // 1. Kick off concurrent background preloading of Home data immediately
     MusicService().preloadHomeData();
 
-    // 2. Concurrently run connectivity check to determine initial feed route
+    // 2. Concurrently run 7-second continuous network analysis window
     ConnectivityService().init();
+    _startupAnalysisFuture = ConnectivityService().analyzeStartupRoute(
+      timeout: const Duration(seconds: 7),
+    );
 
     // 3. Setup 60-120 FPS animation controller
     _controller = AnimationController(
@@ -64,24 +75,26 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
       }
     });
 
-    _controller.addStatusListener((status) {
+    _controller.addStatusListener((status) async {
       if (status == AnimationStatus.completed) {
-        _navigateToMain();
+        if (_startupAnalysisFuture != null) {
+          final targetIndex = await _startupAnalysisFuture!;
+          _navigateToMain(targetIndex);
+        } else {
+          _navigateToMain();
+        }
       }
     });
 
-    // Safety fallback timer so user can NEVER be stuck on the splash screen
-    _fallbackTimer = Timer(Duration(milliseconds: kIsWeb ? 1100 : 2900), () {
+    // Safety fallback timer bounded by the 7-second analysis window (+ 500ms grace)
+    _fallbackTimer = Timer(const Duration(milliseconds: 7500), () {
       if (mounted) _navigateToMain();
     });
 
-    // Ultimate hard failsafe: if still mounted after 2.5s on web (or 3.5s on mobile), navigate to MainScreen
-    _hardFallbackTimer = Timer(
-      Duration(milliseconds: kIsWeb ? 2500 : 3500),
-      () {
-        if (mounted) _navigateToMain();
-      },
-    );
+    // Ultimate hard failsafe: if still mounted after 8.5s, navigate safely
+    _hardFallbackTimer = Timer(const Duration(milliseconds: 8500), () {
+      if (mounted) _navigateToMain();
+    });
 
     // Watchdog timer: If app is still on splash after 2.4s, subtly reveal Recovery entry point
     _recoveryWatchdogTimer = Timer(const Duration(milliseconds: 2400), () {
@@ -111,6 +124,7 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
   }
 
   void _navigateToRecovery() {
+    ConnectivityService().cancelStartupAnalysis();
     _fallbackTimer?.cancel();
     _hardFallbackTimer?.cancel();
     _recoveryWatchdogTimer?.cancel();
@@ -130,7 +144,8 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
     return _fullTitle.length + (p * _fullTagline.length).floor();
   }
 
-  void _navigateToMain() {
+  void _navigateToMain([int? targetIndex]) {
+    ConnectivityService().cancelStartupAnalysis();
     _fallbackTimer?.cancel();
     _hardFallbackTimer?.cancel();
     _recoveryWatchdogTimer?.cancel();
@@ -138,8 +153,12 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
     _navigated = true;
     IntroSplashScreen.hasCompletedSplash = true;
 
-    final isOffline = ConnectivityService().isOffline;
-    final initialIndex = isOffline ? 2 : 0;
+    final initialIndex =
+        targetIndex ??
+        (ConnectivityService().isOffline ||
+                ConnectivityService().quality != NetworkQuality.good
+            ? 2
+            : 0);
     if (initialIndex != 0) {
       DesktopLayoutState.activeNavTab.value = DesktopNavTab.library;
     }
@@ -179,6 +198,7 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
 
   @override
   void dispose() {
+    ConnectivityService().cancelStartupAnalysis();
     _fallbackTimer?.cancel();
     _hardFallbackTimer?.cancel();
     _recoveryWatchdogTimer?.cancel();

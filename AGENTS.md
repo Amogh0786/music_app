@@ -36,7 +36,7 @@ This workspace operates under the **Architectural Immutability + UI Transformati
 
 ---
 
-## 2. Nine Absolute Architectural Invariants
+## 2. Ten Absolute Architectural Invariants
 
 1. **Rule #1: Audio Engine Immutability**  
    - Never rewrite `MusicService`, `_playerA`, `_playerB`, active/standby deck swapping, equal-power crossfade mathematics, or stream cascades to make UI code easier.
@@ -78,6 +78,12 @@ This workspace operates under the **Architectural Immutability + UI Transformati
    - The application strictly enforces a minimalist, modern, matte visual design language using solid colors, clean borders, and OLED/obsidian tones.
    - **Never** use bright neon glow effects, flashy radial/linear gradients, rainbow accents, or loud fluorescent lighting in widgets, cards, banners, notifications, or app chrome.
    - All notifications, dynamic island pills, modal sheets, and dialogue surfaces must employ refined static flat/solid palette tones with crisp typography and subtle borders (e.g., solid emerald `#1DB954` for success/downloads, solid ruby `#FA2D48` for favorites/brand, solid amber `#F59E0B` for warnings, solid crimson `#EF4444` for errors, solid slate `#94A3B8` for info, solid dark obsidian `#18181B` / `#161618` for container backgrounds, and `#2E2E32` for clean matte borders).
+
+10. **Rule #10: Explicit User Authorization Required for Remote Git Pushes**  
+    - When performing tasks, implementing features, fixing bugs, or refactoring, complete the work locally.
+    - Local Git commits (`git commit`) are permitted and encouraged to record granular changes and ensure progress is not lost.
+    - **Never** run `git push` or push code to GitHub or any remote repository automatically.
+    - Only execute `git push` when the user explicitly instructs to push the code to GitHub/remote (e.g., "push changes to main", "push to github").
 
 ---
 

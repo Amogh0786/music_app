@@ -45,75 +45,23 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
 
-    /* Sovereign Failsafe Shell: 100% Decoupled from Flutter Engine */
-    #dilse-engine-fallback {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      background: #000000;
-      z-index: 99999;
-      opacity: 1;
-      transition: opacity 0.25s ease-out;
-      pointer-events: none; /* CRITICAL: Never block touches from reaching Flutter */
-      padding: env(safe-area-inset-top, 20px) 20px env(safe-area-inset-bottom, 20px) 20px;
-    }
-    #dilse-engine-fallback.dismissed {
-      opacity: 0;
-      pointer-events: none;
-      display: none !important;
-    }
-
-    @keyframes dilsePulseGlow {
-      0% { transform: scale(1); box-shadow: 0 0 24px var(--ruby-glow); }
-      50% { transform: scale(1.06); box-shadow: 0 0 44px rgba(250, 45, 72, 0.7); }
-      100% { transform: scale(1); box-shadow: 0 0 24px var(--ruby-glow); }
-    }
-
-    /* Centered Minimal Boot Placeholder */
-    .dilse-splash-hero {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      pointer-events: none;
-    }
-    .dilse-logo-badge {
-      width: 64px;
-      height: 64px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #FF4B63 0%, #FA2D48 60%, #B8001F 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      animation: dilsePulseGlow 2.2s infinite ease-in-out;
-      cursor: pointer;
-      pointer-events: auto;
-    }
-    .dilse-logo-badge svg {
-      width: 32px;
-      height: 32px;
-      fill: #ffffff;
-    }
-
-    /* Sovereign Failsafe Card (Only shown if engine watchdog fires after 8s) */
+    /* Sovereign Failsafe Recovery Card (Zero intrusive overlays; only visible if bootstrap stalls >8s) */
     #dilse-offline-failsafe-card {
       display: none;
-      margin-top: 24px;
-      padding: 14px 18px;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1000;
+      margin: 0;
+      padding: 16px 20px;
       background: #161616;
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 14px;
       text-align: center;
       max-width: 320px;
-      pointer-events: auto; /* Active for recovery buttons */
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.7);
+      pointer-events: auto;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.8);
     }
     .failsafe-btn {
       background: #242424;
@@ -133,26 +81,15 @@
   </style>
 </head>
 <body>
-  <!-- DilSe Minimal Pre-Flutter Boot Shell (Pitch Black with Center Glow) -->
-  <div id="dilse-engine-fallback">
-    <div class="dilse-splash-hero">
-      <div class="dilse-logo-badge" onclick="handleLogoTap()">
-        <svg viewBox="0 0 24 24">
-          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-        </svg>
-      </div>
+  <!-- Sovereign Failsafe Recovery Card (Zero DOM interference; hidden unless watchdog fires) -->
+  <div id="dilse-offline-failsafe-card">
+    <div style="font-size: 13.5px; font-weight: 700; margin-bottom: 4px; color: #ffffff;">Startup Stalled</div>
+    <div style="font-size: 11.5px; color: rgba(255,255,255,0.65); margin-bottom: 12px; line-height: 1.4;">
+      If startup is taking longer than expected, reload or reset the offline cache.
     </div>
-
-    <!-- Sovereign Failsafe Card (Only revealed if engine bootstrap stalls >8s) -->
-    <div id="dilse-offline-failsafe-card">
-      <div style="font-size: 13.5px; font-weight: 700; margin-bottom: 4px; color: #ffffff;">Startup Stalled</div>
-      <div style="font-size: 11.5px; color: rgba(255,255,255,0.65); margin-bottom: 12px; line-height: 1.4;">
-        If startup is taking longer than expected, reload or reset the offline cache.
-      </div>
-      <div style="display: flex; justify-content: center; gap: 8px;">
-        <button class="failsafe-btn primary" onclick="location.reload()">Reload</button>
-        <button class="failsafe-btn" onclick="clearDilSeCache()">Reset Cache</button>
-      </div>
+    <div style="display: flex; justify-content: center; gap: 8px;">
+      <button class="failsafe-btn primary" onclick="location.reload()">Reload</button>
+      <button class="failsafe-btn" onclick="clearDilSeCache()">Reset Cache</button>
     </div>
   </div>
 
@@ -165,15 +102,12 @@
       }
     }, 8000);
 
-    // Global hook to dismiss the fallback shell smoothly
+    // Global hook to dismiss the failsafe smoothly
     window.dismissDilSeFallback = function () {
       clearTimeout(dilseWatchdog);
-      var fallback = document.getElementById('dilse-engine-fallback');
-      if (fallback) {
-        fallback.classList.add('dismissed');
-        setTimeout(function () {
-          fallback.remove();
-        }, 260);
+      var card = document.getElementById('dilse-offline-failsafe-card');
+      if (card) {
+        card.remove();
       }
     };
 
@@ -186,20 +120,14 @@
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
-    // Triple-tap emergency gesture on Logo/Title
-    var logoTapCount = 0;
-    var logoTapTimer = null;
-    function handleLogoTap() {
-      logoTapCount++;
-      clearTimeout(logoTapTimer);
-      logoTapTimer = setTimeout(function () { logoTapCount = 0; }, 1800);
-      if (logoTapCount >= 3) {
-        var card = document.getElementById('dilse-offline-failsafe-card');
-        if (card) card.style.display = 'block';
-      }
-    }
-
     function clearDilSeCache() {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function (registrations) {
+          for (var i = 0; i < registrations.length; i++) {
+            registrations[i].unregister();
+          }
+        });
+      }
       if ('caches' in window) {
         caches.keys().then(function (keys) {
           return Promise.all(keys.map(function (k) { return caches.delete(k); }));
@@ -217,6 +145,14 @@
   <script src="dilse_web_player.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
+      var refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (!refreshing) {
+          refreshing = true;
+          console.log('[DilSe ServiceWorker] New service worker activated, reloading for instant update');
+          window.location.reload();
+        }
+      });
       window.addEventListener('load', function () {
         navigator.serviceWorker.register('sw.js').then(function (reg) {
           reg.update();

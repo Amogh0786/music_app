@@ -1987,6 +1987,16 @@ class PreferencesService extends ChangeNotifier {
     return _prefs.getInt('last_played_dark_vibrant_color');
   }
 
+  String? getWebStreamUrl(String videoId) {
+    if (!_isInitialized || videoId.isEmpty) return null;
+    return _prefs.getString('web_stream_$videoId');
+  }
+
+  Future<void> setWebStreamUrl(String videoId, String streamUrl) async {
+    if (!_isInitialized || videoId.isEmpty || streamUrl.isEmpty) return;
+    await _prefs.setString('web_stream_$videoId', streamUrl);
+  }
+
   Future<void> saveLastPlaybackSession({
     required Map<String, dynamic> song,
     required int positionMs,

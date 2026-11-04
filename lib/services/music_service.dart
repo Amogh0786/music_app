@@ -768,16 +768,22 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
     if (videoId.isEmpty || streamUrl.isEmpty) return;
     _webStreamUrls[videoId] = streamUrl;
     if (kIsWeb) {
-      SharedPreferences.getInstance()
-          .then((prefs) {
-            prefs.setString('web_stream_$videoId', streamUrl);
-          })
-          .catchError((_) {});
+      PreferencesService().setWebStreamUrl(videoId, streamUrl);
     }
   }
 
   static String? getCachedWebStreamUrl(String videoId) {
-    return _webStreamUrls[videoId];
+    if (videoId.isEmpty) return null;
+    final cached = _webStreamUrls[videoId];
+    if (cached != null && cached.isNotEmpty) return cached;
+    if (kIsWeb) {
+      final fromPrefs = PreferencesService().getWebStreamUrl(videoId);
+      if (fromPrefs != null && fromPrefs.isNotEmpty) {
+        _webStreamUrls[videoId] = fromPrefs;
+        return fromPrefs;
+      }
+    }
+    return null;
   }
 
   static String getHdThumbnail(String videoId) {
@@ -2312,42 +2318,49 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       final cleanA = CanonicalSongDedup.cleanArtist(track.author);
       final q = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
       if (cleanT.isNotEmpty) {
-        final jioUri = ApiConfig.jioSearchUri(q, limit: 5);
-        final resp = await http.get(jioUri).timeout(const Duration(seconds: 4));
-        if (resp.statusCode == 200) {
-          final List<dynamic> list = json.decode(resp.body);
-          for (final item in list) {
-            final itemTitle = item['title'] as String? ?? '';
-            final itemArtist = item['author'] as String? ?? '';
-            final itemStream = item['streamUrl'] as String? ?? '';
-            final itemThumb = item['thumbnail'] as String? ?? '';
-            if (itemStream.isEmpty) continue;
-            if (_isCoverOrKaraokeTrack(itemTitle, itemArtist)) continue;
+        Future<bool> tryResolve(Uri uri) async {
+          final resp = await http.get(uri).timeout(const Duration(seconds: 4));
+          if (resp.statusCode == 200) {
+            final List<dynamic> list = json.decode(resp.body);
+            for (final item in list) {
+              final itemTitle = item['title'] as String? ?? '';
+              final itemArtist = item['author'] as String? ?? '';
+              final itemStream = item['streamUrl'] as String? ?? '';
+              final itemThumb = item['thumbnail'] as String? ?? '';
+              if (itemStream.isEmpty) continue;
+              if (_isCoverOrKaraokeTrack(itemTitle, itemArtist)) continue;
 
-            final isMatch = CanonicalSongDedup.areDuplicateSongs(
-              titleA: track.title,
-              artistA: track.author,
-              titleB: itemTitle,
-              artistB: itemArtist,
-            );
+              final isMatch = CanonicalSongDedup.areDuplicateSongs(
+                titleA: track.title,
+                artistA: track.author,
+                titleB: itemTitle,
+                artistB: itemArtist,
+              );
 
-            if (isMatch) {
-              _webStreamUrls[trackId] = itemStream;
-              cacheWebStreamUrl(trackId, itemStream);
-              if (itemThumb.isNotEmpty) {
-                final current = _artworkMap[trackId];
-                final isYtFallback =
-                    current == null ||
-                    current.isEmpty ||
-                    current.startsWith('https://i.ytimg.com/');
-                if (isYtFallback) {
-                  _artworkMap[trackId] = itemThumb;
-                  notifyListeners();
+              if (isMatch) {
+                _webStreamUrls[trackId] = itemStream;
+                cacheWebStreamUrl(trackId, itemStream);
+                if (itemThumb.isNotEmpty) {
+                  final current = _artworkMap[trackId];
+                  final isYtFallback =
+                      current == null ||
+                      current.isEmpty ||
+                      current.startsWith('https://i.ytimg.com/');
+                  if (isYtFallback) {
+                    _artworkMap[trackId] = itemThumb;
+                    notifyListeners();
+                  }
                 }
+                return true;
               }
-              return;
             }
           }
+          return false;
+        }
+
+        bool matched = await tryResolve(ApiConfig.jioSearchUri(q, limit: 5));
+        if (!matched && cleanA.isNotEmpty && cleanT.isNotEmpty) {
+          await tryResolve(ApiConfig.jioSearchUri(cleanT, limit: 5));
         }
       }
 
@@ -5204,7 +5217,7 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
       // 2. Web Mode (PWA / Browser):
       // Dual Engine: Cloudflare Edge Direct Stream (<audio>) + YouTube IFrame Fallback
       if (kIsWeb) {
-        String directStreamUrl = _webStreamUrls[song.id.value] ?? '';
+        String directStreamUrl = getCachedWebStreamUrl(song.id.value) ?? '';
         final downloadedMatch = _downloadedSongs.firstWhere(
           (s) => s['id'] == song.id.value,
           orElse: () => {},
@@ -5217,22 +5230,9 @@ class MusicService extends ChangeNotifier with WidgetsBindingObserver {
         String webVideoId = song.id.value;
         final isSyntheticId = !CanonicalSongDedup.isLikelyYouTubeId(webVideoId);
 
-        // If direct stream URL is empty, resolve genuine YouTube ID for web fallback
-        if (directStreamUrl.isEmpty) {
-          try {
-            final cleanT = CanonicalSongDedup.cleanTitle(song.title);
-            final cleanA = CanonicalSongDedup.cleanArtist(song.author);
-            final ytmQuery = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
-            final ytmResults = await YouTubeMusicClient()
-                .searchSongs(ytmQuery, limit: 1)
-                .timeout(const Duration(seconds: 4));
-            if (ytmResults.isNotEmpty) {
-              webVideoId = ytmResults.first.id.value;
-            }
-          } catch (_) {}
-        } else if (isSyntheticId) {
-          // If direct stream URL is present, begin playback immediately, but asynchronously
-          // resolve genuine YouTube ID in background so triggerFallback() never stalls on synthetic JioSaavn IDs.
+        // If synthetic ID or no direct stream, trigger background YouTube ID resolution
+        // asynchronously WITHOUT blocking immediate playback, preventing background stalls.
+        if (isSyntheticId || directStreamUrl.isEmpty) {
           final cleanT = CanonicalSongDedup.cleanTitle(song.title);
           final cleanA = CanonicalSongDedup.cleanArtist(song.author);
           final ytmQuery = cleanA.isNotEmpty ? '$cleanT $cleanA' : cleanT;
