@@ -66,6 +66,18 @@ class MusicApp extends StatefulWidget {
 }
 
 class _MusicAppState extends State<MusicApp> {
+  bool _hasCompletedSplash = IntroSplashScreen.hasCompletedSplash;
+  int _initialTabIndex = 0;
+
+  void _onSplashCompleted([int targetIndex = 0]) {
+    if (!mounted) return;
+    setState(() {
+      IntroSplashScreen.hasCompletedSplash = true;
+      _hasCompletedSplash = true;
+      _initialTabIndex = targetIndex;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -154,9 +166,9 @@ class _MusicAppState extends State<MusicApp> {
                   child: wrapped,
                 );
               },
-              home: IntroSplashScreen.hasCompletedSplash
-                  ? const MainScreen()
-                  : const IntroSplashScreen(),
+              home: _hasCompletedSplash
+                  ? MainScreen(initialIndex: _initialTabIndex)
+                  : IntroSplashScreen(onComplete: _onSplashCompleted),
             );
           },
         );

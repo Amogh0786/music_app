@@ -11,7 +11,8 @@ import 'main_screen.dart';
 import 'recovery_shell_screen.dart';
 
 class IntroSplashScreen extends StatefulWidget {
-  const IntroSplashScreen({super.key});
+  final ValueChanged<int>? onComplete;
+  const IntroSplashScreen({super.key, this.onComplete});
 
   /// Tracks whether the splash animation has completed once during this app session.
   /// Prevents MaterialApp rebuilds from re-triggering the splash screen.
@@ -161,6 +162,11 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
             : 0);
     if (initialIndex != 0) {
       DesktopLayoutState.activeNavTab.value = DesktopNavTab.library;
+    }
+
+    if (widget.onComplete != null) {
+      widget.onComplete!(initialIndex);
+      return;
     }
 
     try {
