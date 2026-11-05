@@ -94,13 +94,13 @@
   </div>
 
   <script>
-    // Sovereign Engine Watchdog (8.0 seconds timeout for emergency recovery):
+    // Sovereign Engine Watchdog (20.0 seconds timeout for emergency recovery):
     var dilseWatchdog = setTimeout(function () {
       var card = document.getElementById('dilse-offline-failsafe-card');
       if (card) {
         card.style.display = 'block';
       }
-    }, 8000);
+    }, 20000);
 
     // Global hook to dismiss the failsafe smoothly
     window.dismissDilSeFallback = function () {
