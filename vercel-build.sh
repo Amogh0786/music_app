@@ -12,6 +12,6 @@ echo "==> Flutter version:"
 flutter --version
 
 echo "==> Building Flutter Web for production..."
-flutter build web --release --no-tree-shake-icons
+flutter build web --release --no-tree-shake-icons --pwa-strategy=none
 
 echo "==> Build complete! Web directory created at build/web"
